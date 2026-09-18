@@ -820,6 +820,119 @@ export const mergeReviewItems = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Führungsebenen (Briefing 10.2, 11.2–11.4): Unterstützungsaufträge, Ziele, vertrauliche Notizen
+// ---------------------------------------------------------------------------
+
+export const supportRequestStatusEnum = pgEnum("support_request_status", ["ANGEFRAGT", "ANGENOMMEN", "ZURUECKGEGEBEN", "ERLEDIGT", "ZURUECKGEZOGEN"]);
+
+/** Begrenzter, konkreter Unterstützungsauftrag an den Principal – operative Fallverantwortung bleibt beim BD (10.2, F13) */
+export const supportRequests = pgTable(
+  "support_requests",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    requesterUserId: text("requester_user_id").notNull().references(() => users.id),
+    addresseeUserId: text("addressee_user_id").notNull().references(() => users.id),
+    setupId: text("setup_id").references(() => projectSetups.id),
+    accountId: text("account_id").references(() => accounts.id),
+    reviewId: text("review_id").references(() => reviews.id),
+    task: text("task").notNull(), // z. B. „Sparring zur Gesprächsfrage“
+    context: text("context"),
+    dueDate: date("due_date"),
+    status: supportRequestStatusEnum("status").notNull().default("ANGEFRAGT"),
+    responseNote: text("response_note"),
+    result: text("result"),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("support_requests_addressee_idx").on(t.addresseeUserId), index("support_requests_setup_idx").on(t.setupId)],
+);
+
+export const goalStatusEnum = pgEnum("goal_status", ["ENTWURF", "ZUR_ABSTIMMUNG", "VEREINBART", "GEAENDERT", "BEENDET"]);
+
+/** Ziel (11.3) – Kopf; Inhalte liegen versioniert in goal_versions */
+export const goals = pgTable(
+  "goals",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    title: text("title").notNull(),
+    ownerUserId: text("owner_user_id").notNull().references(() => users.id), // Verantwortliche (i. d. R. Principal)
+    accountId: text("account_id").references(() => accounts.id), // optionaler Kundenbezug
+    status: goalStatusEnum("status").notNull().default("ENTWURF"),
+    currentVersionId: text("current_version_id"),
+    /** Bestätigende Personen der aktuellen Vereinbarung (CEO + Principal) */
+    agreedByUserIds: text("agreed_by_user_ids").array().notNull().default(sql`'{}'::text[]`),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("goals_owner_idx").on(t.ownerUserId)],
+);
+
+export const goalVersions = pgTable(
+  "goal_versions",
+  {
+    id: id(),
+    goalId: text("goal_id").notNull().references(() => goals.id),
+    versionNo: integer("version_no").notNull(),
+    desiredOutcome: text("desired_outcome").notNull(),
+    scope: text("scope"), // Geltungsbereich
+    periodFrom: date("period_from"),
+    periodTo: date("period_to"),
+    successCriterion: text("success_criterion"), // beobachtbares Kriterium / Messgröße
+    baseline: text("baseline"), // Ausgangslage – „unbekannt bleibt unbekannt“
+    baselineSourceId: text("baseline_source_id").references(() => sources.id),
+    targetValue: text("target_value"), // nur, falls tatsächlich vereinbart; sonst null
+    supportNeeded: text("support_needed"),
+    prerequisites: text("prerequisites"), // Zeit, Budget, Zugang, Fähigkeiten, Freigaben
+    changeNote: text("change_note"), // Grund der Änderung ab Version 2
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("goal_versions_no_uq").on(t.goalId, t.versionNo)],
+);
+
+/** Beitrag eines Kunden/Setups/Vorhabens zu einem Ziel – erwartet und belegt getrennt */
+export const goalContributions = pgTable(
+  "goal_contributions",
+  {
+    id: id(),
+    goalId: text("goal_id").notNull().references(() => goals.id),
+    accountId: text("account_id").references(() => accounts.id),
+    setupId: text("setup_id").references(() => projectSetups.id),
+    priorityId: text("priority_id").references(() => accountPriorities.id),
+    expectedContribution: text("expected_contribution"),
+    evidencedContribution: text("evidenced_contribution"),
+    evidenceSourceId: text("evidence_source_id").references(() => sources.id),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("goal_contributions_goal_idx").on(t.goalId)],
+);
+
+/** Vertrauliche Führungs-/Coachingnotizen (11.4): getrennt gespeichert, nur für den Teilnehmerkreis, nie in breiteren Ansichten */
+export const confidentialNotes = pgTable(
+  "confidential_notes",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    reviewId: text("review_id").references(() => reviews.id),
+    setupId: text("setup_id").references(() => projectSetups.id),
+    aboutUserId: text("about_user_id").references(() => users.id), // betroffene Mitarbeitende (optional)
+    body: text("body").notNull(),
+    audienceUserIds: text("audience_user_ids").array().notNull(), // expliziter Empfängerkreis
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("confidential_notes_review_idx").on(t.reviewId)],
+);
+
+// ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
 
@@ -857,3 +970,5 @@ export type SuggestionStatus = (typeof suggestionStatusEnum.enumValues)[number];
 export type PriorityCategory = (typeof priorityCategoryEnum.enumValues)[number];
 export type ImportJobStatus = (typeof importJobStatusEnum.enumValues)[number];
 export type ImportKind = (typeof importKindEnum.enumValues)[number];
+export type SupportRequestStatus = (typeof supportRequestStatusEnum.enumValues)[number];
+export type GoalStatus = (typeof goalStatusEnum.enumValues)[number];

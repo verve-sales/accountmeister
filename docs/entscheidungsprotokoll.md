@@ -71,6 +71,21 @@ Namensgleichheit ist kein Identitätsbeweis (13.4). Nur ein eindeutiger E-Mail-T
 ## E-023 · 2026-09-18 · Graph-Adapter im Fixture-Modus
 Der Adapter fordert nur User.Read, Mail.Read, Calendars.Read, offline_access (lesend, delegiert). Ein echter Verbindungsaufbau wird abgewiesen, bis Client-ID, Tenant-ID, Redirect-URI und Datenschutzfreigabe konfiguriert sind; der Fixture-Modus wird in Status, Quelle und Importwarnungen als solcher gekennzeichnet. Tokens werden nur als Referenz gespeichert (im Echtbetrieb serverseitig verschlüsselt); Widerruf löscht Referenz und Scopes.
 
+## E-024 · 2026-09-18 · Unterstützungsaufträge statt Eskalation
+Ein Unterstützungsauftrag (11.1, F13) hat genau einen Adressaten mit Principal- oder CEO-Rolle, einen konkreten Auftragstext (Mindestlänge) und optional Frist und Setup-Bezug; Aufträge an sich selbst sind ausgeschlossen. Der Adressat nimmt an, gibt zurück oder meldet ein Ergebnis; der Anfragende kann zurückziehen. Die Fallverantwortung bleibt beim BD; das Setup zeigt Aufträge im Kontext, „Meine Arbeit“ zeigt offene Aufträge beider Seiten. Kein pauschaler „Eskalations“-Mechanismus.
+
+## E-025 · 2026-09-18 · Portfolio als Zählung, nicht als Bewertung
+Die Portfolioübersicht (11.2) verwendet dieselbe Datenbasis wie die Accountpläne und zeigt ausschließlich Zählungen dokumentierter Objekte (Setups ohne bestätigtes Weekly, Änderungen, offene Fragen, Zugangslücken, unbelegte Beziehungen, Prioritäten, blockierte Aktionen, offene Unterstützung, letztes bestätigtes Weekly). Keine Umsatz-, Forecast-, Potenzial- oder Personenbewertungen (Briefing 7). Rohquellen sind nicht enthalten; der CEO sieht nur Zusammenfassungen.
+
+## E-026 · 2026-09-18 · Führungs-Reviews ohne Setup, Zugriff über Teilnehmerkreis
+Principal-/BD-Weekly und CEO-/Principal-Zielgespräch sind Reviews ohne Setup-Bezug. Zugriff haben ausschließlich Teilnehmende; Nicht-Teilnehmende erhalten „nicht gefunden“ (S01/S02). Gleiche Semantik wie beim BD-/Anker-Weekly: Notiz nur als Entwurf, Entscheidungen, Bestätigung als Snapshot (Entscheidungen, Unterstützungsaufträge, vereinbarte Ziele).
+
+## E-027 · 2026-09-18 · Ziele: Zustimmung beider Rollen, Zielwert nur mit Ausgangslage
+Ein Ziel (11.3, F12) wird „Vereinbart“ erst, wenn eine Person mit CEO-Rolle **und** eine mit Principal-Rolle zugestimmt haben; die erste Zustimmung wird gespeichert („Zur Abstimmung“). Jede inhaltliche Änderung erzeugt eine neue Version mit Änderungsgrund; ein vereinbartes Ziel wird dadurch „Geändert“ und braucht die erneute Zustimmung beider Rollen. Ein Zielwert ist nur zulässig mit dokumentierter Ausgangslage (ggf. ausdrücklich „unbekannt“) und beobachtbarem Erfolgskriterium. Keine automatischen Quoten, keine Ableitung von Zielwerten aus Portfolio- oder Umsatzdaten. Zielbeiträge führen erwartet und belegt getrennt; ein belegter Beitrag braucht eine Quelle.
+
+## E-028 · 2026-09-18 · Vertrauliche Führungsnotizen
+Vertrauliche Notizen (11.4, S04) werden nur von Principal/CEO in einem Führungs-Review angelegt und haben einen expliziten Empfängerkreis (Autor plus gewählte Teilnehmende). Sie erscheinen nie im Setup, im Accountplan, in Artefakten oder im KI-Kontext und werden Nicht-Empfängern auch nicht als Abschnitt angezeigt.
+
 ## Offene Entscheidungen (Briefing 2.3) – Stand unverändert offen
 | Thema | Aktueller lokaler Ersatz | Entscheidung nötig vor |
 |---|---|---|

@@ -1,6 +1,6 @@
 # Verve Sales-Arbeitsumgebung (Pilot)
 
-Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–1 abgeschlossen, Etappen 0–2 abgeschlossen, Etappe 3 umgesetzt (KI-Schnittstelle mit Testanbieter, Vorschlagslebenszyklus, Protokollimport, Outlook/Graph-Adapter im Fixture-Modus). **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
+Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–3 abgeschlossen, Etappe 4 umgesetzt (Unterstützungsaufträge, Portfolio, Principal-/BD-Weekly, Ziele mit Zustimmung CEO+Principal, vertrauliche Führungsnotizen). **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
 
 Dokumente: `docs/briefing.md` (Auftrag), `docs/implementierungsuebersicht.md`, `docs/entscheidungsprotokoll.md`.
 
@@ -49,9 +49,9 @@ e2e              End-to-End-Tests (Playwright)
 docs             Briefing, Implementierungsübersicht, Entscheidungsprotokoll
 ```
 
-## Bekannte Einschränkungen (Stand Etappe 1)
+## Bekannte Einschränkungen (Stand Etappe 4)
 - Kontaktwege nur tabellarisch; die grafische Beziehungskarte folgt. Buyingcenter je Bedarf folgt mit dem Bedarfsobjekt.
-- Principal-/CEO-Ebene (Etappe 4) und Bedarfe/Angebote/Aufträge (Etappe 5): noch nicht umgesetzt; die Navigation kennzeichnet dies.
+- Bedarfe/Angebote/Aufträge (Etappe 5): noch nicht umgesetzt. Zielbeiträge sind mit Setups/Kunden verknüpft; die Koppelung an Accountplan-Prioritäten ist im Datenmodell vorhanden, in der Oberfläche noch nicht.
 - Outlook: Der Microsoft-Graph-Adapter läuft im Fixture-Modus mit fiktiven Testquellen; ein echter Abruf braucht eine App-Registrierung im Verve-Tenant und die Datenschutzfreigabe.
 - KI: nur der deterministische Testanbieter (`AI_PROVIDER=test`) ist nutzbar; er ist kein Sprachmodell. Der Produktivadapter ist bis zur Anbieter-/Datenschutzentscheidung gesperrt.
 - Keine Unternehmensanmeldung, kein KI-Anbieter, keine Mail-/Kalenderanbindung (Entscheidungen offen, siehe Entscheidungsprotokoll).

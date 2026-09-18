@@ -19,6 +19,7 @@ import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/art
 import { acceptSuggestion, giveFeedback, structureReviewNote } from "@/modules/suggestions/service";
 import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
 import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
+import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
 /**
  * Alle Formulare laufen über diese Aktionen. Jede Aktion lädt den Akteur frisch,
@@ -399,4 +400,88 @@ export async function confirmImportAction(fd: FormData) {
   return run("/eingang", async (actor) => {
     await confirmImport(actor, data);
   }, "Import bestätigt und protokolliert.");
+}
+
+// --- Führungsebenen ------------------------------------------------------------
+
+export async function createSupportRequestAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/meine-arbeit", async (actor) => {
+    await createSupportRequest(actor, data);
+  }, "Unterstützungsauftrag angefragt. Die operative Fallverantwortung bleibt beim BD.");
+}
+
+export async function respondSupportRequestAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/meine-arbeit", async (actor) => {
+    await respondToSupportRequest(actor, data.requestId ?? "", data);
+  }, "Rückmeldung zum Unterstützungsauftrag gespeichert.");
+}
+
+export async function createLeadershipReviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  const participantIds = fd.getAll("participantIds").filter((v): v is string => typeof v === "string");
+  return run("/ziele", async (actor) => {
+    const r = await createLeadershipReview(actor, { ...data, participantIds });
+    return `/fuehrung/${r.id}`;
+  }, "Review angelegt.");
+}
+
+export async function saveLeadershipDraftAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/fuehrung/${data.reviewId}`, async (actor) => {
+    await saveLeadershipDraft(actor, data.reviewId ?? "", { version: Number(data.version), noteDraft: data.noteDraft ?? "" });
+  }, "Notiz als Entwurf gespeichert.");
+}
+
+export async function addLeadershipDecisionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/fuehrung/${data.reviewId}`, async (actor) => {
+    await addLeadershipDecision(actor, { reviewId: data.reviewId ?? "", content: data.content ?? "", scope: data.scope, rationale: data.rationale });
+  }, "Entscheidung festgehalten.");
+}
+
+export async function confirmLeadershipReviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/fuehrung/${data.reviewId}`, async (actor) => {
+    await confirmLeadershipReview(actor, data.reviewId ?? "", { version: Number(data.version) });
+  }, "Review bestätigt und versioniert.");
+}
+
+export async function addConfidentialNoteAction(fd: FormData) {
+  const data = formToObject(fd);
+  const audienceUserIds = fd.getAll("audienceUserIds").filter((v): v is string => typeof v === "string");
+  return run(`/fuehrung/${data.reviewId}`, async (actor) => {
+    await addConfidentialNote(actor, { ...data, audienceUserIds });
+  }, "Vertrauliche Notiz gespeichert – nur für den gewählten Empfängerkreis sichtbar.");
+}
+
+export async function createGoalAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/ziele", async (actor) => {
+    const g = await createGoal(actor, data);
+    return `/ziele/${g.id}`;
+  }, "Ziel als Entwurf angelegt (Version 1).");
+}
+
+export async function updateGoalAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/ziele/${data.goalId}`, async (actor) => {
+    await updateGoal(actor, data.goalId ?? "", data);
+  }, "Neue Zielversion gespeichert.");
+}
+
+export async function changeGoalStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/ziele/${data.goalId}`, async (actor) => {
+    const r = await changeGoalStatus(actor, data.goalId ?? "", { version: Number(data.version), status: data.status as never });
+    if (r.pendingAgreement) throw new PendingInfo("Ihre Zustimmung ist gespeichert. „Vereinbart“ wird das Ziel, sobald CEO und Principal zugestimmt haben.");
+  }, "Zielstatus geändert.");
+}
+
+export async function addGoalContributionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? `/ziele/${data.goalId}`, async (actor) => {
+    await addGoalContribution(actor, data);
+  }, "Zielbeitrag festgehalten.");
 }

@@ -5,20 +5,22 @@ import { listMySetups } from "@/modules/setups/service";
 import { listMyOpenActions } from "@/modules/actions/service";
 import { listMyHandovers } from "@/modules/handovers/service";
 import { listReviews } from "@/modules/reviews/service";
+import { listMySupportRequests } from "@/modules/leadership/service";
 import { getProviderStatus, listMySuggestions } from "@/modules/suggestions/service";
 import { SuggestionCard } from "@/components/SuggestionCard";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
-import { actionStatusLabel, fmtDate, handoverStatusLabel, reviewStatusLabel, setupStatusLabel } from "@/lib/labels";
-import { changeActionStatusAction, respondHandoverAction } from "../actions";
+import { actionStatusLabel, fmtDate, handoverStatusLabel, reviewStatusLabel, setupStatusLabel, supportStatusLabel } from "@/lib/labels";
+import { changeActionStatusAction, respondHandoverAction, respondSupportRequestAction } from "../actions";
 
 export default async function MeineArbeitPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
-  const [setups, actions, handovers, reviews] = await Promise.all([listMySetups(actor), listMyOpenActions(actor), listMyHandovers(actor), listReviews(actor)]);
+  const [setups, actions, handovers, reviews, support] = await Promise.all([listMySetups(actor), listMyOpenActions(actor), listMyHandovers(actor), listReviews(actor), listMySupportRequests(actor)]);
+  const openSupport = support.filter((s) => s.status === "ANGEFRAGT" || s.status === "ANGENOMMEN");
   const nextReviews = [...reviews.open, ...reviews.upcoming].slice(0, 5);
   const ai = getProviderStatus();
   const mySuggestions = ai.enabled ? await listMySuggestions(actor) : [];
@@ -70,6 +72,30 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
           </ul>
         )}
       </section>
+
+      {openSupport.length > 0 && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Unterstützungsaufträge ({openSupport.length} offen)</h2>
+          <ul className="space-y-2">
+            {openSupport.map((s) => (
+              <li key={s.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                <div className="flex flex-wrap gap-2 items-baseline"><strong>{s.task}</strong><Status label={supportStatusLabel[s.status] ?? s.status} /><span className="muted">{s.isAddressee ? `von ${s.requesterName}` : `an ${s.addresseeName}`}{s.setupName && <> · <Link href={`/setups/${s.setupId}`}>{s.setupName}</Link></>}{s.dueDate && ` · bis ${fmtDate(s.dueDate)}`}</span></div>
+                {s.context && <p className="muted mt-1">{s.context}</p>}
+                <form action={respondSupportRequestAction} className="mt-2 flex flex-wrap gap-1 items-end">
+                  <input type="hidden" name="requestId" value={s.id} />
+                  <input type="hidden" name="version" value={s.version} />
+                  <input type="hidden" name="back" value={back} />
+                  <input name="note" className="input" style={{ width: "18rem" }} placeholder="Ergebnis / Begründung" aria-label="Ergebnis oder Begründung" />
+                  {s.isAddressee && s.status === "ANGEFRAGT" && <button className="btn btn-small" name="decision" value="ANNEHMEN">Annehmen</button>}
+                  {s.isAddressee && s.status === "ANGENOMMEN" && <button className="btn btn-small" name="decision" value="ERLEDIGEN">Ergebnis melden</button>}
+                  {s.isAddressee && <button className="btn btn-secondary btn-small" name="decision" value="ZURUECKGEBEN">Zurückgeben</button>}
+                  {s.isRequester && s.status === "ANGEFRAGT" && <button className="btn btn-secondary btn-small" name="decision" value="ZURUECKZIEHEN">Zurückziehen</button>}
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card">
         <h2 className="font-semibold mb-2">Meine offenen Aktionen ({actions.length})</h2>

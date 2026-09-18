@@ -96,3 +96,6 @@ export const feedbackReasonLabel: Record<string, string> = { FALSCHE_ANNAHME: "F
 export const importStatusLabel: Record<string, string> = { VORGESCHLAGEN: "Vorgeschlagen", UEBERNOMMEN: "Übernommen", AUSGEWERTET: "Ausgewertet", BESTAETIGT: "Bestätigt", FEHLER: "Fehler", VERWORFEN: "Verworfen" };
 export const importKindLabel: Record<string, string> = { PROTOKOLL_TEXT: "Protokolltext", PROTOKOLL_DATEI: "Protokolldatei", MAIL: "E-Mail", TERMIN: "Termin" };
 export const integrationStatusLabel: Record<string, string> = { VERBUNDEN_FIXTURE: "Verbunden (Fixture-Modus)", VERBUNDEN: "Verbunden", ABGELAUFEN: "Abgelaufen – erneut anmelden", WIDERRUFEN: "Widerrufen", FEHLER: "Fehler" };
+export const supportStatusLabel: Record<string, string> = { ANGEFRAGT: "Angefragt", ANGENOMMEN: "Angenommen", ZURUECKGEGEBEN: "Zurückgegeben", ERLEDIGT: "Erledigt", ZURUECKGEZOGEN: "Zurückgezogen" };
+export const goalStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", ZUR_ABSTIMMUNG: "Zur Abstimmung", VEREINBART: "Vereinbart", GEAENDERT: "Geändert – erneute Abstimmung", BEENDET: "Beendet" };
+export const reviewTypeLabel: Record<string, string> = { BD_ANKER_WEEKLY: "BD-/Anker-Weekly", PRINCIPAL_BD_WEEKLY: "Principal-/BD-Weekly", CEO_PRINCIPAL_ZIELGESPRAECH: "CEO-/Principal-Zielgespräch" };

@@ -95,7 +95,7 @@ test("Health-Endpunkt meldet erreichbare Datenbank und Entwicklungsmodus", async
 
 test("Personen & Zugang: Beziehungsstand mit Beleg, Kontaktweg mit belegter und hypothetischer Verbindung", async ({ page }) => {
   await loginAs(page, "David");
-  await page.getByRole("link", { name: "Plattformteam", exact: true }).click();
+  await page.getByRole("link", { name: "Plattformteam", exact: true }).first().click();
   await page.getByRole("link", { name: "Personen & Zugang →" }).click();
   await expect(page.getByRole("heading", { name: /Personen & Zugang/ })).toBeVisible();
   await expect(page.getByText("Frau Keller (fiktiv)").first()).toBeVisible();
@@ -245,7 +245,7 @@ test("Artefakte: Katalog vollständig, Gesprächsvorbereitung entwerfen, Version
   await expect(page.getByRole("heading", { name: "Artefaktkatalog" })).toBeVisible();
   for (const code of ["A1", "A6", "A16", "ZIEL"]) await expect(page.getByRole("cell", { name: code, exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Plattformteam", exact: true }).click();
+  await page.getByRole("link", { name: "Plattformteam", exact: true }).first().click();
   await page.waitForURL(/artefakte$/);
   await page.getByLabel("Vorlage").selectOption("A6");
   await page.getByRole("button", { name: "Entwurf anlegen" }).click();
@@ -348,4 +348,85 @@ test("Etappe 3B: Postfach im Fixture-Modus verbinden, Mail auswählen und import
   await page.getByRole("link", { name: "Einstellungen", exact: true }).click();
   await page.getByRole("button", { name: "Verbindung widerrufen" }).click();
   await expect(page.getByText("Verbindung widerrufen; Zugangsdaten gelöscht.")).toBeVisible();
+});
+
+test("Etappe 4: Unterstützungsauftrag BD → Principal, Principal-Weekly mit vertraulicher Notiz, Ziel mit Zustimmung CEO+Principal", async ({ page }) => {
+  const suffix = Date.now().toString(36);
+
+  // 1. David (BD) fragt aus dem Setup Unterstützung bei Petra (Principal) an
+  await loginAs(page, "David");
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
+  await page.getByRole("link", { name: /Beispielkonzern/ }).click();
+  await page.getByRole("link", { name: "Plattformteam", exact: true }).first().click();
+  await page.locator("summary", { hasText: "Unterstützung anfragen" }).click();
+  const task = `Kontakt zur Bereichsleitung Einkauf herstellen ${suffix}`;
+  await page.locator("#srTask").fill(task);
+  await page.locator("#srAddressee").selectOption({ label: "Petra Demo (Principal)" });
+  await page.getByRole("button", { name: "Unterstützung anfragen" }).click();
+  await expect(page.getByText("Unterstützungsauftrag angefragt")).toBeVisible();
+  await expect(page.getByText(task)).toBeVisible();
+  await logout(page);
+
+  // 2. Petra sieht den Auftrag in „Meine Arbeit“, nimmt an, legt ein Principal-/BD-Weekly an
+  await loginAs(page, "Petra");
+  const item = page.locator("li", { hasText: task }).first();
+  await expect(item).toBeVisible();
+  await item.getByRole("button", { name: "Annehmen" }).click();
+  await expect(page.getByText("Rückmeldung zum Unterstützungsauftrag gespeichert")).toBeVisible();
+
+  await page.getByRole("link", { name: "Ziele & Portfolio" }).click();
+  await expect(page.getByRole("heading", { name: /^Portfolio \(/ })).toBeVisible();
+  await page.locator("summary", { hasText: "Review anlegen" }).click();
+  await page.locator("#rType").selectOption("PRINCIPAL_BD_WEEKLY");
+  await page.locator("#rDate").fill("2026-10-02");
+  await page.locator("#rTitle").fill(`Principal-Weekly ${suffix}`);
+  await page.getByLabel("David Demo (BD)", { exact: true }).check();
+  await page.getByRole("button", { name: "Review anlegen" }).click();
+  await expect(page).toHaveURL(/\/fuehrung\//);
+  await expect(page.getByText(task)).toBeVisible(); // offener Unterstützungsauftrag in der Vorbereitung
+  await page.locator("#lNote").fill("Portfolio besprochen; Einkaufskontakt wird von Petra hergestellt.");
+  await page.getByRole("button", { name: "Entwurf speichern" }).click();
+  await expect(page.getByText("Notiz als Entwurf gespeichert")).toBeVisible();
+  // Vertrauliche Notiz nur für Petra selbst (Empfängerkreis leer = nur Autorin)
+  await page.locator("summary", { hasText: "Vertrauliche Notiz hinzufügen" }).click();
+  await page.locator("#cnBody").fill(`Coaching-Notiz ${suffix}: Priorisierung im Gespräch üben.`);
+  await page.getByRole("button", { name: "Vertraulich speichern" }).click();
+  await expect(page.getByText("Vertrauliche Notiz gespeichert")).toBeVisible();
+  const reviewUrl = page.url();
+  await logout(page);
+
+  // 3. David sieht das Weekly, aber nicht die vertrauliche Notiz
+  await loginAs(page, "David");
+  await page.goto(reviewUrl);
+  await expect(page.getByRole("heading", { name: `Principal-Weekly ${suffix}` })).toBeVisible();
+  await expect(page.getByText(`Coaching-Notiz ${suffix}`)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Vertrauliche Notizen/ })).toHaveCount(0);
+  await logout(page);
+
+  // 4. Clemens (CEO) legt ein Ziel an und stimmt zu → noch nicht vereinbart
+  await loginAs(page, "Clemens");
+  await page.getByRole("link", { name: "Ziele & Portfolio" }).click();
+  await page.locator("summary", { hasText: "Ziel anlegen" }).click();
+  const goalTitle = `Zwei Referenzkunden im Plattformbereich ${suffix}`;
+  await page.locator("#gTitle").fill(goalTitle);
+  await page.locator("#gOwner").selectOption({ label: "Petra Demo (Principal)" });
+  await page.locator("#gOutcome").fill("Zwei dokumentierte, freigegebene Referenzen aus laufenden Plattform-Setups.");
+  await page.locator("#gCrit").fill("Freigegebene Referenztexte (Artefakt) liegen vor.");
+  await page.locator("#gBase").fill("unbekannt");
+  await page.getByRole("button", { name: "Ziel anlegen" }).click();
+  await expect(page).toHaveURL(/\/ziele\//);
+  await expect(page.getByText("Ziel als Entwurf angelegt")).toBeVisible();
+  await page.getByRole("button", { name: "Zustimmen (vereinbaren)" }).click();
+  await expect(page.getByText("Ihre Zustimmung ist gespeichert")).toBeVisible();
+  await expect(page.getByText("Zur Abstimmung", { exact: true })).toBeVisible();
+  const goalUrl = page.url();
+  await logout(page);
+
+  // 5. Petra stimmt zu → vereinbart
+  await loginAs(page, "Petra");
+  await page.goto(goalUrl);
+  await page.getByRole("button", { name: "Zustimmen (vereinbaren)" }).click();
+  await expect(page.getByText("Zielstatus geändert")).toBeVisible();
+  await expect(page.getByText("Vereinbart", { exact: true })).toBeVisible();
+  await expect(page.getByText(/zugestimmt von .*Clemens.*Petra|zugestimmt von .*Petra.*Clemens/)).toBeVisible();
 });

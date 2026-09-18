@@ -5,6 +5,8 @@ import { db, schema } from "@/db/client";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getSetupDetail } from "@/modules/setups/service";
+import { listSupportRequestsForSetup } from "@/modules/leadership/service";
+import { inArray, or } from "drizzle-orm";
 import { getProviderStatus, listOpenQuestionsForSetup, listSuggestionsForSetup } from "@/modules/suggestions/service";
 import { SuggestionCard } from "@/components/SuggestionCard";
 import { Feedback, type SearchParams } from "@/components/Feedback";
@@ -18,6 +20,7 @@ import {
   handoverStatusLabel,
   setupStatusLabel,
   signalStatusLabel,
+  supportStatusLabel,
   sourceTypeLabel,
   visibilityLabel,
 } from "@/lib/labels";
@@ -28,7 +31,9 @@ import {
   changeSignalStatusAction,
   createActionAction,
   createHandoverAction,
+  createSupportRequestAction,
   respondHandoverAction,
+  respondSupportRequestAction,
   takeOverSignalAction,
   updateSetupAction,
 } from "../../actions";
@@ -51,7 +56,11 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const name = (uid: string | null | undefined) => (uid ? d.userNames.get(uid) ?? allUsers.find((u) => u.id === uid)?.displayName ?? "?" : "–");
 
   const ai = getProviderStatus();
-  const [sugg, openQuestions] = await Promise.all([listSuggestionsForSetup(actor, id), listOpenQuestionsForSetup(id)]);
+  const [sugg, openQuestions, support] = await Promise.all([listSuggestionsForSetup(actor, id), listOpenQuestionsForSetup(id), listSupportRequestsForSetup(actor, id)]);
+  const leaderRoles = await db.query.roleAssignments.findMany({ where: or(eq(schema.roleAssignments.role, "PRINCIPAL"), eq(schema.roleAssignments.role, "CEO")) });
+  const leaderIds = [...new Set(leaderRoles.map((r) => r.userId))].filter((uid) => uid !== actor.userId);
+  const leaders = leaderIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, leaderIds), orderBy: (u, { asc }) => [asc(u.displayName)] }) : [];
+  const openSupport = support.filter((s) => s.status === "ANGEFRAGT" || s.status === "ANGENOMMEN");
   const openSignals = d.signals.filter((s) => s.status !== "BEENDET");
   const openActions = d.actions.filter((a) => a.status !== "ERLEDIGT" && a.status !== "VERWORFEN");
   const doneActions = d.actions.filter((a) => a.status === "ERLEDIGT");
@@ -361,6 +370,53 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       )}
 
       {/* Quellen */}
+      {/* Unterstützungsaufträge (11.1, F13) */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Unterstützung durch Principal/CEO ({openSupport.length} offen)</h2>
+        <p className="muted text-sm mb-2">Ein Unterstützungsauftrag ist begrenzt und konkret (z. B. „Kontakt zu Frau X herstellen“, „Angebotsentwurf gegenlesen“). Die operative Fallverantwortung bleibt beim BD.</p>
+        {support.length === 0 ? <p className="muted text-sm">Keine Unterstützungsaufträge zu diesem Setup.</p> : (
+          <ul className="space-y-2">
+            {support.map((s) => (
+              <li key={s.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                <div className="flex flex-wrap gap-2 items-baseline"><strong>{s.task}</strong><Status label={supportStatusLabel[s.status] ?? s.status} /><span className="muted">{s.requesterName} → {s.addresseeName}{s.dueDate && ` · bis ${fmtDate(s.dueDate)}`}</span></div>
+                {s.context && <p className="muted mt-1">{s.context}</p>}
+                {s.responseNote && <p className="mt-1">Rückmeldung: {s.responseNote}</p>}
+                {s.result && <p className="mt-1">Ergebnis: {s.result}</p>}
+                {(s.isAddressee || s.isRequester) && (s.status === "ANGEFRAGT" || s.status === "ANGENOMMEN") && (
+                  <form action={respondSupportRequestAction} className="mt-2 flex flex-wrap gap-1 items-end">
+                    <input type="hidden" name="requestId" value={s.id} />
+                    <input type="hidden" name="version" value={s.version} />
+                    <input type="hidden" name="back" value={back} />
+                    <input name="note" className="input" style={{ width: "18rem" }} placeholder="Ergebnis / Begründung" aria-label="Ergebnis oder Begründung" />
+                    {s.isAddressee && s.status === "ANGEFRAGT" && <button className="btn btn-small" name="decision" value="ANNEHMEN">Annehmen</button>}
+                    {s.isAddressee && s.status === "ANGENOMMEN" && <button className="btn btn-small" name="decision" value="ERLEDIGEN">Ergebnis melden</button>}
+                    {s.isAddressee && <button className="btn btn-secondary btn-small" name="decision" value="ZURUECKGEBEN">Zurückgeben</button>}
+                    {s.isRequester && s.status === "ANGEFRAGT" && <button className="btn btn-secondary btn-small" name="decision" value="ZURUECKZIEHEN">Zurückziehen</button>}
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {d.canEdit && leaders.length > 0 && (
+          <details className="mt-3">
+            <summary>Unterstützung anfragen</summary>
+            <form action={createSupportRequestAction} className="mt-2 grid sm:grid-cols-2 gap-3">
+              <input type="hidden" name="setupId" value={id} />
+              <input type="hidden" name="back" value={back} />
+              <div className="sm:col-span-2"><label className="label" htmlFor="srTask">Konkreter Auftrag</label><input id="srTask" name="task" className="input" required minLength={10} placeholder="z. B. Kontakt zur Bereichsleitung Einkauf herstellen" /></div>
+              <div>
+                <label className="label" htmlFor="srAddressee">An</label>
+                <select id="srAddressee" name="addresseeUserId" className="select" required>{leaders.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}</select>
+              </div>
+              <div><label className="label" htmlFor="srDue">Bis (optional)</label><input id="srDue" name="dueDate" type="date" className="input" /></div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="srContext">Kontext (was liegt vor, was wird gebraucht)</label><textarea id="srContext" name="context" className="textarea" rows={2} /></div>
+              <div className="sm:col-span-2"><button className="btn" type="submit">Unterstützung anfragen</button></div>
+            </form>
+          </details>
+        )}
+      </section>
+
       <section className="card">
         <h2 className="font-semibold mb-2">Quellen</h2>
         {d.sources.length === 0 ? <p className="muted text-sm">Keine Quellen in Ihrem Berechtigungsbereich.</p> : (

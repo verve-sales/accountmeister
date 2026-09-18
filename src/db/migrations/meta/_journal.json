@@ -50,6 +50,13 @@
       "when": 1789763702815,
       "tag": "0006_quellenanbindung",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789765422186,
+      "tag": "0007_fuehrungsebenen",
+      "breakpoints": true
     }
   ]
 }
