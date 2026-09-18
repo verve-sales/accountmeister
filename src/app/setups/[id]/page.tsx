@@ -66,7 +66,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         <span className="muted text-sm">Sichtbarkeit: {visibilityLabel[d.setup.visibility]}</span>
         <span className="muted text-sm">BD: {d.setup.bdUserId ? name(d.setup.bdUserId) : "Zuordnung offen"}</span>
         {!d.canEdit && <span className="muted text-sm">(nur lesend)</span>}
-        <span className="ml-auto flex gap-4 text-sm"><Link href={`/setups/${id}/personen`}>Personen & Zugang →</Link><Link href={`/weeklys?setup=${id}`}>Weeklys →</Link></span>
+        <span className="ml-auto flex gap-4 text-sm"><Link href={`/setups/${id}/personen`}>Personen & Zugang →</Link><Link href={`/weeklys?setup=${id}`}>Weeklys →</Link><Link href={`/setups/${id}/artefakte`}>Artefakte →</Link></span>
       </div>
       <Feedback params={sp} />
 

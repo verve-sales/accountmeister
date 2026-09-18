@@ -47,6 +47,12 @@ Der Accountplan wird bei jedem Aufruf aus den Objekten gebaut (kein zweiter Date
 ## E-015 · 2026-09-18 · Gespeicherte Accountplan-Stände
 Ein gespeicherter Stand ist eine unveränderliche JSON-Kopie der Live-Übersicht mit Bestätiger und Zeitpunkt (Briefing 7: „Ein gespeicherter Review-Stand bleibt erhalten“). Er wird mit den Berechtigungen des Speichernden erzeugt – Inhalte außerhalb dessen Berechtigungsbereichs fehlen darin und werden im Stand als Hinweis ausgewiesen. Lesen darf, wer den Kunden sehen darf.
 
+## E-016 · 2026-09-18 · Artefaktkatalog als versionierte Konfiguration
+Die 19 Artefakttypen liegen in `src/modules/artifacts/templates.ts` (Registerversion) und werden per Seed in `artifact_templates` synchronisiert – damit sind Vorlagen „ohne Neubau justierbar“ (Briefing 2.2), bleiben aber im Repository nachvollziehbar. Jede Vorlage trägt ihren Umsetzungsstand: bereits als lebende Ansicht vorhanden (A1–A5, A13, Setup, Weekly), als Textentwurf verfügbar (A6, A8, A12, A14–A16) oder Textentwurf verfügbar mit noch folgendem Objektbezug (A7, A9–A11, Ziel). Keine Vorlage wird als fertig ausgegeben, wenn ihr Objekt fehlt.
+
+## E-017 · 2026-09-18 · Artefaktversionen, Freigabe und Kundentext
+Jedes Speichern erzeugt eine neue Version; freigegebene Versionen werden nie überschrieben, sondern „überholt“. Freigabe prüft Pflichtabschnitte und ist ausdrücklich kein Versand und kein Vorstellungsereignis (F09). Kundentext-Varianten (nur A5, A9) starten leer, erlauben nur dafür markierte Abschnitte, dürfen keine persönlichen Quellen referenzieren und brauchen zur Freigabe die Bestätigung, dass keine vertrauliche Herkunft, interne Bewertung oder nicht freigegebene Projektdetails enthalten sind (12.2). Coaching-/Eskalationsnotizen (A14) sind auf die Empfängerkreise „persönlich“ oder „Kundenteam“ beschränkt (11.4). Der Empfängerkreis wird pro Artefakt gesetzt und bei Lesezugriffen erzwungen.
+
 ## Offene Entscheidungen (Briefing 2.3) – Stand unverändert offen
 | Thema | Aktueller lokaler Ersatz | Entscheidung nötig vor |
 |---|---|---|

@@ -15,6 +15,7 @@ import { createPerson, setPersonFunction, setRelationship } from "@/modules/peop
 import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/modules/accesspaths/service";
 import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
 import { changePriority, createPriority, saveAccountPlanSnapshot } from "@/modules/accountplan/service";
+import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/artifacts/service";
 
 /**
  * Alle Formulare laufen über diese Aktionen. Jede Aktion lädt den Akteur frisch,
@@ -278,4 +279,32 @@ export async function saveAccountPlanSnapshotAction(fd: FormData) {
     const s = await saveAccountPlanSnapshot(actor, data);
     return `/kunden/${data.accountId}/staende/${s.id}`;
   }, "Stand des Accountplans gespeichert.");
+}
+
+// --- Artefakte -------------------------------------------------------------------
+
+export async function createArtifactDraftAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/setups/${data.setupId}/artefakte`, async (actor) => {
+    const v = await createDraft(actor, data);
+    return `/artefakte/${v.id}`;
+  }, "Entwurf angelegt. Vorbefüllte Inhalte sind Vorschläge aus vorhandenen Daten – bitte prüfen.");
+}
+
+export async function saveArtifactVersionAction(fd: FormData) {
+  const data = formToObject(fd);
+  const content: Record<string, string> = {};
+  for (const [k, v] of Object.entries(data)) if (k.startsWith("section:")) content[k.slice(8)] = v;
+  const sourceIds = fd.getAll("sourceIds").filter((v): v is string => typeof v === "string");
+  return run(`/artefakte/${data.versionId}`, async (actor) => {
+    const v = await saveNewVersion(actor, { versionId: data.versionId, title: data.title, content, audience: data.audience || undefined, sourceIds });
+    return `/artefakte/${v.id}`;
+  }, "Neue Version gespeichert.");
+}
+
+export async function changeArtifactStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/artefakte/${data.versionId}`, async (actor) => {
+    await changeArtifactStatus(actor, data);
+  }, data.status === "FREIGEGEBEN" ? "Freigegeben. Das ist kein Versand und kein Vorstellungsereignis – Kopieren bleibt Ihre Handlung." : "Status geändert.");
 }

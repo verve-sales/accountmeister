@@ -86,3 +86,6 @@ export const reviewStatusLabel: Record<string, string> = {
 };
 export const priorityKindLabel: Record<string, string> = { VERLAENGERN: "Verlängern", AUSWEITEN: "Ausweiten", VERTIEFEN: "Vertiefen", UEBERTRAGEN: "Auf andere Bereiche übertragen" };
 export const priorityStatusLabel: Record<string, string> = { VORGESCHLAGEN: "Vorgeschlagen", VEREINBART: "Vereinbart", ZURUECKGESTELLT: "Bewusst zurückgestellt", ERREICHT: "Erreicht", VERWORFEN: "Verworfen" };
+export const artifactStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", GEPRUEFT: "Geprüft", FREIGEGEBEN: "Freigegeben", UEBERHOLT: "Überholt" };
+export const artifactVariantLabel: Record<string, string> = { INTERN: "Interne Notiz", EXTERN: "Kundentext" };
+export const implementationLabel: Record<string, string> = { ANSICHT: "Als Ansicht umgesetzt", TEXTENTWURF: "Textentwurf verfügbar", FOLGT: "Textentwurf verfügbar; Objektbezug folgt" };

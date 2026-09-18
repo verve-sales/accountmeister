@@ -15,6 +15,7 @@ const NAV = [
   { href: "/weeklys", label: "Weeklys" },
   { href: "/ziele", label: "Ziele & Portfolio" },
   { href: "/eingang", label: "Eingang" },
+  { href: "/artefakte", label: "Artefakte" },
   { href: "/einstellungen", label: "Einstellungen" },
 ];
 

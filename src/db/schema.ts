@@ -558,6 +558,59 @@ export const accountPlanSnapshots = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Artefakte (Briefing 12 / 15.2 ArtifactVersion): Vorlage, Datenbezug, Entwurf/Freigabe, Version, Quellen, Empfängerkreis
+// ---------------------------------------------------------------------------
+
+export const artifactVariantEnum = pgEnum("artifact_variant", ["INTERN", "EXTERN"]);
+export const artifactStatusEnum = pgEnum("artifact_status", ["ENTWURF", "GEPRUEFT", "FREIGEGEBEN", "UEBERHOLT"]);
+
+/** Registrierte Vorlagen – aus src/modules/artifacts/templates.ts synchronisiert (Konfiguration, später justierbar) */
+export const artifactTemplates = pgTable("artifact_templates", {
+  code: text("code").primaryKey(),
+  name: text("name").notNull(),
+  responsible: text("responsible").notNull(),
+  trigger: text("trigger").notNull(),
+  scopeType: text("scope_type").notNull(),
+  implementation: text("implementation").notNull(), // ANSICHT | TEXTENTWURF | FOLGT
+  viewPath: text("view_path"),
+  qualityCriterion: text("quality_criterion").notNull(),
+  externalVariantAllowed: boolean("external_variant_allowed").notNull().default(false),
+  sections: jsonb("sections").notNull(), // TemplateSection[]
+  registryVersion: integer("registry_version").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  updatedAt: updatedAt(),
+});
+
+export const artifactVersions = pgTable(
+  "artifact_versions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    /** Artefakt-Kette: alle Versionen eines Artefakts teilen dieselbe artifact_key */
+    artifactKey: text("artifact_key").notNull(),
+    versionNo: integer("version_no").notNull().default(1),
+    templateCode: text("template_code").notNull().references(() => artifactTemplates.code),
+    templateVersion: integer("template_version").notNull(),
+    scopeType: text("scope_type").notNull(),
+    scopeId: text("scope_id").notNull(),
+    setupId: text("setup_id").references(() => projectSetups.id),
+    accountId: text("account_id").references(() => accounts.id),
+    title: text("title").notNull(),
+    variant: artifactVariantEnum("variant").notNull().default("INTERN"),
+    content: jsonb("content").notNull(), // { [sectionKey]: string }
+    sourceIds: text("source_ids").array().notNull().default(sql`'{}'::text[]`),
+    audience: accessClassEnum("audience").notNull().default("SETUP"), // zulässiger Empfängerkreis
+    status: artifactStatusEnum("status").notNull().default("ENTWURF"),
+    supersedesId: text("supersedes_id"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    approvedBy: text("approved_by").references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("artifact_versions_key_idx").on(t.artifactKey), index("artifact_versions_setup_idx").on(t.setupId), uniqueIndex("artifact_versions_key_no_uq").on(t.artifactKey, t.versionNo)],
+);
+
+// ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
 
@@ -589,3 +642,5 @@ export type AccessPlanStatus = (typeof accessPlanStatusEnum.enumValues)[number];
 export type ReviewStatus = (typeof reviewStatusEnum.enumValues)[number];
 export type PriorityKind = (typeof priorityKindEnum.enumValues)[number];
 export type PriorityStatus = (typeof priorityStatusEnum.enumValues)[number];
+export type ArtifactStatus = (typeof artifactStatusEnum.enumValues)[number];
+export type ArtifactVariant = (typeof artifactVariantEnum.enumValues)[number];

@@ -7,6 +7,20 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "./client";
 import * as schema from "./schema";
+import { ARTIFACT_TEMPLATES, TEMPLATE_REGISTRY_VERSION } from "@/modules/artifacts/templates";
+
+/** Registriert alle Artefaktvorlagen (idempotent; aktualisiert bei neuer Registerversion). */
+export async function syncArtifactTemplates(db: Db): Promise<void> {
+  for (const t of ARTIFACT_TEMPLATES) {
+    await db
+      .insert(schema.artifactTemplates)
+      .values({ ...t, viewPath: t.viewPath ?? null, sections: t.sections, registryVersion: TEMPLATE_REGISTRY_VERSION })
+      .onConflictDoUpdate({
+        target: schema.artifactTemplates.code,
+        set: { name: t.name, responsible: t.responsible, trigger: t.trigger, scopeType: t.scopeType, implementation: t.implementation, viewPath: t.viewPath ?? null, qualityCriterion: t.qualityCriterion, externalVariantAllowed: t.externalVariantAllowed, sections: t.sections, registryVersion: TEMPLATE_REGISTRY_VERSION, isActive: true, updatedAt: new Date() },
+      });
+  }
+}
 
 export const DEMO_WORKSPACE_NAME = "Verve (Pilot, fiktive Daten)";
 
@@ -30,6 +44,7 @@ export type SeedResult = {
 };
 
 export async function seed(db: Db): Promise<SeedResult> {
+  await syncArtifactTemplates(db);
   const existing = await db.query.workspaces.findFirst({ where: eq(schema.workspaces.name, DEMO_WORKSPACE_NAME) });
   if (existing) {
     return loadExisting(db, existing.id);

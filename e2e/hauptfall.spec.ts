@@ -238,3 +238,31 @@ test("Accountplan: Vorhaben vorschlagen, Zustimmung beider Rollen, Stand speiche
   await expect(page.getByText("Gespeicherter Stand · erzeugt")).toBeVisible();
   await expect(page.getByText(`E2E Vorhaben ${tag}`)).toBeVisible();
 });
+
+test("Artefakte: Katalog vollständig, Gesprächsvorbereitung entwerfen, Version speichern, Freigabe prüft Pflichtabschnitt", async ({ page }) => {
+  await loginAs(page, "David");
+  await page.getByRole("link", { name: "Artefakte", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Artefaktkatalog" })).toBeVisible();
+  for (const code of ["A1", "A6", "A16", "ZIEL"]) await expect(page.getByRole("cell", { name: code, exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Plattformteam", exact: true }).click();
+  await page.waitForURL(/artefakte$/);
+  await page.getByLabel("Vorlage").selectOption("A6");
+  await page.getByRole("button", { name: "Entwurf anlegen" }).click();
+  await expect(page.getByText("Entwurf angelegt")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Gesprächsvorbereitung – Plattformteam/ })).toBeVisible();
+  // Vorbefüllung sichtbar
+  await expect(page.locator("#sec-kontext")).toHaveValue(/Plattformteam/);
+  // Freigabe ohne Pflichtabschnitt „Ziel“ → Fehler
+  await page.getByRole("button", { name: "Freigeben" }).click();
+  await expect(page.locator("p.error")).toContainText("Ziel des Gesprächs");
+  // Ziel ausfüllen → Version 2 → Freigabe
+  await page.locator("#sec-ziel").fill("Verstehen, ob externe Testkoordination relevant ist.");
+  await page.locator("#sec-grenzen").fill("Nina nicht als Quelle nennen.");
+  await page.getByRole("button", { name: "Als neue Version speichern" }).click();
+  await expect(page.getByText("Neue Version gespeichert")).toBeVisible();
+  await expect(page.getByText(/Version 2/).first()).toBeVisible();
+  await page.getByRole("button", { name: "Freigeben" }).click();
+  await expect(page.getByText("Freigegeben. Das ist kein Versand")).toBeVisible();
+  await expect(page.getByText("Freigegeben", { exact: true }).first()).toBeVisible();
+});
