@@ -22,6 +22,7 @@ export const createActionInput = z.object({
   dueDate: z.string().optional().or(z.literal("")),
   /** true = im Gespräch gemeinsam vereinbart, direkt „angenommen“; false = Vorschlag */
   agreedInConversation: z.union([z.boolean(), z.enum(["true", "false", "on"])]).optional(),
+  reviewId: z.string().optional().or(z.literal("")), // im Weekly vereinbart
 });
 
 export async function createAction(actor: Actor, raw: unknown) {
@@ -42,6 +43,7 @@ export async function createAction(actor: Actor, raw: unknown) {
         workspaceId: actor.workspaceId,
         setupId: input.setupId,
         signalId: input.signalId || null,
+        reviewId: input.reviewId || null,
         title: input.title,
         agreement: input.agreement || null,
         ownerUserId: input.ownerUserId,

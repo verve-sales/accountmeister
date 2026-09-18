@@ -1,6 +1,6 @@
 # Implementierungsübersicht – Verve Sales-Arbeitsumgebung
 
-Stand: 18.09.2026 · Etappe 0 abgeschlossen, Etappe 1 umgesetzt (vertikaler Hauptfall + Personen & Zugang).
+Stand: 18.09.2026 · Etappen 0 und 1 abgeschlossen; Etappe 2 begonnen: BD-/Anker-Weekly umgesetzt, Accountplan folgt.
 Referenz: `docs/briefing.md` (Produkt- und Entwicklungsbriefing). Entscheidungen: `docs/entscheidungsprotokoll.md`.
 
 ## 1. Architektur
@@ -20,15 +20,16 @@ Schichten (17.2): UI (`src/app`) → Server Actions (`src/app/actions.ts`, nur F
 | Actions/Handovers | `src/modules/actions`, `src/modules/handovers` | Aktion mit Vorschlag/Annahme (F07), Erledigt nur mit Ergebnis (9.3); Übergabe mit Pflichtinhalt 10.1, Annahme/Rückgabe/Abschluss, keine Selbstübergabe (F05) |
 | Audit/Policies | `src/modules/audit` | Audit-Ereignisse je schreibender Operation (minimal, keine Rohquellen); `policy_version` am Workspace |
 | People/AccessPaths | `src/modules/people`, `src/modules/accesspaths` | Personen (nur berufliche Felder), zeitlich gültige Funktionen, Beziehungsstand mit Kontext- und Belegpflicht, Kontaktweg (A5) mit Schritten belegt/geplant/hypothetisch und Statuslogik; Seite „Personen & Zugang“ je Setup (tabellarisch; Karte folgt) |
-| Reviews/Goals, Artifacts/Suggestions, Integrations/Jobs | – | Noch nicht begonnen (Etappen 2–4); Navigation zeigt dies ehrlich an |
+| Reviews | `src/modules/reviews` | BD-/Anker-Weekly: Vorbereitung aus letztem bestätigtem Stand, Notiz nur als Entwurf, Beobachtungen/Aktionen/Entscheidungen mit Weekly-Bezug, Bestätigung als versionierter Snapshot in einer Transaktion, Korrekturversionen; Setup-Abschnitt 2 bezieht sich auf den bestätigten Stand |
+| Goals, Artifacts/Suggestions, Integrations/Jobs | – | Noch nicht begonnen (Etappen 3–4); Navigation zeigt dies ehrlich an |
 
 ## 3. Datenmodell (Etappe 0/1)
 
-`src/db/schema.ts`, Migrationen `0000_init.sql`, `0001_kontaktwege.sql`. Umgesetzt: workspaces, users, role_assignments, accounts, org_units, project_setups, setup_memberships, persons, person_functions, relationships, sources, assertions, assertion_evidence, signals, actions, handovers, access_plans, access_plan_steps, audit_events.
+`src/db/schema.ts`, Migrationen `0000_init.sql`, `0001_kontaktwege.sql`, `0002_weeklys.sql`. Umgesetzt: workspaces, users, role_assignments, accounts, org_units, project_setups, setup_memberships, persons, person_functions, relationships, sources, assertions, assertion_evidence, signals, actions, handovers, access_plans, access_plan_steps, reviews, review_participants, review_versions, decisions, audit_events.
 
 Konventionen: UUID-Text-IDs, `created_at`/`updated_at` (timestamptz), `created_by`, `version` (optimistische Sperre auf Setup, Signal, Aktion, Übergabe), `workspace_id` überall. Fälligkeiten als `date`, Zeitpunkte als `timestamptz`; Anzeige in Europe/Berlin. Kein Soft-Delete-only: Quellen haben `is_locked` (Sperrung) getrennt von Löschung, das vollständige Löschkonzept folgt mit der Datenschutzentscheidung.
 
-Noch nicht modelliert (folgt je Etappe): Opportunity, DecisionParticipation (Buyingcenter je Bedarf), OpenQuestion, Review/ReviewVersion, Decision, Goal/GoalVersion/GoalContribution, SupportRequest, Offer/Order/StartRequirement, CandidateProfileReference, Suggestion, ArtifactVersion, IntegrationConnection, ImportJob/AIJob, AccessGrant, PolicyVersion (bisher nur Textfeld am Workspace).
+Noch nicht modelliert (folgt je Etappe): Opportunity, DecisionParticipation (Buyingcenter je Bedarf), OpenQuestion, Goal/GoalVersion/GoalContribution, SupportRequest, Offer/Order/StartRequirement, CandidateProfileReference, Suggestion, ArtifactVersion, IntegrationConnection, ImportJob/AIJob, AccessGrant, PolicyVersion (bisher nur Textfeld am Workspace).
 
 ## 4. Berechtigungsmodell (16.2)
 
@@ -44,17 +45,17 @@ Serverseitig, deterministisch, pro Anfrage:
 
 | Bereich | Umsetzung | Stand |
 |---|---|---|
-| Fachliche Regeln | `tests/hauptfall.test.ts`: F01, F03, F05, F07, Begründungspflicht, Übergänge, optimistische Sperre · `tests/personen-zugang.test.ts`: F06, Belegpflicht Beziehungsstand, Funktionswechsel, Zugriff auf Personen/Kontaktwege | 12 Tests grün |
+| Fachliche Regeln | `tests/hauptfall.test.ts`: F01, F03, F05, F07, Begründungspflicht, Übergänge, optimistische Sperre · `tests/personen-zugang.test.ts`: F06, Belegpflicht Beziehungsstand, Funktionswechsel, Zugriff auf Personen/Kontaktwege · `tests/weekly.test.ts`: F07 im Weekly, F11, zwei aufeinander aufbauende Weeklys, Korrekturversion, Zugriff | 15 Tests grün |
 | Zugriff/Sicherheit | `tests/zugriff.test.ts`: S01, S02, S09, persönliche Quelle, ADMIN ohne Inhalt, Principal lesend | 7 Tests grün |
-| End-to-End | `e2e/hauptfall.spec.ts` (Playwright): Hauptfall 19.1 Schritte 1–5, Zugriffsverweigerung, Health-Endpunkt, Personen & Zugang (Belegpflicht, F06 in der Oberfläche) | 3 Tests grün |
+| End-to-End | `e2e/hauptfall.spec.ts` (Playwright): Hauptfall 19.1 Schritte 1–5, Zugriffsverweigerung, Health-Endpunkt, Personen & Zugang (Belegpflicht, F06), zwei aufeinander aufbauende Weeklys in der Oberfläche | 4 Tests grün |
 | Technisch | Migration von leerer DB (Test-Setup macht das bei jedem Lauf), Seed idempotent, Build, Typecheck, Lint | grün |
 
-Noch offen: F02, F04, F08–F16; S03–S08, S10–S12 – jeweils mit den zugehörigen Etappen.
+Noch offen: F02, F04, F08–F10, F12–F16; S03–S08, S10–S12 – jeweils mit den zugehörigen Etappen.
 
 ## 6. Nächste Schritte (Etappe 1 abschließen, Etappe 2 beginnen)
 
-1. Setup-Übergabe aus dem Eingang (BD-Zuordnung) direkt bedienbar machen.
-2. Weekly (Etappe 2): Vorbereitung aus letztem bestätigten Stand, Freitextnotiz, Änderungsvorschau, Bestätigung mit Version.
-3. Accountplan (A1) als verdichtete Sicht aus bestätigten Daten.
-4. Buyingcenter je Bedarf (DecisionParticipation) mit dem Bedarfsobjekt (Opportunity).
+1. Accountplan (A1) als verdichtete Sicht aus bestätigten Setups, Prioritäten und Aktionen; gespeicherter Review-Stand.
+2. Artefaktvorlagen registrieren (A1–A16 als Vorlagen mit Datenbezug, Entwurf/Bestätigung, Empfängerkreis).
+3. Setup-Übergabe aus dem Eingang (BD-Zuordnung) direkt bedienbar machen.
+4. Buyingcenter je Bedarf (DecisionParticipation) mit dem Bedarfsobjekt (Opportunity, Etappe 5).
 5. Grafische Beziehungskarte als gleichwertige Alternative zur Kontaktweg-Tabelle.

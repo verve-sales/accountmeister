@@ -77,3 +77,10 @@ export const accessPlanStatusLabel: Record<string, string> = {
 };
 export const stepKindLabel: Record<string, string> = { BELEGT: "Belegt", GEPLANT: "Geplant", HYPOTHETISCH: "Hypothetisch" };
 export const readinessLabel: Record<string, string> = { UNBEKANNT: "Bereitschaft unbekannt", ANGEFRAGT: "Vermittlung angefragt", BEREIT: "Bereit zu vermitteln", ABGELEHNT: "Vermittlung abgelehnt" };
+export const reviewStatusLabel: Record<string, string> = {
+  GEPLANT: "Geplant",
+  IN_VORBEREITUNG: "In Vorbereitung",
+  LAUFEND: "Laufend",
+  BESTAETIGUNG_OFFEN: "Bestätigung offen",
+  BESTAETIGT: "Bestätigt",
+};

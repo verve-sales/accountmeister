@@ -20,8 +20,8 @@ Jede erfasste Beobachtung legt eine Notiz-Quelle (mit gewählter Zugriffsklasse)
 ## E-006 · 2026-09-18 · Übernahme nur durch Annahme
 Ein Hinweis wechselt den Verantwortlichen entweder durch eigene Übernahme (Setup-Bearbeitende) oder durch eine angenommene Übergabe. Selbstübergaben sind gesperrt (F05). Aktionen für andere starten als „vorgeschlagen“, außer sie sind als im Gespräch vereinbart markiert; annehmen darf nur die verantwortliche Person.
 
-## E-007 · 2026-09-18 · „Was hat sich geändert?“ vorläufig über 7-Tage-Fenster
-Bis Weeklys mit bestätigten Ständen existieren (Etappe 2), zeigt Abschnitt 2 des Setups die Änderungen der letzten sieben Tage. Wird durch „seit letztem bestätigten Weekly“ ersetzt.
+## E-007 · 2026-09-18 · „Was hat sich geändert?“ – ersetzt durch E-012
+Vorläufiges 7-Tage-Fenster; seit Etappe 2 bezieht sich Abschnitt 2 des Setups auf den letzten bestätigten Weekly-Stand (ohne bestätigtes Weekly: alle Einträge).
 
 ## E-008 · 2026-09-18 · Noch nicht umgesetzte Bereiche sichtbar kennzeichnen
 Weeklys, Ziele & Portfolio, Einstellungen sind in der Navigation vorhanden und zeigen einen klaren Hinweis „noch nicht umgesetzt (Etappe X)“ statt leerer Funktionen (Briefing 21).
@@ -34,6 +34,12 @@ Beziehungsstände „Vorgestellt“, „Im Austausch“, „Konkrete Zusammenarb
 
 ## E-011 · 2026-09-18 · Personenfelder bewusst begrenzt
 Die Person trägt nur Name, berufliche Kontaktdaten, Organisation, Funktion (zeitlich gültig), bekannte Zuständigkeit, Zugriffsklasse und Herkunft. Es gibt kein Freitext-Bewertungsfeld und keine Sponsor-/Champion-Markierung an der Person; solche Rollen werden später je Bedarf (Buyingcenter) mit Beleg geführt (Briefing 8.1/8.3).
+
+## E-012 · 2026-09-18 · Weekly-Modell: Entwurf, Bestätigung, Snapshot, Korrekturversion
+Die gemeinsame Notiz wird ausschließlich als Entwurf gespeichert. Beobachtungen, Aktionen und Entscheidungen aus dem Weekly werden als normale Objekte mit `review_id` angelegt (verknüpft, nicht kopiert). Die Bestätigung durch eine Teilnehmerin/einen Teilnehmer schreibt in einer Transaktion eine `review_version` mit Snapshot (IDs der erfassten Objekte, Anzahl offener Hinweise/Aktionen/Übergaben, Kontextsatz, Bezugszeitpunkt) und setzt das Review auf „bestätigt“. Ideen bleiben „vorgeschlagen“ (F07). Änderungen danach erzeugen eine Korrekturversion mit Pflichtbegründung; alte Versionen bleiben erhalten (11.4). Bestätigen darf nur ein Teilnehmender; Setup-Bearbeitende ohne Teilnahme dürfen mitschreiben, aber nicht bestätigen.
+
+## E-013 · 2026-09-18 · Review-Zustände
+Umgesetzt: geplant → laufend → Bestätigung offen → bestätigt („in Vorbereitung“ als optionaler Zwischenzustand). „Ersetzt“ aus Briefing 9.2 wird nicht als Review-Status geführt, sondern über `supersedes_version_id` an der Version – das Review selbst bleibt bestätigt, der gültige Stand zeigt auf die neueste Version.
 
 ## Offene Entscheidungen (Briefing 2.3) – Stand unverändert offen
 | Thema | Aktueller lokaler Ersatz | Entscheidung nötig vor |

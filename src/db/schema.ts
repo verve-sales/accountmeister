@@ -321,6 +321,7 @@ export const signals = pgTable(
     status: signalStatusEnum("status").notNull().default("NEU"),
     ownerUserId: text("owner_user_id").references(() => users.id), // wer die Prüfung übernommen hat
     sourceId: text("source_id").references(() => sources.id),
+    reviewId: text("review_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => reviews.id), // im Weekly erfasst
     closedReason: text("closed_reason"),
     createdBy: text("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
@@ -337,6 +338,7 @@ export const actions = pgTable(
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     setupId: text("setup_id").references(() => projectSetups.id),
     signalId: text("signal_id").references(() => signals.id),
+    reviewId: text("review_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => reviews.id), // im Weekly vereinbart
     title: text("title").notNull(),
     agreement: text("agreement"), // was vereinbart wurde
     ownerUserId: text("owner_user_id").notNull().references(() => users.id),
@@ -437,6 +439,78 @@ export const accessPlanSteps = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Reviews / Weeklys (Briefing 11) – versionierter, bestätigter Stand
+// ---------------------------------------------------------------------------
+
+export const reviewTypeEnum = pgEnum("review_type", ["BD_ANKER_WEEKLY", "PRINCIPAL_BD_WEEKLY", "CEO_PRINCIPAL_ZIELGESPRAECH"]);
+export const reviewStatusEnum = pgEnum("review_status", ["GEPLANT", "IN_VORBEREITUNG", "LAUFEND", "BESTAETIGUNG_OFFEN", "BESTAETIGT"]);
+
+export const reviews = pgTable(
+  "reviews",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    type: reviewTypeEnum("type").notNull().default("BD_ANKER_WEEKLY"),
+    setupId: text("setup_id").references(() => projectSetups.id), // BD/Anker-Weekly ist setup-bezogen
+    accountId: text("account_id").references(() => accounts.id),
+    title: text("title").notNull(),
+    scheduledFor: date("scheduled_for").notNull(),
+    status: reviewStatusEnum("status").notNull().default("GEPLANT"),
+    noteDraft: text("note_draft"), // gemeinsame Freitextnotiz – automatisch nur als Entwurf gespeichert
+    confirmedVersionId: text("confirmed_version_id"), // aktuell gültige bestätigte Version
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("reviews_setup_idx").on(t.setupId), index("reviews_scheduled_idx").on(t.scheduledFor)],
+);
+
+export const reviewParticipants = pgTable(
+  "review_participants",
+  {
+    reviewId: text("review_id").notNull().references(() => reviews.id),
+    userId: text("user_id").notNull().references(() => users.id),
+  },
+  (t) => [primaryKey({ columns: [t.reviewId, t.userId] })],
+);
+
+export const reviewVersions = pgTable(
+  "review_versions",
+  {
+    id: id(),
+    reviewId: text("review_id").notNull().references(() => reviews.id),
+    versionNo: integer("version_no").notNull(),
+    note: text("note"), // bestätigte Notiz
+    /** Bestätigter Stand: IDs der im Weekly erfassten Hinweise, Aktionen, Entscheidungen sowie Zusammenfassung offener Punkte */
+    snapshot: jsonb("snapshot").notNull(),
+    confirmedBy: text("confirmed_by").notNull().references(() => users.id),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }).notNull().defaultNow(),
+    supersedesVersionId: text("supersedes_version_id"),
+    correctionNote: text("correction_note"), // Grund der Korrektur bei Folgeversionen
+  },
+  (t) => [uniqueIndex("review_versions_no_uq").on(t.reviewId, t.versionNo)],
+);
+
+export const decisions = pgTable(
+  "decisions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    setupId: text("setup_id").references(() => projectSetups.id),
+    reviewId: text("review_id").references(() => reviews.id),
+    content: text("content").notNull(),
+    scope: text("scope"), // Geltungsbereich
+    rationale: text("rationale"),
+    decidedByUserIds: text("decided_by_user_ids").array().notNull().default(sql`'{}'::text[]`),
+    decidedOn: date("decided_on").notNull().defaultNow(),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("decisions_setup_idx").on(t.setupId)],
+);
+
+// ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
 
@@ -465,3 +539,4 @@ export type MembershipContribution = (typeof membershipContributionEnum.enumValu
 export type RelationshipState = (typeof relationshipStateEnum.enumValues)[number];
 export type AccessStepKind = (typeof accessStepKindEnum.enumValues)[number];
 export type AccessPlanStatus = (typeof accessPlanStatusEnum.enumValues)[number];
+export type ReviewStatus = (typeof reviewStatusEnum.enumValues)[number];

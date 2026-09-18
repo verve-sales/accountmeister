@@ -24,6 +24,7 @@ a:hover { text-decoration: underline; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; }
 .btn { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 6px; padding: .4rem .8rem; font-weight: 500; cursor: pointer; }
 .btn:hover { filter: brightness(1.08); text-decoration: none; }
+.btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 .btn-secondary { background: var(--surface); color: var(--accent); }
 .btn-small { padding: .2rem .55rem; font-size: .875rem; }
 .label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: .2rem; }

@@ -6,6 +6,7 @@ import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
 import { canCreateSetup, canEditSetup, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { getAccount } from "@/modules/accounts/service";
+import { getSinceForSetup, listReviewsForSetup } from "@/modules/reviews/service";
 
 /**
  * Anlage eines Projektsetups (Briefing 6.1): minimal Kunde, Name, Kontextsatz ODER bewusster Entwurf,
@@ -126,6 +127,7 @@ export async function getSetupDetail(actor: Actor, setupId: string) {
     db.query.sources.findMany({ where: eq(schema.sources.setupId, setupId), orderBy: desc(schema.sources.createdAt) }),
     db.query.handovers.findMany({ where: eq(schema.handovers.setupId, setupId), orderBy: desc(schema.handovers.createdAt) }),
   ]);
+  const [sinceInfo, reviews] = await Promise.all([getSinceForSetup(setupId), listReviewsForSetup(setupId)]);
   const visibleSources = sources.filter((s) => canViewSource(actor, s, ctx));
   const hiddenSourceCount = sources.length - visibleSources.length;
   const userIds = new Set<string>();
@@ -143,8 +145,10 @@ export async function getSetupDetail(actor: Actor, setupId: string) {
   const userNames = new Map(users.map((u) => [u.id, u.displayName]));
   return {
     ...ctx,
-    // Zeitgrenze für „Was hat sich geändert?“ bis Weeklys existieren (Etappe 2): letzte 7 Tage.
-    recentSince: new Date(Date.now() - 7 * 24 * 3600 * 1000),
+    // „Was hat sich geändert?“ bezieht sich auf den letzten bestätigten Weekly-Stand (Briefing 6.3).
+    recentSince: sinceInfo.since ?? new Date(0),
+    recentLabel: sinceInfo.label,
+    reviews,
     canEdit: canEditSetup(actor, ctx),
     members,
     signals,

@@ -13,6 +13,7 @@ import { changeActionStatus, createAction } from "@/modules/actions/service";
 import { createAccount } from "@/modules/accounts/service";
 import { createPerson, setPersonFunction, setRelationship } from "@/modules/people/service";
 import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/modules/accesspaths/service";
+import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
 
 /**
  * Alle Formulare laufen über diese Aktionen. Jede Aktion lädt den Akteur frisch,
@@ -109,7 +110,7 @@ export async function addMemberAction(fd: FormData) {
 export async function captureObservationAction(fd: FormData) {
   const data = formToObject(fd);
   const id = data.setupId ?? "";
-  return run(`/setups/${id}`, async (actor) => {
+  return run(data.reviewId ? `/weeklys/${data.reviewId}` : `/setups/${id}`, async (actor) => {
     await captureObservation(actor, data);
   }, "Beobachtung erfasst und als Hinweis (Neu) gespeichert.");
 }
@@ -202,4 +203,46 @@ export async function changeAccessPlanStatusAction(fd: FormData) {
   return run(data.back ?? "/kunden", async (actor) => {
     await changeAccessPlanStatus(actor, data.accessPlanId ?? "", data);
   }, "Status des Kontaktwegs geändert.");
+}
+
+// --- Weeklys ------------------------------------------------------------------
+
+export async function createReviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  const participantIds = fd.getAll("participantIds").filter((v): v is string => typeof v === "string");
+  return run(data.back ?? "/weeklys", async (actor) => {
+    const r = await createReview(actor, { ...data, participantIds });
+    return `/weeklys/${r.id}`;
+  }, "Weekly angelegt.");
+}
+
+export async function saveReviewDraftAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.reviewId ?? "";
+  return run(`/weeklys/${id}`, async (actor) => {
+    await saveReviewDraft(actor, id, data);
+  }, data.toStatus === "BESTAETIGUNG_OFFEN" ? "Entwurf gespeichert – Ergebnisvorschau zur Bestätigung." : "Notiz als Entwurf gespeichert.");
+}
+
+export async function addDecisionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/weeklys/${data.reviewId}`, async (actor) => {
+    await addDecision(actor, data);
+  }, "Entscheidung festgehalten.");
+}
+
+export async function confirmReviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.reviewId ?? "";
+  return run(`/weeklys/${id}`, async (actor) => {
+    await confirmReview(actor, id, data);
+  }, "Weekly bestätigt. Der Stand ist jetzt versioniert; Aufgaben erscheinen in den persönlichen Ansichten.");
+}
+
+export async function correctReviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.reviewId ?? "";
+  return run(`/weeklys/${id}`, async (actor) => {
+    await correctReview(actor, id, data);
+  }, "Korrekturversion gespeichert; die vorherige Version bleibt nachvollziehbar.");
 }

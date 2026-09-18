@@ -129,3 +129,73 @@ test("Personen & Zugang: Beziehungsstand mit Beleg, Kontaktweg mit belegter und 
   await planBox.getByRole("button", { name: "Schritt speichern" }).click();
   await expect(page.locator("p.error")).toContainText("hypothetisch");
 });
+
+test("Etappe 2: Zwei Weeklys bauen aufeinander auf (Vorbereitung → Notiz → Ergebnis → Bestätigung)", async ({ page }) => {
+  const tag = Date.now().toString(36);
+  await loginAs(page, "David");
+  // Eigenes Setup für den Test
+  await page.getByRole("link", { name: "Kunden" }).click();
+  await page.getByRole("link", { name: /Beispielkonzern/ }).click();
+  await page.locator("summary", { hasText: "Setup anlegen" }).click();
+  await page.getByLabel("Verständlicher Setup-Name").fill(`E2E Weekly-Setup ${tag}`);
+  await page.getByLabel(/Kontextsatz/).fill("Kontext für den Weekly-Test.");
+  await page.getByLabel("Zuständiger BD").selectOption({ label: "David Demo (BD)" });
+  await page.getByRole("button", { name: "Setup anlegen" }).click();
+  await expect(page.getByRole("heading", { name: `E2E Weekly-Setup ${tag}` })).toBeVisible();
+
+  // Weekly 1 anlegen
+  await page.getByRole("link", { name: "Weeklys →" }).click();
+  await page.waitForURL(/\/weeklys\?setup=/);
+  await page.locator("#scheduledFor").fill("2026-09-21");
+  await page.getByLabel("Titel (optional)").fill(`W1 ${tag}`);
+  await page.getByRole("button", { name: "Weekly anlegen" }).click();
+  await expect(page.getByRole("heading", { name: `W1 ${tag}` })).toBeVisible();
+  await expect(page.getByText("Noch kein bestätigtes Weekly für dieses Setup")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stand bestätigen" })).toBeDisabled();
+
+  // Notiz als Entwurf, Beobachtung, Aktion als Idee
+  await page.getByLabel(/Freitextnotiz/).fill("Weekly 1: Team plant zusätzliche Testtermine.");
+  await page.getByRole("button", { name: "Entwurf speichern" }).click();
+  await expect(page.getByText("Notiz als Entwurf gespeichert")).toBeVisible();
+  await page.locator("summary", { hasText: "Beobachtung festhalten" }).click();
+  await page.getByLabel("Sichere Beobachtung").fill("Beobachtung aus Weekly 1: zusätzliche Testtermine geplant.");
+  await page.getByRole("button", { name: "Beobachtung speichern" }).click();
+  await expect(page.getByText("Beobachtung erfasst")).toBeVisible();
+  await page.locator("summary", { hasText: "Aktion festhalten" }).click();
+  await page.getByLabel("Was wird getan?").fill("Idee: Nina fragt nach Testumfang");
+  await page.getByLabel("Wer übernimmt?").selectOption({ label: "Nina Demo (Anker)" });
+  await page.getByRole("button", { name: "Aktion speichern" }).click();
+  await expect(page.getByText("Aktion gespeichert")).toBeVisible();
+  await expect(page.getByText("(Idee, noch nicht angenommen)")).toBeVisible();
+
+  // Bestätigen
+  await page.getByRole("button", { name: "Stand bestätigen" }).click();
+  await expect(page.getByText("Weekly bestätigt")).toBeVisible();
+  await expect(page.getByText(/Bestätigt von/)).toContainText("David Demo (BD)");
+  const w1Url = page.url().split("?")[0]!;
+
+  // Zwischenzeitlich eine Beobachtung außerhalb des Weeklys im Setup
+  await page.getByRole("link", { name: `E2E Weekly-Setup ${tag}` }).click();
+  await page.waitForURL(/\/setups\/[^/]+$/);
+  await expect(page.getByText(/Seit dem bestätigten Weekly „W1/)).toBeVisible();
+  await page.locator("summary", { hasText: "Beobachtung erfassen" }).click();
+  await page.getByLabel(/Sichere Beobachtung/).fill("Zwischenstand: Frau Keller nennt Frau Brandt als zuständig.");
+  await page.getByRole("button", { name: "Beobachtung speichern" }).click();
+  await expect(page.getByText("Beobachtung erfasst")).toBeVisible();
+
+  // Weekly 2: Vorbereitung zeigt W1 als letzten Stand und die neue Beobachtung
+  await page.getByRole("link", { name: "Weeklys →" }).click();
+  await page.waitForURL(/\/weeklys\?setup=/);
+  await page.locator("#scheduledFor").fill("2026-09-28");
+  await page.getByLabel("Titel (optional)").fill(`W2 ${tag}`);
+  await page.getByRole("button", { name: "Weekly anlegen" }).click();
+  await expect(page.getByRole("heading", { name: `W2 ${tag}` })).toBeVisible();
+  await expect(page.getByText("Letzter bestätigter Stand:")).toContainText(`W1 ${tag}`);
+  await expect(page.getByText("Zwischenstand: Frau Keller nennt Frau Brandt als zuständig.")).toBeVisible();
+  await expect(page.getByText("Beobachtung aus Weekly 1: zusätzliche Testtermine geplant.")).toHaveCount(0);
+
+  // W1 bleibt bestätigt und unverändert erreichbar
+  await page.goto(w1Url);
+  await expect(page.locator("pre", { hasText: "Weekly 1: Team plant zusätzliche Testtermine." })).toBeVisible();
+  await expect(page.getByText(/Bestätigt von/)).toContainText("Version 1");
+});

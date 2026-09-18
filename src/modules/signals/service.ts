@@ -20,6 +20,7 @@ export const captureObservationInput = z.object({
   sourceTitle: z.string().trim().max(200).optional().or(z.literal("")),
   sourceTime: z.string().optional().or(z.literal("")), // ISO-Datum/-Zeit aus dem Formular
   sourceAccessClass: z.enum(schema.accessClassEnum.enumValues).default("SETUP"),
+  reviewId: z.string().optional().or(z.literal("")), // im Weekly erfasst
 });
 
 export async function captureObservation(actor: Actor, raw: unknown) {
@@ -36,7 +37,7 @@ export async function captureObservation(actor: Actor, raw: unknown) {
         workspaceId: actor.workspaceId,
         setupId: input.setupId,
         type: "NOTIZ",
-        title: input.sourceTitle || `Beobachtung von ${actor.displayName}`,
+        title: input.sourceTitle || (input.reviewId ? `Weekly-Notiz ${actor.displayName}` : `Beobachtung von ${actor.displayName}`),
         body: [input.observation, input.relevanceHypothesis ? `Vermutung: ${input.relevanceHypothesis}` : null].filter(Boolean).join("\n\n"),
         origin: "manuell",
         sourceTime: input.sourceTime ? new Date(input.sourceTime) : new Date(),
@@ -56,6 +57,7 @@ export async function captureObservation(actor: Actor, raw: unknown) {
         usageLimit: input.usageLimit || null,
         status: "NEU",
         sourceId: source.id,
+        reviewId: input.reviewId || null,
         createdBy: actor.userId,
       })
       .returning();

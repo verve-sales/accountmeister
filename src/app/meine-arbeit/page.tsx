@@ -4,16 +4,18 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { listMySetups } from "@/modules/setups/service";
 import { listMyOpenActions } from "@/modules/actions/service";
 import { listMyHandovers } from "@/modules/handovers/service";
+import { listReviews } from "@/modules/reviews/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
-import { actionStatusLabel, fmtDate, handoverStatusLabel, setupStatusLabel } from "@/lib/labels";
+import { actionStatusLabel, fmtDate, handoverStatusLabel, reviewStatusLabel, setupStatusLabel } from "@/lib/labels";
 import { changeActionStatusAction, respondHandoverAction } from "../actions";
 
 export default async function MeineArbeitPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
-  const [setups, actions, handovers] = await Promise.all([listMySetups(actor), listMyOpenActions(actor), listMyHandovers(actor)]);
+  const [setups, actions, handovers, reviews] = await Promise.all([listMySetups(actor), listMyOpenActions(actor), listMyHandovers(actor), listReviews(actor)]);
+  const nextReviews = [...reviews.open, ...reviews.upcoming].slice(0, 5);
   const openIncoming = handovers.filter((h) => h.receiverUserId === actor.userId && h.status === "ANGEFRAGT");
   const outgoing = handovers.filter((h) => h.senderUserId === actor.userId && (h.status === "ANGEFRAGT" || h.status === "ANGENOMMEN"));
   const back = "/meine-arbeit";
@@ -92,6 +94,15 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
               ))}
             </tbody>
           </table>
+        )}
+      </section>
+
+      <section className="card">
+        <h2 className="font-semibold mb-2">Nächste Weeklys ({nextReviews.length})</h2>
+        {nextReviews.length === 0 ? <p className="muted text-sm">Keine anstehenden Weeklys. <Link href="/weeklys">Weekly anlegen</Link>.</p> : (
+          <ul className="text-sm space-y-1">
+            {nextReviews.map((r) => <li key={r.id}><Link href={`/weeklys/${r.id}`}>{r.title}</Link> · {fmtDate(r.scheduledFor)} · <Status label={reviewStatusLabel[r.status] ?? r.status} /></li>)}
+          </ul>
         )}
       </section>
 

@@ -66,7 +66,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         <span className="muted text-sm">Sichtbarkeit: {visibilityLabel[d.setup.visibility]}</span>
         <span className="muted text-sm">BD: {d.setup.bdUserId ? name(d.setup.bdUserId) : "Zuordnung offen"}</span>
         {!d.canEdit && <span className="muted text-sm">(nur lesend)</span>}
-        <Link href={`/setups/${id}/personen`} className="text-sm ml-auto">Personen & Zugang →</Link>
+        <span className="ml-auto flex gap-4 text-sm"><Link href={`/setups/${id}/personen`}>Personen & Zugang →</Link><Link href={`/weeklys?setup=${id}`}>Weeklys →</Link></span>
       </div>
       <Feedback params={sp} />
 
@@ -131,9 +131,9 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       {/* 2. Was hat sich geändert? */}
       <section className="card">
         <h2 className="font-semibold mb-1">2. Was hat sich seit dem letzten Weekly geändert?</h2>
-        <p className="muted text-sm mb-2">Bis Weeklys umgesetzt sind (Etappe 2): Änderungen der letzten 7 Tage.</p>
+        <p className="muted text-sm mb-2">{d.recentLabel}</p>
         {recentSignals.length === 0 && recentDone.length === 0 ? (
-          <p className="muted text-sm">Keine neuen Beobachtungen oder erledigten Aktionen in den letzten 7 Tagen.</p>
+          <p className="muted text-sm">Keine neuen Beobachtungen oder erledigten Aktionen seit dem letzten bestätigten Stand.</p>
         ) : (
           <ul className="text-sm space-y-1">
             {recentSignals.map((s) => (
