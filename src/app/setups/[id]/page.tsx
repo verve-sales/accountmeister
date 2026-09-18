@@ -1,0 +1,370 @@
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db/client";
+import { DomainError } from "@/lib/errors";
+import { getCurrentActor } from "@/modules/identity/session";
+import { getSetupDetail } from "@/modules/setups/service";
+import { Feedback, type SearchParams } from "@/components/Feedback";
+import { Status } from "@/components/Status";
+import {
+  accessClassLabel,
+  actionStatusLabel,
+  contributionLabel,
+  fmtDate,
+  fmtDateTime,
+  handoverStatusLabel,
+  setupStatusLabel,
+  signalStatusLabel,
+  sourceTypeLabel,
+  visibilityLabel,
+} from "@/lib/labels";
+import {
+  addMemberAction,
+  captureObservationAction,
+  changeActionStatusAction,
+  changeSignalStatusAction,
+  createActionAction,
+  createHandoverAction,
+  respondHandoverAction,
+  takeOverSignalAction,
+  updateSetupAction,
+} from "../../actions";
+
+export default async function SetupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
+  const { id } = await params;
+  const sp = await searchParams;
+  const actor = await getCurrentActor();
+  if (!actor) redirect("/anmelden");
+  let d;
+  try {
+    d = await getSetupDetail(actor, id);
+  } catch (e) {
+    if (e instanceof DomainError) notFound();
+    throw e;
+  }
+  const back = `/setups/${id}`;
+  const allUsers = await db.query.users.findMany({ where: eq(schema.users.status, "ACTIVE"), orderBy: (u, { asc }) => [asc(u.displayName)] });
+  const others = allUsers.filter((u) => u.id !== actor.userId);
+  const name = (uid: string | null | undefined) => (uid ? d.userNames.get(uid) ?? allUsers.find((u) => u.id === uid)?.displayName ?? "?" : "–");
+
+  const openSignals = d.signals.filter((s) => s.status !== "BEENDET");
+  const openActions = d.actions.filter((a) => a.status !== "ERLEDIGT" && a.status !== "VERWORFEN");
+  const doneActions = d.actions.filter((a) => a.status === "ERLEDIGT");
+  const openHandovers = d.handovers.filter((h) => h.status === "ANGEFRAGT" || h.status === "ANGENOMMEN");
+  const recentSignals = d.signals.filter((s) => s.createdAt >= d.recentSince);
+  const recentDone = doneActions.filter((a) => a.updatedAt >= d.recentSince);
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm">
+        <Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${d.account.id}`}>{d.account.name}</Link> › {d.setup.name}
+      </p>
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h1 className="text-2xl font-semibold">{d.setup.name}</h1>
+        <Status label={setupStatusLabel[d.setup.status] ?? d.setup.status} />
+        <span className="muted text-sm">Sichtbarkeit: {visibilityLabel[d.setup.visibility]}</span>
+        <span className="muted text-sm">BD: {d.setup.bdUserId ? name(d.setup.bdUserId) : "Zuordnung offen"}</span>
+        {!d.canEdit && <span className="muted text-sm">(nur lesend)</span>}
+      </div>
+      <Feedback params={sp} />
+
+      {/* 1. Was läuft hier? */}
+      <section className="card">
+        <h2 className="font-semibold mb-1">1. Was läuft hier?</h2>
+        {d.setup.contextNote ? <p>{d.setup.contextNote}</p> : <p className="muted">Noch kein Kontextsatz – bewusster Entwurf. Ergänzen, wenn passend.</p>}
+        <p className="text-sm mt-2 muted">
+          Beteiligte:{" "}
+          {d.members.map((m) => (
+            <span key={m.userId} className="mr-3">
+              {m.displayName} – {contributionLabel[m.contribution] ?? m.contribution}
+              {m.contributionNote ? ` (${m.contributionNote})` : ""}
+            </span>
+          ))}
+        </p>
+        {d.canEdit && (
+          <details className="mt-3">
+            <summary className="text-sm">Kontext oder Status bearbeiten</summary>
+            <form action={updateSetupAction} className="mt-2 grid sm:grid-cols-3 gap-3">
+              <input type="hidden" name="setupId" value={d.setup.id} />
+              <input type="hidden" name="version" value={d.setup.version} />
+              <div className="sm:col-span-3"><label className="label" htmlFor="contextNote">Kontextsatz</label><textarea id="contextNote" name="contextNote" className="textarea" defaultValue={d.setup.contextNote ?? ""} /></div>
+              <div>
+                <label className="label" htmlFor="status">Status</label>
+                <select id="status" name="status" className="select" defaultValue={d.setup.status}>
+                  {schema.setupStatusEnum.enumValues.map((v) => <option key={v} value={v}>{setupStatusLabel[v]}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="visibility">Sichtbarkeit</label>
+                <select id="visibility" name="visibility" className="select" defaultValue={d.setup.visibility}>
+                  {schema.setupVisibilityEnum.enumValues.map((v) => <option key={v} value={v}>{visibilityLabel[v]}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end"><button className="btn" type="submit">Speichern</button></div>
+            </form>
+            <form action={addMemberAction} className="mt-4 grid sm:grid-cols-3 gap-3">
+              <input type="hidden" name="setupId" value={d.setup.id} />
+              <div>
+                <label className="label" htmlFor="memberUserId">Beteiligte Person hinzufügen</label>
+                <select id="memberUserId" name="userId" className="select" required defaultValue="">
+                  <option value="" disabled>Bitte wählen …</option>
+                  {allUsers.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="contribution">Vereinbarter Beitrag</label>
+                <select id="contribution" name="contribution" className="select" defaultValue="ANKER_KONTEXT">
+                  {schema.membershipContributionEnum.enumValues.map((v) => <option key={v} value={v}>{contributionLabel[v]}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end gap-2">
+                <input name="contributionNote" className="input" placeholder="Erläuterung (optional)" aria-label="Erläuterung zum Beitrag" />
+                <button className="btn btn-secondary" type="submit">Hinzufügen</button>
+              </div>
+            </form>
+          </details>
+        )}
+      </section>
+
+      {/* 2. Was hat sich geändert? */}
+      <section className="card">
+        <h2 className="font-semibold mb-1">2. Was hat sich seit dem letzten Weekly geändert?</h2>
+        <p className="muted text-sm mb-2">Bis Weeklys umgesetzt sind (Etappe 2): Änderungen der letzten 7 Tage.</p>
+        {recentSignals.length === 0 && recentDone.length === 0 ? (
+          <p className="muted text-sm">Keine neuen Beobachtungen oder erledigten Aktionen in den letzten 7 Tagen.</p>
+        ) : (
+          <ul className="text-sm space-y-1">
+            {recentSignals.map((s) => (
+              <li key={s.id}>Neue Beobachtung ({fmtDate(s.createdAt)}, {name(s.createdBy)}): {s.observation}</li>
+            ))}
+            {recentDone.map((a) => (
+              <li key={a.id}>Erledigt ({fmtDate(a.updatedAt)}, {name(a.ownerUserId)}): {a.title} – {a.result}</li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* 3. Was haben wir vereinbart? */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">3. Was haben wir als Nächstes vereinbart?</h2>
+        {openActions.length === 0 ? <p className="muted text-sm">Keine offenen Aktionen.</p> : (
+          <table className="list">
+            <thead><tr><th>Aktion</th><th>Verantwortlich</th><th>Status</th><th>Fällig</th>{d.canEdit && <th></th>}</tr></thead>
+            <tbody>
+              {openActions.map((a) => (
+                <tr key={a.id}>
+                  <td>{a.title}{a.agreement && <div className="muted text-sm">{a.agreement}</div>}{a.result && <div className="muted text-sm">Stand: {a.result}</div>}</td>
+                  <td>{name(a.ownerUserId)}</td>
+                  <td><Status label={actionStatusLabel[a.status] ?? a.status} /></td>
+                  <td>{fmtDate(a.dueDate)}</td>
+                  {d.canEdit && (
+                    <td>
+                      <form action={changeActionStatusAction} className="flex flex-wrap gap-1 items-end">
+                        <input type="hidden" name="actionId" value={a.id} />
+                        <input type="hidden" name="version" value={a.version} />
+                        <input type="hidden" name="back" value={back} />
+                        <input name="result" className="input" style={{ width: "11rem" }} placeholder="Ergebnis / Blocker" aria-label="Ergebnis oder Blocker" />
+                        {a.status === "VORGESCHLAGEN" && a.ownerUserId === actor.userId && <button className="btn btn-small" name="status" value="ANGENOMMEN">Annehmen</button>}
+                        {a.status !== "VORGESCHLAGEN" && <button className="btn btn-small" name="status" value="ERLEDIGT">Erledigt</button>}
+                        {(a.status === "ANGENOMMEN" || a.status === "IN_ARBEIT") && <button className="btn btn-secondary btn-small" name="status" value="BLOCKIERT">Blockiert</button>}
+                        <button className="btn btn-secondary btn-small" name="status" value="VERWORFEN">Verwerfen</button>
+                      </form>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {doneActions.length > 0 && (
+          <details className="mt-3"><summary className="text-sm">Erledigte Aktionen ({doneActions.length})</summary>
+            <ul className="text-sm mt-2 space-y-1">{doneActions.map((a) => <li key={a.id}>{a.title} – {name(a.ownerUserId)} – Ergebnis: {a.result}</li>)}</ul>
+          </details>
+        )}
+        {d.canEdit && (
+          <details className="mt-3">
+            <summary className="text-sm">Aktion vereinbaren</summary>
+            <form action={createActionAction} className="mt-2 grid sm:grid-cols-2 gap-3">
+              <input type="hidden" name="setupId" value={d.setup.id} />
+              <input type="hidden" name="back" value={back} />
+              <div className="sm:col-span-2"><label className="label" htmlFor="actTitle">Was wird getan?</label><input id="actTitle" name="title" className="input" required minLength={3} /></div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="agreement">Vereinbarung / Kontext (optional)</label><input id="agreement" name="agreement" className="input" /></div>
+              <div>
+                <label className="label" htmlFor="ownerUserId">Wer übernimmt?</label>
+                <select id="ownerUserId" name="ownerUserId" className="select" defaultValue={actor.userId}>
+                  {allUsers.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+                </select>
+              </div>
+              <div><label className="label" htmlFor="dueDate">Termin (optional)</label><input id="dueDate" name="dueDate" type="date" className="input" /></div>
+              <div>
+                <label className="label" htmlFor="signalId">Bezug zu Hinweis (optional)</label>
+                <select id="signalId" name="signalId" className="select" defaultValue="">
+                  <option value="">–</option>
+                  {openSignals.map((s) => <option key={s.id} value={s.id}>{s.observation.slice(0, 80)}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end gap-2">
+                <label className="text-sm flex items-center gap-2"><input type="checkbox" name="agreedInConversation" value="true" /> Im Gespräch gemeinsam vereinbart (sonst: Vorschlag)</label>
+              </div>
+              <div className="sm:col-span-2"><button className="btn" type="submit">Aktion speichern</button></div>
+            </form>
+          </details>
+        )}
+      </section>
+
+      {/* 4. Anregungen */}
+      <section className="card">
+        <h2 className="font-semibold mb-1">4. Welche Anregungen sind jetzt hilfreich?</h2>
+        <p className="muted text-sm">KI-Anbieter deaktiviert – keine automatischen Vorschläge. Offene Hinweise unten sind die manuelle Arbeitsliste.</p>
+      </section>
+
+      {/* Hinweise */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Hinweise ({openSignals.length} offen)</h2>
+        {d.signals.length === 0 ? <p className="muted text-sm">Noch keine Beobachtungen erfasst.</p> : (
+          <ul className="space-y-3">
+            {d.signals.map((s) => {
+              const relatedHandover = d.handovers.find((h) => h.subjectType === "SIGNAL" && h.subjectId === s.id && h.status === "ANGEFRAGT");
+              return (
+                <li key={s.id} className="border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex flex-wrap gap-2 items-baseline">
+                    <Status label={signalStatusLabel[s.status] ?? s.status} />
+                    <span className="muted text-sm">{fmtDate(s.createdAt)} · erfasst von {name(s.createdBy)} · Prüfung: {s.ownerUserId ? name(s.ownerUserId) : "niemand"}</span>
+                    {relatedHandover && <span className="muted text-sm">· Übergabe an {name(relatedHandover.receiverUserId)} angefragt</span>}
+                  </div>
+                  <p className="mt-1"><span className="muted text-sm">Beobachtung: </span>{s.observation}</p>
+                  {s.relevanceHypothesis && <p className="text-sm"><span className="muted">Vermutung: </span>{s.relevanceHypothesis}</p>}
+                  {s.usageLimit && <p className="text-sm"><span className="muted">Nutzungsgrenze: </span>{s.usageLimit}</p>}
+                  {s.closedReason && <p className="text-sm"><span className="muted">Begründung: </span>{s.closedReason}</p>}
+                  <p className="text-sm mt-1">{s.sourceId && d.sources.some((x) => x.id === s.sourceId) ? <Link href={`/quellen/${s.sourceId}`}>Quelle ansehen</Link> : <span className="muted">Quelle nicht in Ihrem Berechtigungsbereich</span>}</p>
+                  {d.canEdit && s.status !== "BEENDET" && (
+                    <div className="mt-2 flex flex-wrap gap-3 items-start">
+                      {s.status === "NEU" && !relatedHandover && (
+                        <form action={takeOverSignalAction}>
+                          <input type="hidden" name="signalId" value={s.id} />
+                          <input type="hidden" name="version" value={s.version} />
+                          <input type="hidden" name="back" value={back} />
+                          <button className="btn btn-small" type="submit">Prüfung selbst übernehmen</button>
+                        </form>
+                      )}
+                      <form action={changeSignalStatusAction} className="flex flex-wrap gap-1 items-end">
+                        <input type="hidden" name="signalId" value={s.id} />
+                        <input type="hidden" name="version" value={s.version} />
+                        <input type="hidden" name="back" value={back} />
+                        <input name="closedReason" className="input" style={{ width: "14rem" }} placeholder="Begründung (bei Beenden/Zurückstellen)" aria-label="Begründung" />
+                        {s.status === "PRUEFUNG_UEBERNOMMEN" && <button className="btn btn-secondary btn-small" name="status" value="IN_KLAERUNG">In Klärung</button>}
+                        <button className="btn btn-secondary btn-small" name="status" value="ZURUECKGESTELLT">Zurückstellen</button>
+                        <button className="btn btn-secondary btn-small" name="status" value="BEENDET">Beenden</button>
+                      </form>
+                      {!relatedHandover && others.length > 0 && (
+                        <details>
+                          <summary className="text-sm">Übergabe an eine andere Person</summary>
+                          <form action={createHandoverAction} className="mt-2 grid sm:grid-cols-2 gap-2 max-w-3xl">
+                            <input type="hidden" name="subjectType" value="SIGNAL" />
+                            <input type="hidden" name="subjectId" value={s.id} />
+                            <input type="hidden" name="back" value={back} />
+                            <div>
+                              <label className="label" htmlFor={`recv-${s.id}`}>Empfänger</label>
+                              <select id={`recv-${s.id}`} name="receiverUserId" className="select" required defaultValue={d.setup.bdUserId && d.setup.bdUserId !== actor.userId ? d.setup.bdUserId : ""}>
+                                <option value="" disabled>Bitte wählen …</option>
+                                {others.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+                              </select>
+                            </div>
+                            <div><label className="label" htmlFor={`due-${s.id}`}>Termin (optional)</label><input id={`due-${s.id}`} name="dueDate" type="date" className="input" /></div>
+                            <div className="sm:col-span-2"><label className="label" htmlFor={`ctx-${s.id}`}>Kontext</label><input id={`ctx-${s.id}`} name="context" className="input" required defaultValue={`Beobachtung aus dem Setup „${d.setup.name}“.`} /></div>
+                            <div><label className="label" htmlFor={`prov-${s.id}`}>Was ist belegt?</label><input id={`prov-${s.id}`} name="proven" className="input" defaultValue={s.observation} /></div>
+                            <div><label className="label" htmlFor={`open-${s.id}`}>Was bleibt offen?</label><input id={`open-${s.id}`} name="open" className="input" defaultValue={s.relevanceHypothesis ?? ""} /></div>
+                            <div><label className="label" htmlFor={`use-${s.id}`}>Was darf verwendet werden?</label><input id={`use-${s.id}`} name="allowedUse" className="input" defaultValue={s.usageLimit ?? ""} /></div>
+                            <div><label className="label" htmlFor={`fb-${s.id}`}>Rückmeldung über</label><input id={`fb-${s.id}`} name="feedbackChannel" className="input" placeholder="z. B. nächstes Weekly" /></div>
+                            <div className="sm:col-span-2"><label className="label" htmlFor={`resp-${s.id}`}>Welche konkrete Verantwortung soll übernommen werden?</label><input id={`resp-${s.id}`} name="responsibility" className="input" required minLength={5} placeholder="z. B. Klären, wer die Kapazitätsplanung koordiniert" /></div>
+                            <div className="sm:col-span-2"><button className="btn btn-small" type="submit">Übergabe anfragen</button></div>
+                          </form>
+                        </details>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {d.canEdit && (
+          <details className="mt-4" open={d.signals.length === 0}>
+            <summary>Beobachtung erfassen</summary>
+            <form action={captureObservationAction} className="mt-2 grid sm:grid-cols-2 gap-3">
+              <input type="hidden" name="setupId" value={d.setup.id} />
+              <div className="sm:col-span-2"><label className="label" htmlFor="observation">Sichere Beobachtung (was wurde tatsächlich gesagt/gesehen?)</label><textarea id="observation" name="observation" className="textarea" required minLength={5} /></div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="relevanceHypothesis">Vermutung / mögliche Bedeutung (getrennt von der Beobachtung, optional)</label><input id="relevanceHypothesis" name="relevanceHypothesis" className="input" /></div>
+              <div><label className="label" htmlFor="usageLimit">Nutzungsgrenze (optional)</label><input id="usageLimit" name="usageLimit" className="input" placeholder="z. B. nicht als Bedarf gegenüber Kunde formulieren" /></div>
+              <div>
+                <label className="label" htmlFor="sourceAccessClass">Wer darf die Originalnotiz sehen?</label>
+                <select id="sourceAccessClass" name="sourceAccessClass" className="select" defaultValue="SETUP">
+                  {schema.accessClassEnum.enumValues.map((v) => <option key={v} value={v}>{accessClassLabel[v]}</option>)}
+                </select>
+              </div>
+              <div><label className="label" htmlFor="sourceTitle">Anlass / Quelle (optional)</label><input id="sourceTitle" name="sourceTitle" className="input" placeholder="z. B. Weekly 18.09." /></div>
+              <div><label className="label" htmlFor="sourceTime">Zeitpunkt der Beobachtung (optional)</label><input id="sourceTime" name="sourceTime" type="datetime-local" className="input" /></div>
+              <div className="sm:col-span-2"><button className="btn" type="submit">Beobachtung speichern</button></div>
+            </form>
+          </details>
+        )}
+      </section>
+
+      {/* Übergaben */}
+      {d.handovers.length > 0 && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Übergaben ({openHandovers.length} offen)</h2>
+          <table className="list">
+            <thead><tr><th>Verantwortung</th><th>Von → An</th><th>Status</th><th>Rückmeldung</th><th></th></tr></thead>
+            <tbody>
+              {d.handovers.map((h) => (
+                <tr key={h.id}>
+                  <td>{h.responsibility}<div className="muted text-sm">{h.context}</div></td>
+                  <td>{name(h.senderUserId)} → {name(h.receiverUserId)}</td>
+                  <td><Status label={handoverStatusLabel[h.status] ?? h.status} /></td>
+                  <td>{h.responseNote ?? "–"}</td>
+                  <td>
+                    {h.status === "ANGENOMMEN" && (h.receiverUserId === actor.userId || h.senderUserId === actor.userId) && (
+                      <form action={respondHandoverAction} className="flex gap-1 items-end">
+                        <input type="hidden" name="handoverId" value={h.id} />
+                        <input type="hidden" name="version" value={h.version} />
+                        <input type="hidden" name="back" value={back} />
+                        <input type="hidden" name="decision" value="ABSCHLIESSEN" />
+                        <input name="responseNote" className="input" style={{ width: "12rem" }} placeholder="Ergebnis" required aria-label="Ergebnis der Übergabe" />
+                        <button className="btn btn-small" type="submit">Abschließen</button>
+                      </form>
+                    )}
+                    {h.status === "ANGEFRAGT" && h.receiverUserId === actor.userId && <Link href="/meine-arbeit" className="text-sm">In „Meine Arbeit“ beantworten</Link>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      {/* Quellen */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Quellen</h2>
+        {d.sources.length === 0 ? <p className="muted text-sm">Keine Quellen in Ihrem Berechtigungsbereich.</p> : (
+          <table className="list">
+            <thead><tr><th>Titel</th><th>Typ</th><th>Quellenzeit</th><th>Inhaber</th><th>Zugriff</th></tr></thead>
+            <tbody>
+              {d.sources.map((s) => (
+                <tr key={s.id}>
+                  <td><Link href={`/quellen/${s.id}`}>{s.title}</Link></td>
+                  <td>{sourceTypeLabel[s.type] ?? s.type}</td>
+                  <td>{fmtDateTime(s.sourceTime)}</td>
+                  <td>{name(s.ownerUserId)}</td>
+                  <td>{accessClassLabel[s.accessClass]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {d.hiddenSourceCount > 0 && <p className="muted text-sm mt-2">{d.hiddenSourceCount} weitere Quelle(n) sind für Ihre Rolle nicht einsehbar.</p>}
+      </section>
+    </div>
+  );
+}
