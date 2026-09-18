@@ -19,6 +19,7 @@ import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/art
 import { acceptSuggestion, giveFeedback, structureReviewNote } from "@/modules/suggestions/service";
 import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
 import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
+import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, changeOpportunityStatus, confirmOpportunity, confirmOrder, createOffer, createOpportunity, createOrder, createProfileReference, markOrderEvidenceIncomplete, markReady, markStarted, presentOffer, removeParticipation, saveMeddpicc, setRequirementStatus, updateOpportunity } from "@/modules/opportunities/service";
 import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
 /**
@@ -484,4 +485,142 @@ export async function addGoalContributionAction(fd: FormData) {
   return run(data.back ?? `/ziele/${data.goalId}`, async (actor) => {
     await addGoalContribution(actor, data);
   }, "Zielbeitrag festgehalten.");
+}
+
+// --- Bedarfe, Angebote, Aufträge (Etappe 5) -----------------------------------------
+
+export async function createOpportunityAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? `/setups/${data.setupId}`, async (actor) => {
+    const o = await createOpportunity(actor, data);
+    return `/bedarfe/${o.id}`;
+  }, "Bedarf angelegt (in Klärung).");
+}
+
+export async function updateOpportunityAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await updateOpportunity(actor, data.opportunityId ?? "", data);
+  }, "Bedarf aktualisiert.");
+}
+
+export async function saveMeddpiccAction(fd: FormData) {
+  const data = formToObject(fd);
+  const { opportunityId, version, ...fields } = data;
+  return run(`/bedarfe/${opportunityId}`, async (actor) => {
+    await saveMeddpicc(actor, opportunityId ?? "", { version: Number(version), fields });
+  }, "Qualifizierungshilfe gespeichert – ohne Bewertung, nur dokumentiert.");
+}
+
+export async function confirmOpportunityAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await confirmOpportunity(actor, data.opportunityId ?? "", data);
+  }, "Bedarf bestätigt – mit Quelle und Zeitpunkt dokumentiert.");
+}
+
+export async function changeOpportunityStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await changeOpportunityStatus(actor, data.opportunityId ?? "", { version: Number(data.version), status: data.status as never, reason: data.reason });
+  }, "Bedarfsstatus geändert.");
+}
+
+export async function addParticipationAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await addParticipation(actor, data);
+  }, "Rolle im Buyingcenter festgehalten.");
+}
+
+export async function removeParticipationAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await removeParticipation(actor, data.participationId ?? "");
+  }, "Rolle entfernt.");
+}
+
+export async function createProfileReferenceAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/einstellungen", async (actor) => {
+    await createProfileReference(actor, data);
+  }, "Profilreferenz angelegt (nur Verweis, kein Profilinhalt).");
+}
+
+export async function createOfferAction(fd: FormData) {
+  const data = formToObject(fd);
+  const profileReferenceIds = fd.getAll("profileReferenceIds").filter((v): v is string => typeof v === "string");
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await createOffer(actor, { ...data, profileReferenceIds });
+  }, "Angebot als Entwurf angelegt. Ein Entwurf gilt nicht als vorgestellt.");
+}
+
+export async function presentOfferAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await presentOffer(actor, data.offerId ?? "", data);
+  }, "Vorstellungsereignis bestätigt und belegt.");
+}
+
+export async function changeOfferStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await changeOfferStatus(actor, data.offerId ?? "", { version: Number(data.version), status: data.status as never, note: data.note });
+  }, data.status === "AKZEPTIERT" ? "Rückmeldung festgehalten. Ein akzeptiertes Angebot ist noch kein Auftrag." : "Angebotsstatus geändert.");
+}
+
+export async function createOrderAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await createOrder(actor, data);
+  }, "Auftrag in Vorbereitung angelegt.");
+}
+
+export async function confirmOrderAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await confirmOrder(actor, data.orderId ?? "", data);
+  }, "Beauftragung mit Nachweis bestätigt.");
+}
+
+export async function orderEvidenceIncompleteAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await markOrderEvidenceIncomplete(actor, data.orderId ?? "", { version: Number(data.version), note: data.note ?? "" });
+  }, "Fehlender Nachweis festgehalten.");
+}
+
+export async function cancelOrderAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await cancelOrder(actor, data.orderId ?? "", { version: Number(data.version), reason: data.reason ?? "" });
+  }, "Auftrag beendet/storniert.");
+}
+
+export async function addStartRequirementAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await addStartRequirement(actor, data);
+  }, "Startvoraussetzung erfasst.");
+}
+
+export async function setRequirementStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await setRequirementStatus(actor, data.requirementId ?? "", data);
+  }, "Stand der Startvoraussetzung gespeichert.");
+}
+
+export async function markReadyAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await markReady(actor, data.orderId ?? "", { version: Number(data.version) });
+  }, "Einsatz startbereit – alle erfassten Startvoraussetzungen sind bestätigt oder begründet nicht anwendbar.");
+}
+
+export async function markStartedAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await markStarted(actor, data.orderId ?? "", { version: Number(data.version), startedAt: data.startedAt, note: data.note });
+  }, "Start als bestätigtes Ereignis festgehalten.");
 }

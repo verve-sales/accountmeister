@@ -6,6 +6,7 @@ import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getSetupDetail } from "@/modules/setups/service";
 import { listSupportRequestsForSetup } from "@/modules/leadership/service";
+import { listOpportunitiesForSetup } from "@/modules/opportunities/service";
 import { inArray, or } from "drizzle-orm";
 import { getProviderStatus, listOpenQuestionsForSetup, listSuggestionsForSetup } from "@/modules/suggestions/service";
 import { SuggestionCard } from "@/components/SuggestionCard";
@@ -18,6 +19,7 @@ import {
   fmtDate,
   fmtDateTime,
   handoverStatusLabel,
+  opportunityStatusLabel,
   setupStatusLabel,
   signalStatusLabel,
   supportStatusLabel,
@@ -31,6 +33,7 @@ import {
   changeSignalStatusAction,
   createActionAction,
   createHandoverAction,
+  createOpportunityAction,
   createSupportRequestAction,
   respondHandoverAction,
   respondSupportRequestAction,
@@ -56,12 +59,14 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const name = (uid: string | null | undefined) => (uid ? d.userNames.get(uid) ?? allUsers.find((u) => u.id === uid)?.displayName ?? "?" : "–");
 
   const ai = getProviderStatus();
-  const [sugg, openQuestions, support] = await Promise.all([listSuggestionsForSetup(actor, id), listOpenQuestionsForSetup(id), listSupportRequestsForSetup(actor, id)]);
+  const [sugg, openQuestions, support, opportunities] = await Promise.all([listSuggestionsForSetup(actor, id), listOpenQuestionsForSetup(id), listSupportRequestsForSetup(actor, id), listOpportunitiesForSetup(actor, id)]);
+  const openOpportunities = opportunities.filter((o) => o.status !== "BEENDET");
   const leaderRoles = await db.query.roleAssignments.findMany({ where: or(eq(schema.roleAssignments.role, "PRINCIPAL"), eq(schema.roleAssignments.role, "CEO")) });
   const leaderIds = [...new Set(leaderRoles.map((r) => r.userId))].filter((uid) => uid !== actor.userId);
   const leaders = leaderIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, leaderIds), orderBy: (u, { asc }) => [asc(u.displayName)] }) : [];
   const openSupport = support.filter((s) => s.status === "ANGEFRAGT" || s.status === "ANGENOMMEN");
   const openSignals = d.signals.filter((s) => s.status !== "BEENDET");
+  const linkableSignals = openSignals.filter((s) => s.status !== "MIT_BEDARF_VERKNUEPFT");
   const openActions = d.actions.filter((a) => a.status !== "ERLEDIGT" && a.status !== "VERWORFEN");
   const doneActions = d.actions.filter((a) => a.status === "ERLEDIGT");
   const openHandovers = d.handovers.filter((h) => h.status === "ANGEFRAGT" || h.status === "ANGENOMMEN");
@@ -160,6 +165,45 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       </section>
 
       {/* 3. Was haben wir vereinbart? */}
+      {/* Bedarfe (Etappe 5): je Setup mehrere, unabhängige Zustände (F02); direkt erfassbar (F08) */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Bedarfe ({openOpportunities.length} offen)</h2>
+        {opportunities.length === 0 ? <p className="muted text-sm">Noch kein Bedarf. Ein Bedarf kann direkt erfasst werden – ohne vollständiges Setup oder Qualifizierung (Fast-Track).</p> : (
+          <table className="list">
+            <thead><tr><th>Bedarf</th><th>Status</th><th>Verantwortlich</th><th>Bestätigt</th><th>Geändert</th></tr></thead>
+            <tbody>
+              {opportunities.map((o) => (
+                <tr key={o.id}>
+                  <td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link>{o.fastTrack && <span className="muted text-sm"> · direkte Anfrage</span>}</td>
+                  <td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td>
+                  <td>{name(o.ownerUserId)}</td>
+                  <td>{o.confirmedAt ? fmtDate(o.confirmedAt) : <span className="muted">–</span>}</td>
+                  <td>{fmtDate(o.updatedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {d.canEdit && (
+          <details className="mt-3">
+            <summary>Bedarf erfassen</summary>
+            <form action={createOpportunityAction} className="mt-2 grid sm:grid-cols-2 gap-3">
+              <input type="hidden" name="setupId" value={id} />
+              <input type="hidden" name="back" value={back} />
+              <div><label className="label" htmlFor="opTitle">Titel</label><input id="opTitle" name="title" className="input" required minLength={3} /></div>
+              <div>
+                <label className="label" htmlFor="opSignal">Hervorgegangen aus Hinweis (optional)</label>
+                <select id="opSignal" name="signalId" className="select" defaultValue=""><option value="">– direkt erfasst –</option>{linkableSignals.map((s) => <option key={s.id} value={s.id}>{s.observation.slice(0, 80)}</option>)}</select>
+              </div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="opNeed">Bedarfsbeschreibung in Kundensprache</label><textarea id="opNeed" name="needDescription" className="textarea" required minLength={10} rows={3} /></div>
+              <div><label className="label" htmlFor="opTrigger">Konkreter Anlass (optional)</label><input id="opTrigger" name="trigger" className="input" /></div>
+              <label className="flex items-center gap-2 text-sm self-end"><input type="checkbox" name="fastTrack" value="on" /> Direkte Anfrage (Fast-Track, Messstart jetzt)</label>
+              <div className="sm:col-span-2"><button className="btn" type="submit">Bedarf anlegen</button></div>
+            </form>
+          </details>
+        )}
+      </section>
+
       <section className="card">
         <h2 className="font-semibold mb-2">3. Was haben wir als Nächstes vereinbart?</h2>
         {openActions.length === 0 ? <p className="muted text-sm">Keine offenen Aktionen.</p> : (

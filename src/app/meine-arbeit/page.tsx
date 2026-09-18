@@ -6,13 +6,14 @@ import { listMyOpenActions } from "@/modules/actions/service";
 import { listMyHandovers } from "@/modules/handovers/service";
 import { listReviews } from "@/modules/reviews/service";
 import { listMySupportRequests } from "@/modules/leadership/service";
+import { listMyOpportunities } from "@/modules/opportunities/service";
 import { getProviderStatus, listMySuggestions } from "@/modules/suggestions/service";
 import { SuggestionCard } from "@/components/SuggestionCard";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
-import { actionStatusLabel, fmtDate, handoverStatusLabel, reviewStatusLabel, setupStatusLabel, supportStatusLabel } from "@/lib/labels";
+import { actionStatusLabel, fmtDate, handoverStatusLabel, reviewStatusLabel, setupStatusLabel, supportStatusLabel, opportunityStatusLabel } from "@/lib/labels";
 import { changeActionStatusAction, respondHandoverAction, respondSupportRequestAction } from "../actions";
 
 export default async function MeineArbeitPage({ searchParams }: { searchParams: SearchParams }) {
@@ -20,6 +21,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
   const [setups, actions, handovers, reviews, support] = await Promise.all([listMySetups(actor), listMyOpenActions(actor), listMyHandovers(actor), listReviews(actor), listMySupportRequests(actor)]);
+  const myOpportunities = await listMyOpportunities(actor);
   const openSupport = support.filter((s) => s.status === "ANGEFRAGT" || s.status === "ANGENOMMEN");
   const nextReviews = [...reviews.open, ...reviews.upcoming].slice(0, 5);
   const ai = getProviderStatus();
@@ -130,6 +132,16 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
           </table>
         )}
       </section>
+
+      {myOpportunities.length > 0 && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Meine offenen Bedarfe ({myOpportunities.length})</h2>
+          <table className="list">
+            <thead><tr><th>Bedarf</th><th>Kunde</th><th>Status</th><th>Geändert</th></tr></thead>
+            <tbody>{myOpportunities.map((o) => <tr key={o.id}><td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link>{o.fastTrack && <span className="muted text-sm"> · direkte Anfrage</span>}</td><td>{o.accountName}</td><td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td><td>{fmtDate(o.updatedAt)}</td></tr>)}</tbody>
+          </table>
+        </section>
+      )}
 
       <section className="card">
         <h2 className="font-semibold mb-2">Nächste Weeklys ({nextReviews.length})</h2>

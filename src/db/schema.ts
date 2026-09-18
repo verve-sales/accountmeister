@@ -933,6 +933,170 @@ export const confidentialNotes = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Bedarfe, Buyingcenter, Angebote, Aufträge, Startvoraussetzungen (Etappe 5; Briefing 8.3, 9.2, 9.3, 15.2)
+// ---------------------------------------------------------------------------
+
+export const opportunityStatusEnum = pgEnum("opportunity_status", [
+  "IN_KLAERUNG",
+  "BESTAETIGT",
+  "PROFIL_ANGEBOT_VORGESTELLT",
+  "AUSWAHL_BESTELLUNG",
+  "BEAUFTRAGT",
+  "ZURUECKGESTELLT",
+  "BEENDET",
+]);
+export const decisionRoleEnum = pgEnum("decision_role", [
+  "BEDARFSTRAEGER",
+  "FACHLICHE_BEWERTUNG",
+  "BUDGETVERANTWORTUNG",
+  "EINKAUF_VERTRAGSWEG",
+  "ZUSAETZLICHE_FREIGABE",
+  "UNTERSTUETZER_SPONSOR",
+]);
+export const offerStatusEnum = pgEnum("offer_status", ["ENTWURF", "GEPRUEFT", "VORGESTELLT", "RUECKMELDUNG_OFFEN", "AKZEPTIERT", "ABGELEHNT", "ZURUECKGEZOGEN"]);
+export const orderStatusEnum = pgEnum("order_status", ["IN_VORBEREITUNG", "NACHWEISE_UNVOLLSTAENDIG", "BEAUFTRAGUNG_BESTAETIGT", "BEENDET_STORNIERT"]);
+export const engagementStatusEnum = pgEnum("engagement_status", ["GEPLANT", "STARTBEREIT", "GESTARTET", "BEENDET"]);
+export const requirementStatusEnum = pgEnum("requirement_status", ["OFFEN", "NACHWEIS_VORGELEGT", "BESTAETIGT", "NICHT_ANWENDBAR"]);
+
+/** Bedarf/Chance (Opportunity): je Setup mehrere, unabhängige Zustände (F02); Fast-Track ohne vollständiges Setup (F08) */
+export const opportunities = pgTable(
+  "opportunities",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    title: text("title").notNull(),
+    needDescription: text("need_description").notNull(), // Bedarfsbeschreibung in Kundensprache
+    trigger: text("trigger"), // konkreter Anlass (Identify Pain), nur dokumentiert
+    status: opportunityStatusEnum("status").notNull().default("IN_KLAERUNG"),
+    ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+    fastTrack: boolean("fast_track").notNull().default(false), // direkte Anfrage (9.4)
+    requestedAt: timestamp("requested_at", { withTimezone: true }), // Messstart Fast-Track, manuell gesetzt
+    // Bestätigung (9.3): dokumentiert mit Quelle und Zeitpunkt
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    confirmedSourceId: text("confirmed_source_id").references(() => sources.id),
+    confirmedNote: text("confirmed_note"),
+    // MEDDPICC als optionale Qualifizierungshilfe (9.4) – keine Pflichtfelder, keine erfundenen Werte
+    meddpicc: jsonb("meddpicc").$type<Record<string, string>>(),
+    signalId: text("signal_id").references(() => signals.id), // hervorgegangen aus Hinweis
+    statusReason: text("status_reason"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("opportunities_setup_idx").on(t.setupId), index("opportunities_account_idx").on(t.accountId)],
+);
+
+/** Buyingcenter je Bedarf (8.3): Person oder offene Funktion ohne erfundene Person; eine Person kann mehrere Rollen haben */
+export const decisionParticipations = pgTable(
+  "decision_participations",
+  {
+    id: id(),
+    opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
+    role: decisionRoleEnum("role").notNull(),
+    personId: text("person_id").references(() => persons.id), // null = Funktion bekannt, Person offen
+    epistemicStatus: epistemicStatusEnum("epistemic_status").notNull().default("HYPOTHESE"),
+    evidenceSourceId: text("evidence_source_id").references(() => sources.id),
+    note: text("note"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("decision_participations_opp_idx").on(t.opportunityId)],
+);
+
+/** Freigegebene Profilreferenz (15.2): nur Verweis auf ein freigegebenes Profil, kein Kandidatenmanagement */
+export const candidateProfileReferences = pgTable(
+  "candidate_profile_references",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    label: text("label").notNull(), // z. B. „Profil Senior Testkoordination (freigegeben 09/2026)“
+    sourceRef: text("source_ref"), // Ablageort/Referenz, kein Inhalt
+    availabilityNote: text("availability_note"),
+    approvedBy: text("approved_by").references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+);
+
+/** Angebot/Profilvorstellung (9.2): „Vorgestellt“ nur mit manuell bestätigtem Vorstellungsereignis oder Beleg (F09) */
+export const offers = pgTable(
+  "offers",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
+    title: text("title").notNull(),
+    summary: text("summary"), // Inhalt in Kurzform; Kundentext als Artefakt
+    artifactVersionId: text("artifact_version_id").references(() => artifactVersions.id),
+    profileReferenceIds: text("profile_reference_ids").array().notNull().default(sql`'{}'::text[]`),
+    status: offerStatusEnum("status").notNull().default("ENTWURF"),
+    versionNo: integer("version_no").notNull().default(1),
+    presentedAt: timestamp("presented_at", { withTimezone: true }),
+    presentedTo: text("presented_to"), // Personen/Funktionen, denen tatsächlich vorgestellt wurde
+    presentedSourceId: text("presented_source_id").references(() => sources.id),
+    feedbackNote: text("feedback_note"),
+    statusReason: text("status_reason"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("offers_opp_idx").on(t.opportunityId)],
+);
+
+/** Auftrag (9.3): „Beauftragung bestätigt“ nur mit prüfbaren Bestell-/Vertragsnachweisen */
+export const orders = pgTable(
+  "orders",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
+    offerId: text("offer_id").references(() => offers.id),
+    orderReference: text("order_reference"), // Bestell-/Vertragsnummer o. ä.
+    evidenceSourceId: text("evidence_source_id").references(() => sources.id), // Nachweis als Quelle
+    evidenceNote: text("evidence_note"),
+    plannedStart: date("planned_start"),
+    plannedEnd: date("planned_end"),
+    status: orderStatusEnum("status").notNull().default("IN_VORBEREITUNG"),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    confirmedBy: text("confirmed_by").references(() => users.id),
+    engagementStatus: engagementStatusEnum("engagement_status").notNull().default("GEPLANT"),
+    startedAt: timestamp("started_at", { withTimezone: true }), // tatsächlich bestätigtes Ereignis, nicht Datum
+    statusReason: text("status_reason"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("orders_opp_idx").on(t.opportunityId)],
+);
+
+/** Startvoraussetzung je Auftrag/Einsatz (9.3): geltende Anforderung, Nachweis, prüfende Stelle, Status; keine leere Checkliste */
+export const startRequirements = pgTable(
+  "start_requirements",
+  {
+    id: id(),
+    orderId: text("order_id").notNull().references(() => orders.id),
+    requirement: text("requirement").notNull(),
+    policyRef: text("policy_ref"), // Bezug zur geltenden Regel (Policyversion), falls freigegeben
+    checkedBy: text("checked_by"), // prüfende Stelle (Funktion)
+    evidenceSourceId: text("evidence_source_id").references(() => sources.id),
+    evidenceNote: text("evidence_note"),
+    status: requirementStatusEnum("status").notNull().default("OFFEN"),
+    confirmedBy: text("confirmed_by").references(() => users.id),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    version: version(),
+  },
+  (t) => [index("start_requirements_order_idx").on(t.orderId)],
+);
+
+// ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
 
@@ -972,3 +1136,9 @@ export type ImportJobStatus = (typeof importJobStatusEnum.enumValues)[number];
 export type ImportKind = (typeof importKindEnum.enumValues)[number];
 export type SupportRequestStatus = (typeof supportRequestStatusEnum.enumValues)[number];
 export type GoalStatus = (typeof goalStatusEnum.enumValues)[number];
+export type OpportunityStatus = (typeof opportunityStatusEnum.enumValues)[number];
+export type DecisionRole = (typeof decisionRoleEnum.enumValues)[number];
+export type OfferStatus = (typeof offerStatusEnum.enumValues)[number];
+export type OrderStatus = (typeof orderStatusEnum.enumValues)[number];
+export type EngagementStatus = (typeof engagementStatusEnum.enumValues)[number];
+export type RequirementStatus = (typeof requirementStatusEnum.enumValues)[number];

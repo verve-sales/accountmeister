@@ -8,7 +8,9 @@ import { getMyConnection } from "@/modules/integrations/service";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getConfig } from "@/lib/config";
 import { fmtDateTime, integrationStatusLabel } from "@/lib/labels";
-import { connectMailboxAction, revokeMailboxAction } from "../actions";
+import { connectMailboxAction, createProfileReferenceAction, revokeMailboxAction } from "../actions";
+import { listProfileReferences } from "@/modules/opportunities/service";
+import { hasRole } from "@/modules/identity/actor";
 
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -17,6 +19,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
   const ai = getProviderStatus();
   const cfg = getConfig();
   const conn = await getMyConnection(actor);
+  const profileRefs = await listProfileReferences(actor);
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Einstellungen</h1>
@@ -58,6 +61,26 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
         </table>
         <p className="muted text-sm mt-2">Änderungen erfolgen über die Serverkonfiguration (.env), nicht über diese Seite.</p>
       </section>
+      {(hasRole(actor, "BD") || hasRole(actor, "PRINCIPAL") || hasRole(actor, "CEO")) && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Freigegebene Profilreferenzen ({profileRefs.length})</h2>
+          <p className="muted text-sm mb-2">Nur Verweise auf freigegebene Profile (Bezeichnung, Ablageort, Verfügbarkeit) – kein Profilinhalt, kein Kandidatenmanagement. Sichtbar für BD, Principal und CEO.</p>
+          {profileRefs.length === 0 ? <p className="muted text-sm">Noch keine Profilreferenz.</p> : (
+            <table className="list"><thead><tr><th>Bezeichnung</th><th>Ablage/Referenz</th><th>Verfügbarkeit</th><th>Freigegeben</th></tr></thead>
+              <tbody>{profileRefs.map((r) => <tr key={r.id}><td>{r.label}</td><td className="text-sm">{r.sourceRef ?? "–"}</td><td className="text-sm">{r.availabilityNote ?? "–"}</td><td className="text-sm">{r.approvedAt ? fmtDateTime(r.approvedAt) : "–"}</td></tr>)}</tbody>
+            </table>
+          )}
+          <details className="mt-3">
+            <summary>Profilreferenz anlegen</summary>
+            <form action={createProfileReferenceAction} className="mt-2 grid sm:grid-cols-3 gap-3">
+              <div><label className="label" htmlFor="prLabel">Bezeichnung</label><input id="prLabel" name="label" className="input" required minLength={3} placeholder="z. B. Profil Senior Testkoordination (freigegeben 09/2026)" /></div>
+              <div><label className="label" htmlFor="prRef">Ablageort / Referenz</label><input id="prRef" name="sourceRef" className="input" /></div>
+              <div><label className="label" htmlFor="prAvail">Verfügbarkeit</label><input id="prAvail" name="availabilityNote" className="input" /></div>
+              <div className="sm:col-span-3"><button className="btn" type="submit">Anlegen</button></div>
+            </form>
+          </details>
+        </section>
+      )}
       <NotYet title="Benachrichtigungen und Administration" etappe="Etappe 5" inhalt="Erinnerungseinstellungen, Review-Rhythmen, berechtigte Administration von Rollen und Aufbewahrung." />
     </div>
   );

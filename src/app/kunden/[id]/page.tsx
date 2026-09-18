@@ -3,11 +3,12 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getAccount } from "@/modules/accounts/service";
 import { listSetupsForAccount } from "@/modules/setups/service";
+import { listOpportunitiesForAccount } from "@/modules/opportunities/service";
 import { canCreateSetup } from "@/modules/identity/authz";
 import { DomainError } from "@/lib/errors";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
-import { fmtDate, setupStatusLabel, visibilityLabel, contributionLabel } from "@/lib/labels";
+import { fmtDate, setupStatusLabel, visibilityLabel, contributionLabel, opportunityStatusLabel } from "@/lib/labels";
 import { createSetupAction } from "../../actions";
 import { listPeopleForAccount } from "@/modules/people/service";
 import { relationshipStateLabel, priorityKindLabel, priorityStatusLabel } from "@/lib/labels";
@@ -30,6 +31,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
     throw e;
   }
   const setups = await listSetupsForAccount(actor, id);
+  const opportunities = await listOpportunitiesForAccount(actor, id);
   const people = await listPeopleForAccount(actor, id);
   const [plan, snapshots, mayEditPlan] = await Promise.all([buildAccountPlan(actor, id), listAccountPlanSnapshots(actor, id), canEditAccountPlan(actor, id)]);
   const back = `/kunden/${id}`;
@@ -130,6 +132,17 @@ export default async function KundePage({ params, searchParams }: { params: Prom
                 </tr>
               ))}
             </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="card">
+        <h2 className="font-semibold mb-2">Bedarfe ({opportunities.filter((o) => o.status !== "BEENDET").length} offen)</h2>
+        <p className="muted text-sm mb-2">Jeder Bedarf hat einen eigenen Zustand; es gibt keinen zusammengefassten Angebots- oder Pipelinestatus je Kunde.</p>
+        {opportunities.length === 0 ? <p className="muted text-sm">Noch kein Bedarf erfasst. Bedarfe entstehen im Setup.</p> : (
+          <table className="list">
+            <thead><tr><th>Bedarf</th><th>Setup</th><th>Status</th><th>Bestätigt</th></tr></thead>
+            <tbody>{opportunities.map((o) => <tr key={o.id}><td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link></td><td><Link href={`/setups/${o.setupId}`}>{o.setupName}</Link></td><td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td><td>{o.confirmedAt ? fmtDate(o.confirmedAt) : "–"}</td></tr>)}</tbody>
           </table>
         )}
       </section>

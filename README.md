@@ -1,6 +1,6 @@
 # Verve Sales-Arbeitsumgebung (Pilot)
 
-Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–3 abgeschlossen, Etappe 4 umgesetzt (Unterstützungsaufträge, Portfolio, Principal-/BD-Weekly, Ziele mit Zustimmung CEO+Principal, vertrauliche Führungsnotizen). **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
+Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–4 abgeschlossen, Etappe 5 Teil A umgesetzt (Bedarfe mit Buyingcenter, Angebote, Aufträge, Startvoraussetzungen); Teil B (Härtung, Betrieb) folgt. **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
 
 Dokumente: `docs/briefing.md` (Auftrag), `docs/implementierungsuebersicht.md`, `docs/entscheidungsprotokoll.md`.
 
@@ -49,9 +49,10 @@ e2e              End-to-End-Tests (Playwright)
 docs             Briefing, Implementierungsübersicht, Entscheidungsprotokoll
 ```
 
-## Bekannte Einschränkungen (Stand Etappe 4)
+## Bekannte Einschränkungen (Stand Etappe 5 Teil A)
 - Kontaktwege nur tabellarisch; die grafische Beziehungskarte folgt. Buyingcenter je Bedarf folgt mit dem Bedarfsobjekt.
-- Bedarfe/Angebote/Aufträge (Etappe 5): noch nicht umgesetzt. Zielbeiträge sind mit Setups/Kunden verknüpft; die Koppelung an Accountplan-Prioritäten ist im Datenmodell vorhanden, in der Oberfläche noch nicht.
+- Startvoraussetzungen werden frei erfasst; ein freigegebenes Regelwerk (Vertrag/Compliance/Onboarding) und die Vergütungsregeln (A16) sind offen. Nachweise sind Quellen/Belegnotizen, keine Dokumentenverwaltung.
+- Härtung (Löschablauf, Sitzungsablauf, Rate-Limits, Docker, Backup) folgt in Etappe 5 Teil B. Zielbeiträge sind mit Setups/Kunden verknüpft; die Koppelung an Accountplan-Prioritäten ist im Datenmodell vorhanden, in der Oberfläche noch nicht.
 - Outlook: Der Microsoft-Graph-Adapter läuft im Fixture-Modus mit fiktiven Testquellen; ein echter Abruf braucht eine App-Registrierung im Verve-Tenant und die Datenschutzfreigabe.
 - KI: nur der deterministische Testanbieter (`AI_PROVIDER=test`) ist nutzbar; er ist kein Sprachmodell. Der Produktivadapter ist bis zur Anbieter-/Datenschutzentscheidung gesperrt.
 - Keine Unternehmensanmeldung, kein KI-Anbieter, keine Mail-/Kalenderanbindung (Entscheidungen offen, siehe Entscheidungsprotokoll).

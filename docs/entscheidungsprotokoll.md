@@ -86,6 +86,18 @@ Ein Ziel (11.3, F12) wird „Vereinbart“ erst, wenn eine Person mit CEO-Rolle 
 ## E-028 · 2026-09-18 · Vertrauliche Führungsnotizen
 Vertrauliche Notizen (11.4, S04) werden nur von Principal/CEO in einem Führungs-Review angelegt und haben einen expliziten Empfängerkreis (Autor plus gewählte Teilnehmende). Sie erscheinen nie im Setup, im Accountplan, in Artefakten oder im KI-Kontext und werden Nicht-Empfängern auch nicht als Abschnitt angezeigt.
 
+## E-029 · 2026-09-18 · Bedarfe: eigener Zustand je Bedarf, Bestätigung nur mit Beleg
+Bedarfe (Opportunity) hängen an einem Setup und haben je einen eigenen Zustand (9.2); es gibt keinen Kunden-Pipelinestatus (F02). Ein Bedarf ist mit Titel und Beschreibung anlegbar – ohne vollständiges Setup, Buyingcenter oder MEDDPICC (F08). Fast-Track setzt den Messstart manuell beim Anlegen; die Anwendung garantiert keine Besetzung. „Bestätigt“ braucht einen Beleg (vorhandene Quelle oder neue Belegnotiz) und speichert den Zeitpunkt; Budget-/Beschaffungsinformation ist nicht Voraussetzung. „Vorgestellt“ und „Beauftragt“ entstehen ausschließlich über Angebot bzw. Auftrag, nie durch direkten Statuswechsel. Ein aus einem Hinweis hervorgegangener Bedarf setzt den Hinweis auf „mit Bedarf verknüpft“.
+
+## E-030 · 2026-09-18 · Buyingcenter und MEDDPICC ohne erfundene Sicherheit
+Rollen im Buyingcenter (8.3) werden je Bedarf geführt; eine Funktion kann ohne Person angelegt werden, eine Person mehrere Rollen haben. Der Erkenntnisstatus startet als Hypothese; „bestätigt“ braucht eine Quelle – ein Titel belegt keine Entscheidungsvollmacht. MEDDPICC (9.4) sind acht freie Textfelder ohne Pflicht, Vollständigkeitsanzeige, Ampel oder Bewertung.
+
+## E-031 · 2026-09-18 · Angebot: Entwurf ist nie „vorgestellt“; akzeptiert ist kein Auftrag
+Ein Angebot durchläuft Entwurf → geprüft → tatsächlich vorgestellt (F09: nur mit Empfängerangabe, Zeitpunkt nicht in der Zukunft und Beleg) → Rückmeldung. Eine positive Rückmeldung setzt den Bedarf höchstens auf „Auswahl/Bestellung“ – kein Auftrag, kein Start (F10). Profile werden nur als freigegebene Referenzen (Bezeichnung, Ablageort, Verfügbarkeit) verwaltet, sichtbar für BD/Principal/CEO; kein Kandidatenmanagement, keine Profilinhalte.
+
+## E-032 · 2026-09-18 · Auftrag und Start nur mit Nachweisen
+„Beauftragung bestätigt“ braucht Referenz und Nachweisquelle. Startvoraussetzungen werden je Auftrag erfasst (Anforderung, prüfende Stelle, Regelbezug); „bestätigt“ braucht einen Nachweis, „nicht anwendbar“ eine Begründung. „Startbereit“ verlangt mindestens eine erfasste und bestätigte bzw. begründet nicht anwendbare Voraussetzung – eine leere Prüfliste gilt nicht als erfüllt. „Gestartet“ ist ein manuell bestätigtes Ereignis mit Zeitpunkt, nie die Folge eines erreichten Datums. Ohne freigegebene Regelkonfiguration zeigt die Anwendung den dokumentierten Stand und behauptet keine produktive Einsatzfreigabe. Vergütungs-/Provisionsberechnung (A16) bleibt außerhalb des Umfangs.
+
 ## Offene Entscheidungen (Briefing 2.3) – Stand unverändert offen
 | Thema | Aktueller lokaler Ersatz | Entscheidung nötig vor |
 |---|---|---|
@@ -96,4 +108,5 @@ Vertrauliche Notizen (11.4, S04) werden nur von Principal/CEO in einem Führungs
 | Führendes CRM/Staffing-System | eigener Pilotdatenbestand | Synchronisation realer Stammdaten |
 | Datenschutz (Zweck, Rechtsgrundlage, DSFA, Aufbewahrung, Löschkonzept) | Zugriffsklassen + Sperrung technisch vorbereitet | Echtdatenbetrieb |
 | Sales-/Vergütungsregeln (A16) | nicht implementiert, keine Berechnung | Aktivierung entsprechender Prüfungen |
+| Startvoraussetzungs-Regelwerk (Vertrag/Compliance/Onboarding) | frei erfasste Voraussetzungen je Auftrag, Regelbezug als Text | produktiver Einsatzfreigabe |
 | Git-Remote | lokales Repository | Teamarbeit / CI |

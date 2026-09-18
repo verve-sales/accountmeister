@@ -430,3 +430,100 @@ test("Etappe 4: Unterstützungsauftrag BD → Principal, Principal-Weekly mit ve
   await expect(page.getByText("Vereinbart", { exact: true })).toBeVisible();
   await expect(page.getByText(/zugestimmt von .*Clemens.*Petra|zugestimmt von .*Petra.*Clemens/)).toBeVisible();
 });
+
+test("Etappe 5: Bedarf direkt erfassen → bestätigen mit Beleg → Buyingcenter → Angebot geprüft → vorgestellt mit Beleg → akzeptiert (kein Auftrag) → Auftrag mit Nachweis → Startvoraussetzungen → startbereit → gestartet", async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  await loginAs(page, "David");
+
+  // Profilreferenz (nur Verweis) in den Einstellungen
+  await page.getByRole("link", { name: "Einstellungen" }).click();
+  await page.locator("summary", { hasText: "Profilreferenz anlegen" }).click();
+  await page.locator("#prLabel").fill(`Profil Testkoordination ${suffix}`);
+  await page.getByRole("button", { name: "Anlegen", exact: true }).click();
+  await expect(page.getByText("Profilreferenz angelegt")).toBeVisible();
+
+  // Bedarf direkt im Setup erfassen (F08, Fast-Track)
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
+  await page.getByRole("link", { name: /Beispielkonzern/ }).click();
+  await page.getByRole("link", { name: "Plattformteam", exact: true }).first().click();
+  await page.locator("summary", { hasText: "Bedarf erfassen" }).click();
+  const title = `Testkoordination Release ${suffix}`;
+  await page.locator("#opTitle").fill(title);
+  await page.locator("#opNeed").fill("Der Kunde braucht kurzfristig Unterstützung in der Testkoordination für das Q4-Release.");
+  await page.getByLabel(/Direkte Anfrage/).check();
+  await page.getByRole("button", { name: "Bedarf anlegen" }).click();
+  await expect(page).toHaveURL(/\/bedarfe\//);
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await expect(page.getByText("In Klärung", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Direkte Anfrage (Fast-Track)")).toBeVisible();
+
+  // Bestätigen ohne Beleg scheitert, mit Belegnotiz gelingt
+  await page.locator("summary", { hasText: "Bedarf bestätigen" }).click();
+  await page.getByRole("button", { name: "Bedarf bestätigen", exact: true }).click();
+  await expect(page.getByText(/Bitte einen Beleg angeben/)).toBeVisible();
+  await page.locator("summary", { hasText: "Bedarf bestätigen" }).click();
+  await page.locator("#confText").fill("Frau Keller hat den Bedarf im Termin am 15.09. ausdrücklich bestätigt.");
+  await page.getByRole("button", { name: "Bedarf bestätigen", exact: true }).click();
+  await expect(page.getByText("Bedarf bestätigt – mit Quelle")).toBeVisible();
+
+  // Buyingcenter: offene Funktion ohne Person
+  await page.locator("summary", { hasText: "Rolle hinzufügen" }).click();
+  await page.locator("#pRole").selectOption("BUDGETVERANTWORTUNG");
+  await page.getByRole("button", { name: "Rolle speichern" }).click();
+  await expect(page.getByText("Funktion bekannt, Person offen").first()).toBeVisible();
+
+  // Angebot: Entwurf → geprüft → vorgestellt mit Beleg
+  await page.locator("summary", { hasText: "Angebot anlegen" }).click();
+  await page.locator("#ofTitle").fill(`Profilvorstellung ${suffix}`);
+  await page.getByLabel(`Profil Testkoordination ${suffix}`).check();
+  await page.getByRole("button", { name: "Angebot anlegen", exact: true }).click();
+  await expect(page.getByText("Ein Entwurf gilt nicht als vorgestellt")).toBeVisible();
+  await page.getByRole("button", { name: "Als geprüft markieren" }).click();
+  await expect(page.getByText("Geprüft", { exact: true })).toBeVisible();
+  await page.locator("summary", { hasText: "Vorstellungsereignis bestätigen" }).click();
+  await page.locator("input[name=presentedTo]").fill("Frau Keller, Herr Brandt");
+  await page.locator("input[name=evidenceText]").last().fill("Profil am 17.09. per Mail gesendet; Eingang bestätigt.");
+  await page.getByRole("button", { name: "Als tatsächlich vorgestellt festhalten" }).click();
+  await expect(page.getByText("Vorstellungsereignis bestätigt und belegt")).toBeVisible();
+  await expect(page.getByText("Profil/Angebot vorgestellt", { exact: true }).first()).toBeVisible();
+
+  // Akzeptiert → Auswahl/Bestellung, aber kein Auftrag (F10)
+  await page.getByRole("button", { name: "Akzeptiert", exact: true }).click();
+  await expect(page.getByText("Ein akzeptiertes Angebot ist noch kein Auftrag")).toBeVisible();
+  await expect(page.getByText("Auswahl/Bestellung", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Noch kein Auftrag.", { exact: true })).toBeVisible();
+
+  // Auftrag anlegen, Beauftragung mit Nachweis
+  await page.locator("summary", { hasText: "Auftrag anlegen" }).click();
+  await page.locator("#odStart").fill("2026-11-02");
+  await page.getByRole("button", { name: "Auftrag anlegen", exact: true }).click();
+  await expect(page.getByText("Auftrag in Vorbereitung angelegt")).toBeVisible();
+  await page.locator("summary", { hasText: "Beauftragung bestätigen" }).click();
+  await page.locator("input[name=orderReference]").first().fill(`PO-${suffix}`);
+  await page.locator("input[name=evidenceText]").last().fill("Bestellung liegt als PDF im Auftragsordner; Laufzeit 02.11.–31.03.");
+  await page.getByRole("button", { name: "Beauftragung bestätigen", exact: true }).click();
+  await expect(page.getByText("Beauftragung mit Nachweis bestätigt")).toBeVisible();
+  await expect(page.getByText("Beauftragt", { exact: true }).first()).toBeVisible();
+
+  // Startbereit ohne Voraussetzungen scheitert (leere Prüfliste)
+  await page.getByRole("button", { name: /Startbereit setzen/ }).click();
+  await expect(page.getByText(/leere Prüfliste gilt nicht/)).toBeVisible();
+  await page.locator("summary", { hasText: "Startvoraussetzung erfassen" }).click();
+  await page.locator("input[name=requirement]").fill("Geheimhaltungsvereinbarung unterschrieben");
+  await page.getByRole("button", { name: "Hinzufügen", exact: true }).click();
+  await expect(page.getByText("Startvoraussetzung erfasst")).toBeVisible();
+  await page.getByRole("button", { name: /Startbereit setzen/ }).click();
+  await expect(page.getByText(/ohne bestätigten Nachweis/)).toBeVisible();
+  await page.locator("summary", { hasText: "Nachweis / Stand setzen" }).click();
+  await page.locator("input[name=evidenceText]").last().fill("NDA unterschrieben am 21.10., im Vertragsordner abgelegt.");
+  await page.getByRole("button", { name: "Speichern", exact: true }).last().click();
+  await expect(page.getByText("Stand der Startvoraussetzung gespeichert")).toBeVisible();
+  await page.getByRole("button", { name: /Startbereit setzen/ }).click();
+  await expect(page.getByText("Einsatz startbereit")).toBeVisible();
+
+  // Gestartet als bestätigtes Ereignis
+  await page.locator("input[name=note][placeholder*='Kick-off']").fill("Kick-off am 02.11. mit Frau Keller durchgeführt.");
+  await page.getByRole("button", { name: "Start bestätigen" }).click();
+  await expect(page.getByText("Start als bestätigtes Ereignis festgehalten")).toBeVisible();
+  await expect(page.getByText("Gestartet", { exact: true }).first()).toBeVisible();
+});

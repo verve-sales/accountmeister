@@ -57,6 +57,13 @@
       "when": 1789765422186,
       "tag": "0007_fuehrungsebenen",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789767025117,
+      "tag": "0008_bedarfe_auftraege",
+      "breakpoints": true
     }
   ]
 }
