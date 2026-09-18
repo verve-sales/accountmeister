@@ -17,6 +17,8 @@ import { addDecision, confirmReview, correctReview, createReview, saveReviewDraf
 import { changePriority, createPriority, saveAccountPlanSnapshot } from "@/modules/accountplan/service";
 import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/artifacts/service";
 import { acceptSuggestion, giveFeedback, structureReviewNote } from "@/modules/suggestions/service";
+import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
+import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
 
 /**
  * Alle Formulare laufen über diese Aktionen. Jede Aktion lädt den Akteur frisch,
@@ -335,4 +337,66 @@ export async function suggestionFeedbackAction(fd: FormData) {
   return run(data.back ?? "/meine-arbeit", async (actor) => {
     await giveFeedback(actor, data.suggestionId ?? "", data);
   }, "Rückmeldung gespeichert.");
+}
+
+// --- Quellenanbindung / Import -------------------------------------------------
+
+export async function connectMailboxAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/einstellungen", async (actor) => {
+    await connectMailbox(actor, { fixture: data.mode !== "echt" });
+  }, "Postfach verbunden (Fixture-Modus – fiktive Testquellen, kein echter Abruf).");
+}
+
+export async function revokeMailboxAction() {
+  return run("/einstellungen", async (actor) => {
+    await revokeMailbox(actor);
+  }, "Verbindung widerrufen; Zugangsdaten gelöscht.");
+}
+
+export async function importProtocolAction(fd: FormData) {
+  const data = formToObject(fd);
+  const file = fd.get("file");
+  let text = data.text ?? "";
+  let fileName = "";
+  if (file instanceof File && file.size > 0) {
+    if (file.size > 2_000_000) withFeedback("/eingang", "fehler", "Datei ist größer als 2 MB.");
+    fileName = file.name;
+    try {
+      validateFileName(fileName);
+    } catch (e) {
+      withFeedback("/eingang", "fehler", e instanceof DomainError ? e.message : "Dateityp nicht zulässig.");
+    }
+    text = await file.text();
+  }
+  return run("/eingang", async (actor) => {
+    const r = await importProtocol(actor, { ...data, text, fileName });
+    if (r.repeated) throw new PendingInfo("Diese Quelle war bereits importiert – kein zweiter Import.");
+    if (r.newVersion) throw new PendingInfo("Quelle war bekannt; geänderter Inhalt wurde als neue Version gespeichert.");
+    const n = r.structured?.created ?? 0;
+    throw new PendingInfo(`Quelle übernommen${r.structured ? ` und ausgewertet: ${n} Vorschlag/Vorschläge zur Prüfung` : ""}. Bitte Prüfliste und Vorschläge im Setup ansehen.`);
+  }, "");
+}
+
+export async function importMailboxItemAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/eingang", async (actor) => {
+    const r = await importMailboxItem(actor, data);
+    if (r.repeated) throw new PendingInfo("Dieses Objekt war bereits importiert – kein zweiter Import.");
+    throw new PendingInfo(`„${r.job.title}“ übernommen${r.structured ? ` und ausgewertet: ${r.structured.created} Vorschlag/Vorschläge` : ""}. Warnungen: ${r.job.warnings.length}.`);
+  }, "");
+}
+
+export async function decideMergeAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/eingang", async (actor) => {
+    await decideMerge(actor, data);
+  }, "Zuordnung entschieden.");
+}
+
+export async function confirmImportAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/eingang", async (actor) => {
+    await confirmImport(actor, data);
+  }, "Import bestätigt und protokolliert.");
 }

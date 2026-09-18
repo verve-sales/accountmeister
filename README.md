@@ -1,6 +1,6 @@
 # Verve Sales-Arbeitsumgebung (Pilot)
 
-Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–1 abgeschlossen, Etappen 0–2 abgeschlossen, Etappe 3 Teil A umgesetzt (KI-Schnittstelle mit Testanbieter, Vorschlagslebenszyklus). **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
+Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–1 abgeschlossen, Etappen 0–2 abgeschlossen, Etappe 3 umgesetzt (KI-Schnittstelle mit Testanbieter, Vorschlagslebenszyklus, Protokollimport, Outlook/Graph-Adapter im Fixture-Modus). **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
 
 Dokumente: `docs/briefing.md` (Auftrag), `docs/implementierungsuebersicht.md`, `docs/entscheidungsprotokoll.md`.
 
@@ -41,7 +41,7 @@ Der Produktionsstart (`npm start`) verweigert absichtlich den Betrieb mit `AUTH_
 ## Struktur
 ```
 src/app          Seiten (App Router), Server Actions (Formularbrücke), globales Layout
-src/modules      Fachmodule: identity, accounts, setups, knowledge, signals, actions, handovers, people, accesspaths, reviews, accountplan, artifacts, ai, suggestions, audit
+src/modules      Fachmodule: identity, accounts, setups, knowledge, signals, actions, handovers, people, accesspaths, reviews, accountplan, artifacts, ai, suggestions, integrations, imports, audit
 src/db           Schema (Drizzle), Migrationen, Client, Seed
 src/lib          Konfiguration (mit Produktionsschutz), Fehlerklassen, Anzeigetexte
 tests            Integrationstests (Vitest) gegen PostgreSQL
@@ -51,6 +51,7 @@ docs             Briefing, Implementierungsübersicht, Entscheidungsprotokoll
 
 ## Bekannte Einschränkungen (Stand Etappe 1)
 - Kontaktwege nur tabellarisch; die grafische Beziehungskarte folgt. Buyingcenter je Bedarf folgt mit dem Bedarfsobjekt.
-- Principal-/CEO-Ebene, Protokollimport und Outlook-Anbindung: noch nicht umgesetzt; die Navigation kennzeichnet dies.
+- Principal-/CEO-Ebene (Etappe 4) und Bedarfe/Angebote/Aufträge (Etappe 5): noch nicht umgesetzt; die Navigation kennzeichnet dies.
+- Outlook: Der Microsoft-Graph-Adapter läuft im Fixture-Modus mit fiktiven Testquellen; ein echter Abruf braucht eine App-Registrierung im Verve-Tenant und die Datenschutzfreigabe.
 - KI: nur der deterministische Testanbieter (`AI_PROVIDER=test`) ist nutzbar; er ist kein Sprachmodell. Der Produktivadapter ist bis zur Anbieter-/Datenschutzentscheidung gesperrt.
 - Keine Unternehmensanmeldung, kein KI-Anbieter, keine Mail-/Kalenderanbindung (Entscheidungen offen, siehe Entscheidungsprotokoll).

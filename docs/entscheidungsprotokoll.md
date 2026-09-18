@@ -62,12 +62,21 @@ Entscheidung des Auftraggebers (Ivo Seifert): Verve nutzt Microsoft Outlook. Der
 ## E-020 · 2026-09-18 · Vorschlagsverarbeitung
 Kette: berechtigten Kontext laden (nur Notiztext, Namen, bestätigte Aussagen) → Anbieter → Zod-Schema → Quellenprüfung (Zitat muss wörtlich in der Notiz stehen; zugeordnete Personen müssen Teilnehmende sein) → Rechte erneut laden (S05) → speichern → Mensch entscheidet. Dedupe je Setup über Typ + normalisiertes Zitat; bereits entschiedene Vorschläge werden ohne neue Information nicht wiederholt (F15). Auftragsprotokolle speichern Hash und Länge des Eingabetexts, nie den Text (16.4). Annahme erzeugt ausschließlich ungeprüfte Objekte; Aktionen aus Vorschlägen für andere starten als „vorgeschlagen“. Nutzungsgrenze `AI_DAILY_JOB_LIMIT` je Arbeitsraum und Tag.
 
+## E-021 · 2026-09-18 · Import: Nur-Text, freigegebene Dateitypen, Idempotenz, Versionen
+Importierte Inhalte werden ausschließlich als Nur-Text übernommen (Skripte, Bilder/Tracker, Auszeichnungen entfernt; Links bleiben Text und werden nie serverseitig abgerufen – S10/17.4). Dateien: nur .txt und .md bis 2 MB; PDF/DOCX erst nach Prüfung einer isolierten Verarbeitung. Externe Kennung (Mail-/Termin-ID bzw. Inhalts-Hash) macht Wiederimporte idempotent; geänderter Inhalt erzeugt eine neue Quellenversion, die alte bleibt. Anhänge werden nie übernommen, nur im Importumfang genannt.
+
+## E-022 · 2026-09-18 · Keine automatische Personenzusammenführung
+Namensgleichheit ist kein Identitätsbeweis (13.4). Nur ein eindeutiger E-Mail-Treffer gilt als sichere Zuordnung; alle anderen Nennungen landen in einer Prüfliste (zusammenführen / neue Person / ignorieren), die vor der Importbestätigung abgearbeitet sein muss. Verve-eigene Nutzer erscheinen nicht in der Prüfliste. Ein Termin belegt Planung, nicht Teilnahme – der Import erzeugt keine Beziehung.
+
+## E-023 · 2026-09-18 · Graph-Adapter im Fixture-Modus
+Der Adapter fordert nur User.Read, Mail.Read, Calendars.Read, offline_access (lesend, delegiert). Ein echter Verbindungsaufbau wird abgewiesen, bis Client-ID, Tenant-ID, Redirect-URI und Datenschutzfreigabe konfiguriert sind; der Fixture-Modus wird in Status, Quelle und Importwarnungen als solcher gekennzeichnet. Tokens werden nur als Referenz gespeichert (im Echtbetrieb serverseitig verschlüsselt); Widerruf löscht Referenz und Scopes.
+
 ## Offene Entscheidungen (Briefing 2.3) – Stand unverändert offen
 | Thema | Aktueller lokaler Ersatz | Entscheidung nötig vor |
 |---|---|---|
 | Hosting/Produktivregion | lokal, PostgreSQL 16 | Echtdatenbetrieb |
 | Unternehmensanmeldung (OIDC-Anbieter) | Entwicklungsanmeldung | Bereitstellung für reale Nutzer |
-| Mail-/Kalenderanbieter | **entschieden: Microsoft 365/Outlook (E-018)**; Adapter mit Testfixtures folgt | echtem Import: App-Registrierung + Datenschutzfreigabe |
+| Mail-/Kalenderanbieter | **entschieden: Microsoft 365/Outlook (E-018)**; Graph-Adapter im Fixture-Modus vorhanden (E-023) | echtem Import: App-Registrierung im Verve-Tenant + Datenschutzfreigabe |
 | KI-Anbieter/Modell | `AI_PROVIDER=test` (regelbasiert, lokal); Produktivadapter gesperrt | KI-Verarbeitung echter Inhalte |
 | Führendes CRM/Staffing-System | eigener Pilotdatenbestand | Synchronisation realer Stammdaten |
 | Datenschutz (Zweck, Rechtsgrundlage, DSFA, Aufbewahrung, Löschkonzept) | Zugriffsklassen + Sperrung technisch vorbereitet | Echtdatenbetrieb |

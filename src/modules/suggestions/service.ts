@@ -57,14 +57,41 @@ const CATEGORY_ORDER: Record<PriorityCategory, number> = { KONKRETE_ANFRAGE: 0, 
  * die der Anbieter erhält; dazu kommen nur Anzeigenamen und bestätigte Aussagen als Text.
  */
 export async function structureReviewNote(actor: Actor, reviewId: string, deps: { provider?: AIProvider } = {}) {
-  const cfg = getConfig();
-  const provider = deps.provider ?? getAIProvider();
-  const info = provider.info();
   const { review, ctx, participants, canWork } = await requireReview(actor, reviewId);
   if (!canWork) throw new ForbiddenError("Nur Teilnehmende oder Setup-Bearbeitende strukturieren die Notiz.");
   if (review.status === "BESTAETIGT") throw new TransitionError("Ein bestätigtes Weekly wird nicht mehr strukturiert.");
   const noteText = (review.noteDraft ?? "").trim();
   if (noteText.length < 12) throw new ValidationError("Die Notiz ist leer oder zu kurz, um sie zu strukturieren.");
+  return structureText(actor, ctx, {
+    text: noteText,
+    dedupeScope: reviewId,
+    reviewId,
+    sourceIds: [],
+    trigger: `Weekly-Notiz „${review.title}“`,
+    participantUserIds: participants.map((p) => p.userId),
+  }, deps);
+}
+
+export type StructureTextInput = {
+  text: string;
+  /** Idempotenz-Bereich des Auftrags (z. B. Review-ID oder Import-ID) */
+  dedupeScope: string;
+  reviewId?: string;
+  sourceIds: string[];
+  trigger: string;
+  participantUserIds: string[];
+};
+
+/**
+ * Gemeinsame Verarbeitungskette für Weekly-Notizen und importierte Quellen (Briefing 14.4).
+ * Der Anbieter erhält nur den Text, Anzeigenamen und bestätigte Aussagen – keine weiteren Rohquellen.
+ */
+export async function structureText(actor: Actor, ctx: SetupContext, input0: StructureTextInput, deps: { provider?: AIProvider } = {}) {
+  const cfg = getConfig();
+  const provider = deps.provider ?? getAIProvider();
+  const info = provider.info();
+  const noteText = input0.text.trim();
+  if (noteText.length < 12) throw new ValidationError("Der Text ist leer oder zu kurz, um ihn zu strukturieren.");
 
   // Nutzungsgrenze je Arbeitsraum und Tag (17.4)
   const since = new Date();
@@ -73,8 +100,9 @@ export async function structureReviewNote(actor: Actor, reviewId: string, deps: 
   if (Number(cnt?.n ?? 0) >= cfg.AI_DAILY_JOB_LIMIT) throw new UsageLimitError(cfg.AI_DAILY_JOB_LIMIT);
 
   // Berechtigten Kontext laden (nur Namen/Texte, keine Rohquellen)
+  const participantIds = input0.participantUserIds.length ? input0.participantUserIds : [actor.userId];
   const [users, persons, confirmed] = await Promise.all([
-    db.query.users.findMany({ where: inArray(schema.users.id, participants.map((p) => p.userId)) }),
+    db.query.users.findMany({ where: inArray(schema.users.id, participantIds) }),
     db.query.persons.findMany({ where: eq(schema.persons.accountId, ctx.account.id) }),
     db.query.assertions.findMany({ where: and(eq(schema.assertions.setupId, ctx.setup.id), eq(schema.assertions.epistemicStatus, "SACHVERHALT_BESTAETIGT")) }),
   ]);
@@ -86,15 +114,14 @@ export async function structureReviewNote(actor: Actor, reviewId: string, deps: 
     confirmedAssertions: confirmed.map((a) => a.content),
   };
   const inputHash = sha(noteText);
-  const jobDedupe = sha(`${reviewId}:${inputHash}:${STRUCTURE_NOTE_PROMPT_VERSION}`);
+  const jobDedupe = sha(`${input0.dedupeScope}:${inputHash}:${STRUCTURE_NOTE_PROMPT_VERSION}`);
 
-  // Idempotenz: identische Notiz für dasselbe Weekly wurde bereits erfolgreich verarbeitet → nicht wiederholen
   const prior = await db.query.aiJobs.findFirst({ where: and(eq(schema.aiJobs.dedupeKey, jobDedupe), eq(schema.aiJobs.status, "ERFOLGREICH")) });
-  if (prior) return { job: prior, created: 0, skipped: 0, repeated: true, noSuggestionReason: "" };
+  if (prior) return { job: prior, created: 0, skipped: 0, rejected: 0, repeated: true, noSuggestionReason: "" };
 
   const [job] = await db
     .insert(schema.aiJobs)
-    .values({ workspaceId: actor.workspaceId, type: "STRUCTURE_NOTE", actorUserId: actor.userId, setupId: ctx.setup.id, reviewId, provider: info.id, model: info.model, promptVersion: STRUCTURE_NOTE_PROMPT_VERSION, inputHash, inputChars: noteText.length, dedupeKey: jobDedupe })
+    .values({ workspaceId: actor.workspaceId, type: "STRUCTURE_NOTE", actorUserId: actor.userId, setupId: ctx.setup.id, reviewId: input0.reviewId ?? null, provider: info.id, model: info.model, promptVersion: STRUCTURE_NOTE_PROMPT_VERSION, inputHash, inputChars: noteText.length, dedupeKey: jobDedupe })
     .returning();
   if (!job) throw new Error("KI-Auftrag konnte nicht angelegt werden");
 
@@ -106,7 +133,6 @@ export async function structureReviewNote(actor: Actor, reviewId: string, deps: 
     throw e;
   }
 
-  // Schema-/Quellenprüfung: ungültige Ausgaben oder Zitate, die nicht in der Notiz stehen, werden zurückgewiesen
   const parsed = structureNoteOutputSchema.safeParse(raw);
   if (!parsed.success) {
     await db.update(schema.aiJobs).set({ status: "FEHLER", error: "Ausgabe entspricht nicht dem Schema", finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
@@ -115,18 +141,14 @@ export async function structureReviewNote(actor: Actor, reviewId: string, deps: 
   const valid: StructuredItem[] = [];
   let rejected = 0;
   for (const item of parsed.data.items) {
-    if (!noteText.includes(item.evidenceQuote)) {
-      rejected++;
-      continue;
-    }
-    if (item.proposedOwnerName && !input.participantNames.includes(item.proposedOwnerName)) {
+    if (!noteText.includes(item.evidenceQuote) || (item.proposedOwnerName && !input.participantNames.includes(item.proposedOwnerName))) {
       rejected++;
       continue;
     }
     valid.push(item);
   }
 
-  // Berechtigung erneut prüfen – zwischenzeitlich entzogene Rechte dürfen nicht durch den laufenden Auftrag umgangen werden (S05)
+  // Berechtigung erneut prüfen (S05)
   const fresh = await loadActor(actor.userId);
   const freshCtx = fresh ? await loadSetupContext(fresh, ctx.setup.id) : null;
   if (!fresh || !freshCtx || !canViewSetup(fresh, freshCtx)) {
@@ -134,7 +156,6 @@ export async function structureReviewNote(actor: Actor, reviewId: string, deps: 
     throw new ForbiddenError("Ihre Berechtigung hat sich während der Verarbeitung geändert; es wurde nichts gespeichert.");
   }
 
-  // Speichern mit Wiederholungsregel (F15): gleicher Dedupe-Key und keine neue Information → nicht erneut anlegen
   const nameToUser = new Map(users.map((u) => [u.displayName, u.id]));
   let created = 0;
   let skipped = 0;
@@ -144,7 +165,7 @@ export async function structureReviewNote(actor: Actor, reviewId: string, deps: 
       const existing = await tx.query.suggestions.findFirst({ where: and(eq(schema.suggestions.setupId, ctx.setup.id), eq(schema.suggestions.dedupeKey, dedupeKey)) });
       if (existing) {
         skipped++;
-        continue; // abgelehnt/erledigt/offen – ohne neue Information nicht wiederholen
+        continue;
       }
       await tx.insert(schema.suggestions).values({
         workspaceId: actor.workspaceId,
@@ -152,9 +173,9 @@ export async function structureReviewNote(actor: Actor, reviewId: string, deps: 
         title: item.title,
         targetRole: item.type === "PERSON" || item.type === "OFFENE_FRAGE" ? "BD" : "TEILNEHMENDE",
         setupId: ctx.setup.id,
-        reviewId,
-        trigger: `Weekly-Notiz „${review.title}“`,
-        sourceIds: [],
+        reviewId: input0.reviewId ?? null,
+        trigger: input0.trigger,
+        sourceIds: input0.sourceIds,
         evidenceQuote: item.evidenceQuote,
         observation: item.observation,
         hypothesis: item.hypothesis || null,
@@ -176,7 +197,7 @@ export async function structureReviewNote(actor: Actor, reviewId: string, deps: 
       created++;
     }
     await tx.update(schema.aiJobs).set({ status: "ERFOLGREICH", itemCount: created, rejectedCount: rejected, finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
-    await recordAudit(tx, actor, "ai.structure_note", "REVIEW", reviewId, { erzeugt: created, uebersprungen: skipped, zurueckgewiesen: rejected, provider: info.id });
+    await recordAudit(tx, actor, "ai.structure_text", input0.reviewId ? "REVIEW" : "SETUP", input0.reviewId ?? ctx.setup.id, { erzeugt: created, uebersprungen: skipped, zurueckgewiesen: rejected, provider: info.id });
   });
   return { job, created, skipped, rejected, repeated: false, noSuggestionReason: parsed.data.noSuggestionReason };
 }

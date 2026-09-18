@@ -724,6 +724,102 @@ export const openQuestions = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Quellenanbindung (Briefing 13): Integrationen, Importe, Quellenversionen, Zuordnungsprüfliste
+// ---------------------------------------------------------------------------
+
+export const integrationProviderEnum = pgEnum("integration_provider", ["MICROSOFT_GRAPH"]);
+export const integrationStatusEnum = pgEnum("integration_status", ["VERBUNDEN_FIXTURE", "VERBUNDEN", "ABGELAUFEN", "WIDERRUFEN", "FEHLER"]);
+export const importJobStatusEnum = pgEnum("import_job_status", ["VORGESCHLAGEN", "UEBERNOMMEN", "AUSGEWERTET", "BESTAETIGT", "FEHLER", "VERWORFEN"]);
+export const importKindEnum = pgEnum("import_kind", ["PROTOKOLL_TEXT", "PROTOKOLL_DATEI", "MAIL", "TERMIN"]);
+
+/** Persönliche Verbindung eines Nutzers zu einem Anbieter – Tokens nur als verschlüsselte Referenz (13.4) */
+export const integrationConnections = pgTable(
+  "integration_connections",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    userId: text("user_id").notNull().references(() => users.id),
+    provider: integrationProviderEnum("provider").notNull(),
+    /** Tatsächlich gewährte Berechtigungen (Scopes), zur Anzeige (13.4 „Berechtigungen anzeigen“) */
+    grantedScopes: text("granted_scopes").array().notNull().default(sql`'{}'::text[]`),
+    /** Referenz auf den serverseitig verschlüsselten Token-Speicher; nie der Token selbst */
+    tokenRef: text("token_ref"),
+    accountLabel: text("account_label"), // z. B. Postfach-Anzeigename
+    status: integrationStatusEnum("status").notNull().default("VERBUNDEN_FIXTURE"),
+    fixtureMode: boolean("fixture_mode").notNull().default(true), // kein echter Abruf
+    lastSuccessfulFetchAt: timestamp("last_successful_fetch_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("integration_connections_user_provider_uq").on(t.userId, t.provider)],
+);
+
+export const importJobs = pgTable(
+  "import_jobs",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    actorUserId: text("actor_user_id").notNull().references(() => users.id),
+    kind: importKindEnum("kind").notNull(),
+    connectionId: text("connection_id").references(() => integrationConnections.id),
+    /** Externe Kennung (Mail-/Termin-ID bzw. Datei-Hash) – idempotent je Arbeitsraum */
+    externalKey: text("external_key").notNull(),
+    title: text("title").notNull(),
+    setupId: text("setup_id").references(() => projectSetups.id), // Zielsetup (vorgeschlagen/gewählt)
+    accountId: text("account_id").references(() => accounts.id),
+    accessClass: accessClassEnum("access_class").notNull().default("PERSOENLICH"), // interner Empfängerkreis
+    sourceId: text("source_id").references(() => sources.id), // erzeugte Quelle nach Übernahme
+    aiJobId: text("ai_job_id").references(() => aiJobs.id),
+    status: importJobStatusEnum("status").notNull().default("VORGESCHLAGEN"),
+    scopeSummary: text("scope_summary"), // Importumfang (z. B. „1 Mail, 2 Anhänge ausgeschlossen“)
+    warnings: text("warnings").array().notNull().default(sql`'{}'::text[]`), // z. B. sensible Inhalte, HTML entfernt
+    error: text("error"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [uniqueIndex("import_jobs_external_uq").on(t.workspaceId, t.kind, t.externalKey), index("import_jobs_actor_idx").on(t.actorUserId)],
+);
+
+/** Quellenversion: bei erneutem Import mit verändertem Inhalt entsteht eine neue Version, die alte bleibt (15.3) */
+export const sourceVersions = pgTable(
+  "source_versions",
+  {
+    id: id(),
+    sourceId: text("source_id").notNull().references(() => sources.id),
+    versionNo: integer("version_no").notNull(),
+    body: text("body"),
+    contentHash: text("content_hash").notNull(),
+    importJobId: text("import_job_id").references(() => importJobs.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("source_versions_no_uq").on(t.sourceId, t.versionNo)],
+);
+
+export const mergeReviewStatusEnum = pgEnum("merge_review_status", ["OFFEN", "ZUSAMMENGEFUEHRT", "NEUE_PERSON", "IGNORIERT"]);
+
+/** Prüfliste unsicherer Zusammenführungen: gleiche Namen sind kein Identitätsbeweis (13.4, Testfall 19.2) */
+export const mergeReviewItems = pgTable(
+  "merge_review_items",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    importJobId: text("import_job_id").notNull().references(() => importJobs.id),
+    mentionedName: text("mentioned_name").notNull(),
+    mentionedEmail: text("mentioned_email"),
+    candidatePersonIds: text("candidate_person_ids").array().notNull().default(sql`'{}'::text[]`),
+    status: mergeReviewStatusEnum("status").notNull().default("OFFEN"),
+    decidedPersonId: text("decided_person_id").references(() => persons.id),
+    decidedBy: text("decided_by").references(() => users.id),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("merge_review_items_job_idx").on(t.importJobId)],
+);
+
+// ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
 
@@ -759,3 +855,5 @@ export type ArtifactStatus = (typeof artifactStatusEnum.enumValues)[number];
 export type ArtifactVariant = (typeof artifactVariantEnum.enumValues)[number];
 export type SuggestionStatus = (typeof suggestionStatusEnum.enumValues)[number];
 export type PriorityCategory = (typeof priorityCategoryEnum.enumValues)[number];
+export type ImportJobStatus = (typeof importJobStatusEnum.enumValues)[number];
+export type ImportKind = (typeof importKindEnum.enumValues)[number];

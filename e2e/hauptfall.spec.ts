@@ -278,7 +278,7 @@ test("Etappe 3: Weekly-Notiz strukturieren → Vorschläge prüfen → annehmen 
   await page.getByRole("button", { name: "Weekly anlegen" }).click();
   await expect(page.getByRole("heading", { name: `KI-Weekly ${tag}` })).toBeVisible();
 
-  await page.getByLabel(/Freitextnotiz/).fill(`Im Migrationsteam wird über zusätzlichen Testkoordinationsaufwand ${tag} gesprochen. Möglicherweise entsteht Bedarf an externer Unterstützung. Wer entscheidet im Migrationsteam über externe Kapazitäten?`);
+  await page.getByLabel(/Freitextnotiz/).fill(`Im Migrationsteam wird über zusätzlichen Testkoordinationsaufwand ${tag} gesprochen. Möglicherweise entsteht Bedarf an externer Unterstützung ${tag}. Wer entscheidet im Migrationsteam über externe Kapazitäten ${tag}?`);
   await page.getByRole("button", { name: "Entwurf speichern" }).click();
   await expect(page.getByText("Notiz als Entwurf gespeichert")).toBeVisible();
   await page.getByRole("button", { name: "Notiz strukturieren" }).click();
@@ -295,4 +295,57 @@ test("Etappe 3: Weekly-Notiz strukturieren → Vorschläge prüfen → annehmen 
   await expect(page.locator("p.error")).toContainText("Ablehnungsgrund");
   // Kein Fakt entstanden: Ergebnisvorschau zeigt Beobachtung, keine Bestätigung
   await expect(page.getByRole("heading", { name: /Neue Beobachtungen \(1\)/ })).toBeVisible();
+});
+
+test("Etappe 3B: Postfach im Fixture-Modus verbinden, Mail auswählen und importieren, Protokoll einfügen, Prüfliste, bestätigen", async ({ page }) => {
+  const tag = Date.now().toString(36);
+  await loginAs(page, "David");
+  await page.getByRole("link", { name: "Einstellungen", exact: true }).click();
+  await page.waitForURL(/einstellungen/);
+  await expect(page.getByRole("heading", { name: "Mein Postfach (Microsoft 365 / Outlook)" })).toBeVisible();
+  // Vorherige Verbindung (aus früheren Läufen) zurücksetzen
+  if (await page.getByRole("button", { name: "Verbindung widerrufen" }).isVisible()) {
+    await page.getByRole("button", { name: "Verbindung widerrufen" }).click();
+    await expect(page.getByText("Verbindung widerrufen; Zugangsdaten gelöscht.")).toBeVisible();
+  }
+  // Echt → ehrlich abgewiesen
+  await page.getByRole("button", { name: "Echtes Postfach verbinden" }).click();
+  await expect(page.locator("p.error")).toContainText("noch nicht konfiguriert");
+  await page.getByRole("button", { name: "Verbinden (Fixture-Modus)" }).click();
+  await expect(page.getByText("Postfach verbunden (Fixture-Modus")).toBeVisible();
+  await expect(page.getByText("Verbunden (Fixture-Modus)", { exact: true })).toBeVisible();
+
+  // Eingang: Mail auswählen und importieren
+  await page.locator("nav").getByRole("link", { name: "Eingang" }).click();
+  await expect(page.getByText("Fixture-Modus: fiktive Testquellen")).toBeVisible();
+  const row = page.getByRole("row", { name: /Kapazitäten nächste Phase/ });
+  if (await row.getByRole("button", { name: "Übernehmen" }).isVisible()) {
+    await row.getByLabel("Zielsetup").selectOption({ label: "Plattformteam" });
+    await row.getByRole("button", { name: "Übernehmen" }).click();
+    await expect(page.getByText(/übernommen und ausgewertet/)).toBeVisible();
+  }
+  await expect(page.getByRole("row", { name: /Kapazitäten nächste Phase/ })).toContainText("bereits importiert");
+
+  // Protokolltext importieren – mit mehrdeutiger Person? Nur bekannte Namen: Keller eindeutig → keine Prüfliste
+  await page.getByLabel("Titel", { exact: true }).fill(`Protokoll ${tag}`);
+  await page.locator("#impSetup").selectOption({ label: "Beispielkonzern AG (fiktiv) – Plattformteam" });
+  await page.getByLabel(/Protokolltext/).fill(`Frau Keller berichtet ${tag}: Das Migrationsteam plant zusätzliche Testtermine. Möglicherweise wird externe Unterstützung nötig.`);
+  await page.getByRole("button", { name: "Quelle übernehmen" }).click();
+  await expect(page.getByText(/Quelle übernommen/)).toBeVisible();
+  const job = page.locator("li.border", { hasText: `Protokoll ${tag}` });
+  await expect(job).toContainText("Ausgewertet");
+  // Namensnennung im Text ist kein Identitätsbeweis → Prüfliste entscheiden, dann bestätigen
+  await expect(job).toContainText("Unklare Personenzuordnung");
+  await job.getByRole("button", { name: "Import bestätigen" }).click();
+  await expect(page.locator("p.error")).toContainText("Personenzuordnung");
+  const jobAgain = page.locator("li.border", { hasText: `Protokoll ${tag}` });
+  await jobAgain.getByRole("button", { name: "Ist diese Person" }).first().click();
+  await expect(page.getByText("Zuordnung entschieden")).toBeVisible();
+  await page.locator("li.border", { hasText: `Protokoll ${tag}` }).getByRole("button", { name: "Import bestätigen" }).click();
+  await expect(page.getByText("Import bestätigt und protokolliert")).toBeVisible();
+
+  // Widerruf
+  await page.getByRole("link", { name: "Einstellungen", exact: true }).click();
+  await page.getByRole("button", { name: "Verbindung widerrufen" }).click();
+  await expect(page.getByText("Verbindung widerrufen; Zugangsdaten gelöscht.")).toBeVisible();
 });
