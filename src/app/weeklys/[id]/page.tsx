@@ -5,6 +5,9 @@ import { db, schema } from "@/db/client";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
 import { prepareReview } from "@/modules/reviews/service";
+import { getProviderStatus, listSuggestionsForSetup } from "@/modules/suggestions/service";
+import { SuggestionCard } from "@/components/SuggestionCard";
+import { structureNoteAction } from "../../actions";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { actionStatusLabel, fmtDate, fmtDateTime, handoverStatusLabel, reviewStatusLabel, signalStatusLabel } from "@/lib/labels";
@@ -30,6 +33,9 @@ export default async function WeeklyPage({ params, searchParams }: { params: Pro
   const inProgress = review.status === "LAUFEND" || review.status === "BESTAETIGUNG_OFFEN";
   const canCapture = p.canWork && p.canEditSetup && !confirmed;
   const currentVersion = p.versions.find((v) => v.id === review.confirmedVersionId) ?? null;
+  const ai = getProviderStatus();
+  const sugg = await listSuggestionsForSetup(actor, ctx.setup.id, { reviewId: review.id });
+  const openSuggestions = [...sugg.prominent, ...sugg.more];
 
   return (
     <div className="space-y-6">
@@ -74,7 +80,7 @@ export default async function WeeklyPage({ params, searchParams }: { params: Pro
             {p.changedActions.length === 0 ? <p className="muted">keine</p> : <ul className="list-disc ml-5">{p.changedActions.map((a) => <li key={a.id}>{a.title} → <Status label={actionStatusLabel[a.status] ?? a.status} />{a.result && <span className="muted"> – {a.result}</span>}</li>)}</ul>}
           </div>
         </div>
-        <p className="muted text-sm mt-3">Vorschläge: KI-Anbieter deaktiviert – keine automatische Agenda.</p>
+        <p className="muted text-sm mt-3">{ai.enabled ? `KI-Anbieter: ${ai.description}` : "KI-Anbieter deaktiviert – keine automatische Agenda; manuelle Dokumentation funktioniert vollständig."}</p>
       </section>
 
       {/* Durchführung */}
@@ -95,6 +101,40 @@ export default async function WeeklyPage({ params, searchParams }: { params: Pro
           </form>
         ) : (
           <pre className="whitespace-pre-wrap text-sm muted" style={{ fontFamily: "inherit" }}>{review.noteDraft ?? "(noch keine Notiz)"}</pre>
+        )}
+      </section>
+
+      {/* KI-Strukturierung */}
+      <section className="card">
+        <h2 className="font-semibold mb-1">Notiz strukturieren – prüffähige Ergänzungsvorschläge ({openSuggestions.length} offen)</h2>
+        {ai.enabled ? (
+          <>
+            <p className="muted text-sm mb-2">Anbieter: {ai.model} ({ai.id}) · Prompt {ai.promptVersion}. Die KI liest ausschließlich die Notiz sowie Namen und bestätigte Aussagen. Jeder Vorschlag zitiert die Notiz; nichts wird automatisch übernommen.</p>
+            {p.canWork && !confirmed && (
+              <form action={structureNoteAction}>
+                <input type="hidden" name="reviewId" value={review.id} />
+                <button className="btn btn-secondary btn-small" type="submit" disabled={!review.noteDraft}>Notiz strukturieren</button>
+                {!review.noteDraft && <span className="muted text-sm ml-2">Zuerst Notiz als Entwurf speichern.</span>}
+              </form>
+            )}
+          </>
+        ) : (
+          <p className="muted text-sm">KI-Anbieter deaktiviert. Beobachtungen, Aktionen und Entscheidungen werden manuell über die Felder unten festgehalten.</p>
+        )}
+        {openSuggestions.length > 0 && (
+          <ul className="space-y-3 mt-3">
+            {sugg.prominent.map((x) => <SuggestionCard key={x.id} s={x} ownerName={x.proposedOwnerUserId ? sugg.userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide={sugg.canDecide && !confirmed} back={back} users={users} />)}
+            {sugg.more.length > 0 && (
+              <details><summary className="text-sm">{sugg.more.length} weitere Vorschläge</summary>
+                <ul className="space-y-3 mt-2">{sugg.more.map((x) => <SuggestionCard key={x.id} s={x} ownerName={x.proposedOwnerUserId ? sugg.userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide={sugg.canDecide && !confirmed} back={back} users={users} />)}</ul>
+              </details>
+            )}
+          </ul>
+        )}
+        {sugg.decided.length > 0 && (
+          <details className="mt-3"><summary className="text-sm">Entschiedene Vorschläge ({sugg.decided.length})</summary>
+            <ul className="space-y-3 mt-2">{sugg.decided.map((x) => <SuggestionCard key={x.id} s={x} ownerName={x.proposedOwnerUserId ? sugg.userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide={false} back={back} users={users} />)}</ul>
+          </details>
         )}
       </section>
 

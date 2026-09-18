@@ -5,7 +5,9 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL fehlt"),
   AUTH_MODE: z.enum(["development", "oidc"]).default("development"),
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET muss mindestens 32 Zeichen haben"),
-  AI_PROVIDER: z.enum(["disabled", "test"]).default("disabled"),
+  AI_PROVIDER: z.enum(["disabled", "test", "production"]).default("disabled"),
+  /** Nutzungsgrenze: KI-Aufträge je Arbeitsraum und Tag (Briefing 17.4) */
+  AI_DAILY_JOB_LIMIT: z.coerce.number().int().min(1).max(100000).default(200),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

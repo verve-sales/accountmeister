@@ -5,6 +5,8 @@ import { db, schema } from "@/db/client";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getSetupDetail } from "@/modules/setups/service";
+import { getProviderStatus, listOpenQuestionsForSetup, listSuggestionsForSetup } from "@/modules/suggestions/service";
+import { SuggestionCard } from "@/components/SuggestionCard";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import {
@@ -48,6 +50,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const others = allUsers.filter((u) => u.id !== actor.userId);
   const name = (uid: string | null | undefined) => (uid ? d.userNames.get(uid) ?? allUsers.find((u) => u.id === uid)?.displayName ?? "?" : "–");
 
+  const ai = getProviderStatus();
+  const [sugg, openQuestions] = await Promise.all([listSuggestionsForSetup(actor, id), listOpenQuestionsForSetup(id)]);
   const openSignals = d.signals.filter((s) => s.status !== "BEENDET");
   const openActions = d.actions.filter((a) => a.status !== "ERLEDIGT" && a.status !== "VERWORFEN");
   const doneActions = d.actions.filter((a) => a.status === "ERLEDIGT");
@@ -217,7 +221,18 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       {/* 4. Anregungen */}
       <section className="card">
         <h2 className="font-semibold mb-1">4. Welche Anregungen sind jetzt hilfreich?</h2>
-        <p className="muted text-sm">KI-Anbieter deaktiviert – keine automatischen Vorschläge. Offene Hinweise unten sind die manuelle Arbeitsliste.</p>
+        {!ai.enabled && <p className="muted text-sm">KI-Anbieter deaktiviert – keine automatischen Vorschläge. Offene Hinweise unten sind die manuelle Arbeitsliste.</p>}
+        {ai.enabled && sugg.prominent.length === 0 && <p className="muted text-sm">Keine offenen Vorschläge. Vorschläge entstehen aus strukturierten Weekly-Notizen.</p>}
+        {sugg.prominent.length > 0 && (
+          <ul className="space-y-3">{sugg.prominent.map((x) => <SuggestionCard key={x.id} s={x} ownerName={x.proposedOwnerUserId ? sugg.userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide={sugg.canDecide} back={back} users={allUsers} />)}</ul>
+        )}
+        {sugg.more.length > 0 && <p className="muted text-sm mt-2">{sugg.more.length} weitere Vorschläge im jeweiligen Weekly.</p>}
+        {openQuestions.length > 0 && (
+          <div className="mt-3">
+            <h3 className="font-medium text-sm">Offene Fragen ({openQuestions.length})</h3>
+            <ul className="text-sm list-disc ml-5">{openQuestions.map((q) => <li key={q.id}>{q.question}{q.decisionImpact && <span className="muted"> – Auswirkung: {q.decisionImpact}</span>}{q.possibleSource && <span className="muted"> – Weg: {q.possibleSource}</span>}</li>)}</ul>
+          </div>
+        )}
       </section>
 
       {/* Hinweise */}

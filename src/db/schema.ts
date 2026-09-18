@@ -611,6 +611,119 @@ export const artifactVersions = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// KI-Vorschläge (Briefing 14), offene Fragen, KI-Aufträge
+// ---------------------------------------------------------------------------
+
+export const suggestionStatusEnum = pgEnum("suggestion_status", ["NEU", "GEPRUEFT", "ANGENOMMEN", "VERAENDERT", "ZURUECKGESTELLT", "ABGELEHNT", "ERLEDIGT", "UEBERHOLT"]);
+export const suggestionTypeEnum = pgEnum("suggestion_type", ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT"]);
+export const priorityCategoryEnum = pgEnum("priority_category", [
+  "KONKRETE_ANFRAGE", // konkrete Anfrage oder vereinbarter Termin
+  "BLOCKIERTE_AKTION",
+  "NEUE_INFORMATION",
+  "ZUGANGSLUECKE",
+  "PLANUNGSANLASS",
+  "VERBESSERUNGSIDEE",
+]);
+export const feedbackReasonEnum = pgEnum("feedback_reason", ["FALSCHE_ANNAHME", "BEREITS_ERLEDIGT", "UNPASSEND", "NICHT_ZULAESSIG", "KEIN_AKTUELLER_ANLASS", "SONSTIGES"]);
+export const aiJobStatusEnum = pgEnum("ai_job_status", ["GESTARTET", "ERFOLGREICH", "ABGELEHNT", "FEHLER"]);
+
+export const aiJobs = pgTable(
+  "ai_jobs",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    type: text("type").notNull(), // z. B. STRUCTURE_NOTE
+    actorUserId: text("actor_user_id").notNull().references(() => users.id),
+    setupId: text("setup_id").references(() => projectSetups.id),
+    reviewId: text("review_id").references(() => reviews.id),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    /** Hash des Eingabetexts – kein Rohtext in Auftragsprotokollen (16.4) */
+    inputHash: text("input_hash").notNull(),
+    inputChars: integer("input_chars").notNull(),
+    status: aiJobStatusEnum("status").notNull().default("GESTARTET"),
+    itemCount: integer("item_count"),
+    rejectedCount: integer("rejected_count"), // schema-/quellenwidrige Elemente
+    error: text("error"), // kurze, datensparsame Fehlermeldung
+    dedupeKey: text("dedupe_key").notNull(), // Wiederholungskennung (Auftragsebene)
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("ai_jobs_ws_started_idx").on(t.workspaceId, t.startedAt)],
+);
+
+export const suggestions = pgTable(
+  "suggestions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    type: suggestionTypeEnum("type").notNull(),
+    title: text("title").notNull(),
+    targetRole: text("target_role").notNull(), // adressierte Rolle (BD, ANKER, PRINCIPAL …)
+    setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    reviewId: text("review_id").references(() => reviews.id),
+    objectType: text("object_type"), // optionaler Bezug auf ein bestehendes Objekt
+    objectId: text("object_id"),
+    trigger: text("trigger").notNull(), // Beobachtung bzw. Auslöser
+    sourceIds: text("source_ids").array().notNull().default(sql`'{}'::text[]`),
+    evidenceQuote: text("evidence_quote").notNull(),
+    observation: text("observation").notNull(), // Sachverhalt aus Quelle
+    hypothesis: text("hypothesis"), // getrennt gekennzeichnete Idee
+    uncertainty: text("uncertainty"),
+    whyNow: text("why_now"),
+    nextStep: text("next_step"),
+    proposedQuestion: text("proposed_question"),
+    expectedResult: text("expected_result"),
+    proposedOwnerUserId: text("proposed_owner_user_id").references(() => users.id), // Vorschlag, nicht Zuweisung
+    mentionedPersonName: text("mentioned_person_name"),
+    priorityCategory: priorityCategoryEnum("priority_category").notNull().default("NEUE_INFORMATION"),
+    dedupeKey: text("dedupe_key").notNull(),
+    recheckTrigger: text("recheck_trigger"), // Anlass für erneute Prüfung
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+    aiJobId: text("ai_job_id").references(() => aiJobs.id),
+    status: suggestionStatusEnum("status").notNull().default("NEU"),
+    feedbackReason: feedbackReasonEnum("feedback_reason"),
+    feedbackNote: text("feedback_note"),
+    decidedBy: text("decided_by").references(() => users.id),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    /** Bei Annahme erzeugtes Objekt (Signal, Aktion, Entscheidung, offene Frage) */
+    acceptedObjectType: text("accepted_object_type"),
+    acceptedObjectId: text("accepted_object_id"),
+    createdAt: createdAt(),
+    version: version(),
+  },
+  (t) => [index("suggestions_setup_status_idx").on(t.setupId, t.status), index("suggestions_dedupe_idx").on(t.setupId, t.dedupeKey)],
+);
+
+export const openQuestionStatusEnum = pgEnum("open_question_status", ["OFFEN", "IN_KLAERUNG", "BEANTWORTET", "ZURUECKGESTELLT"]);
+
+export const openQuestions = pgTable(
+  "open_questions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    question: text("question").notNull(),
+    decisionImpact: text("decision_impact"), // Entscheidungsauswirkung
+    possibleSource: text("possible_source"), // geeignete Quelle / Kontaktweg
+    ownerUserId: text("owner_user_id").references(() => users.id),
+    actionId: text("action_id").references(() => actions.id), // Klärungsaktion
+    answer: text("answer"),
+    answerSourceId: text("answer_source_id").references(() => sources.id),
+    status: openQuestionStatusEnum("status").notNull().default("OFFEN"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("open_questions_setup_idx").on(t.setupId)],
+);
+
+// ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
 
@@ -644,3 +757,5 @@ export type PriorityKind = (typeof priorityKindEnum.enumValues)[number];
 export type PriorityStatus = (typeof priorityStatusEnum.enumValues)[number];
 export type ArtifactStatus = (typeof artifactStatusEnum.enumValues)[number];
 export type ArtifactVariant = (typeof artifactVariantEnum.enumValues)[number];
+export type SuggestionStatus = (typeof suggestionStatusEnum.enumValues)[number];
+export type PriorityCategory = (typeof priorityCategoryEnum.enumValues)[number];

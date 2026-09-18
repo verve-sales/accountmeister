@@ -36,6 +36,13 @@
       "when": 1789761581579,
       "tag": "0004_artefakte",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789762539290,
+      "tag": "0005_ki-vorschlaege",
+      "breakpoints": true
     }
   ]
 }

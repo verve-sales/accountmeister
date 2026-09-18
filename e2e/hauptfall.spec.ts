@@ -266,3 +266,33 @@ test("Artefakte: Katalog vollständig, Gesprächsvorbereitung entwerfen, Version
   await expect(page.getByText("Freigegeben. Das ist kein Versand")).toBeVisible();
   await expect(page.getByText("Freigegeben", { exact: true }).first()).toBeVisible();
 });
+
+test("Etappe 3: Weekly-Notiz strukturieren → Vorschläge prüfen → annehmen erzeugt ungeprüften Hinweis, ablehnen braucht Grund", async ({ page }) => {
+  const tag = Date.now().toString(36);
+  await loginAs(page, "David");
+  await page.getByRole("link", { name: "Weeklys", exact: true }).click();
+  await page.locator("summary", { hasText: "Weekly anlegen" }).click();
+  await page.locator("#setupId").selectOption({ label: "Beispielkonzern AG (fiktiv) – Plattformteam" });
+  await page.locator("#scheduledFor").fill("2026-11-02");
+  await page.getByLabel("Titel (optional)").fill(`KI-Weekly ${tag}`);
+  await page.getByRole("button", { name: "Weekly anlegen" }).click();
+  await expect(page.getByRole("heading", { name: `KI-Weekly ${tag}` })).toBeVisible();
+
+  await page.getByLabel(/Freitextnotiz/).fill(`Im Migrationsteam wird über zusätzlichen Testkoordinationsaufwand ${tag} gesprochen. Möglicherweise entsteht Bedarf an externer Unterstützung. Wer entscheidet im Migrationsteam über externe Kapazitäten?`);
+  await page.getByRole("button", { name: "Entwurf speichern" }).click();
+  await expect(page.getByText("Notiz als Entwurf gespeichert")).toBeVisible();
+  await page.getByRole("button", { name: "Notiz strukturieren" }).click();
+  await expect(page.getByText(/Vorschlag\/Vorschläge erzeugt/)).toBeVisible();
+  await expect(page.getByText("Idee / Vermutung (nicht belegt)").first()).toBeVisible();
+
+  // Erster prominenter Vorschlag annehmen → Hinweis „Neu“ in der Ergebnisvorschau
+  const first = page.locator("li.border", { hasText: "Beleg (Zitat)" }).first();
+  await first.getByRole("button", { name: "Annehmen" }).click();
+  await expect(page.getByText("Vorschlag angenommen")).toBeVisible();
+  // Ablehnen ohne Grund → Fehler
+  const next = page.locator("li.border", { hasText: "Beleg (Zitat)" }).filter({ hasText: "Neu" }).first();
+  await next.getByRole("button", { name: "Ablehnen" }).click();
+  await expect(page.locator("p.error")).toContainText("Ablehnungsgrund");
+  // Kein Fakt entstanden: Ergebnisvorschau zeigt Beobachtung, keine Bestätigung
+  await expect(page.getByRole("heading", { name: /Neue Beobachtungen \(1\)/ })).toBeVisible();
+});

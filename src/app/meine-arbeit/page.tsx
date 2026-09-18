@@ -5,6 +5,10 @@ import { listMySetups } from "@/modules/setups/service";
 import { listMyOpenActions } from "@/modules/actions/service";
 import { listMyHandovers } from "@/modules/handovers/service";
 import { listReviews } from "@/modules/reviews/service";
+import { getProviderStatus, listMySuggestions } from "@/modules/suggestions/service";
+import { SuggestionCard } from "@/components/SuggestionCard";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db/client";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { actionStatusLabel, fmtDate, handoverStatusLabel, reviewStatusLabel, setupStatusLabel } from "@/lib/labels";
@@ -16,6 +20,10 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
   if (!actor) redirect("/anmelden");
   const [setups, actions, handovers, reviews] = await Promise.all([listMySetups(actor), listMyOpenActions(actor), listMyHandovers(actor), listReviews(actor)]);
   const nextReviews = [...reviews.open, ...reviews.upcoming].slice(0, 5);
+  const ai = getProviderStatus();
+  const mySuggestions = ai.enabled ? await listMySuggestions(actor) : [];
+  const allUsers = ai.enabled ? await db.query.users.findMany({ where: eq(schema.users.status, "ACTIVE") }) : [];
+  const userNames = new Map(allUsers.map((u) => [u.id, u.displayName]));
   const openIncoming = handovers.filter((h) => h.receiverUserId === actor.userId && h.status === "ANGEFRAGT");
   const outgoing = handovers.filter((h) => h.senderUserId === actor.userId && (h.status === "ANGEFRAGT" || h.status === "ANGENOMMEN"));
   const back = "/meine-arbeit";
@@ -145,8 +153,14 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
       )}
 
       <section className="card">
-        <h2 className="font-semibold mb-1">Vorschläge</h2>
-        <p className="muted text-sm">KI-Anbieter ist deaktiviert. Es werden keine automatischen Vorschläge erzeugt; manuelle Dokumentation funktioniert vollständig (Briefing 17.5).</p>
+        <h2 className="font-semibold mb-1">Vorschläge ({mySuggestions.length})</h2>
+        {!ai.enabled ? (
+          <p className="muted text-sm">KI-Anbieter ist deaktiviert. Es werden keine automatischen Vorschläge erzeugt; manuelle Dokumentation funktioniert vollständig (Briefing 17.5).</p>
+        ) : mySuggestions.length === 0 ? (
+          <p className="muted text-sm">Keine offenen Vorschläge in Ihren Setups. Anbieter: {ai.description}</p>
+        ) : (
+          <ul className="space-y-3">{mySuggestions.map((x) => <SuggestionCard key={x.id} s={x} ownerName={x.proposedOwnerUserId ? userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide back={back} users={allUsers} />)}</ul>
+        )}
       </section>
     </div>
   );

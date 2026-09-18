@@ -16,6 +16,7 @@ import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/m
 import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
 import { changePriority, createPriority, saveAccountPlanSnapshot } from "@/modules/accountplan/service";
 import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/artifacts/service";
+import { acceptSuggestion, giveFeedback, structureReviewNote } from "@/modules/suggestions/service";
 
 /**
  * Alle Formulare laufen über diese Aktionen. Jede Aktion lädt den Akteur frisch,
@@ -307,4 +308,31 @@ export async function changeArtifactStatusAction(fd: FormData) {
   return run(`/artefakte/${data.versionId}`, async (actor) => {
     await changeArtifactStatus(actor, data);
   }, data.status === "FREIGEGEBEN" ? "Freigegeben. Das ist kein Versand und kein Vorstellungsereignis – Kopieren bleibt Ihre Handlung." : "Status geändert.");
+}
+
+// --- KI-Vorschläge -------------------------------------------------------------
+
+export async function structureNoteAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.reviewId ?? "";
+  return run(`/weeklys/${id}`, async (actor) => {
+    const r = await structureReviewNote(actor, id);
+    if (r.repeated) throw new PendingInfo("Diese Notiz wurde bereits strukturiert; es wurden keine neuen Vorschläge erzeugt.");
+    if (r.created === 0) throw new PendingInfo(r.noSuggestionReason || `Keine neuen Vorschläge (${r.skipped} bereits bekannt, ${r.rejected ?? 0} zurückgewiesen).`);
+    throw new PendingInfo(`${r.created} Vorschlag/Vorschläge erzeugt (${r.skipped} bereits bekannt, ${r.rejected ?? 0} zurückgewiesen). Bitte prüfen – nichts wurde automatisch übernommen.`);
+  }, "");
+}
+
+export async function acceptSuggestionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/meine-arbeit", async (actor) => {
+    await acceptSuggestion(actor, data.suggestionId ?? "", data);
+  }, "Vorschlag angenommen – das Objekt wurde im ungeprüften Zustand angelegt.");
+}
+
+export async function suggestionFeedbackAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/meine-arbeit", async (actor) => {
+    await giveFeedback(actor, data.suggestionId ?? "", data);
+  }, "Rückmeldung gespeichert.");
 }

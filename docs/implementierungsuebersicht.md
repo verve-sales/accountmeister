@@ -1,6 +1,6 @@
 # Implementierungsübersicht – Verve Sales-Arbeitsumgebung
 
-Stand: 18.09.2026 · Etappen 0 und 1 abgeschlossen; Etappe 2 abgeschlossen: BD-/Anker-Weekly, Accountplan, Artefaktkatalog mit Textentwürfen.
+Stand: 18.09.2026 · Etappen 0 und 1 abgeschlossen; Etappe 2 abgeschlossen; Etappe 3 Teil A umgesetzt (KI-Schnittstelle, Vorschlagslebenszyklus). Teil B (Protokollimport, Outlook-Adapter) folgt.
 Referenz: `docs/briefing.md` (Produkt- und Entwicklungsbriefing). Entscheidungen: `docs/entscheidungsprotokoll.md`.
 
 ## 1. Architektur
@@ -23,15 +23,16 @@ Schichten (17.2): UI (`src/app`) → Server Actions (`src/app/actions.ts`, nur F
 | Reviews | `src/modules/reviews` | BD-/Anker-Weekly: Vorbereitung aus letztem bestätigtem Stand, Notiz nur als Entwurf, Beobachtungen/Aktionen/Entscheidungen mit Weekly-Bezug, Bestätigung als versionierter Snapshot in einer Transaktion, Korrekturversionen; Setup-Abschnitt 2 bezieht sich auf den bestätigten Stand |
 | Accountplan | `src/modules/accountplan` | A1 als Live-Übersicht aus bestätigten Daten (Einsätze mit Beleg, offene Hinweise, Beziehungen/Kontaktwege, Prioritäten, offene Fragen, Aktionen, Entscheidungen); Prioritäten (A13) mit Vier-Augen-Vereinbarung BD + Principal und begründeter Zurückstellung; gespeicherte Review-Stände bleiben unverändert erhalten |
 | Artifacts | `src/modules/artifacts` | Alle 19 Artefakttypen (A1–A16, Setup, Weekly, Ziel) als versionierte Konfiguration registriert und in `artifact_templates` synchronisiert; je Typ Umsetzungsstand (Ansicht / Textentwurf / Objektbezug folgt); Textentwürfe mit Abschnitten, Vorbefüllung aus berechtigten Daten, Versionen, Prüfung/Freigabe, Empfängerkreis, Quellen; interne Notiz und Kundentext getrennt |
-| Goals, Suggestions, Integrations/Jobs | – | Noch nicht begonnen (Etappen 3–4); Navigation zeigt dies ehrlich an |
+| AI / Suggestions | `src/modules/ai`, `src/modules/suggestions` | Anbietervertrag mit drei Adaptern (deaktiviert, deterministischer Testanbieter, gesperrter Produktivadapter), versionierter Prompt `structure-note.v1` + Zod-Ausgabeschema + Evaluationsfälle; Verarbeitungskette 14.4 mit Schema-/Quellenprüfung, erneuter Rechteprüfung (S05), Nutzungsgrenze, Dedupe/Wiederholungsregel (F15); Vorschläge mit allen Pflichtfeldern 14.2 und transparenten Prioritätskategorien 14.3; Annahme erzeugt nur ungeprüfte Objekte (Hinweis neu, Aktion vorgeschlagen, offene Frage, Entscheidung im offenen Weekly); Feedbackgründe; KI-Aufträge ohne Rohtext |
+| Goals, Integrations/Jobs (Import) | – | Noch nicht begonnen (Etappen 3–4); Navigation zeigt dies ehrlich an |
 
 ## 3. Datenmodell (Etappe 0/1)
 
-`src/db/schema.ts`, Migrationen `0000_init.sql`, `0001_kontaktwege.sql`, `0002_weeklys.sql`, `0003_accountplan.sql`, `0004_artefakte.sql`. Umgesetzt: workspaces, users, role_assignments, accounts, org_units, project_setups, setup_memberships, persons, person_functions, relationships, sources, assertions, assertion_evidence, signals, actions, handovers, access_plans, access_plan_steps, reviews, review_participants, review_versions, decisions, account_priorities, account_plan_snapshots, artifact_templates, artifact_versions, audit_events.
+`src/db/schema.ts`, Migrationen `0000_init.sql`, `0001_kontaktwege.sql`, `0002_weeklys.sql`, `0003_accountplan.sql`, `0004_artefakte.sql`, `0005_ki-vorschlaege.sql`. Umgesetzt: workspaces, users, role_assignments, accounts, org_units, project_setups, setup_memberships, persons, person_functions, relationships, sources, assertions, assertion_evidence, signals, actions, handovers, access_plans, access_plan_steps, reviews, review_participants, review_versions, decisions, account_priorities, account_plan_snapshots, artifact_templates, artifact_versions, ai_jobs, suggestions, open_questions, audit_events.
 
 Konventionen: UUID-Text-IDs, `created_at`/`updated_at` (timestamptz), `created_by`, `version` (optimistische Sperre auf Setup, Signal, Aktion, Übergabe), `workspace_id` überall. Fälligkeiten als `date`, Zeitpunkte als `timestamptz`; Anzeige in Europe/Berlin. Kein Soft-Delete-only: Quellen haben `is_locked` (Sperrung) getrennt von Löschung, das vollständige Löschkonzept folgt mit der Datenschutzentscheidung.
 
-Noch nicht modelliert (folgt je Etappe): Opportunity, DecisionParticipation (Buyingcenter je Bedarf), OpenQuestion, Goal/GoalVersion/GoalContribution, SupportRequest, Offer/Order/StartRequirement, CandidateProfileReference, Suggestion, ArtifactVersion, IntegrationConnection, ImportJob/AIJob, AccessGrant, PolicyVersion (bisher nur Textfeld am Workspace).
+Noch nicht modelliert (folgt je Etappe): Opportunity, DecisionParticipation (Buyingcenter je Bedarf), Goal/GoalVersion/GoalContribution, SupportRequest, Offer/Order/StartRequirement, CandidateProfileReference, Suggestion, ArtifactVersion, IntegrationConnection, ImportJob/AIJob, AccessGrant, PolicyVersion (bisher nur Textfeld am Workspace).
 
 ## 4. Berechtigungsmodell (16.2)
 
@@ -47,18 +48,17 @@ Serverseitig, deterministisch, pro Anfrage:
 
 | Bereich | Umsetzung | Stand |
 |---|---|---|
-| Fachliche Regeln | `tests/hauptfall.test.ts`: F01, F03, F05, F07, Begründungspflicht, Übergänge, optimistische Sperre · `tests/personen-zugang.test.ts`: F06, Belegpflicht Beziehungsstand, Funktionswechsel, Zugriff auf Personen/Kontaktwege · `tests/weekly.test.ts`: F07 im Weekly, F11, zwei aufeinander aufbauende Weeklys, Korrekturversion, Zugriff · `tests/accountplan.test.ts`: F14, Prioritäten-Vereinbarung, Snapshot bleibt erhalten, Zugriff · `tests/artefakte.test.ts`: Registervollständigkeit, Versionen/Freigabe, F09 und Kundentext-Trennung, A14-Empfängerkreis, Zugriff | 22 Tests grün |
+| Fachliche Regeln | `tests/hauptfall.test.ts`: F01, F03, F05, F07, Begründungspflicht, Übergänge, optimistische Sperre · `tests/personen-zugang.test.ts`: F06, Belegpflicht Beziehungsstand, Funktionswechsel, Zugriff auf Personen/Kontaktwege · `tests/weekly.test.ts`: F07 im Weekly, F11, zwei aufeinander aufbauende Weeklys, Korrekturversion, Zugriff · `tests/accountplan.test.ts`: F14, Prioritäten-Vereinbarung, Snapshot bleibt erhalten, Zugriff · `tests/artefakte.test.ts`: Registervollständigkeit, Versionen/Freigabe, F09 und Kundentext-Trennung, A14-Empfängerkreis, Zugriff · `tests/ai-provider.test.ts`: Evaluationsfälle (Halluzination, Prompt-Injection, Konflikt, kein Vorschlag), Schema · `tests/vorschlaege.test.ts`: Verarbeitungskette, S05, S06, F15, Halluzinations-Zurückweisung, KI deaktiviert, Nutzungsgrenze | 34 Tests grün |
 | Zugriff/Sicherheit | `tests/zugriff.test.ts`: S01, S02, S09, persönliche Quelle, ADMIN ohne Inhalt, Principal lesend | 7 Tests grün |
-| End-to-End | `e2e/hauptfall.spec.ts` (Playwright): Hauptfall 19.1 Schritte 1–5, Zugriffsverweigerung, Health-Endpunkt, Personen & Zugang (Belegpflicht, F06), zwei aufeinander aufbauende Weeklys, Accountplan mit Vier-Augen-Vereinbarung und gespeichertem Stand, Artefaktkatalog und Entwurf→Version→Freigabe | 6 Tests grün |
+| End-to-End | `e2e/hauptfall.spec.ts` (Playwright): Hauptfall 19.1 Schritte 1–5, Zugriffsverweigerung, Health-Endpunkt, Personen & Zugang (Belegpflicht, F06), zwei aufeinander aufbauende Weeklys, Accountplan mit Vier-Augen-Vereinbarung und gespeichertem Stand, Artefaktkatalog und Entwurf→Version→Freigabe, Notiz strukturieren → Vorschlag annehmen/ablehnen | 7 Tests grün |
 | Technisch | Migration von leerer DB (Test-Setup macht das bei jedem Lauf), Seed idempotent, Build, Typecheck, Lint | grün |
 
-Noch offen: F02, F04, F08, F10, F12, F13, F15, F16; S03–S08, S10–S12 – jeweils mit den zugehörigen Etappen.
+Noch offen: F02, F04, F08, F10, F12, F13, F16; S03, S04, S07, S08, S10–S12 – jeweils mit den zugehörigen Etappen.
 
 ## 6. Nächste Schritte (Etappe 1 abschließen, Etappe 2 beginnen)
 
-Etappe 3 (KI und Quellenanbindung):
-1. KI-Schnittstelle: deterministischer Testanbieter + deaktivierter Produktivadapter; Schema-/Quellenprüfung der Ausgaben.
-2. Vorschlagslebenszyklus (Suggestion): neu, geprüft, angenommen, verändert, zurückgestellt, abgelehnt, erledigt, überholt; Wiederholungsregeln.
-3. Strukturierung der Weekly-Notiz als prüffähige Ergänzungsvorschläge.
-4. Protokollimport (Text/Datei) mit Zuordnung und Prüfung; Mail-/Kalender-Adaptervertrag mit Testfixtures (kein Anbieter als angeschlossen darstellen).
+Etappe 3 Teil B (Quellenanbindung):
+1. Protokollimport (Text, freigegebene Dateitypen) nach Importprozess 13.2 mit Zuordnungsvorschlag, Prüfung, Quellenbezug und Versionsprotokoll.
+2. Outlook/Microsoft-Graph-Adapter nach Adaptervertrag 13.4 (verbinden, Berechtigungen anzeigen, auswählbare Mails/Termine listen, ausgewählte Quelle abrufen, widerrufen), zunächst mit Testfixtures; echte Anbindung erst nach Datenschutzfreigabe und App-Registrierung.
+3. Strukturierung importierter Quellen über dieselbe Verarbeitungskette wie Weekly-Notizen.
 Nachgelagert: Setup-Übergabe aus dem Eingang direkt bedienbar; Buyingcenter je Bedarf (Etappe 5); grafische Beziehungskarte.

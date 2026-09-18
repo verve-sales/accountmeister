@@ -1,6 +1,6 @@
 # Verve Sales-Arbeitsumgebung (Pilot)
 
-Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–1 abgeschlossen, Etappen 0–2 abgeschlossen (Setup, Personen & Zugang, Weekly mit Versionen, Accountplan, Artefaktkatalog mit Textentwürfen). **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
+Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–1 abgeschlossen, Etappen 0–2 abgeschlossen, Etappe 3 Teil A umgesetzt (KI-Schnittstelle mit Testanbieter, Vorschlagslebenszyklus). **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
 
 Dokumente: `docs/briefing.md` (Auftrag), `docs/implementierungsuebersicht.md`, `docs/entscheidungsprotokoll.md`.
 
@@ -41,7 +41,7 @@ Der Produktionsstart (`npm start`) verweigert absichtlich den Betrieb mit `AUTH_
 ## Struktur
 ```
 src/app          Seiten (App Router), Server Actions (Formularbrücke), globales Layout
-src/modules      Fachmodule: identity, accounts, setups, knowledge, signals, actions, handovers, people, accesspaths, reviews, accountplan, artifacts, audit
+src/modules      Fachmodule: identity, accounts, setups, knowledge, signals, actions, handovers, people, accesspaths, reviews, accountplan, artifacts, ai, suggestions, audit
 src/db           Schema (Drizzle), Migrationen, Client, Seed
 src/lib          Konfiguration (mit Produktionsschutz), Fehlerklassen, Anzeigetexte
 tests            Integrationstests (Vitest) gegen PostgreSQL
@@ -51,6 +51,6 @@ docs             Briefing, Implementierungsübersicht, Entscheidungsprotokoll
 
 ## Bekannte Einschränkungen (Stand Etappe 1)
 - Kontaktwege nur tabellarisch; die grafische Beziehungskarte folgt. Buyingcenter je Bedarf folgt mit dem Bedarfsobjekt.
-- Principal-/CEO-Ebene, KI-Vorschläge, Importe: noch nicht umgesetzt; die Navigation kennzeichnet dies.
-- KI-Strukturierung der Weekly-Notiz folgt in Etappe 3; bis dahin werden Beobachtungen, Aktionen und Entscheidungen manuell über Felder festgehalten.
+- Principal-/CEO-Ebene, Protokollimport und Outlook-Anbindung: noch nicht umgesetzt; die Navigation kennzeichnet dies.
+- KI: nur der deterministische Testanbieter (`AI_PROVIDER=test`) ist nutzbar; er ist kein Sprachmodell. Der Produktivadapter ist bis zur Anbieter-/Datenschutzentscheidung gesperrt.
 - Keine Unternehmensanmeldung, kein KI-Anbieter, keine Mail-/Kalenderanbindung (Entscheidungen offen, siehe Entscheidungsprotokoll).

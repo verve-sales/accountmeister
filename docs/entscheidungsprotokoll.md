@@ -53,13 +53,22 @@ Die 19 Artefakttypen liegen in `src/modules/artifacts/templates.ts` (Registerver
 ## E-017 · 2026-09-18 · Artefaktversionen, Freigabe und Kundentext
 Jedes Speichern erzeugt eine neue Version; freigegebene Versionen werden nie überschrieben, sondern „überholt“. Freigabe prüft Pflichtabschnitte und ist ausdrücklich kein Versand und kein Vorstellungsereignis (F09). Kundentext-Varianten (nur A5, A9) starten leer, erlauben nur dafür markierte Abschnitte, dürfen keine persönlichen Quellen referenzieren und brauchen zur Freigabe die Bestätigung, dass keine vertrauliche Herkunft, interne Bewertung oder nicht freigegebene Projektdetails enthalten sind (12.2). Coaching-/Eskalationsnotizen (A14) sind auf die Empfängerkreise „persönlich“ oder „Kundenteam“ beschränkt (11.4). Der Empfängerkreis wird pro Artefakt gesetzt und bei Lesezugriffen erzwungen.
 
+## E-018 · 2026-09-18 · Mail-/Kalenderanbieter: Microsoft 365 / Outlook
+Entscheidung des Auftraggebers (Ivo Seifert): Verve nutzt Microsoft Outlook. Der Adapter wird gegen Microsoft Graph gebaut (lesend, minimale delegierte Berechtigungen für ausgewählte Mails und Termine; keine Schreibrechte). Voraussetzungen vor echtem Import: App-Registrierung im Verve-Tenant, Freigabe der Berechtigungen, Datenschutzbewertung (Zweck, Rechtsgrundlage, Datenklassen, Aufbewahrung). Bis dahin: Adaptervertrag mit Testfixtures; kein Anbieter wird als angeschlossen dargestellt.
+
+## E-019 · 2026-09-18 · KI-Anbieter im Pilot: deterministischer Testanbieter
+`AI_PROVIDER=test` ist ein regelbasierter Anbieter ohne Sprachmodell und ohne Netzwerk. Er dient dazu, Vorschlagslebenszyklus, Schema-/Quellenprüfung und Evaluationsfälle vollständig lokal zu entwickeln. Der Produktivadapter (`production`) existiert als Konfigurationswert, wirft aber, bis Anbieter, Modell, Vertrag, Datenklassen und Datenschutzfreigabe entschieden sind. In Produktion ist `test` gesperrt (S09). Prompt- und Schemaversion (`structure-note.v1`) werden an jedem Vorschlag und Auftrag gespeichert.
+
+## E-020 · 2026-09-18 · Vorschlagsverarbeitung
+Kette: berechtigten Kontext laden (nur Notiztext, Namen, bestätigte Aussagen) → Anbieter → Zod-Schema → Quellenprüfung (Zitat muss wörtlich in der Notiz stehen; zugeordnete Personen müssen Teilnehmende sein) → Rechte erneut laden (S05) → speichern → Mensch entscheidet. Dedupe je Setup über Typ + normalisiertes Zitat; bereits entschiedene Vorschläge werden ohne neue Information nicht wiederholt (F15). Auftragsprotokolle speichern Hash und Länge des Eingabetexts, nie den Text (16.4). Annahme erzeugt ausschließlich ungeprüfte Objekte; Aktionen aus Vorschlägen für andere starten als „vorgeschlagen“. Nutzungsgrenze `AI_DAILY_JOB_LIMIT` je Arbeitsraum und Tag.
+
 ## Offene Entscheidungen (Briefing 2.3) – Stand unverändert offen
 | Thema | Aktueller lokaler Ersatz | Entscheidung nötig vor |
 |---|---|---|
 | Hosting/Produktivregion | lokal, PostgreSQL 16 | Echtdatenbetrieb |
 | Unternehmensanmeldung (OIDC-Anbieter) | Entwicklungsanmeldung | Bereitstellung für reale Nutzer |
-| Mail-/Kalenderanbieter | keiner; Adaptervertrag folgt in Etappe 3 | echtem Import |
-| KI-Anbieter/Modell | `AI_PROVIDER=disabled`; Testanbieter folgt in Etappe 3 | KI-Verarbeitung echter Inhalte |
+| Mail-/Kalenderanbieter | **entschieden: Microsoft 365/Outlook (E-018)**; Adapter mit Testfixtures folgt | echtem Import: App-Registrierung + Datenschutzfreigabe |
+| KI-Anbieter/Modell | `AI_PROVIDER=test` (regelbasiert, lokal); Produktivadapter gesperrt | KI-Verarbeitung echter Inhalte |
 | Führendes CRM/Staffing-System | eigener Pilotdatenbestand | Synchronisation realer Stammdaten |
 | Datenschutz (Zweck, Rechtsgrundlage, DSFA, Aufbewahrung, Löschkonzept) | Zugriffsklassen + Sperrung technisch vorbereitet | Echtdatenbetrieb |
 | Sales-/Vergütungsregeln (A16) | nicht implementiert, keine Berechnung | Aktivierung entsprechender Prüfungen |
