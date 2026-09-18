@@ -66,6 +66,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         <span className="muted text-sm">Sichtbarkeit: {visibilityLabel[d.setup.visibility]}</span>
         <span className="muted text-sm">BD: {d.setup.bdUserId ? name(d.setup.bdUserId) : "Zuordnung offen"}</span>
         {!d.canEdit && <span className="muted text-sm">(nur lesend)</span>}
+        <Link href={`/setups/${id}/personen`} className="text-sm ml-auto">Personen & Zugang →</Link>
       </div>
       <Feedback params={sp} />
 

@@ -92,3 +92,40 @@ test("Health-Endpunkt meldet erreichbare Datenbank und Entwicklungsmodus", async
   expect(body.status).toBe("ok");
   expect(body.authMode).toBe("development");
 });
+
+test("Personen & Zugang: Beziehungsstand mit Beleg, Kontaktweg mit belegter und hypothetischer Verbindung", async ({ page }) => {
+  await loginAs(page, "David");
+  await page.getByRole("link", { name: "Plattformteam", exact: true }).click();
+  await page.getByRole("link", { name: "Personen & Zugang →" }).click();
+  await expect(page.getByRole("heading", { name: /Personen & Zugang/ })).toBeVisible();
+  await expect(page.getByText("Frau Keller (fiktiv)").first()).toBeVisible();
+
+  // Beziehungsstand „Vorgestellt“ ohne Beleg → Fehler; mit Belegnotiz → gespeichert
+  await page.locator("summary", { hasText: "Beziehungsstand setzen" }).click();
+  await page.locator("#rPerson").selectOption({ label: "Frau Brandt (fiktiv)" });
+  await page.locator("#rState").selectOption("VORGESTELLT");
+  await page.getByLabel("Kontext (Pflicht)").fill("Frau Keller hat David per Mail vorgestellt.");
+  await page.getByRole("button", { name: "Beziehungsstand speichern" }).click();
+  await expect(page.locator("p.error")).toContainText("Beleg");
+  await page.locator("summary", { hasText: "Beziehungsstand setzen" }).click();
+  await page.locator("#rPerson").selectOption({ label: "Frau Brandt (fiktiv)" });
+  await page.locator("#rState").selectOption("VORGESTELLT");
+  await page.getByLabel("Kontext (Pflicht)").fill("Frau Keller hat David per Mail vorgestellt.");
+  await page.getByLabel(/Oder Belegnotiz/).fill("Demo-Mail 20.09.: „Ich verbinde Sie gern.“");
+  await page.getByRole("button", { name: "Beziehungsstand speichern" }).click();
+  await expect(page.getByText("Beziehungsstand gespeichert")).toBeVisible();
+
+  // Kontaktweg anlegen und Schritt als „belegt“ ohne Beleg → abgelehnt
+  await page.locator("summary", { hasText: "Kontaktweg anlegen" }).click();
+  await page.getByLabel("Zielperson").selectOption({ label: "Frau Brandt (fiktiv)" });
+  await page.getByLabel("Fachlicher Anlass (Pflicht)").fill(`E2E Kontaktweg ${Date.now().toString(36)}`);
+  await page.getByRole("button", { name: "Kontaktweg anlegen" }).click();
+  await expect(page.getByText("Kontaktweg angelegt")).toBeVisible();
+  const planBox = page.locator("div.border", { hasText: "E2E Kontaktweg" }).first();
+  await planBox.locator("summary", { hasText: "Schritt ergänzen" }).click();
+  await planBox.getByLabel("Von (Verve)").selectOption({ label: "David Demo (BD)" });
+  await planBox.getByLabel("Zu", { exact: true }).selectOption({ label: "Frau Keller (fiktiv)" });
+  await planBox.getByLabel("Verbindung").selectOption("BELEGT");
+  await planBox.getByRole("button", { name: "Schritt speichern" }).click();
+  await expect(page.locator("p.error")).toContainText("hypothetisch");
+});

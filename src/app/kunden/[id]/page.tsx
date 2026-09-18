@@ -9,6 +9,8 @@ import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { fmtDate, setupStatusLabel, visibilityLabel, contributionLabel } from "@/lib/labels";
 import { createSetupAction } from "../../actions";
+import { listPeopleForAccount } from "@/modules/people/service";
+import { relationshipStateLabel } from "@/lib/labels";
 import { db, schema } from "@/db/client";
 import { eq } from "drizzle-orm";
 
@@ -25,6 +27,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
     throw e;
   }
   const setups = await listSetupsForAccount(actor, id);
+  const people = await listPeopleForAccount(actor, id);
   const mayCreate = canCreateSetup(actor, account);
   const bdUsers = mayCreate
     ? [...new Map((await db.select({ id: schema.users.id, displayName: schema.users.displayName }).from(schema.users).innerJoin(schema.roleAssignments, eq(schema.roleAssignments.userId, schema.users.id)).where(eq(schema.roleAssignments.role, "BD"))).map((u) => [u.id, u])).values()]
@@ -61,6 +64,25 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             </tbody>
           </table>
         )}
+      </section>
+
+      <section className="card">
+        <h2 className="font-semibold mb-2">Personen & Zugang ({people.length})</h2>
+        {people.length === 0 ? <p className="muted text-sm">Noch keine Personen erfasst. Personen werden im jeweiligen Setup gepflegt.</p> : (
+          <table className="list">
+            <thead><tr><th>Person</th><th>Funktion</th><th>Beziehungen (Halter · Stand)</th></tr></thead>
+            <tbody>
+              {people.map(({ person, currentFunction, relationships }) => (
+                <tr key={person.id}>
+                  <td>{person.displayName}</td>
+                  <td>{currentFunction?.functionTitle ?? <span className="muted">unbekannt</span>}</td>
+                  <td className="text-sm">{relationships.length === 0 ? <span className="muted">keine dokumentiert</span> : relationships.map((r) => <div key={r.id}>{r.holderName} · <Status label={relationshipStateLabel[r.state] ?? r.state} /></div>)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {setups.length > 0 && <p className="muted text-sm mt-2">Pflege je Setup: {setups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/personen`}>{s.name}</Link></span>)}</p>}
       </section>
 
       {mayCreate && (

@@ -58,3 +58,22 @@ export function fmtDateTime(d: Date | string | null | undefined, tz = "Europe/Be
   const date = typeof d === "string" ? new Date(d) : d;
   return date.toLocaleString("de-DE", { timeZone: tz, dateStyle: "medium", timeStyle: "short" });
 }
+
+export const relationshipStateLabel: Record<string, string> = {
+  NAME_FUNKTION_BEKANNT: "Name/Funktion bekannt",
+  VORSTELLUNG_ANGEFRAGT: "Vorstellung angefragt",
+  VORGESTELLT: "Vorgestellt",
+  IM_AUSTAUSCH: "Im Austausch",
+  KONKRETE_ZUSAMMENARBEIT: "Konkrete Zusammenarbeit",
+  NICHT_AKTIV: "Derzeit nicht aktiv",
+};
+export const accessPlanStatusLabel: Record<string, string> = {
+  ENTWURF: "Entwurf",
+  IN_ABSTIMMUNG: "In Abstimmung",
+  VERMITTLUNG_ZUGESAGT: "Vermittlung zugesagt",
+  VORGESTELLT: "Vorgestellt",
+  NICHT_MOEGLICH: "Derzeit nicht möglich",
+  BEENDET: "Beendet",
+};
+export const stepKindLabel: Record<string, string> = { BELEGT: "Belegt", GEPLANT: "Geplant", HYPOTHETISCH: "Hypothetisch" };
+export const readinessLabel: Record<string, string> = { UNBEKANNT: "Bereitschaft unbekannt", ANGEFRAGT: "Vermittlung angefragt", BEREIT: "Bereit zu vermitteln", ABGELEHNT: "Vermittlung abgelehnt" };

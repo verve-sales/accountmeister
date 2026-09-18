@@ -29,6 +29,12 @@ Weeklys, Ziele & Portfolio, Einstellungen sind in der Navigation vorhanden und z
 ## E-009 · 2026-09-18 · Playwright gegen Entwicklungsserver
 E2E-Tests laufen gegen `next dev`, weil der Produktionsstart die Entwicklungsanmeldung korrekt blockiert. Produktionsbuild wird separat mit `npm run build` geprüft.
 
+## E-010 · 2026-09-18 · Belegpflicht für Beziehungsstand und Kontaktweg
+Beziehungsstände „Vorgestellt“, „Im Austausch“, „Konkrete Zusammenarbeit“ erfordern einen Beleg (vorhandene Quelle oder Belegnotiz, die als Quelle mit Zugriff „Setup“ gespeichert wird); Kontext ist bei jedem Stand Pflicht. Kontaktweg-Schritte dürfen nur „belegt“ heißen, wenn sie auf eine dokumentierte Beziehung (mindestens „Vorstellung angefragt“) oder Quelle verweisen; sonst „geplant“ oder „hypothetisch“ (F06). „Vermittlung zugesagt“ braucht einen Schritt mit Bereitschaft „bereit“; „Vorgestellt“ braucht eine Quelle und setzt den Beziehungsstand der Zielperson mit diesem Beleg.
+
+## E-011 · 2026-09-18 · Personenfelder bewusst begrenzt
+Die Person trägt nur Name, berufliche Kontaktdaten, Organisation, Funktion (zeitlich gültig), bekannte Zuständigkeit, Zugriffsklasse und Herkunft. Es gibt kein Freitext-Bewertungsfeld und keine Sponsor-/Champion-Markierung an der Person; solche Rollen werden später je Bedarf (Buyingcenter) mit Beleg geführt (Briefing 8.1/8.3).
+
 ## Offene Entscheidungen (Briefing 2.3) – Stand unverändert offen
 | Thema | Aktueller lokaler Ersatz | Entscheidung nötig vor |
 |---|---|---|

@@ -11,6 +11,8 @@ import { captureObservation, changeSignalStatus, takeOverSignal } from "@/module
 import { createHandover, respondToHandover } from "@/modules/handovers/service";
 import { changeActionStatus, createAction } from "@/modules/actions/service";
 import { createAccount } from "@/modules/accounts/service";
+import { createPerson, setPersonFunction, setRelationship } from "@/modules/people/service";
+import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/modules/accesspaths/service";
 
 /**
  * Alle Formulare laufen über diese Aktionen. Jede Aktion lädt den Akteur frisch,
@@ -156,4 +158,48 @@ export async function changeActionStatusAction(fd: FormData) {
   return run(data.back ?? "/meine-arbeit", async (actor) => {
     await changeActionStatus(actor, data.actionId ?? "", data);
   }, "Aktions-Status geändert.");
+}
+
+// --- Personen & Zugang ------------------------------------------------------
+
+export async function createPersonAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? `/kunden/${data.accountId}`, async (actor) => {
+    await createPerson(actor, data);
+  }, "Person angelegt.");
+}
+
+export async function setPersonFunctionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/kunden", async (actor) => {
+    await setPersonFunction(actor, data);
+  }, "Funktion aktualisiert; die bisherige Funktion wurde zeitlich abgeschlossen.");
+}
+
+export async function setRelationshipAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/kunden", async (actor) => {
+    await setRelationship(actor, data);
+  }, "Beziehungsstand gespeichert.");
+}
+
+export async function createAccessPlanAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? `/setups/${data.setupId}/personen`, async (actor) => {
+    await createAccessPlan(actor, data);
+  }, "Kontaktweg angelegt (Entwurf). Bitte Schritte mit Belegen ergänzen.");
+}
+
+export async function addAccessPlanStepAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/kunden", async (actor) => {
+    await addAccessPlanStep(actor, data);
+  }, "Schritt ergänzt.");
+}
+
+export async function changeAccessPlanStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/kunden", async (actor) => {
+    await changeAccessPlanStatus(actor, data.accessPlanId ?? "", data);
+  }, "Status des Kontaktwegs geändert.");
 }

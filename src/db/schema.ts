@@ -380,6 +380,63 @@ export const handovers = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Kontaktwege (Briefing 8.4 / A5) – belegt, geplant und hypothetisch klar getrennt
+// ---------------------------------------------------------------------------
+
+export const accessPlanStatusEnum = pgEnum("access_plan_status", ["ENTWURF", "IN_ABSTIMMUNG", "VERMITTLUNG_ZUGESAGT", "VORGESTELLT", "NICHT_MOEGLICH", "BEENDET"]);
+export const accessStepKindEnum = pgEnum("access_step_kind", [
+  "BELEGT", // bestehende, belegte Beziehung
+  "GEPLANT", // Vermittlung angefragt / zugesagt, noch nicht erfolgt
+  "HYPOTHETISCH", // angenommene Verbindung ohne Beleg
+]);
+export const mediationReadinessEnum = pgEnum("mediation_readiness", ["UNBEKANNT", "ANGEFRAGT", "BEREIT", "ABGELEHNT"]);
+
+export const accessPlans = pgTable(
+  "access_plans",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    /** Zielperson – oder nur gesuchte Funktion, wenn die Person unbekannt ist */
+    targetPersonId: text("target_person_id").references(() => persons.id),
+    targetFunction: text("target_function"),
+    occasion: text("occasion").notNull(), // fachlicher Anlass
+    desiredOutcome: text("desired_outcome"), // angestrebtes Gesprächsergebnis
+    allowedIntroContent: text("allowed_intro_content"), // erlaubter Inhalt der Vorstellung
+    alternative: text("alternative"), // falls dieser Weg nicht möglich ist
+    ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+    nextStep: text("next_step"),
+    status: accessPlanStatusEnum("status").notNull().default("ENTWURF"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("access_plans_setup_idx").on(t.setupId)],
+);
+
+export const accessPlanSteps = pgTable(
+  "access_plan_steps",
+  {
+    id: id(),
+    accessPlanId: text("access_plan_id").notNull().references(() => accessPlans.id),
+    position: integer("position").notNull(),
+    /** Ausgangspunkt: Verve-Beziehungshalter (Schritt 1) oder vermittelnde Person */
+    fromUserId: text("from_user_id").references(() => users.id),
+    fromPersonId: text("from_person_id").references(() => persons.id),
+    toPersonId: text("to_person_id").notNull().references(() => persons.id),
+    kind: accessStepKindEnum("kind").notNull().default("HYPOTHETISCH"),
+    /** Beleg der Beziehung – bei kind=BELEGT Pflicht (Relationship oder Quelle) */
+    relationshipId: text("relationship_id").references(() => relationships.id),
+    evidenceSourceId: text("evidence_source_id").references(() => sources.id),
+    mediationReadiness: mediationReadinessEnum("mediation_readiness").notNull().default("UNBEKANNT"),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("access_plan_steps_plan_idx").on(t.accessPlanId)],
+);
+
+// ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
 
@@ -405,3 +462,6 @@ export type ActionStatus = (typeof actionStatusEnum.enumValues)[number];
 export type HandoverStatus = (typeof handoverStatusEnum.enumValues)[number];
 export type SetupStatus = (typeof setupStatusEnum.enumValues)[number];
 export type MembershipContribution = (typeof membershipContributionEnum.enumValues)[number];
+export type RelationshipState = (typeof relationshipStateEnum.enumValues)[number];
+export type AccessStepKind = (typeof accessStepKindEnum.enumValues)[number];
+export type AccessPlanStatus = (typeof accessPlanStatusEnum.enumValues)[number];

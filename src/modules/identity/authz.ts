@@ -129,3 +129,12 @@ export function canViewAction(actor: Actor, action: typeof schema.actions.$infer
 export function isParty(actor: Actor, h: typeof schema.handovers.$inferSelect): boolean {
   return h.senderUserId === actor.userId || h.receiverUserId === actor.userId;
 }
+
+/** Schreibrecht auf Kundenebene (Personen anlegen/pflegen): zuständiger BD, Principal, account-bezogene BD/Anker-Rollen. */
+export function hasRoleForAccountWrite(actor: Actor, account: AccountRow): boolean {
+  if (account.workspaceId !== actor.workspaceId) return false;
+  if (isResponsibleBd(actor, account)) return true;
+  if (hasRole(actor, "PRINCIPAL", account.id)) return true;
+  const acc = actor.accountRoles.get(account.id);
+  return !!acc && (acc.has("BD") || acc.has("ANKER"));
+}
