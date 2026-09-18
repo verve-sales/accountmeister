@@ -14,6 +14,7 @@ import { createAccount } from "@/modules/accounts/service";
 import { createPerson, setPersonFunction, setRelationship } from "@/modules/people/service";
 import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/modules/accesspaths/service";
 import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
+import { changePriority, createPriority, saveAccountPlanSnapshot } from "@/modules/accountplan/service";
 
 /**
  * Alle Formulare laufen über diese Aktionen. Jede Aktion lädt den Akteur frisch,
@@ -38,12 +39,19 @@ function withFeedback(target: string, kind: "fehler" | "ok", message: string): n
   redirect(url.pathname + url.search);
 }
 
+/** Kein Fehler, sondern ein Hinweis, der die Erfolgsmeldung ersetzt (z. B. „Zustimmung gespeichert, noch nicht vereinbart“). */
+class PendingInfo extends Error {}
+
 async function run(back: string, fn: (actor: Actor) => Promise<string | void>, okMessage: string): Promise<never> {
   const actor = await requireActor();
   let next: string | void;
   try {
     next = await fn(actor);
   } catch (e) {
+    if (e instanceof PendingInfo) {
+      revalidatePath("/", "layout");
+      withFeedback(back, "ok", e.message);
+    }
     const msg = e instanceof DomainError ? e.message : "Unerwarteter Fehler. Die Änderung wurde nicht gespeichert.";
     if (!(e instanceof DomainError)) console.error(e);
     withFeedback(back, "fehler", msg);
@@ -245,4 +253,29 @@ export async function correctReviewAction(fd: FormData) {
   return run(`/weeklys/${id}`, async (actor) => {
     await correctReview(actor, id, data);
   }, "Korrekturversion gespeichert; die vorherige Version bleibt nachvollziehbar.");
+}
+
+// --- Accountplan ---------------------------------------------------------------
+
+export async function createPriorityAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/kunden/${data.accountId}`, async (actor) => {
+    await createPriority(actor, data);
+  }, "Vorhaben als Vorschlag aufgenommen.");
+}
+
+export async function changePriorityAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/kunden", async (actor) => {
+    const r = await changePriority(actor, data.priorityId ?? "", data);
+    if (r.pendingAgreement) throw new PendingInfo("Ihre Zustimmung ist gespeichert. „Vereinbart“ wird das Vorhaben, sobald BD und Principal zugestimmt haben.");
+  }, "Priorität aktualisiert.");
+}
+
+export async function saveAccountPlanSnapshotAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/kunden/${data.accountId}`, async (actor) => {
+    const s = await saveAccountPlanSnapshot(actor, data);
+    return `/kunden/${data.accountId}/staende/${s.id}`;
+  }, "Stand des Accountplans gespeichert.");
 }

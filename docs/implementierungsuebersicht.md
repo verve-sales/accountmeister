@@ -1,6 +1,6 @@
 # Implementierungsübersicht – Verve Sales-Arbeitsumgebung
 
-Stand: 18.09.2026 · Etappen 0 und 1 abgeschlossen; Etappe 2 begonnen: BD-/Anker-Weekly umgesetzt, Accountplan folgt.
+Stand: 18.09.2026 · Etappen 0 und 1 abgeschlossen; Etappe 2 weitgehend umgesetzt: BD-/Anker-Weekly und Accountplan; Artefaktvorlagen-Registrierung folgt.
 Referenz: `docs/briefing.md` (Produkt- und Entwicklungsbriefing). Entscheidungen: `docs/entscheidungsprotokoll.md`.
 
 ## 1. Architektur
@@ -21,11 +21,12 @@ Schichten (17.2): UI (`src/app`) → Server Actions (`src/app/actions.ts`, nur F
 | Audit/Policies | `src/modules/audit` | Audit-Ereignisse je schreibender Operation (minimal, keine Rohquellen); `policy_version` am Workspace |
 | People/AccessPaths | `src/modules/people`, `src/modules/accesspaths` | Personen (nur berufliche Felder), zeitlich gültige Funktionen, Beziehungsstand mit Kontext- und Belegpflicht, Kontaktweg (A5) mit Schritten belegt/geplant/hypothetisch und Statuslogik; Seite „Personen & Zugang“ je Setup (tabellarisch; Karte folgt) |
 | Reviews | `src/modules/reviews` | BD-/Anker-Weekly: Vorbereitung aus letztem bestätigtem Stand, Notiz nur als Entwurf, Beobachtungen/Aktionen/Entscheidungen mit Weekly-Bezug, Bestätigung als versionierter Snapshot in einer Transaktion, Korrekturversionen; Setup-Abschnitt 2 bezieht sich auf den bestätigten Stand |
+| Accountplan | `src/modules/accountplan` | A1 als Live-Übersicht aus bestätigten Daten (Einsätze mit Beleg, offene Hinweise, Beziehungen/Kontaktwege, Prioritäten, offene Fragen, Aktionen, Entscheidungen); Prioritäten (A13) mit Vier-Augen-Vereinbarung BD + Principal und begründeter Zurückstellung; gespeicherte Review-Stände bleiben unverändert erhalten |
 | Goals, Artifacts/Suggestions, Integrations/Jobs | – | Noch nicht begonnen (Etappen 3–4); Navigation zeigt dies ehrlich an |
 
 ## 3. Datenmodell (Etappe 0/1)
 
-`src/db/schema.ts`, Migrationen `0000_init.sql`, `0001_kontaktwege.sql`, `0002_weeklys.sql`. Umgesetzt: workspaces, users, role_assignments, accounts, org_units, project_setups, setup_memberships, persons, person_functions, relationships, sources, assertions, assertion_evidence, signals, actions, handovers, access_plans, access_plan_steps, reviews, review_participants, review_versions, decisions, audit_events.
+`src/db/schema.ts`, Migrationen `0000_init.sql`, `0001_kontaktwege.sql`, `0002_weeklys.sql`, `0003_accountplan.sql`. Umgesetzt: workspaces, users, role_assignments, accounts, org_units, project_setups, setup_memberships, persons, person_functions, relationships, sources, assertions, assertion_evidence, signals, actions, handovers, access_plans, access_plan_steps, reviews, review_participants, review_versions, decisions, account_priorities, account_plan_snapshots, audit_events.
 
 Konventionen: UUID-Text-IDs, `created_at`/`updated_at` (timestamptz), `created_by`, `version` (optimistische Sperre auf Setup, Signal, Aktion, Übergabe), `workspace_id` überall. Fälligkeiten als `date`, Zeitpunkte als `timestamptz`; Anzeige in Europe/Berlin. Kein Soft-Delete-only: Quellen haben `is_locked` (Sperrung) getrennt von Löschung, das vollständige Löschkonzept folgt mit der Datenschutzentscheidung.
 
@@ -45,17 +46,16 @@ Serverseitig, deterministisch, pro Anfrage:
 
 | Bereich | Umsetzung | Stand |
 |---|---|---|
-| Fachliche Regeln | `tests/hauptfall.test.ts`: F01, F03, F05, F07, Begründungspflicht, Übergänge, optimistische Sperre · `tests/personen-zugang.test.ts`: F06, Belegpflicht Beziehungsstand, Funktionswechsel, Zugriff auf Personen/Kontaktwege · `tests/weekly.test.ts`: F07 im Weekly, F11, zwei aufeinander aufbauende Weeklys, Korrekturversion, Zugriff | 15 Tests grün |
+| Fachliche Regeln | `tests/hauptfall.test.ts`: F01, F03, F05, F07, Begründungspflicht, Übergänge, optimistische Sperre · `tests/personen-zugang.test.ts`: F06, Belegpflicht Beziehungsstand, Funktionswechsel, Zugriff auf Personen/Kontaktwege · `tests/weekly.test.ts`: F07 im Weekly, F11, zwei aufeinander aufbauende Weeklys, Korrekturversion, Zugriff · `tests/accountplan.test.ts`: F14, Prioritäten-Vereinbarung, Snapshot bleibt erhalten, Zugriff | 18 Tests grün |
 | Zugriff/Sicherheit | `tests/zugriff.test.ts`: S01, S02, S09, persönliche Quelle, ADMIN ohne Inhalt, Principal lesend | 7 Tests grün |
-| End-to-End | `e2e/hauptfall.spec.ts` (Playwright): Hauptfall 19.1 Schritte 1–5, Zugriffsverweigerung, Health-Endpunkt, Personen & Zugang (Belegpflicht, F06), zwei aufeinander aufbauende Weeklys in der Oberfläche | 4 Tests grün |
+| End-to-End | `e2e/hauptfall.spec.ts` (Playwright): Hauptfall 19.1 Schritte 1–5, Zugriffsverweigerung, Health-Endpunkt, Personen & Zugang (Belegpflicht, F06), zwei aufeinander aufbauende Weeklys, Accountplan mit Vier-Augen-Vereinbarung und gespeichertem Stand | 5 Tests grün |
 | Technisch | Migration von leerer DB (Test-Setup macht das bei jedem Lauf), Seed idempotent, Build, Typecheck, Lint | grün |
 
-Noch offen: F02, F04, F08–F10, F12–F16; S03–S08, S10–S12 – jeweils mit den zugehörigen Etappen.
+Noch offen: F02, F04, F08–F10, F12, F13, F15, F16; S03–S08, S10–S12 – jeweils mit den zugehörigen Etappen.
 
 ## 6. Nächste Schritte (Etappe 1 abschließen, Etappe 2 beginnen)
 
-1. Accountplan (A1) als verdichtete Sicht aus bestätigten Setups, Prioritäten und Aktionen; gespeicherter Review-Stand.
-2. Artefaktvorlagen registrieren (A1–A16 als Vorlagen mit Datenbezug, Entwurf/Bestätigung, Empfängerkreis).
-3. Setup-Übergabe aus dem Eingang (BD-Zuordnung) direkt bedienbar machen.
-4. Buyingcenter je Bedarf (DecisionParticipation) mit dem Bedarfsobjekt (Opportunity, Etappe 5).
-5. Grafische Beziehungskarte als gleichwertige Alternative zur Kontaktweg-Tabelle.
+1. Artefaktvorlagen registrieren (A1–A16 als Vorlagen mit Datenbezug, Entwurf/Bestätigung, Empfängerkreis).
+2. Setup-Übergabe aus dem Eingang (BD-Zuordnung) direkt bedienbar machen.
+3. Buyingcenter je Bedarf (DecisionParticipation) mit dem Bedarfsobjekt (Opportunity, Etappe 5).
+4. Grafische Beziehungskarte als gleichwertige Alternative zur Kontaktweg-Tabelle.

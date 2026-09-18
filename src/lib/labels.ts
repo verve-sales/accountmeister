@@ -84,3 +84,5 @@ export const reviewStatusLabel: Record<string, string> = {
   BESTAETIGUNG_OFFEN: "Bestätigung offen",
   BESTAETIGT: "Bestätigt",
 };
+export const priorityKindLabel: Record<string, string> = { VERLAENGERN: "Verlängern", AUSWEITEN: "Ausweiten", VERTIEFEN: "Vertiefen", UEBERTRAGEN: "Auf andere Bereiche übertragen" };
+export const priorityStatusLabel: Record<string, string> = { VORGESCHLAGEN: "Vorgeschlagen", VEREINBART: "Vereinbart", ZURUECKGESTELLT: "Bewusst zurückgestellt", ERREICHT: "Erreicht", VERWORFEN: "Verworfen" };

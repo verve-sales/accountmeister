@@ -1,6 +1,6 @@
 # Verve Sales-Arbeitsumgebung (Pilot)
 
-Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–1 abgeschlossen, Etappe 2 begonnen (BD-/Anker-Weekly mit Vorbereitung, Entwurf, Ergebnisvorschau, Bestätigung und Versionen). **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
+Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–1 abgeschlossen, Etappe 2 weitgehend umgesetzt (BD-/Anker-Weekly mit Versionen; Accountplan mit Prioritäten und gespeicherten Ständen). **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
 
 Dokumente: `docs/briefing.md` (Auftrag), `docs/implementierungsuebersicht.md`, `docs/entscheidungsprotokoll.md`.
 
@@ -41,7 +41,7 @@ Der Produktionsstart (`npm start`) verweigert absichtlich den Betrieb mit `AUTH_
 ## Struktur
 ```
 src/app          Seiten (App Router), Server Actions (Formularbrücke), globales Layout
-src/modules      Fachmodule: identity, accounts, setups, knowledge, signals, actions, handovers, people, accesspaths, reviews, audit
+src/modules      Fachmodule: identity, accounts, setups, knowledge, signals, actions, handovers, people, accesspaths, reviews, accountplan, audit
 src/db           Schema (Drizzle), Migrationen, Client, Seed
 src/lib          Konfiguration (mit Produktionsschutz), Fehlerklassen, Anzeigetexte
 tests            Integrationstests (Vitest) gegen PostgreSQL
@@ -51,6 +51,6 @@ docs             Briefing, Implementierungsübersicht, Entscheidungsprotokoll
 
 ## Bekannte Einschränkungen (Stand Etappe 1)
 - Kontaktwege nur tabellarisch; die grafische Beziehungskarte folgt. Buyingcenter je Bedarf folgt mit dem Bedarfsobjekt.
-- Accountplan (A1), Artefaktvorlagen, Principal-/CEO-Ebene, Vorschläge, Importe: noch nicht umgesetzt; die Navigation kennzeichnet dies.
+- Artefaktvorlagen (A2–A16 als Vorlagen), Principal-/CEO-Ebene, Vorschläge, Importe: noch nicht umgesetzt; die Navigation kennzeichnet dies.
 - KI-Strukturierung der Weekly-Notiz folgt in Etappe 3; bis dahin werden Beobachtungen, Aktionen und Entscheidungen manuell über Felder festgehalten.
 - Keine Unternehmensanmeldung, kein KI-Anbieter, keine Mail-/Kalenderanbindung (Entscheidungen offen, siehe Entscheidungsprotokoll).

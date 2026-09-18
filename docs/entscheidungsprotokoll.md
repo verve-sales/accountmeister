@@ -41,6 +41,12 @@ Die gemeinsame Notiz wird ausschließlich als Entwurf gespeichert. Beobachtungen
 ## E-013 · 2026-09-18 · Review-Zustände
 Umgesetzt: geplant → laufend → Bestätigung offen → bestätigt („in Vorbereitung“ als optionaler Zwischenzustand). „Ersetzt“ aus Briefing 9.2 wird nicht als Review-Status geführt, sondern über `supersedes_version_id` an der Version – das Review selbst bleibt bestätigt, der gültige Stand zeigt auf die neueste Version.
 
+## E-014 · 2026-09-18 · Accountplan ohne Zahlenfelder, Prioritäten mit Vier-Augen-Vereinbarung
+Der Accountplan wird bei jedem Aufruf aus den Objekten gebaut (kein zweiter Datenbestand). Er enthält bewusst keine Betrags-, Potenzial- oder Forecast-Felder (Briefing 7). „Bestehende Zusammenarbeit“ zeigt nur Aussagen mit Erkenntnisstatus „Sachverhalt bestätigt“ und weist fehlende Belege aus. Prioritäten werden als „vorgeschlagen“ angelegt; „vereinbart“ setzt Zustimmungen aus beiden Rollen (zuständiger/account-bezogener BD und Principal) voraus – die erste Zustimmung wird gespeichert, ohne den Status zu ändern. Zurückstellen braucht einen Grund („bewusst zurückgestellte Themen“, A13). Der Zielbezug ist bis zum Zielobjekt (Etappe 4) ein Textfeld.
+
+## E-015 · 2026-09-18 · Gespeicherte Accountplan-Stände
+Ein gespeicherter Stand ist eine unveränderliche JSON-Kopie der Live-Übersicht mit Bestätiger und Zeitpunkt (Briefing 7: „Ein gespeicherter Review-Stand bleibt erhalten“). Er wird mit den Berechtigungen des Speichernden erzeugt – Inhalte außerhalb dessen Berechtigungsbereichs fehlen darin und werden im Stand als Hinweis ausgewiesen. Lesen darf, wer den Kunden sehen darf.
+
 ## Offene Entscheidungen (Briefing 2.3) – Stand unverändert offen
 | Thema | Aktueller lokaler Ersatz | Entscheidung nötig vor |
 |---|---|---|

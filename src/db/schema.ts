@@ -511,6 +511,53 @@ export const decisions = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Accountplan (Briefing 7 / A1 / A13): Prioritäten und gespeicherte Stände – kein zweiter Datenbestand
+// ---------------------------------------------------------------------------
+
+export const priorityKindEnum = pgEnum("priority_kind", ["VERLAENGERN", "AUSWEITEN", "VERTIEFEN", "UEBERTRAGEN"]);
+export const priorityStatusEnum = pgEnum("priority_status", ["VORGESCHLAGEN", "VEREINBART", "ZURUECKGESTELLT", "ERREICHT", "VERWORFEN"]);
+
+export const accountPriorities = pgTable(
+  "account_priorities",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    setupId: text("setup_id").references(() => projectSetups.id), // optionaler Bezug
+    kind: priorityKindEnum("kind").notNull(),
+    title: text("title").notNull(),
+    rationale: text("rationale"), // Begründung
+    prerequisites: text("prerequisites"), // Voraussetzungen (Zeit, Zugang, Freigaben …)
+    goalReference: text("goal_reference"), // Bezug zu Portfolio-/Kundenziel (Zielobjekt folgt in Etappe 4)
+    rank: integer("rank").notNull().default(100),
+    status: priorityStatusEnum("status").notNull().default("VORGESCHLAGEN"),
+    agreedByUserIds: text("agreed_by_user_ids").array().notNull().default(sql`'{}'::text[]`),
+    deferredReason: text("deferred_reason"), // bewusst zurückgestellt – warum
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("account_priorities_account_idx").on(t.accountId)],
+);
+
+/** Gespeicherter Review-Stand des Accountplans – bleibt erhalten, auch wenn sich die Live-Übersicht ändert (7). */
+export const accountPlanSnapshots = pgTable(
+  "account_plan_snapshots",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    title: text("title").notNull(),
+    content: jsonb("content").notNull(), // vollständiger Stand (siehe AccountPlanView)
+    note: text("note"),
+    confirmedBy: text("confirmed_by").notNull().references(() => users.id),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("account_plan_snapshots_account_idx").on(t.accountId)],
+);
+
+// ---------------------------------------------------------------------------
 // Audit
 // ---------------------------------------------------------------------------
 
@@ -540,3 +587,5 @@ export type RelationshipState = (typeof relationshipStateEnum.enumValues)[number
 export type AccessStepKind = (typeof accessStepKindEnum.enumValues)[number];
 export type AccessPlanStatus = (typeof accessPlanStatusEnum.enumValues)[number];
 export type ReviewStatus = (typeof reviewStatusEnum.enumValues)[number];
+export type PriorityKind = (typeof priorityKindEnum.enumValues)[number];
+export type PriorityStatus = (typeof priorityStatusEnum.enumValues)[number];

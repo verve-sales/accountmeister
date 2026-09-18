@@ -27,7 +27,7 @@ test("Setup anlegen → Beobachtung → Übergabe → Annahme → Aktion erledig
 
   // 1. Nina (Anker) legt ein lückenhaftes Setup an – BD-Zuordnung offen
   await loginAs(page, "Nina");
-  await page.getByRole("link", { name: "Kunden" }).click();
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
   await page.getByRole("link", { name: /Beispielkonzern/ }).click();
   await page.locator("summary", { hasText: "Setup anlegen" }).click();
   await page.getByLabel("Verständlicher Setup-Name").fill(setupName);
@@ -134,7 +134,7 @@ test("Etappe 2: Zwei Weeklys bauen aufeinander auf (Vorbereitung → Notiz → E
   const tag = Date.now().toString(36);
   await loginAs(page, "David");
   // Eigenes Setup für den Test
-  await page.getByRole("link", { name: "Kunden" }).click();
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
   await page.getByRole("link", { name: /Beispielkonzern/ }).click();
   await page.locator("summary", { hasText: "Setup anlegen" }).click();
   await page.getByLabel("Verständlicher Setup-Name").fill(`E2E Weekly-Setup ${tag}`);
@@ -198,4 +198,43 @@ test("Etappe 2: Zwei Weeklys bauen aufeinander auf (Vorbereitung → Notiz → E
   await page.goto(w1Url);
   await expect(page.locator("pre", { hasText: "Weekly 1: Team plant zusätzliche Testtermine." })).toBeVisible();
   await expect(page.getByText(/Bestätigt von/)).toContainText("Version 1");
+});
+
+test("Accountplan: Vorhaben vorschlagen, Zustimmung beider Rollen, Stand speichern bleibt erhalten", async ({ page }) => {
+  const tag = Date.now().toString(36);
+  await loginAs(page, "David");
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
+  await page.getByRole("link", { name: /Beispielkonzern/ }).click();
+  await expect(page.getByRole("heading", { name: "Überblick – Accountplan" })).toBeVisible();
+  await expect(page.getByText("Bestehende Zusammenarbeit")).toBeVisible();
+  await expect(page.getByText(/Einsatz A .* beauftragt/)).toBeVisible();
+
+  await page.locator("summary", { hasText: "Vorhaben vorschlagen" }).click();
+  await page.getByLabel("Vorhaben", { exact: true }).fill(`E2E Vorhaben ${tag}`);
+  await page.getByLabel("Begründung").fill("Aus Weekly-Hinweis.");
+  await page.getByRole("button", { name: "Als Vorschlag aufnehmen" }).click();
+  await expect(page.getByText("Vorhaben als Vorschlag aufgenommen")).toBeVisible();
+
+  // David stimmt zu → noch nicht vereinbart
+  await page.locator("summary", { hasText: "Priorität ändern" }).click();
+  const row = page.locator("li", { hasText: `E2E Vorhaben ${tag}` }).first();
+  await row.getByRole("button", { name: "Zustimmen" }).click();
+  await expect(page.getByText("Ihre Zustimmung ist gespeichert")).toBeVisible();
+  await logout(page);
+
+  // Petra (Principal) stimmt zu → vereinbart
+  await loginAs(page, "Petra");
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
+  await page.getByRole("link", { name: /Beispielkonzern/ }).click();
+  await page.locator("summary", { hasText: "Priorität ändern" }).click();
+  await page.locator("li", { hasText: `E2E Vorhaben ${tag}` }).first().getByRole("button", { name: "Zustimmen" }).click();
+  await expect(page.getByText("Priorität aktualisiert")).toBeVisible();
+  await expect(page.getByRole("row", { name: new RegExp(`E2E Vorhaben ${tag}`) })).toContainText("Vereinbart");
+
+  // Stand speichern und prüfen, dass er erhalten bleibt
+  await page.getByLabel("Aktuellen Stand speichern als").fill(`Review ${tag}`);
+  await page.getByRole("button", { name: "Stand speichern" }).click();
+  await expect(page.getByRole("heading", { name: `Review ${tag}` })).toBeVisible();
+  await expect(page.getByText("Gespeicherter Stand · erzeugt")).toBeVisible();
+  await expect(page.getByText(`E2E Vorhaben ${tag}`)).toBeVisible();
 });
