@@ -12,6 +12,6 @@ Das Projekt liegt als Git-Repository mit vollständiger Historie vor (`verve-sal
    git push -u origin main
    ```
    Beim ersten Push fragt Git nach der Anmeldung (Browserfenster von GitHub öffnet sich).
-4. Danach in der Claude-App unter Einstellungen → Integrationen GitHub verknüpfen; dann kann Claude in künftigen Sitzungen direkt in dieses Repository pushen.
+4. Damit Claude künftig direkt pushen kann: im Browser https://claude.ai/code öffnen (gleiches Konto wie in der App). Beim Anlegen einer neuen Aufgabe in der Repository-Auswahl „GitHub verbinden“ wählen, die Claude-GitHub-App installieren und ihr Zugriff auf `verve-sales` geben. Anschließend eine neue Aufgabe mit diesem Repository starten. (Die Verknüpfung liegt nicht in den Datei-Einstellungen oder Konnektoren der Desktop-App. Fehlt die Option, muss ein Organisations-Admin sie freischalten.)
 
 Alternative ohne Bundle: ZIP entpacken, im Ordner `git init -b main`, `git add -A`, `git commit -m "Etappe 0/1"`, dann Schritt 3 ab `git remote add origin …`.
