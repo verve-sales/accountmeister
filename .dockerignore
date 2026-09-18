@@ -1,0 +1,13 @@
+node_modules
+.next
+.env
+.env.*
+backups
+test-results
+playwright-report
+coverage
+e2e
+tests
+docs
+*.md
+.git

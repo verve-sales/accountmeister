@@ -39,7 +39,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </Link>
             {actor && (
               <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                {NAV.map((n) => (
+                {[...NAV, ...(actor?.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : [])].map((n) => (
                   <Link key={n.href} href={n.href}>
                     {n.label}
                   </Link>

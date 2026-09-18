@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { NotYet } from "@/components/NotYet";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { getProviderStatus } from "@/modules/suggestions/service";
@@ -81,7 +80,10 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
           </details>
         </section>
       )}
-      <NotYet title="Benachrichtigungen und Administration" etappe="Etappe 5" inhalt="Erinnerungseinstellungen, Review-Rhythmen, berechtigte Administration von Rollen und Aufbewahrung." />
+      <section className="card">
+        <h2 className="font-semibold mb-2">Administration und Aufbewahrung</h2>
+        <p className="text-sm">Rollen, Zugänge, Protokoll und Bestandszahlen pflegt die Betriebsverwaltung unter <Link href="/verwaltung">Verwaltung</Link> (nur Rolle ADMIN, ohne Inhaltszugriff). Sperren und Löschen einzelner Quellen erfolgt auf der jeweiligen Quellenseite. Aufbewahrungsfristen und Erinnerungen folgen mit dem Löschkonzept bzw. der Unternehmensanmeldung (siehe <code>docs/pilotfreigabe.md</code>).</p>
+      </section>
     </div>
   );
 }

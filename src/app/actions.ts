@@ -3,7 +3,9 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { DomainError } from "@/lib/errors";
-import { getCurrentActor, getSession } from "@/modules/identity/session";
+import { getCurrentActor, getSession, touchSession } from "@/modules/identity/session";
+import { headers } from "next/headers";
+import { checkRateLimit, LIMITS } from "@/lib/ratelimit";
 import { resolveDevLoginUser } from "@/modules/identity/dev-login";
 import type { Actor } from "@/modules/identity/actor";
 import { createSetup, updateSetup, addMember } from "@/modules/setups/service";
@@ -19,6 +21,7 @@ import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/art
 import { acceptSuggestion, giveFeedback, structureReviewNote } from "@/modules/suggestions/service";
 import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
 import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
+import { assignRole, eraseSourceContent, lockSource, revokeRole, setUserStatus } from "@/modules/governance/service";
 import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, changeOpportunityStatus, confirmOpportunity, confirmOrder, createOffer, createOpportunity, createOrder, createProfileReference, markOrderEvidenceIncomplete, markReady, markStarted, presentOffer, removeParticipation, saveMeddpicc, setRequirementStatus, updateOpportunity } from "@/modules/opportunities/service";
 import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
@@ -50,6 +53,9 @@ class PendingInfo extends Error {}
 
 async function run(back: string, fn: (actor: Actor) => Promise<string | void>, okMessage: string): Promise<never> {
   const actor = await requireActor();
+  const rl = checkRateLimit(`write:${actor.userId}`, LIMITS.write.limit, LIMITS.write.windowMs);
+  if (!rl.allowed) withFeedback(back, "fehler", `Zu viele Änderungen in kurzer Zeit. Bitte in ${rl.retryAfterSeconds} Sekunden erneut versuchen.`);
+  await touchSession();
   let next: string | void;
   try {
     next = await fn(actor);
@@ -68,13 +74,22 @@ async function run(back: string, fn: (actor: Actor) => Promise<string | void>, o
 
 // --- Anmeldung -------------------------------------------------------------
 
+async function clientKey(): Promise<string> {
+  const h = await headers();
+  return (h.get("x-forwarded-for") ?? h.get("x-real-ip") ?? "lokal").split(",")[0]!.trim();
+}
+
 export async function devLoginAction(fd: FormData) {
+  const rl = checkRateLimit(`login:${await clientKey()}`, LIMITS.login.limit, LIMITS.login.windowMs);
+  if (!rl.allowed) withFeedback("/anmelden", "fehler", `Zu viele Anmeldeversuche. Bitte in ${rl.retryAfterSeconds} Sekunden erneut versuchen.`);
   const userId = String(fd.get("userId") ?? "");
   const user = await resolveDevLoginUser(userId);
   if (!user) withFeedback("/anmelden", "fehler", "Nutzer nicht gefunden.");
   const session = await getSession();
   session.userId = user.id;
   session.mode = "development";
+  session.issuedAt = Date.now();
+  session.lastSeenAt = Date.now();
   await session.save();
   redirect("/meine-arbeit");
 }
@@ -623,4 +638,42 @@ export async function markStartedAction(fd: FormData) {
   return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
     await markStarted(actor, data.orderId ?? "", { version: Number(data.version), startedAt: data.startedAt, note: data.note });
   }, "Start als bestätigtes Ereignis festgehalten.");
+}
+
+// --- Governance: Sperren/Löschen, Verwaltung (Etappe 5 Teil B) -----------------------
+
+export async function lockSourceAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? `/quellen/${data.sourceId}`, async (actor) => {
+    const r = await lockSource(actor, data.sourceId ?? "", data);
+    throw new PendingInfo(`Quelle gesperrt. Zur erneuten Prüfung markiert: ${r.suggestionsSuperseded} Vorschläge, ${r.artifactVersionsSuperseded} Artefaktfassungen, ${r.assertionsSuperseded} Aussagen.`);
+  }, "Quelle gesperrt.");
+}
+
+export async function eraseSourceAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? `/quellen/${data.sourceId}`, async (actor) => {
+    await eraseSourceContent(actor, data.sourceId ?? "", data);
+  }, "Inhalt der Quelle entfernt; Metadaten und Protokoll bleiben.");
+}
+
+export async function assignRoleAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/verwaltung", async (actor) => {
+    await assignRole(actor, data);
+  }, "Rolle zugewiesen.");
+}
+
+export async function revokeRoleAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/verwaltung", async (actor) => {
+    await revokeRole(actor, data.roleAssignmentId ?? "");
+  }, "Rolle entzogen.");
+}
+
+export async function setUserStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/verwaltung", async (actor) => {
+    await setUserStatus(actor, data.userId ?? "", data.status === "INACTIVE" ? "INACTIVE" : "ACTIVE");
+  }, "Zugangsstatus geändert.");
 }

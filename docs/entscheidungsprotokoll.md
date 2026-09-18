@@ -98,15 +98,24 @@ Ein Angebot durchläuft Entwurf → geprüft → tatsächlich vorgestellt (F09: 
 ## E-032 · 2026-09-18 · Auftrag und Start nur mit Nachweisen
 „Beauftragung bestätigt“ braucht Referenz und Nachweisquelle. Startvoraussetzungen werden je Auftrag erfasst (Anforderung, prüfende Stelle, Regelbezug); „bestätigt“ braucht einen Nachweis, „nicht anwendbar“ eine Begründung. „Startbereit“ verlangt mindestens eine erfasste und bestätigte bzw. begründet nicht anwendbare Voraussetzung – eine leere Prüfliste gilt nicht als erfüllt. „Gestartet“ ist ein manuell bestätigtes Ereignis mit Zeitpunkt, nie die Folge eines erreichten Datums. Ohne freigegebene Regelkonfiguration zeigt die Anwendung den dokumentierten Stand und behauptet keine produktive Einsatzfreigabe. Vergütungs-/Provisionsberechnung (A16) bleibt außerhalb des Umfangs.
 
+## E-033 · 2026-09-19 · Sperren vor Löschen, Löschen mit Folgewirkung
+Löschverlangen werden in zwei protokollierten Schritten umgesetzt: Sperren (Quelle für andere unsichtbar; Vorschläge, Artefaktfassungen und allein darauf gestützte Aussagen „überholt“, S07) und danach Inhalt entfernen (Quellentext und -versionen gelöscht; allein abgeleitete Aussagen und Hinweistexte entfernt, Hinweis begründet beendet). Typ, Zeitpunkte, Herkunft und Protokoll bleiben, weil die Nachvollziehbarkeit der Verarbeitung erhalten bleiben muss (16.4); das Protokoll enthält den Grund, nie den Inhalt. Berechtigt: Quelleninhaber, zuständige Führungsrolle, Betriebsverwaltung. Sicherungen: Ablauf statt Einzellöschung; Wiederherstellung wendet die in der Datenbank gespeicherten Sperr-/Löschzustände automatisch mit an (S12) – Aufbewahrung der Sicherungen bleibt offene Entscheidung.
+
+## E-034 · 2026-09-19 · Verwaltung ohne Inhaltszugriff, Grenzen im Prozessspeicher
+Die Rolle ADMIN pflegt Rollen und Zugänge und sieht Protokoll (nur Feldnamen) und Bestandszahlen je Schutzbereich – keine Setups, Quellen, Notizen oder Vorschläge (16.2). Sitzungen haben eine Höchstdauer (12 h) und eine Inaktivitätsgrenze (2 h). Nutzungsgrenzen für Anmeldeversuche (20 / 15 min je Herkunft) und schreibende Aktionen (120 / min je Person) laufen im Prozessspeicher; für mehrere Instanzen ist ein gemeinsamer Speicher nachzurüsten. Für die E2E-Suite wird die Anmeldegrenze über die Umgebung angehoben; Produktionswerte bleiben unverändert.
+
+## E-035 · 2026-09-19 · Betrieb: Container, Startverweigerung, Sicherung
+Betrieb als Docker-Container (Node 22) mit PostgreSQL 16 hinter einem TLS-Reverse-Proxy; die Anwendung lauscht nur lokal. `scripts/start.sh` verweigert den Start bei Entwicklungsanmeldung, Test-KI oder Beispiel-Secret (S09) und wendet Migrationen mit `scripts/migrate.mjs` ohne Entwicklungswerkzeuge an. Sicherung per `pg_dump` (Custom-Format, Prüfsumme), Wiederherstellung in eine leere Datenbank mit Konsistenzprüfung. Geheimnisse ausschließlich über Umgebungsvariablen (`.env.production`, nicht im Git).
+
 ## Offene Entscheidungen (Briefing 2.3) – Stand unverändert offen
 | Thema | Aktueller lokaler Ersatz | Entscheidung nötig vor |
 |---|---|---|
-| Hosting/Produktivregion | lokal, PostgreSQL 16 | Echtdatenbetrieb |
+| Hosting/Produktivregion | lokal, PostgreSQL 16; Docker/Compose vorbereitet (E-035) | Echtdatenbetrieb |
 | Unternehmensanmeldung (OIDC-Anbieter) | Entwicklungsanmeldung | Bereitstellung für reale Nutzer |
 | Mail-/Kalenderanbieter | **entschieden: Microsoft 365/Outlook (E-018)**; Graph-Adapter im Fixture-Modus vorhanden (E-023) | echtem Import: App-Registrierung im Verve-Tenant + Datenschutzfreigabe |
 | KI-Anbieter/Modell | `AI_PROVIDER=test` (regelbasiert, lokal); Produktivadapter gesperrt | KI-Verarbeitung echter Inhalte |
 | Führendes CRM/Staffing-System | eigener Pilotdatenbestand | Synchronisation realer Stammdaten |
-| Datenschutz (Zweck, Rechtsgrundlage, DSFA, Aufbewahrung, Löschkonzept) | Zugriffsklassen + Sperrung technisch vorbereitet | Echtdatenbetrieb |
+| Datenschutz (Zweck, Rechtsgrundlage, DSFA, Aufbewahrung, Löschkonzept) | Zugriffsklassen, Sperr-/Löschablauf mit Folgewirkung (E-033), Bestandszahlen; Aufbewahrungsfristen nicht gesetzt | Echtdatenbetrieb |
 | Sales-/Vergütungsregeln (A16) | nicht implementiert, keine Berechnung | Aktivierung entsprechender Prüfungen |
 | Startvoraussetzungs-Regelwerk (Vertrag/Compliance/Onboarding) | frei erfasste Voraussetzungen je Auftrag, Regelbezug als Text | produktiver Einsatzfreigabe |
-| Git-Remote | lokales Repository | Teamarbeit / CI |
+| Git-Remote | **entschieden: github.com/verve-sales/accountmeister**; Auslieferung aus dieser Sitzung per Bundle | – |

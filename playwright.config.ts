@@ -18,6 +18,8 @@ export default defineConfig({
     // Entwicklungsserver: Die Entwicklungsanmeldung ist unter NODE_ENV=production bewusst gesperrt (S09).
     command: "npx next dev -p 3100",
     url: "http://localhost:3100/health",
+    // Die E2E-Suite meldet sich häufiger an, als die Anmeldegrenze im Betrieb erlaubt (Standard 20 / 15 min).
+    env: { RATE_LIMIT_LOGIN_PER_15MIN: "1000" },
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },

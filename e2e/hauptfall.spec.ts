@@ -527,3 +527,40 @@ test("Etappe 5: Bedarf direkt erfassen → bestätigen mit Beleg → Buyingcente
   await expect(page.getByText("Start als bestätigtes Ereignis festgehalten")).toBeVisible();
   await expect(page.getByText("Gestartet", { exact: true }).first()).toBeVisible();
 });
+
+test("Etappe 5B: Verwaltung nur für ADMIN ohne Inhalte; Quelle sperren markiert Abhängiges; Inhalt entfernen", async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  // Admin: Verwaltung sichtbar, Setup-Inhalte nicht
+  await loginAs(page, "Admin");
+  await page.getByRole("link", { name: "Verwaltung" }).click();
+  await expect(page.getByRole("heading", { name: /Verwaltung/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Zugänge und Rollen/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Protokoll/ })).toBeVisible();
+  await page.goto("/kunden");
+  await expect(page.getByText(/Beispielkonzern/)).toHaveCount(0);
+  await logout(page);
+
+  // David: Beobachtung → Quelle; Quelle sperren; Inhalt entfernen
+  await loginAs(page, "David");
+  await expect(page.getByRole("link", { name: "Verwaltung" })).toHaveCount(0);
+  await page.getByRole("link", { name: "Kunden", exact: true }).click();
+  await page.getByRole("link", { name: /Beispielkonzern/ }).click();
+  await page.getByRole("link", { name: "Plattformteam", exact: true }).first().click();
+  const obs = `Sperrtest-Beobachtung ${suffix}: Einkauf prüft Rahmenvertrag.`;
+  await page.locator("summary", { hasText: "Beobachtung erfassen" }).click();
+  await page.getByLabel(/Sichere Beobachtung/).fill(obs);
+  await page.getByRole("button", { name: "Beobachtung speichern" }).click();
+  await expect(page.getByText("Beobachtung erfasst")).toBeVisible();
+  const item = page.locator("li", { hasText: obs }).filter({ has: page.getByRole("link", { name: "Quelle ansehen" }) }).first();
+  await item.getByRole("link", { name: "Quelle ansehen" }).click();
+  await expect(page).toHaveURL(/\/quellen\//);
+  await page.locator("#lockReason").fill("Löschverlangen der betroffenen Person (Test).");
+  await page.getByRole("button", { name: "Quelle sperren" }).click();
+  await expect(page.getByText(/Quelle gesperrt\. Zur erneuten Prüfung markiert/)).toBeVisible();
+  await expect(page.getByText("Gesperrt", { exact: true })).toBeVisible();
+  await page.locator("#eraseReason").fill("Löschverlangen umgesetzt (Test).");
+  await page.getByRole("button", { name: "Inhalt endgültig entfernen" }).click();
+  await expect(page.getByText("Inhalt der Quelle entfernt")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "[Inhalt gelöscht]" })).toBeVisible();
+  await expect(page.getByText(obs)).toHaveCount(0);
+});
