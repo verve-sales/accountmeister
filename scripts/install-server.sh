@@ -47,7 +47,7 @@ ENV_FILE="$APP_DIR/.env.production"
 if [ -f "$ENV_FILE" ]; then
   echo "Vorhandene Konfiguration wird verwendet: $ENV_FILE"
 else
-  ask DOMAIN "Domain der Anwendung (z. B. sales.verveconsulting.de)"
+  ask DOMAIN "Domain der Anwendung (z. B. accountmeister.verveconsulting.ai)"
   ask ADMIN_EMAILS "E-Mail-Adresse(n) der Betriebsverwaltung, kommagetrennt" "ivo.seifert@verveconsulting.de"
   ask TENANT_ID "Microsoft Entra: Verzeichnis-ID (Mandant)"
   ask OIDC_CLIENT_ID "Microsoft Entra: Anwendungs-ID (Client)"

@@ -2,7 +2,7 @@
 
 Stand: 19.09.2026. Diese Anleitung richtet sich an jemanden ohne Server-Erfahrung. Sie dauert etwa 60 bis 90 Minuten, die meiste Zeit davon ist Warten. Du brauchst: den IONOS-Kundenlogin, den Cloudflare-Login für die Domain `verveconsulting.ai` (dort liegen die DNS-Einträge), Administratorrechte in eurem Microsoft 365 (für die Anmeldung) und einen GitHub-Zugang auf das Repository `verve-sales/accountmeister`.
 
-Am Ende läuft die Anwendung unter `https://sales.verveconsulting.ai`, mit Anmeldung über eure Microsoft-365-Konten, täglicher Sicherung und automatischem TLS-Zertifikat.
+Am Ende läuft die Anwendung unter `https://accountmeister.verveconsulting.ai`, mit Anmeldung über eure Microsoft-365-Konten, täglicher Sicherung und automatischem TLS-Zertifikat.
 
 ## Überblick
 
@@ -21,10 +21,10 @@ Der Server bekommt Docker installiert; darin laufen drei Container: die Anwendun
 Die Domain `verveconsulting.ai` ist zwar bei IONOS registriert, ihre DNS-Einträge werden aber bei **Cloudflare** verwaltet (im IONOS-Kundenbereich steht unter „Verwendungsart: Eigene Nameserver – hasslo.ns.cloudflare.com, cora.ns.cloudflare.com“). Änderungen im IONOS-DNS hätten deshalb keine Wirkung; die IONOS-Hinweise „SSL aktivieren“ und „Domain Guard“ kannst du ignorieren, das Zertifikat besorgt der Server selbst.
 
 1. Bei dash.cloudflare.com anmelden, die Zone `verveconsulting.ai` öffnen, links „DNS → Records“.
-2. „Add record“: Typ **A**, Name `sales`, IPv4-Adresse = die Server-IP aus Schritt 1, **Proxy status: „DNS only“ (graue Wolke, nicht orange)**, TTL Auto. Speichern.
+2. „Add record“: Typ **A**, Name `accountmeister`, IPv4-Adresse = die Server-IP aus Schritt 1, **Proxy status: „DNS only“ (graue Wolke, nicht orange)**, TTL Auto. Speichern.
    Die graue Wolke ist wichtig: Der Server holt sein Zertifikat direkt bei Let's Encrypt, und die Anwendung soll nicht durch den Cloudflare-Proxy laufen (Kundendaten bleiben dann zwischen Browser und eurem Server). Wer Cloudflare später bewusst als Schutzschicht vorschalten möchte, kann das nach der Inbetriebnahme umstellen.
-3. Falls es schon einen Eintrag `sales` gibt, diesen ersetzen. Die Änderung ist bei Cloudflare in der Regel nach ein bis zwei Minuten aktiv.
-4. Adresse der Anwendung ist damit: `https://sales.verveconsulting.ai`. Diese Adresse wird in Schritt 4 und 6 exakt so verwendet.
+3. Falls es schon einen Eintrag `accountmeister` gibt, diesen ersetzen. Die Änderung ist bei Cloudflare in der Regel nach ein bis zwei Minuten aktiv.
+4. Adresse der Anwendung ist damit: `https://accountmeister.verveconsulting.ai`. Diese Adresse wird in Schritt 4 und 6 exakt so verwendet.
 
 ## Schritt 3: GitHub-Zugriff für den Server vorbereiten
 
@@ -39,10 +39,10 @@ Wenn das Repository privat ist (Standard), braucht der Server zum Herunterladen 
 Damit sich das Team mit dem Microsoft-Konto anmelden kann, muss die Anwendung eurem Microsoft-Mandanten bekannt sein. Das erledigt ein Administrator eures Microsoft 365 in etwa fünf Minuten.
 
 1. entra.microsoft.com öffnen (oder portal.azure.com → „Microsoft Entra ID“). Links „Anwendungen → App-Registrierungen → Neue Registrierung“.
-2. Name: „Verve Sales-Arbeitsumgebung“. Unterstützte Kontotypen: **„Nur Konten in diesem Organisationsverzeichnis“** (einzelner Mandant). Umleitungs-URI: Plattform „Web“, Wert `https://sales.verveconsulting.ai/api/auth/callback` (deine Adresse aus Schritt 2, exakt so, mit `/api/auth/callback`). Registrieren.
+2. Name: „Verve Sales-Arbeitsumgebung“. Unterstützte Kontotypen: **„Nur Konten in diesem Organisationsverzeichnis“** (einzelner Mandant). Umleitungs-URI: Plattform „Web“, Wert `https://accountmeister.verveconsulting.ai/api/auth/callback` (deine Adresse aus Schritt 2, exakt so, mit `/api/auth/callback`). Registrieren.
 3. Auf der Übersichtsseite der neuen App zwei Werte notieren: **Anwendungs-ID (Client)** und **Verzeichnis-ID (Mandant)**. Beide sehen aus wie `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
 4. Links „Zertifikate & Geheimnisse → Geheime Clientschlüssel → Neuer geheimer Clientschlüssel“. Beschreibung „Server“, Gültigkeit 24 Monate. Den Eintrag in der Spalte **„Wert“** sofort kopieren (nicht „Geheimnis-ID“); er wird nur einmal angezeigt. Trage dir den Ablauftermin in den Kalender ein.
-5. Links „Authentifizierung“: unter „Front-Channel-Abmeldungs-URL“ optional `https://sales.verveconsulting.ai/anmelden` eintragen. Unter „Implizite Genehmigung“ nichts anhaken. Speichern.
+5. Links „Authentifizierung“: unter „Front-Channel-Abmeldungs-URL“ optional `https://accountmeister.verveconsulting.ai/anmelden` eintragen. Unter „Implizite Genehmigung“ nichts anhaken. Speichern.
 6. Links „API-Berechtigungen“: Standardmäßig steht dort „Microsoft Graph → User.Read“. Das reicht. Klicke „Administratorzustimmung für <Firma> erteilen“, damit Mitarbeitende nicht einzeln zustimmen müssen.
 7. Optional, empfohlen: „Tokenkonfiguration → Optionalen Anspruch hinzufügen → ID → email“ anhaken und hinzufügen. Dann liefert Microsoft die E-Mail-Adresse zuverlässig.
 
@@ -71,7 +71,7 @@ Ersetze `DEIN-GITHUB-NAME` durch deinen GitHub-Benutzernamen und `DEIN-TOKEN` du
 1. Docker installieren (2–3 Minuten).
 2. Firewall des Servers (SSH, HTTP, HTTPS).
 3. Quellcode holen. Hier fragt git nach „Username“ (GitHub-Name) und „Password“ – dort das **Token** einfügen (Rechtsklick fügt im Terminal ein).
-4. Konfiguration: Das Skript fragt nacheinander nach Domain (`sales.verveconsulting.ai`), E-Mail der Betriebsverwaltung (deine Adresse), Verzeichnis-ID, Anwendungs-ID und Geheimen Clientschlüssel (Schritt 4). Passwörter für Datenbank und Sitzung erzeugt es selbst. Alles landet in `/opt/verve-sales/.env.production`, nur für root lesbar.
+4. Konfiguration: Das Skript fragt nacheinander nach Domain (`accountmeister.verveconsulting.ai`), E-Mail der Betriebsverwaltung (deine Adresse), Verzeichnis-ID, Anwendungs-ID und Geheimen Clientschlüssel (Schritt 4). Passwörter für Datenbank und Sitzung erzeugt es selbst. Alles landet in `/opt/verve-sales/.env.production`, nur für root lesbar.
 5. Bauen und Starten (5–8 Minuten beim ersten Mal). Am Ende steht „Anwendung läuft.“
 6. Tägliche Sicherung um 03:15 Uhr nach `/var/backups/verve-sales`, 14 Tage Aufbewahrung.
 
@@ -79,7 +79,7 @@ Falls das Skript mit einer Fehlermeldung abbricht: die letzte Meldung kopieren u
 
 ## Schritt 7: Erster Aufruf und erste Anmeldung
 
-1. Im Browser `https://sales.verveconsulting.ai` öffnen. Der erste Aufruf kann 10–20 Sekunden dauern, weil Caddy das Zertifikat bei Let's Encrypt holt. Erscheint eine Zertifikatswarnung oder ein Fehler, sind DNS (Schritt 2) oder die Cloud-Panel-Firewall (Schritt 1, Punkt 5) noch nicht fertig; 10 Minuten warten und neu laden.
+1. Im Browser `https://accountmeister.verveconsulting.ai` öffnen. Der erste Aufruf kann 10–20 Sekunden dauern, weil Caddy das Zertifikat bei Let's Encrypt holt. Erscheint eine Zertifikatswarnung oder ein Fehler, sind DNS (Schritt 2) oder die Cloud-Panel-Firewall (Schritt 1, Punkt 5) noch nicht fertig; 10 Minuten warten und neu laden.
 2. „Mit Microsoft 365 anmelden“ klicken, mit deinem Konto anmelden. Weil deine Adresse in `ADMIN_EMAILS` steht, bekommst du automatisch die Verwaltungsrolle und landest auf „Verwaltung“.
 3. Dort für jede Kollegin und jeden Kollegen einen **Zugang anlegen** (E-Mail des Microsoft-Kontos, Name) und **Rollen zuweisen**: Anker, BD, Principal, CEO. Ohne Rolle sieht niemand Inhalte. Eine BD-Rolle „arbeitsraumweit“ erlaubt das Anlegen von Kunden; die kundenbezogene Zuständigkeit wird dann am Kunden gesetzt.
 4. Die Verwaltungsrolle selbst sieht keine Inhalte. Wenn du auch fachlich arbeiten willst, weise dir zusätzlich eine fachliche Rolle zu (z. B. CEO oder Principal).
@@ -102,7 +102,7 @@ Die Sicherungen liegen auf demselben Server. Für den Pilot reicht das; vor Echt
 
 ## Wenn etwas nicht geht
 
-Seite nicht erreichbar: `docker compose --env-file .env.production ps` – alle drei Container „Up“? Dann DNS prüfen (`nslookup sales.verveconsulting.ai` auf deinem PC muss die Server-IP zeigen; zeigt es eine Cloudflare-Adresse, steht der Eintrag noch auf „Proxied“) und die Cloud-Panel-Firewall.
+Seite nicht erreichbar: `docker compose --env-file .env.production ps` – alle drei Container „Up“? Dann DNS prüfen (`nslookup accountmeister.verveconsulting.ai` auf deinem PC muss die Server-IP zeigen; zeigt es eine Cloudflare-Adresse, steht der Eintrag noch auf „Proxied“) und die Cloud-Panel-Firewall.
 
 Anmeldung schlägt fehl mit „AADSTS…“: Meist stimmt die Umleitungs-URI in Entra nicht exakt mit `https://<Domain>/api/auth/callback` überein, oder der Clientschlüssel wurde als „Geheimnis-ID“ statt „Wert“ kopiert. Werte in `/opt/verve-sales/.env.production` korrigieren (`nano .env.production`), dann `docker compose --env-file .env.production up -d`.
 
