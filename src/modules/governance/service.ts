@@ -157,6 +157,23 @@ export async function revokeRole(actor: Actor, roleAssignmentId: string) {
   await recordAudit(db, actor, "role.revoked", "USER", r.userId, { role: r.role, scope: r.scope });
 }
 
+export const createAccessInput = z.object({
+  email: z.string().trim().toLowerCase().email("Bitte eine gültige E-Mail-Adresse angeben"),
+  displayName: z.string().trim().min(2, "Name fehlt").max(200),
+});
+
+/** Zugang vorbereiten (ADMIN): Person kann sich danach mit ihrem Microsoft-365-Konto anmelden; Rollen werden getrennt vergeben. */
+export async function createUserAccess(actor: Actor, raw: unknown) {
+  assertAdmin(actor);
+  const parsed = createAccessInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
+  const existing = await db.query.users.findFirst({ where: and(eq(schema.users.workspaceId, actor.workspaceId), sql`lower(${schema.users.email}) = ${parsed.data.email}`) });
+  if (existing) throw new ValidationError("Für diese E-Mail-Adresse besteht bereits ein Zugang.");
+  const [u] = await db.insert(schema.users).values({ workspaceId: actor.workspaceId, email: parsed.data.email, displayName: parsed.data.displayName }).returning();
+  await recordAudit(db, actor, "user.created", "USER", u?.id ?? "");
+  return u;
+}
+
 export async function setUserStatus(actor: Actor, userId: string, status: "ACTIVE" | "INACTIVE") {
   assertAdmin(actor);
   if (userId === actor.userId) throw new ValidationError("Der eigene Zugang kann nicht deaktiviert werden.");

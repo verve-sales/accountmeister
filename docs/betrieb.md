@@ -13,6 +13,10 @@ Die Anwendung besteht aus zwei Prozessen: dem Next.js-Server (Node.js 22) und ei
 | `DATABASE_URL` | ja | PostgreSQL-Verbindung |
 | `SESSION_SECRET` | ja | mind. 32 zufällige Zeichen; Beispielwerte werden verweigert |
 | `AUTH_MODE` | ja | `oidc` in Produktion; `development` wird verweigert (S09) |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URI` | bei `oidc` | Microsoft Entra ID: `https://login.microsoftonline.com/<Mandant>/v2.0`, Anwendungs-ID, geheimer Clientschlüssel (Wert), `https://<Domain>/api/auth/callback` |
+| `ADMIN_EMAILS` | empfohlen | Adressen, die beim ersten Anmelden die Verwaltungsrolle erhalten |
+| `OIDC_AUTO_CREATE_USERS` | nein | `false` (Standard): Zugänge vorher in der Verwaltung anlegen |
+| `DOMAIN` | ja (Compose) | öffentliche Adresse für Caddy/TLS und die Redirect-URI |
 | `AI_PROVIDER` | ja | `disabled` bis zur KI-Entscheidung; `test` wird verweigert (S09); `production` wirft bis zur Freigabe |
 | `AI_DAILY_JOB_LIMIT` | nein | KI-Aufträge je Arbeitsraum und Tag (Standard 200) |
 | `SESSION_MAX_AGE_SECONDS`, `SESSION_IDLE_SECONDS` | nein | Sitzungsdauer (Standard 12 h) und Inaktivitätsgrenze (Standard 2 h) |
@@ -73,4 +77,4 @@ KI nicht verfügbar oder deaktiviert: Alles außer „Notiz strukturieren“ fun
 
 ## 10. Was vor Echtdatenbetrieb noch fehlt
 
-Unternehmensanmeldung (OIDC), TLS-Abschluss im Proxy, Sicherungsplan mit Aufbewahrung, Datenschutzfreigabe und Löschkonzept, App-Registrierung für Microsoft Graph, KI-Anbieterentscheidung, Regelwerk für Startvoraussetzungen. Alles in `docs/pilotfreigabe.md` als Checkliste.
+Sicherungsplan mit Aufbewahrung und Kopie an einen zweiten Ort, Datenschutzfreigabe und Löschkonzept, App-Registrierung für Microsoft Graph, KI-Anbieterentscheidung, Regelwerk für Startvoraussetzungen. Alles in `docs/pilotfreigabe.md` als Checkliste.

@@ -13,7 +13,9 @@ export default async function AnmeldenPage({ searchParams }: { searchParams: Sea
     return (
       <section className="card max-w-lg">
         <h1 className="text-xl font-semibold mb-2">Anmeldung</h1>
-        <p className="muted">Die Unternehmensanmeldung (OIDC) ist noch nicht konfiguriert. Entscheidung zum Anbieter steht aus (Briefing 2.3).</p>
+        <p className="muted text-sm mb-4">Anmeldung mit Ihrem Verve-Microsoft-365-Konto. Es werden nur Name und E-Mail-Adresse übernommen; Rollen und Zugriffsrechte vergibt die Betriebsverwaltung in der Anwendung.</p>
+        <Feedback params={params} />
+        <a className="btn" href="/api/auth/login">Mit Microsoft 365 anmelden</a>
       </section>
     );
   }

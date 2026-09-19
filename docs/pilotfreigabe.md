@@ -15,8 +15,8 @@ Stand: 19.09.2026. Die Anwendung ist als vollständiger Prototyp mit fiktiven Da
 
 | Entscheidung | Blockiert | Vorbereitet in der Anwendung |
 |---|---|---|
-| Hosting/Region | Echtdatenbetrieb | Docker/Compose, Reverse-Proxy-Anleitung |
-| Unternehmensanmeldung (OIDC-Anbieter, Gruppen → Rollen) | Anmeldung realer Nutzer | `AUTH_MODE=oidc` als Konfigurationswert; Rollenpflege in der Verwaltung |
+| Hosting/Region | – (entschieden: IONOS Cloud Server, `docs/installation-ionos.md`) | Docker/Compose mit Caddy, Installationsskript |
+| Unternehmensanmeldung | – (entschieden: Microsoft Entra ID, umgesetzt) | App-Registrierung im Tenant (Anleitung Schritt 4); Rollen in der Verwaltung, nicht aus Gruppen |
 | Datenschutz: Zwecke, Rechtsgrundlagen, Informationen an Betroffene, DSFA-Bewertung, Beschäftigtenvertretung | Echtdatenbetrieb | Zugriffsklassen, Sperr-/Löschablauf, Protokoll ohne Inhalte, Bestandszahlen je Schutzbereich |
 | Aufbewahrung je Datenklasse und Löschkonzept inkl. Sicherungen | Echtdatenbetrieb | Sperren + Inhalt entfernen; Wiederherstellungsprüfung; keine erfundenen Fristen |
 | Microsoft Graph: App-Registrierung im Verve-Tenant, Redirect-URI, Token-Verschlüsselung, Datenschutzfreigabe | echter Mail-/Kalenderimport | Adapter mit minimalen lesenden Scopes im Fixture-Modus (E-018, E-023) |

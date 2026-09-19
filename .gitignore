@@ -11,3 +11,5 @@ src/generated/
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+.env.production
+backups/

@@ -3,7 +3,9 @@ import { cookies } from "next/headers";
 import { getConfig } from "@/lib/config";
 import { loadActor, type Actor } from "./actor";
 
-export type SessionData = { userId?: string; mode?: "development" | "oidc"; issuedAt?: number; lastSeenAt?: number };
+import type { PendingLogin } from "./oidc";
+
+export type SessionData = { userId?: string; mode?: "development" | "oidc"; issuedAt?: number; lastSeenAt?: number; pendingLogin?: PendingLogin };
 
 /** Sitzungsdauer (17.4): absolute Höchstdauer und Inaktivitätsgrenze; beide in Sekunden, über Umgebung anpassbar. */
 export const SESSION_MAX_AGE_SECONDS = Number(process.env.SESSION_MAX_AGE_SECONDS ?? 12 * 60 * 60);

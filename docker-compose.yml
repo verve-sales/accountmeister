@@ -1,4 +1,4 @@
-# Pilotbetrieb: Anwendung + PostgreSQL. Geheimnisse ausschließlich über eine lokale .env.production (nicht im Git).
+# Pilotbetrieb: Caddy (TLS) + Anwendung + PostgreSQL. Geheimnisse ausschließlich in .env.production (nicht im Git).
 services:
   db:
     image: postgres:16
@@ -24,12 +24,38 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://verve:${POSTGRES_PASSWORD}@db:5432/verve_sales
       AUTH_MODE: ${AUTH_MODE:-oidc}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: https://${DOMAIN:?DOMAIN in .env.production setzen}/api/auth/callback
+      OIDC_AUTO_CREATE_USERS: ${OIDC_AUTO_CREATE_USERS:-false}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      WORKSPACE_NAME: ${WORKSPACE_NAME:-Verve Consulting}
       AI_PROVIDER: ${AI_PROVIDER:-disabled}
       AI_DAILY_JOB_LIMIT: ${AI_DAILY_JOB_LIMIT:-200}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET in .env.production setzen}
       SESSION_MAX_AGE_SECONDS: ${SESSION_MAX_AGE_SECONDS:-43200}
       SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-7200}
+      RATE_LIMIT_LOGIN_PER_15MIN: ${RATE_LIMIT_LOGIN_PER_15MIN:-20}
+      RATE_LIMIT_WRITES_PER_MIN: ${RATE_LIMIT_WRITES_PER_MIN:-120}
+    expose:
+      - "3000"
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      DOMAIN: ${DOMAIN}
     ports:
-      - "127.0.0.1:3000:3000"   # nur lokal; TLS-Abschluss über einen vorgeschalteten Reverse-Proxy (siehe docs/betrieb.md)
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

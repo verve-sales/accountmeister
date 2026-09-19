@@ -21,7 +21,7 @@ import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/art
 import { acceptSuggestion, giveFeedback, structureReviewNote } from "@/modules/suggestions/service";
 import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
 import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
-import { assignRole, eraseSourceContent, lockSource, revokeRole, setUserStatus } from "@/modules/governance/service";
+import { assignRole, createUserAccess, eraseSourceContent, lockSource, revokeRole, setUserStatus } from "@/modules/governance/service";
 import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, changeOpportunityStatus, confirmOpportunity, confirmOrder, createOffer, createOpportunity, createOrder, createProfileReference, markOrderEvidenceIncomplete, markReady, markStarted, presentOffer, removeParticipation, saveMeddpicc, setRequirementStatus, updateOpportunity } from "@/modules/opportunities/service";
 import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
@@ -96,6 +96,7 @@ export async function devLoginAction(fd: FormData) {
 
 export async function logoutAction() {
   const session = await getSession();
+  if (session.mode === "oidc") redirect("/api/auth/logout");
   session.destroy();
   redirect("/anmelden");
 }
@@ -676,4 +677,11 @@ export async function setUserStatusAction(fd: FormData) {
   return run("/verwaltung", async (actor) => {
     await setUserStatus(actor, data.userId ?? "", data.status === "INACTIVE" ? "INACTIVE" : "ACTIVE");
   }, "Zugangsstatus geändert.");
+}
+
+export async function createUserAccessAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/verwaltung", async (actor) => {
+    await createUserAccess(actor, data);
+  }, "Zugang angelegt. Die Person kann sich jetzt mit ihrem Microsoft-365-Konto anmelden; bitte Rollen zuweisen.");
 }

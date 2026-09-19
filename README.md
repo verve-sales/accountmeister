@@ -1,6 +1,6 @@
 # Verve Sales-Arbeitsumgebung (Pilot)
 
-Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–5 umgesetzt – vollständige Pilotversion mit fiktiven Daten. Echtdatenbetrieb erst nach den Freigaben in `docs/pilotfreigabe.md`; Betrieb siehe `docs/betrieb.md`. **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
+Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–5 umgesetzt – vollständige Pilotversion mit fiktiven Daten. Anmeldung über Microsoft 365 (Entra ID) eingebaut; Installation auf dem IONOS Cloud Server: `docs/installation-ionos.md`. Echtdatenbetrieb erst nach den Freigaben in `docs/pilotfreigabe.md`; Betrieb siehe `docs/betrieb.md`. **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
 
 Dokumente: `docs/briefing.md` (Auftrag), `docs/implementierungsuebersicht.md`, `docs/entscheidungsprotokoll.md`.
 
@@ -56,4 +56,4 @@ scripts          Start (Produktion), Migration, Sicherung, Wiederherstellung
 - Nutzungsgrenzen laufen im Prozessspeicher (eine Instanz). Docker-Abbild in dieser Umgebung nicht gebaut (kein Docker-Daemon) – erster Build auf dem Zielsystem prüfen. Zielbeiträge sind mit Setups/Kunden verknüpft; die Koppelung an Accountplan-Prioritäten ist im Datenmodell vorhanden, in der Oberfläche noch nicht.
 - Outlook: Der Microsoft-Graph-Adapter läuft im Fixture-Modus mit fiktiven Testquellen; ein echter Abruf braucht eine App-Registrierung im Verve-Tenant und die Datenschutzfreigabe.
 - KI: nur der deterministische Testanbieter (`AI_PROVIDER=test`) ist nutzbar; er ist kein Sprachmodell. Der Produktivadapter ist bis zur Anbieter-/Datenschutzentscheidung gesperrt.
-- Keine Unternehmensanmeldung, kein KI-Anbieter, keine Mail-/Kalenderanbindung (Entscheidungen offen, siehe Entscheidungsprotokoll).
+- Kein KI-Anbieter, keine echte Mail-/Kalenderanbindung (Entscheidungen offen, siehe Entscheidungsprotokoll). Unternehmensanmeldung über Microsoft Entra ID vorhanden (`AUTH_MODE=oidc`).

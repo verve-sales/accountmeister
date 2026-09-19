@@ -11,7 +11,7 @@ import { fmtDateTime, roleLabel } from "@/lib/labels";
 import { getConfig } from "@/lib/config";
 import { SESSION_IDLE_SECONDS, SESSION_MAX_AGE_SECONDS } from "@/modules/identity/session";
 import { LIMITS } from "@/lib/ratelimit";
-import { assignRoleAction, revokeRoleAction, setUserStatusAction } from "../actions";
+import { assignRoleAction, createUserAccessAction, revokeRoleAction, setUserStatusAction } from "../actions";
 
 export default async function VerwaltungPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
@@ -90,6 +90,15 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
             ))}
           </tbody>
         </table>
+        <details className="mt-3">
+          <summary>Zugang anlegen</summary>
+          <form action={createUserAccessAction} className="mt-2 grid sm:grid-cols-3 gap-3">
+            <div><label className="label" htmlFor="uEmail">E-Mail (Microsoft-365-Konto)</label><input id="uEmail" name="email" type="email" className="input" required /></div>
+            <div><label className="label" htmlFor="uName">Name</label><input id="uName" name="displayName" className="input" required minLength={2} /></div>
+            <div className="self-end"><button className="btn" type="submit">Zugang anlegen</button></div>
+            <p className="muted text-xs sm:col-span-3">Ohne Rolle sieht die Person nach der Anmeldung keine Inhalte. Rollen unten zuweisen.</p>
+          </form>
+        </details>
         <details className="mt-3">
           <summary>Rolle zuweisen</summary>
           <form action={assignRoleAction} className="mt-2 grid sm:grid-cols-4 gap-3">

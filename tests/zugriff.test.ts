@@ -67,11 +67,13 @@ describe("Zugriff (Briefing 16.2, S01/S02/S09)", () => {
   });
 
   it("S09: Produktion mit Entwicklungsanmeldung oder Test-KI wird verhindert", () => {
-    const base = { NODE_ENV: "production" as const, SESSION_SECRET: "x".repeat(40) };
+    const base = { NODE_ENV: "production" as const, SESSION_SECRET: "x".repeat(40), OIDC_ISSUER: "https://login.microsoftonline.com/t/v2.0", OIDC_CLIENT_ID: "c", OIDC_CLIENT_SECRET: "s", OIDC_REDIRECT_URI: "https://sales.example/api/auth/callback" };
     expect(() => assertSafeForEnvironment({ ...base, AUTH_MODE: "development", AI_PROVIDER: "disabled" })).toThrow(/AUTH_MODE/);
     expect(() => assertSafeForEnvironment({ ...base, AUTH_MODE: "oidc", AI_PROVIDER: "test" })).toThrow(/AI_PROVIDER/);
     expect(() => assertSafeForEnvironment({ ...base, AUTH_MODE: "oidc", AI_PROVIDER: "disabled", SESSION_SECRET: "entwicklung-nur-lokal-bitte-ersetzen-0123456789abcdef" })).toThrow(/SESSION_SECRET/);
     expect(() => assertSafeForEnvironment({ ...base, AUTH_MODE: "oidc", AI_PROVIDER: "disabled" })).not.toThrow();
+    // OIDC ohne Anbieterdaten: auch außerhalb Produktion abgelehnt (statt stiller Fehlfunktion)
+    expect(() => assertSafeForEnvironment({ NODE_ENV: "development", AUTH_MODE: "oidc", AI_PROVIDER: "disabled", SESSION_SECRET: "x".repeat(40) })).toThrow(/OIDC_ISSUER/);
     expect(() => assertSafeForEnvironment({ NODE_ENV: "development", AUTH_MODE: "development", AI_PROVIDER: "test", SESSION_SECRET: "entwicklung-x".padEnd(40, "0") })).not.toThrow();
   });
 });

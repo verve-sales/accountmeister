@@ -119,10 +119,12 @@ export const users = pgTable(
     displayName: text("display_name").notNull(),
     status: userStatusEnum("status").notNull().default("ACTIVE"),
     timezone: text("timezone").notNull().default("Europe/Berlin"),
+    externalSubject: text("external_subject"), // stabile Kennung des Identitätsanbieters (OIDC sub/oid)
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [uniqueIndex("users_email_uq").on(t.workspaceId, t.email)],
+  (t) => [uniqueIndex("users_email_uq").on(t.workspaceId, t.email), uniqueIndex("users_external_subject_uq").on(t.externalSubject)],
 );
 
 export const roleAssignments = pgTable(

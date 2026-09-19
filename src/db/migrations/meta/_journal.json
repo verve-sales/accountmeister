@@ -64,6 +64,13 @@
       "when": 1789767025117,
       "tag": "0008_bedarfe_auftraege",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789791926714,
+      "tag": "0009_oidc_nutzer",
+      "breakpoints": true
     }
   ]
 }
