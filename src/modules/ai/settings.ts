@@ -1,0 +1,132 @@
+import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { z } from "zod";
+import { db, schema } from "@/db/client";
+import { getConfig } from "@/lib/config";
+import { ForbiddenError, ValidationError } from "@/lib/errors";
+import { recordAudit } from "@/modules/audit/audit";
+import type { Actor } from "@/modules/identity/actor";
+import { hasRole } from "@/modules/identity/actor";
+import { getAIProvider } from "./index";
+import type { ModelInfo, TaskOptions } from "./provider";
+
+/**
+ * KI-Aufgaben und ihre Modellwahl (Verwaltung → KI). Der API-Schlüssel steht ausschließlich in der
+ * Serverkonfiguration; hier werden nur Modell, Temperatur und Ausgabegrenze je Aufgabe geführt.
+ */
+
+export const AI_TASKS = [
+  { key: "STRUCTURE_NOTE", label: "Notiz strukturieren", description: "Weekly-Notizen und importierte Quellen in prüffähige Vorschläge zerlegen (Beobachtung, Aktion, Entscheidung, offene Frage, Person, Konflikt)." },
+  { key: "ANALYZE_DOCUMENT", label: "Dokument analysieren (Kundenanlage)", description: "Aus einem hochgeladenen Dokument Organisation, Setup, Personen, Signale und mögliche Bedarfe vorschlagen – zur Bestätigung durch den BD." },
+] as const;
+
+export type AiTaskKey = (typeof AI_TASKS)[number]["key"];
+
+export const aiTaskKeys = AI_TASKS.map((t) => t.key) as [AiTaskKey, ...AiTaskKey[]];
+
+export type TaskSettingRow = typeof schema.aiTaskSettings.$inferSelect;
+
+/** Wirksame Optionen einer Aufgabe: gespeicherte Einstellung oder Standardmodell aus der Konfiguration. */
+export async function getTaskOptions(workspaceId: string, task: AiTaskKey): Promise<TaskOptions & { enabled: boolean; source: "konfiguriert" | "standard" }> {
+  const row = await db.query.aiTaskSettings.findFirst({ where: and(eq(schema.aiTaskSettings.workspaceId, workspaceId), eq(schema.aiTaskSettings.task, task)) });
+  if (row) return { model: row.model, temperature: row.temperature, maxOutputTokens: row.maxOutputTokens, enabled: row.enabled, source: "konfiguriert" };
+  return { model: getConfig().LANGDOCK_DEFAULT_MODEL, temperature: 0.2, maxOutputTokens: 4000, enabled: true, source: "standard" };
+}
+
+export class TaskDisabledError extends ForbiddenError {
+  constructor(label: string) {
+    super(`Die KI-Aufgabe „${label}“ ist unter Verwaltung → KI deaktiviert.`);
+  }
+}
+
+export async function requireTaskOptions(workspaceId: string, task: AiTaskKey): Promise<TaskOptions> {
+  const o = await getTaskOptions(workspaceId, task);
+  if (!o.enabled) throw new TaskDisabledError(AI_TASKS.find((t) => t.key === task)?.label ?? task);
+  return { model: o.model, temperature: o.temperature, maxOutputTokens: o.maxOutputTokens };
+}
+
+function assertAdmin(actor: Actor) {
+  if (!hasRole(actor, "ADMIN")) throw new ForbiddenError("Die KI-Konfiguration steht der Betriebsverwaltung (ADMIN) zur Verfügung.");
+}
+
+export const saveTaskSettingInput = z.object({
+  task: z.enum(aiTaskKeys),
+  model: z.string().trim().min(1, "Modell fehlt").max(120),
+  temperature: z.coerce.number().min(0).max(1).default(0.2),
+  maxOutputTokens: z.coerce.number().int().min(256).max(32000).default(4000),
+  enabled: z.union([z.literal("on"), z.literal("true"), z.literal("false"), z.boolean()]).optional(),
+});
+
+export async function saveTaskSetting(actor: Actor, raw: unknown) {
+  assertAdmin(actor);
+  const parsed = saveTaskSettingInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
+  const i = parsed.data;
+  const enabled = i.enabled === "on" || i.enabled === "true" || i.enabled === true;
+  return db.transaction(async (tx) => {
+    const existing = await tx.query.aiTaskSettings.findFirst({ where: and(eq(schema.aiTaskSettings.workspaceId, actor.workspaceId), eq(schema.aiTaskSettings.task, i.task)) });
+    const values = { model: i.model, temperature: i.temperature, maxOutputTokens: i.maxOutputTokens, enabled, updatedBy: actor.userId, updatedAt: new Date() };
+    if (existing) await tx.update(schema.aiTaskSettings).set(values).where(eq(schema.aiTaskSettings.id, existing.id));
+    else await tx.insert(schema.aiTaskSettings).values({ workspaceId: actor.workspaceId, task: i.task, ...values });
+    await recordAudit(tx, actor, "ai.task_setting_saved", "AI_TASK", i.task, { model: i.model, temperature: i.temperature, maxOutputTokens: i.maxOutputTokens, enabled, vorher: existing ? { model: existing.model, enabled: existing.enabled } : null });
+    return { task: i.task, model: i.model, enabled };
+  });
+}
+
+/** Übersicht für die Konfigurationsseite: Anbieterstatus, Modelle, Einstellungen je Aufgabe, Verbrauch. */
+export async function getAiOverview(actor: Actor) {
+  assertAdmin(actor);
+  const cfg = getConfig();
+  const provider = getAIProvider();
+  const info = provider.info();
+  let models: ModelInfo[] = [];
+  let modelsError: string | null = null;
+  if (provider.listModels) {
+    try {
+      models = await provider.listModels();
+    } catch (e) {
+      modelsError = e instanceof Error ? e.message : "Modellliste nicht abrufbar";
+    }
+  }
+  const rows = await db.query.aiTaskSettings.findMany({ where: eq(schema.aiTaskSettings.workspaceId, actor.workspaceId) });
+  const byTask = new Map(rows.map((r) => [r.task, r]));
+  const tasks = await Promise.all(
+    AI_TASKS.map(async (t) => {
+      const opt = await getTaskOptions(actor.workspaceId, t.key);
+      const row = byTask.get(t.key);
+      return { ...t, ...opt, updatedAt: row?.updatedAt ?? null, updatedBy: row?.updatedBy ?? null };
+    }),
+  );
+  const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const usage = await db
+    .select({
+      type: schema.aiJobs.type,
+      model: schema.aiJobs.model,
+      jobs: sql<number>`count(*)`,
+      ok: sql<number>`count(*) filter (where ${schema.aiJobs.status} = 'ERFOLGREICH')`,
+      tokensIn: sql<number>`coalesce(sum(${schema.aiJobs.tokensIn}), 0)`,
+      tokensOut: sql<number>`coalesce(sum(${schema.aiJobs.tokensOut}), 0)`,
+    })
+    .from(schema.aiJobs)
+    .where(and(eq(schema.aiJobs.workspaceId, actor.workspaceId), gte(schema.aiJobs.startedAt, since30)))
+    .groupBy(schema.aiJobs.type, schema.aiJobs.model)
+    .orderBy(desc(sql`count(*)`));
+  const recent = await db.query.aiJobs.findMany({ where: eq(schema.aiJobs.workspaceId, actor.workspaceId), orderBy: desc(schema.aiJobs.startedAt), limit: 15 });
+  return {
+    provider: { ...info, configured: cfg.AI_PROVIDER, baseUrl: cfg.AI_PROVIDER === "langdock" ? cfg.LANGDOCK_BASE_URL : null, keyPresent: !!cfg.LANGDOCK_API_KEY, dailyLimit: cfg.AI_DAILY_JOB_LIMIT },
+    models,
+    modelsError,
+    tasks,
+    usage: usage.map((u) => ({ ...u, jobs: Number(u.jobs), ok: Number(u.ok), tokensIn: Number(u.tokensIn), tokensOut: Number(u.tokensOut) })),
+    recent,
+  };
+}
+
+/** Verbindungstest: Modellliste abrufen. Sendet keine Inhalte. */
+export async function testConnection(actor: Actor) {
+  assertAdmin(actor);
+  const provider = getAIProvider();
+  if (!provider.listModels) throw new ValidationError("Der aktive Anbieter hat keine Verbindungsprüfung (AI_PROVIDER ist nicht „langdock“).");
+  const models = await provider.listModels();
+  await recordAudit(db, actor, "ai.connection_tested", "AI_PROVIDER", provider.info().id, { models: models.length });
+  return models.length;
+}

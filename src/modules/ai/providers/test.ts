@@ -1,5 +1,5 @@
-import type { AIProvider, ProviderInfo, StructureNoteInput } from "../provider";
-import type { StructuredItem, StructureNoteOutput } from "../schemas";
+import type { AIProvider, AnalyzeDocumentInput, ProviderInfo, StructureNoteInput } from "../provider";
+import type { IntakeProposal, StructuredItem, StructureNoteOutput } from "../schemas";
 
 /**
  * Deterministischer Testanbieter (Briefing 2.3): regelbasiert, ohne Netzwerk, ohne Modell.
@@ -172,5 +172,54 @@ export class TestProvider implements AIProvider {
     }
 
     return items.length > 0 ? { items, noSuggestionReason: "" } : { items: [], noSuggestionReason: "Aus dieser Notiz lässt sich kein belastbarer zusätzlicher Vorschlag ableiten." };
+  }
+
+  /**
+   * Dokument analysieren – regelbasiert, für Entwicklung und Tests: Organisation aus der ersten Zeile mit Rechtsform,
+   * Personen aus „Herr/Frau Nachname“, Beobachtungen und mögliche Bedarfe aus Sätzen mit typischen Verben.
+   * Jedes Element zitiert wörtlich aus dem Text.
+   */
+  async analyzeDocument(input: AnalyzeDocumentInput): Promise<IntakeProposal> {
+    const text = input.documentText;
+    const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
+    const ORG = /\b([A-ZÄÖÜ][\wäöüß&.\- ]{1,60}?\s(GmbH & Co\. KG|GmbH|AG|SE|KG|e\.V\.|Stadt|Landkreis|Ministerium))\b/;
+    let organization: IntakeProposal["organization"] = null;
+    for (const l of lines) {
+      const m = ORG.exec(l);
+      if (m) {
+        const name = m[1]!.trim();
+        const known = input.knownAccountNames.find((k) => name.toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(name.toLowerCase())) ?? "";
+        const orgType = /Stadt|Landkreis|Ministerium/.test(name) ? "OEFFENTLICH" : /AG|SE/.test(m[2] ?? "") ? "KONZERN" : "SONSTIGE";
+        organization = { name, orgType, possibleExistingAccount: known, evidenceQuote: m[0] };
+        break;
+      }
+    }
+    const persons: IntakeProposal["persons"] = [];
+    const seen = new Set<string>();
+    for (const m of text.matchAll(/\b(Frau|Herr|Hr\.|Fr\.)\s+([A-ZÄÖÜ][\wäöüß-]+(?:\s[A-ZÄÖÜ][\wäöüß-]+)?)(?:\s*[,(]\s*([^,.;()\n]{3,60}))?/g)) {
+      const name = `${m[1]} ${m[2]}`;
+      if (seen.has(name) || persons.length >= 30) continue;
+      seen.add(name);
+      persons.push({ displayName: name, functionTitle: (m[3] ?? "").trim(), email: "", knownResponsibility: "", evidenceQuote: m[0] });
+    }
+    const signals: IntakeProposal["signals"] = [];
+    const needs: IntakeProposal["needs"] = [];
+    for (const s of splitSentences(text)) {
+      if (/\b(sucht|suchen|benötigt|benötigen|braucht|brauchen|plant|planen|will|wollen|möchte|möchten)\b/i.test(s) && needs.length < 15) {
+        needs.push({ title: s.length > 80 ? s.slice(0, 77) + "…" : s, needDescription: s.length >= 10 ? s : s + " (aus Dokument)", evidenceQuote: s });
+      } else if (OBSERVATION_VERB.test(s) && signals.length < 30) {
+        signals.push({ observation: s, relevanceHypothesis: SPECULATION.test(s) ? "Im Dokument als Vermutung formuliert." : "", evidenceQuote: s });
+      }
+    }
+    return {
+      organization,
+      setup: organization ? { name: `Erstkontakt ${organization.name}`.slice(0, 200), contextNote: `Angelegt aus Dokument „${input.fileName}“.` } : null,
+      persons,
+      signals,
+      needs,
+      openQuestions: organization ? [] : ["Welche Organisation ist gemeint? Im Dokument wurde keine Rechtsform gefunden."],
+      summary: lines.slice(0, 3).join(" ").slice(0, 600),
+      noProposalReason: organization ? "" : "Keine Organisation mit erkennbarer Rechtsform im Text gefunden.",
+    };
   }
 }

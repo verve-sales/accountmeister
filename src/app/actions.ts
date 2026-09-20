@@ -18,11 +18,14 @@ import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/m
 import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
 import { changePriority, createPriority, saveAccountPlanSnapshot } from "@/modules/accountplan/service";
 import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/artifacts/service";
-import { acceptSuggestion, giveFeedback, structureReviewNote } from "@/modules/suggestions/service";
+import { acceptSuggestion, giveFeedback, structureReviewNote, structureSource } from "@/modules/suggestions/service";
 import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
 import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
 import { assignRole, createUserAccess, eraseSourceContent, lockSource, revokeRole, setUserStatus } from "@/modules/governance/service";
 import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, changeOpportunityStatus, confirmOpportunity, confirmOrder, createOffer, createOpportunity, createOrder, createProfileReference, markOrderEvidenceIncomplete, markReady, markStarted, presentOffer, removeParticipation, saveMeddpicc, setRequirementStatus, updateOpportunity } from "@/modules/opportunities/service";
+import { uploadDocument } from "@/modules/documents/service";
+import { applyIntake, discardIntake, formToApplyInput, startIntake } from "@/modules/intake/service";
+import { saveTaskSetting, testConnection } from "@/modules/ai/settings";
 import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
 /**
@@ -684,4 +687,71 @@ export async function createUserAccessAction(fd: FormData) {
   return run("/verwaltung", async (actor) => {
     await createUserAccess(actor, data);
   }, "Zugang angelegt. Die Person kann sich jetzt mit ihrem Microsoft-365-Konto anmelden; bitte Rollen zuweisen.");
+}
+
+// --- Etappe 6: Dokumente, Kundenanlage aus Dokument, KI-Konfiguration ---------
+
+function fileFrom(fd: FormData, name: string): File | null {
+  const f = fd.get(name);
+  return f instanceof File && f.size > 0 ? f : null;
+}
+
+export async function uploadDocumentAction(fd: FormData) {
+  const data = formToObject(fd);
+  const back = `/setups/${data.setupId ?? ""}`;
+  return run(back, async (actor) => {
+    const r = await uploadDocument(actor, data, fileFrom(fd, "file"));
+    if (r.extract.status !== "OK") throw new PendingInfo(`Dokument gespeichert. ${r.extract.note ?? ""}`.trim());
+    return `/quellen/${r.sourceId}`;
+  }, "Dokument als Quelle gespeichert. Text wurde extrahiert.");
+}
+
+export async function structureSourceAction(fd: FormData) {
+  const data = formToObject(fd);
+  const back = data.back ?? `/quellen/${data.sourceId ?? ""}`;
+  return run(back, async (actor) => {
+    const r = await structureSource(actor, data.sourceId ?? "");
+    if (r.repeated) throw new PendingInfo("Diese Quelle wurde mit diesem Stand bereits strukturiert; es wurden keine neuen Vorschläge erzeugt.");
+    if (r.created === 0) throw new PendingInfo(r.noSuggestionReason ? `Keine Vorschläge: ${r.noSuggestionReason}` : `Keine neuen Vorschläge (${r.skipped} bereits vorhanden, ${r.rejected} zurückgewiesen).`);
+    return `/setups/${data.setupId ?? ""}`;
+  }, "Vorschläge aus der Quelle erzeugt – bitte im Setup prüfen.");
+}
+
+export async function startIntakeAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/kunden/anlage/neu", async (actor) => {
+    const p = await startIntake(actor, data, fileFrom(fd, "file"));
+    return `/kunden/anlage/${p.id}`;
+  }, "Dokument gelesen. Bitte den Vorschlag prüfen und übernehmen.");
+}
+
+export async function applyIntakeAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.proposalId ?? "";
+  return run(`/kunden/anlage/${id}`, async (actor) => {
+    const r = await applyIntake(actor, id, formToApplyInput(data));
+    if (r.problems.length > 0) throw new PendingInfo(`Kunde und Setup angelegt (${r.created.persons} Personen, ${r.created.signals} Signale, ${r.created.needs} Bedarfe). Nicht übernommen: ${r.problems.join(" · ")}`);
+    return `/setups/${r.setupId}`;
+  }, "Kunde, Setup und ausgewählte Elemente angelegt – alles im ungeprüften Zustand.");
+}
+
+export async function discardIntakeAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/kunden", async (actor) => {
+    await discardIntake(actor, data.proposalId ?? "");
+  }, "Anlagevorschlag verworfen. Das Dokument bleibt als persönliche Quelle erhalten.");
+}
+
+export async function saveAiTaskSettingAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/verwaltung/ki", async (actor) => {
+    await saveTaskSetting(actor, data);
+  }, "Einstellung gespeichert.");
+}
+
+export async function testAiConnectionAction() {
+  return run("/verwaltung/ki", async (actor) => {
+    const n = await testConnection(actor);
+    throw new PendingInfo(`Verbindung in Ordnung – ${n} Modell(e) verfügbar.`);
+  }, "");
 }

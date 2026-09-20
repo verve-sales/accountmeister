@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { DomainError } from "@/lib/errors";
+import { getConfig } from "@/lib/config";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getSetupDetail } from "@/modules/setups/service";
 import { listSupportRequestsForSetup } from "@/modules/leadership/service";
@@ -38,6 +39,7 @@ import {
   respondHandoverAction,
   respondSupportRequestAction,
   takeOverSignalAction,
+  uploadDocumentAction,
   updateSetupAction,
 } from "../../actions";
 
@@ -59,6 +61,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const name = (uid: string | null | undefined) => (uid ? d.userNames.get(uid) ?? allUsers.find((u) => u.id === uid)?.displayName ?? "?" : "–");
 
   const ai = getProviderStatus();
+  const maxUploadMb = getConfig().MAX_UPLOAD_MB;
   const [sugg, openQuestions, support, opportunities] = await Promise.all([listSuggestionsForSetup(actor, id), listOpenQuestionsForSetup(id), listSupportRequestsForSetup(actor, id), listOpportunitiesForSetup(actor, id)]);
   const openOpportunities = opportunities.filter((o) => o.status !== "BEENDET");
   const leaderRoles = await db.query.roleAssignments.findMany({ where: or(eq(schema.roleAssignments.role, "PRINCIPAL"), eq(schema.roleAssignments.role, "CEO")) });
@@ -480,6 +483,25 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           </table>
         )}
         {d.hiddenSourceCount > 0 && <p className="muted text-sm mt-2">{d.hiddenSourceCount} weitere Quelle(n) sind für Ihre Rolle nicht einsehbar.</p>}
+        {d.canEdit && (
+          <details className="mt-4">
+            <summary>Dokument hochladen (PDF, Word, Excel, CSV, Text, E-Mail)</summary>
+            <form action={uploadDocumentAction} encType="multipart/form-data" className="mt-2 grid sm:grid-cols-2 gap-3">
+              <input type="hidden" name="setupId" value={d.setup.id} />
+              <div className="sm:col-span-2"><label className="label" htmlFor="file">Datei (max. {maxUploadMb} MB)</label><input id="file" name="file" type="file" className="input" required accept=".pdf,.docx,.xlsx,.csv,.txt,.md,.eml,.json" /></div>
+              <div><label className="label" htmlFor="docTitle">Titel (optional, sonst Dateiname)</label><input id="docTitle" name="title" className="input" maxLength={200} /></div>
+              <div>
+                <label className="label" htmlFor="docAccessClass">Wer darf das Dokument sehen?</label>
+                <select id="docAccessClass" name="accessClass" className="select" defaultValue="SETUP">
+                  {schema.accessClassEnum.enumValues.map((v) => <option key={v} value={v}>{accessClassLabel[v]}</option>)}
+                </select>
+              </div>
+              <div><label className="label" htmlFor="docSourceTime">Datum des Dokuments (optional)</label><input id="docSourceTime" name="sourceTime" type="datetime-local" className="input" /></div>
+              <p className="muted text-sm sm:col-span-2">Der Text wird auf dem Server extrahiert und als Quelle geführt; die Datei bleibt zum Nachlesen gespeichert. {ai.enabled ? "Auf der Quellenseite können Sie daraus KI-Vorschläge erzeugen lassen." : "KI ist deaktiviert; das Dokument ist trotzdem als Quelle nutzbar."}</p>
+              <div className="sm:col-span-2"><button className="btn" type="submit">Dokument hochladen</button></div>
+            </form>
+          </details>
+        )}
       </section>
     </div>
   );

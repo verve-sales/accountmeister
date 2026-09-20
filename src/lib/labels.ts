@@ -45,7 +45,10 @@ export const epistemicLabel: Record<string, string> = {
   WIDERSPRUECHLICH: "Widersprüchlich",
   UEBERHOLT: "Überholt",
 };
-export const sourceTypeLabel: Record<string, string> = { NOTIZ: "Notiz", PROTOKOLL: "Protokoll", EMAIL: "E-Mail", TERMIN: "Termin", OEFFENTLICH: "Öffentliche Quelle" };
+export const sourceTypeLabel: Record<string, string> = { NOTIZ: "Notiz", PROTOKOLL: "Protokoll", EMAIL: "E-Mail", TERMIN: "Termin", OEFFENTLICH: "Öffentliche Quelle", DOKUMENT: "Dokument" };
+export const orgTypeLabel: Record<string, string> = { KONZERN: "Konzern", TOCHTERGESELLSCHAFT: "Tochtergesellschaft", EINZELUNTERNEHMEN: "Einzelunternehmen", OEFFENTLICH: "Öffentliche Einrichtung", SONSTIGE: "Sonstige" };
+export const extractStatusLabel: Record<string, string> = { OK: "Vollständig", TEILWEISE: "Teilweise", LEER: "Kein Text", FEHLER: "Fehler" };
+export const intakeStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", UEBERNOMMEN: "Übernommen", VERWORFEN: "Verworfen" };
 export const roleLabel: Record<string, string> = { ANKER: "Anker", BD: "BD", PRINCIPAL: "Principal", CEO: "CEO", ADMIN: "Administration" };
 
 export function fmtDate(d: string | Date | null | undefined, tz = "Europe/Berlin"): string {

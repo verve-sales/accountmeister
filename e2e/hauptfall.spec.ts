@@ -564,3 +564,57 @@ test("Etappe 5B: Verwaltung nur für ADMIN ohne Inhalte; Quelle sperren markiert
   await expect(page.getByRole("heading", { name: "[Inhalt gelöscht]" })).toBeVisible();
   await expect(page.getByText(obs)).toHaveCount(0);
 });
+
+test("Etappe 6: Kunde aus Dokument anlegen (Upload → Vorschlag → Übernahme); Dokument im Setup; Verwaltung → KI", async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const org = `Dokumentwerk ${suffix} GmbH`;
+  const doc = [
+    `Gesprächsnotiz ${org}, 18.09.2026`,
+    "Teilnehmende: Herr Winter, Leiter Logistik; Frau Adler, IT-Einkauf.",
+    `Die ${org} plant die Ablösung des Lagersystems bis Mitte 2027.`,
+    "Herr Winter sucht Unterstützung bei der Testkoordination für die Migration.",
+    "Das Budget wurde noch nicht freigegeben.",
+  ].join("\n");
+
+  await loginAs(page, "David");
+  await page.goto("/kunden");
+  await page.getByRole("link", { name: "Dokument hochladen und Vorschlag erzeugen" }).click();
+  await expect(page.getByRole("heading", { name: "Kunde aus Dokument anlegen" })).toBeVisible();
+  await page.locator("#file").setInputFiles({ name: `notiz-${suffix}.txt`, mimeType: "text/plain", buffer: Buffer.from(doc, "utf8") });
+  await page.locator("#title").fill(`Gesprächsnotiz ${suffix}`);
+  await page.getByRole("button", { name: /Hochladen/ }).click();
+  await expect(page).toHaveURL(/\/kunden\/anlage\//);
+  await expect(page.getByText("Dokument gelesen")).toBeVisible();
+  await expect(page.locator("#orgName")).toHaveValue(new RegExp(org));
+  await page.locator("#orgName").fill(org);
+  await expect(page.locator('input[name="persons.0.displayName"]')).toHaveValue("Herr Winter");
+  // Zweite Person nicht übernehmen
+  await page.locator('input[name="persons.1.include"]').uncheck();
+  await page.locator("#setupName").fill(`Erstkontakt ${suffix}`);
+  await page.getByRole("button", { name: /Kunde, Setup und ausgewählte Elemente anlegen/ }).click();
+  await expect(page).toHaveURL(/\/setups\//);
+  await expect(page.getByText(/Kunde, Setup und ausgewählte Elemente angelegt/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Erstkontakt ${suffix}` })).toBeVisible();
+  // Dokument ist Quelle des Setups; Person angelegt; Bedarf in Klärung
+  await expect(page.getByRole("link", { name: `Gesprächsnotiz ${suffix}` })).toBeVisible();
+  await expect(page.getByText("Herr Winter").first()).toBeVisible();
+  await expect(page.getByText("Frau Adler")).toHaveCount(0);
+  // Quellenseite zeigt Datei und erlaubt KI-Vorschläge
+  await page.getByRole("link", { name: `Gesprächsnotiz ${suffix}` }).click();
+  await expect(page.getByRole("heading", { name: "Dokument", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: `notiz-${suffix}.txt` })).toBeVisible();
+  await page.getByRole("button", { name: "KI-Vorschläge aus diesem Dokument erzeugen" }).click();
+  await expect(page.getByText(/Vorschläge aus der Quelle erzeugt|Keine neuen Vorschläge|bereits strukturiert/)).toBeVisible();
+  await logout(page);
+
+  // Admin: KI-Konfiguration
+  await loginAs(page, "Admin");
+  await page.goto("/verwaltung/ki");
+  await expect(page.getByRole("heading", { name: "KI-Konfiguration" })).toBeVisible();
+  await expect(page.locator("strong", { hasText: "Notiz strukturieren" })).toBeVisible();
+  await page.locator("#model-ANALYZE_DOCUMENT").fill("gpt-4o");
+  await page.locator('form:has(#model-ANALYZE_DOCUMENT) button[type="submit"]').click();
+  await expect(page.getByText("Einstellung gespeichert.")).toBeVisible();
+  await expect(page.locator("#model-ANALYZE_DOCUMENT")).toHaveValue("gpt-4o");
+  await logout(page);
+});

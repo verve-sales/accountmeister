@@ -7,7 +7,9 @@ import { Status } from "@/components/Status";
 import { accessClassLabel, epistemicLabel, fmtDateTime, sourceTypeLabel } from "@/lib/labels";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { hasRole } from "@/modules/identity/actor";
-import { eraseSourceAction, lockSourceAction } from "../../actions";
+import { eraseSourceAction, lockSourceAction, structureSourceAction } from "../../actions";
+import { getProviderStatus } from "@/modules/suggestions/service";
+import { extractStatusLabel } from "@/lib/labels";
 
 export default async function QuellePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
@@ -21,6 +23,8 @@ export default async function QuellePage({ params, searchParams }: { params: Pro
     if (e instanceof DomainError) notFound();
     throw e;
   }
+  const ai = getProviderStatus();
+  const fmtSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
   return (
     <div className="space-y-6 max-w-3xl">
       <p className="text-sm">{q.setup ? <Link href={`/setups/${q.setup.id}`}>← Zurück zum Setup „{q.setup.name}“</Link> : <Link href="/meine-arbeit">← Meine Arbeit</Link>}</p>
@@ -37,8 +41,28 @@ export default async function QuellePage({ params, searchParams }: { params: Pro
         </dl>
         <p className="muted text-sm mt-3">Eine Quelle belegt zunächst eine Aussage, nicht automatisch ihre Richtigkeit oder Bindungswirkung (Briefing 13.3).</p>
       </section>
+      {q.document && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Dokument</h2>
+          <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+            <div><dt className="muted">Datei</dt><dd>{q.document.storagePath && !q.document.deletedAt ? <a href={`/api/dokumente/${q.document.id}`}>{q.document.fileName}</a> : <span>{q.document.fileName} <span className="muted">(Datei entfernt)</span></span>}</dd></div>
+            <div><dt className="muted">Größe</dt><dd>{fmtSize(q.document.sizeBytes)}{q.document.pageCount ? ` · ${q.document.pageCount} Seite(n)/Blätter` : ""}</dd></div>
+            <div><dt className="muted">Textextraktion</dt><dd><Status label={extractStatusLabel[q.document.extractStatus] ?? q.document.extractStatus} />{q.document.extractNote ? <span className="muted"> {q.document.extractNote}</span> : null}</dd></div>
+            <div><dt className="muted">Prüfsumme (SHA-256)</dt><dd className="break-all">{q.document.sha256.slice(0, 16)}…</dd></div>
+          </dl>
+          {q.setup && q.canEdit && !q.source.isLocked && (q.source.body ?? "").trim().length >= 12 && (
+            <form action={structureSourceAction} className="mt-3 flex flex-wrap gap-2 items-center">
+              <input type="hidden" name="sourceId" value={q.source.id} />
+              <input type="hidden" name="setupId" value={q.setup.id} />
+              <input type="hidden" name="back" value={`/quellen/${q.source.id}`} />
+              <button className="btn" type="submit" disabled={!ai.enabled}>KI-Vorschläge aus diesem Dokument erzeugen</button>
+              <span className="muted text-sm">{ai.enabled ? `Anbieter: ${ai.description}` : "KI ist deaktiviert (Verwaltung → KI)."}</span>
+            </form>
+          )}
+        </section>
+      )}
       <section className="card">
-        <h2 className="font-semibold mb-2">Inhalt (Originalquelle)</h2>
+        <h2 className="font-semibold mb-2">Inhalt (Originalquelle{q.document ? " – extrahierter Text" : ""})</h2>
         <pre className="whitespace-pre-wrap text-sm" style={{ fontFamily: "inherit" }}>{q.source.body ?? "(kein Text hinterlegt)"}</pre>
       </section>
       {(q.source.ownerUserId === actor.userId || hasRole(actor, "PRINCIPAL") || hasRole(actor, "CEO")) && (

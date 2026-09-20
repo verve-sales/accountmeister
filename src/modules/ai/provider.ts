@@ -1,6 +1,7 @@
-import type { StructureNoteOutput } from "./schemas";
+import type { IntakeProposal, StructureNoteOutput } from "./schemas";
 
 export const STRUCTURE_NOTE_PROMPT_VERSION = "structure-note.v1";
+export const ANALYZE_DOCUMENT_PROMPT_VERSION = "analyze-document.v1";
 
 /** Berechtigter Kontext, den der Anbieter erhalten darf – keine Rohquellen außer dem zu strukturierenden Text. */
 export type StructureNoteInput = {
@@ -14,15 +15,37 @@ export type StructureNoteInput = {
   confirmedAssertions: string[];
 };
 
-export type ProviderInfo = { id: "disabled" | "test" | "production"; model: string; enabled: boolean; description: string };
+/** Kontext für „Dokument analysieren“ (Kundenanlage): nur der Dokumenttext und Namen bereits bekannter Kunden. */
+export type AnalyzeDocumentInput = {
+  documentText: string;
+  fileName: string;
+  knownAccountNames: string[];
+};
+
+/** Aufgabenbezogene Modellwahl (Verwaltung → KI). Anbieter ohne Modellwahl ignorieren sie. */
+export type TaskOptions = { model?: string; temperature?: number; maxOutputTokens?: number };
+
+export type Usage = { tokensIn: number | null; tokensOut: number | null; model: string };
+
+export type ProviderId = "disabled" | "test" | "langdock" | "production";
+export type ProviderInfo = { id: ProviderId; model: string; enabled: boolean; description: string };
+
+export type ModelInfo = { id: string; ownedBy?: string };
 
 /**
  * Anbietervertrag (Briefing 2.3 / 14.4): Der Anbieter liefert ausschließlich Vorschlagsdaten; er hat keinen
- * Zugriff auf Datenbank oder Tools und kann keine externen Aktionen auslösen.
+ * Zugriff auf Datenbank oder Tools und kann keine externen Aktionen auslösen. Rückgaben sind roh und werden
+ * vom Aufrufer gegen das jeweilige Schema geprüft.
  */
 export interface AIProvider {
   info(): ProviderInfo;
-  structureNote(input: StructureNoteInput): Promise<unknown>; // roh – wird vom Aufrufer gegen das Schema geprüft
+  structureNote(input: StructureNoteInput, opts?: TaskOptions): Promise<unknown>;
+  /** Kundenanlage aus Dokument – optional; Anbieter ohne diese Fähigkeit werfen oder lassen es weg. */
+  analyzeDocument?(input: AnalyzeDocumentInput, opts?: TaskOptions): Promise<unknown>;
+  /** Verbrauch des letzten Aufrufs (Kostenspur), falls der Anbieter ihn liefert. */
+  lastUsage?(): Usage | null;
+  /** Verfügbare Modelle im Arbeitsraum des Anbieters (für die Konfigurationsseite). */
+  listModels?(): Promise<ModelInfo[]>;
 }
 
-export type { StructureNoteOutput };
+export type { StructureNoteOutput, IntakeProposal };

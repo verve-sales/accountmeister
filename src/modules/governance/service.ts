@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, schema } from "@/db/client";
 import { ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
+import { eraseDocumentFile } from "@/modules/documents/service";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { canViewSource, hasRoleForAccountWrite, loadSetupContext } from "@/modules/identity/authz";
 
@@ -98,8 +99,10 @@ export async function eraseSourceContent(actor: Actor, sourceId: string, raw: un
       .set({ observation: "[Inhalt gelöscht – Quelle entfernt]", relevanceHypothesis: null, usageLimit: null, status: "BEENDET", closedReason: "Quelle auf Verlangen gelöscht", updatedAt: new Date() })
       .where(eq(schema.signals.sourceId, sourceId))
       .returning({ id: schema.signals.id });
-    await recordAudit(tx, actor, "source.erased", "SOURCE", sourceId, { reason: parsed.data.reason.slice(0, 200), versions: versions.length, assertions: assertionsErased, signals: sigs.length });
-    return { sourceId, versionsErased: versions.length, assertionsErased, signalsErased: sigs.length };
+    // Dokumentquelle: auch die hochgeladene Datei entfernen (Metadaten bleiben)
+    const fileErased = await eraseDocumentFile(tx, sourceId);
+    await recordAudit(tx, actor, "source.erased", "SOURCE", sourceId, { reason: parsed.data.reason.slice(0, 200), versions: versions.length, assertions: assertionsErased, signals: sigs.length, file: fileErased });
+    return { sourceId, versionsErased: versions.length, assertionsErased, signalsErased: sigs.length, fileErased };
   });
 }
 

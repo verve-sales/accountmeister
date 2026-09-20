@@ -15,7 +15,7 @@ RUN npm run build && npm prune --omit=dev
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000
-RUN groupadd -r verve && useradd -r -g verve -d /app verve
+RUN groupadd -r verve && useradd -r -g verve -d /app verve && mkdir -p /data/uploads && chown -R verve:verve /data
 COPY --from=build --chown=verve:verve /app/package.json ./
 COPY --from=build --chown=verve:verve /app/node_modules ./node_modules
 COPY --from=build --chown=verve:verve /app/.next ./.next
@@ -23,6 +23,7 @@ COPY --from=build --chown=verve:verve /app/next.config.ts ./
 COPY --from=build --chown=verve:verve /app/src/db/migrations ./src/db/migrations
 COPY --from=build --chown=verve:verve /app/scripts ./scripts
 USER verve
+VOLUME ["/data/uploads"]
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD node -e "fetch('http://localhost:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 # Start: Migrationen anwenden (mit Prüfung), dann Anwendung. Unsichere Konfiguration bricht ab (S09).

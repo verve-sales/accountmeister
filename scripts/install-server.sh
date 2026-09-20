@@ -65,6 +65,10 @@ OIDC_AUTO_CREATE_USERS=false
 WORKSPACE_NAME=Verve Consulting
 AI_PROVIDER=disabled
 AI_DAILY_JOB_LIMIT=200
+LANGDOCK_API_KEY=
+LANGDOCK_BASE_URL=https://api.langdock.com/openai/eu/v1
+LANGDOCK_DEFAULT_MODEL=gpt-4o-mini
+MAX_UPLOAD_MB=25
 SESSION_MAX_AGE_SECONDS=43200
 SESSION_IDLE_SECONDS=7200
 RATE_LIMIT_LOGIN_PER_15MIN=20
@@ -86,7 +90,7 @@ done
 say "6/6 Tägliche Sicherung (03:15 Uhr) und Aufbewahrung 14 Tage"
 mkdir -p "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
 cat > /etc/cron.d/verve-sales-backup <<CRON
-15 3 * * * root cd $APP_DIR && docker compose --env-file $ENV_FILE exec -T db pg_dump -U verve -Fc verve_sales > $BACKUP_DIR/verve-sales-\$(date +\%Y\%m\%d).dump && find $BACKUP_DIR -name '*.dump' -mtime +14 -delete
+15 3 * * * root cd $APP_DIR && docker compose --env-file $ENV_FILE exec -T db pg_dump -U verve -Fc verve_sales > $BACKUP_DIR/verve-sales-\$(date +\%Y\%m\%d).dump && docker compose --env-file $ENV_FILE exec -T app tar -C /data -czf - uploads > $BACKUP_DIR/verve-sales-uploads-\$(date +\%Y\%m\%d).tar.gz && find $BACKUP_DIR \( -name '*.dump' -o -name '*.tar.gz' \) -mtime +14 -delete
 CRON
 chmod 644 /etc/cron.d/verve-sales-backup
 

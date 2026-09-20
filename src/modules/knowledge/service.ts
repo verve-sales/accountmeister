@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { NotFoundError } from "@/lib/errors";
 import type { Actor } from "@/modules/identity/actor";
-import { canViewSource, loadSetupContext } from "@/modules/identity/authz";
+import { canEditSetup, canViewSource, loadSetupContext } from "@/modules/identity/authz";
 
 /** „Quelle ansehen“ – Originalquelle nur mit passender Berechtigung (13.5, 16.2). */
 export async function getSource(actor: Actor, sourceId: string) {
@@ -16,5 +16,6 @@ export async function getSource(actor: Actor, sourceId: string) {
     .from(schema.assertionEvidence)
     .innerJoin(schema.assertions, eq(schema.assertions.id, schema.assertionEvidence.assertionId))
     .where(eq(schema.assertionEvidence.sourceId, sourceId));
-  return { source, ownerName: owner?.displayName ?? "?", setup: ctx?.setup ?? null, evidence };
+  const document = source.type === "DOKUMENT" ? await db.query.documents.findFirst({ where: eq(schema.documents.sourceId, sourceId) }) : null;
+  return { source, ownerName: owner?.displayName ?? "?", setup: ctx?.setup ?? null, evidence, document: document ?? null, canEdit: ctx ? canEditSetup(actor, ctx) : false };
 }

@@ -1,10 +1,10 @@
 # Betriebsunterlagen – Verve Sales-Arbeitsumgebung (Pilot)
 
-Stand: 19.09.2026. Diese Unterlage beschreibt, wie die Anwendung auf einem Server betrieben wird. Sie ersetzt keine Datenschutz- oder Rechtsfreigabe (Briefing 16.3); die Pilotfreigabe-Checkliste steht in `docs/pilotfreigabe.md`.
+Stand: 20.09.2026. Diese Unterlage beschreibt, wie die Anwendung auf einem Server betrieben wird. Sie ersetzt keine Datenschutz- oder Rechtsfreigabe (Briefing 16.3); die Pilotfreigabe-Checkliste steht in `docs/pilotfreigabe.md`.
 
 ## 1. Architektur im Betrieb
 
-Die Anwendung besteht aus zwei Prozessen: dem Next.js-Server (Node.js 22) und einer PostgreSQL-16-Datenbank. Nutzer greifen per Browser zu. Ein Reverse-Proxy (z. B. Caddy, nginx, Traefik) übernimmt TLS und leitet an Port 3000 weiter; die Anwendung selbst lauscht nur auf 127.0.0.1. Es gibt keine weiteren Dienste; die KI-Anbindung und der Mail-/Kalenderabruf laufen als Adapter im Anwendungsprozess und sind im Pilot deaktiviert bzw. gesperrt, bis die Entscheidungen aus dem Entscheidungsprotokoll getroffen sind.
+Die Anwendung besteht aus zwei Prozessen: dem Next.js-Server (Node.js 22) und einer PostgreSQL-16-Datenbank. Hochgeladene Dokumente liegen als Dateien im Volume `uploads` (`/data/uploads`); ihr extrahierter Text steht in der Datenbank. Nutzer greifen per Browser zu. Ein Reverse-Proxy (z. B. Caddy, nginx, Traefik) übernimmt TLS und leitet an Port 3000 weiter; die Anwendung selbst lauscht nur auf 127.0.0.1. Es gibt keine weiteren Dienste; die KI-Anbindung und der Mail-/Kalenderabruf laufen als Adapter im Anwendungsprozess und sind im Pilot deaktiviert bzw. gesperrt, bis die Entscheidungen aus dem Entscheidungsprotokoll getroffen sind.
 
 ## 2. Konfiguration (nur über Umgebungsvariablen)
 
@@ -17,7 +17,9 @@ Die Anwendung besteht aus zwei Prozessen: dem Next.js-Server (Node.js 22) und ei
 | `ADMIN_EMAILS` | empfohlen | Adressen, die beim ersten Anmelden die Verwaltungsrolle erhalten |
 | `OIDC_AUTO_CREATE_USERS` | nein | `false` (Standard): Zugänge vorher in der Verwaltung anlegen |
 | `DOMAIN` | ja (Compose) | öffentliche Adresse für Caddy/TLS und die Redirect-URI |
-| `AI_PROVIDER` | ja | `disabled` bis zur KI-Entscheidung; `test` wird verweigert (S09); `production` wirft bis zur Freigabe |
+| `AI_PROVIDER` | ja | `disabled` (aus) oder `langdock` (Produktiv, E-037); `test` wird in Produktion verweigert (S09); `production` ist ein gesperrter Platzhalter |
+| `LANGDOCK_API_KEY`, `LANGDOCK_BASE_URL`, `LANGDOCK_DEFAULT_MODEL` | bei `langdock` | API-Schlüssel (nur Server), OpenAI-kompatible Basis-URL (Standard `https://api.langdock.com/openai/eu/v1`), Standardmodell, wenn je Aufgabe keines gewählt ist |
+| `UPLOAD_DIR`, `MAX_UPLOAD_MB` | nein | Ablage hochgeladener Dokumente (Compose: Volume `uploads` unter `/data/uploads`), Größenlimit je Datei (Standard 25) |
 | `AI_DAILY_JOB_LIMIT` | nein | KI-Aufträge je Arbeitsraum und Tag (Standard 200) |
 | `SESSION_MAX_AGE_SECONDS`, `SESSION_IDLE_SECONDS` | nein | Sitzungsdauer (Standard 12 h) und Inaktivitätsgrenze (Standard 2 h) |
 | `RATE_LIMIT_LOGIN_PER_15MIN`, `RATE_LIMIT_WRITES_PER_MIN` | nein | Nutzungsgrenzen (Standard 20 bzw. 120) |
@@ -48,7 +50,7 @@ Migrationen sind versionierte SQL-Dateien in `src/db/migrations` (Journal in `me
 
 ## 5. Sicherung und Wiederherstellung
 
-`scripts/backup.sh` erzeugt einen `pg_dump` im Custom-Format mit Prüfsumme. `scripts/restore.sh` spielt ihn in eine leere Zieldatenbank zurück und prüft die Prüfsumme. `scripts/restore-check.sql` zählt danach Objekte, gesperrte und gelöschte Quellen sowie Protokolleinträge; diese Zahlen müssen dem Sicherungsstand entsprechen (S12: Lösch- und Sperrentscheidungen bleiben nach Wiederherstellung konsistent, weil sie in der Datenbank selbst liegen).
+Die Sicherung umfasst zwei Teile: die Datenbank (`pg_dump`, Custom-Format) und das Dokumentenvolume (`tar` von `/data/uploads`). Der vom Installationsskript eingerichtete Cron-Job (03:15 Uhr) sichert beides nach `/var/backups/verve-sales` und behält 14 Tage; `scripts/update-server.sh` sichert zusätzlich vor jedem Update. `scripts/backup.sh` erzeugt einen `pg_dump` im Custom-Format mit Prüfsumme. `scripts/restore.sh` spielt ihn in eine leere Zieldatenbank zurück und prüft die Prüfsumme. Das Dokumentenarchiv wird mit `docker compose exec -T app tar -C /data -xzf - < verve-sales-uploads-<Datum>.tar.gz` zurückgespielt; Datenbank und Dokumente müssen vom selben Tag stammen, sonst fehlen Dateien zu Quellen (die Anwendung zeigt dann „Datei entfernt“). `scripts/restore-check.sql` zählt danach Objekte, gesperrte und gelöschte Quellen sowie Protokolleinträge; diese Zahlen müssen dem Sicherungsstand entsprechen (S12: Lösch- und Sperrentscheidungen bleiben nach Wiederherstellung konsistent, weil sie in der Datenbank selbst liegen).
 
 Der Wiederherstellungstest wurde am 19.09.2026 mit dem Entwicklungsdatenbestand durchgeführt (Sicherung → leere Datenbank → identische Zählungen). Er ist vor Echtdatenbetrieb mit dem Produktionsabbild zu wiederholen und dann regelmäßig einzuplanen.
 
@@ -59,7 +61,7 @@ Sicherungen enthalten personenbezogene Daten: verschlüsselt ablegen, Zugriff be
 Zwei dokumentierte Schritte, ausführbar durch Quelleninhaber, zuständige Führungsrolle oder Betriebsverwaltung auf der Quellenseite:
 
 1. Sperren: Die Quelle ist für andere unsichtbar; alle Vorschläge, Artefaktfassungen und Aussagen, die sich allein auf sie stützen, werden als „überholt“ markiert und müssen erneut geprüft werden (S07).
-2. Inhalt entfernen: Text der Quelle und aller Quellenversionen wird gelöscht; Typ, Zeitpunkte, Herkunft und Protokolleinträge bleiben für die Nachvollziehbarkeit.
+2. Inhalt entfernen: Text der Quelle und aller Quellenversionen wird gelöscht, bei Dokumenten auch die Datei im Volume; Typ, Zeitpunkte, Herkunft, Dateiname/Prüfsumme und Protokolleinträge bleiben für die Nachvollziehbarkeit.
 
 Beide Schritte werden protokolliert – mit Grund, aber ohne Inhalt. Suchindex und externe Exporte existieren im Pilot nicht; kommen sie hinzu, sind sie in diesen Ablauf aufzunehmen.
 
@@ -75,6 +77,10 @@ Die Betriebsverwaltung (Rolle ADMIN) pflegt unter „Verwaltung“ Rollen und Zu
 
 KI nicht verfügbar oder deaktiviert: Alles außer „Notiz strukturieren“ funktioniert; der Status wird ehrlich angezeigt. Datenbank nicht erreichbar: `/health` meldet 503, der Proxy sollte eine Wartungsseite zeigen. Import fehlgeschlagen: Auftrag bleibt im Status „Fehler“ und kann wiederholt werden, kein Teilstand gilt als bestätigt. Verbindung zum Postfach abgelaufen: Status „Abgelaufen – erneut anmelden“, letzter erfolgreicher Abruf bleibt sichtbar.
 
-## 10. Was vor Echtdatenbetrieb noch fehlt
+## 10. KI-Betrieb (Etappe 6)
 
-Sicherungsplan mit Aufbewahrung und Kopie an einen zweiten Ort, Datenschutzfreigabe und Löschkonzept, App-Registrierung für Microsoft Graph, KI-Anbieterentscheidung, Regelwerk für Startvoraussetzungen. Alles in `docs/pilotfreigabe.md` als Checkliste.
+Aktivierung: `AI_PROVIDER=langdock` und `LANGDOCK_API_KEY` in `.env.production`, dann `docker compose up -d` (Anleitung `docs/installation-ionos.md`, Schritt 8). Unter „Verwaltung → KI“ prüft die Betriebsverwaltung die Verbindung (nur Modellliste, keine Inhalte), wählt je Aufgabe Modell, Temperatur und Ausgabegrenze und sieht den Token-Verbrauch der letzten 30 Tage sowie die letzten Aufträge. Aufgaben: „Notiz strukturieren“ (Weeklys, importierte Quellen, Dokumente im Setup) und „Dokument analysieren“ (Kundenanlage aus Dokument). Fehler des Anbieters (Schlüssel abgelehnt, Modell nicht verfügbar, Rate-Limit) werden im Auftrag protokolliert und dem Nutzer verständlich gemeldet; manuelle Arbeit bleibt immer möglich. Der Schlüssel wird nirgends angezeigt; bei Verdacht auf Kompromittierung in Langdock widerrufen, neuen Schlüssel eintragen, Container neu starten.
+
+## 11. Was vor Echtdatenbetrieb noch fehlt
+
+Unterschrift unter den Freigabevorschlag (`docs/pilotfreigabe-vorschlag.md`: Verantwortliche, Fristen, Verfahren, zweiter Sicherungsort), App-Registrierung für Microsoft Graph (nur für Mailimport), Regelwerk für Startvoraussetzungen. Checkliste in `docs/pilotfreigabe.md`.

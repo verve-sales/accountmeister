@@ -5,7 +5,17 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL fehlt"),
   AUTH_MODE: z.enum(["development", "oidc"]).default("development"),
   SESSION_SECRET: z.string().min(32, "SESSION_SECRET muss mindestens 32 Zeichen haben"),
-  AI_PROVIDER: z.enum(["disabled", "test", "production"]).default("disabled"),
+  /** KI-Anbieter: disabled | test (nur Entwicklung) | langdock (Produktiv, OpenAI-kompatible API von Langdock) | production (gesperrter Platzhalter) */
+  AI_PROVIDER: z.enum(["disabled", "test", "langdock", "production"]).default("disabled"),
+  /** Langdock: API-Schlüssel (nur auf dem Server) und Basis-URL der OpenAI-kompatiblen Schnittstelle (Region eu) */
+  LANGDOCK_API_KEY: z.string().min(1).optional(),
+  LANGDOCK_BASE_URL: z.string().url().default("https://api.langdock.com/openai/eu/v1"),
+  /** Standardmodell, wenn für eine Aufgabe noch keines konfiguriert ist (Verwaltung → KI) */
+  LANGDOCK_DEFAULT_MODEL: z.string().default("gpt-4o-mini"),
+  /** Ablage hochgeladener Dokumente (außerhalb des Codes; im Container ein Volume) */
+  UPLOAD_DIR: z.string().default("./data/uploads"),
+  /** Maximale Dateigröße je Upload in Megabyte */
+  MAX_UPLOAD_MB: z.coerce.number().int().min(1).max(200).default(25),
   /** Nutzungsgrenze: KI-Aufträge je Arbeitsraum und Tag (Briefing 17.4) */
   AI_DAILY_JOB_LIMIT: z.coerce.number().int().min(1).max(100000).default(200),
   /** Unternehmensanmeldung (OIDC, Microsoft Entra ID): nur bei AUTH_MODE=oidc erforderlich */
@@ -41,8 +51,9 @@ export function getConfig(): AppConfig {
   return cfg;
 }
 
-export function assertSafeForEnvironment(cfg: Pick<AppConfig, "NODE_ENV" | "AUTH_MODE" | "AI_PROVIDER" | "SESSION_SECRET"> & Partial<Pick<AppConfig, "OIDC_ISSUER" | "OIDC_CLIENT_ID" | "OIDC_CLIENT_SECRET" | "OIDC_REDIRECT_URI">>): void {
+export function assertSafeForEnvironment(cfg: Pick<AppConfig, "NODE_ENV" | "AUTH_MODE" | "AI_PROVIDER" | "SESSION_SECRET"> & Partial<Pick<AppConfig, "OIDC_ISSUER" | "OIDC_CLIENT_ID" | "OIDC_CLIENT_SECRET" | "OIDC_REDIRECT_URI" | "LANGDOCK_API_KEY">>): void {
   const problems: string[] = [];
+  if (cfg.AI_PROVIDER === "langdock" && !cfg.LANGDOCK_API_KEY) problems.push("AI_PROVIDER=langdock verlangt LANGDOCK_API_KEY");
   if (cfg.AUTH_MODE === "oidc") {
     const missing = (["OIDC_ISSUER", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_REDIRECT_URI"] as const).filter((k) => !cfg[k]);
     if (missing.length > 0) problems.push("AUTH_MODE=oidc verlangt: " + missing.join(", "));

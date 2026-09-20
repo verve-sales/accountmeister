@@ -13,6 +13,7 @@ import {
   timestamp,
   integer,
   boolean,
+  real,
   date,
   jsonb,
   uniqueIndex,
@@ -51,7 +52,7 @@ export const relationshipStateEnum = pgEnum("relationship_state", [
   "NICHT_AKTIV",
 ]);
 
-export const sourceTypeEnum = pgEnum("source_type", ["NOTIZ", "PROTOKOLL", "EMAIL", "TERMIN", "OEFFENTLICH"]);
+export const sourceTypeEnum = pgEnum("source_type", ["NOTIZ", "PROTOKOLL", "EMAIL", "TERMIN", "OEFFENTLICH", "DOKUMENT"]);
 export const accessClassEnum = pgEnum("access_class", [
   "PERSOENLICH", // nur Quelleninhaber
   "SETUP", // zugeordnete Setup-Beteiligte
@@ -649,10 +650,80 @@ export const aiJobs = pgTable(
     rejectedCount: integer("rejected_count"), // schema-/quellenwidrige Elemente
     error: text("error"), // kurze, datensparsame Fehlermeldung
     dedupeKey: text("dedupe_key").notNull(), // Wiederholungskennung (Auftragsebene)
+    /** Verbrauch laut Anbieter (Kostenspur, Etappe 6) */
+    tokensIn: integer("tokens_in"),
+    tokensOut: integer("tokens_out"),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (t) => [index("ai_jobs_ws_started_idx").on(t.workspaceId, t.startedAt)],
+);
+
+// ---------------------------------------------------------------------------
+// Etappe 6: Dokumente, Anlagevorschläge, KI-Aufgabenkonfiguration
+// ---------------------------------------------------------------------------
+
+export const extractStatusEnum = pgEnum("extract_status", ["OK", "TEILWEISE", "LEER", "FEHLER"]);
+
+/** Hochgeladene Datei zu einer Quelle vom Typ DOKUMENT. Der extrahierte Text steht in sources.body. */
+export const documents = pgTable(
+  "documents",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    sourceId: text("source_id").notNull().references(() => sources.id),
+    fileName: text("file_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    sha256: text("sha256").notNull(),
+    /** Pfad relativ zu UPLOAD_DIR; null, wenn die Datei entfernt wurde (Inhalt gelöscht) */
+    storagePath: text("storage_path"),
+    extractStatus: extractStatusEnum("extract_status").notNull(),
+    extractNote: text("extract_note"),
+    pageCount: integer("page_count"),
+    uploadedBy: text("uploaded_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("documents_source_uq").on(t.sourceId)],
+);
+
+export const intakeStatusEnum = pgEnum("intake_status", ["ENTWURF", "UEBERNOMMEN", "VERWORFEN"]);
+
+/** KI-Anlagevorschlag aus einem Dokument (Kunde, Ansprechpartner, Signale, Bedarfe) – wird erst durch Menschen übernommen. */
+export const intakeProposals = pgTable(
+  "intake_proposals",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    actorUserId: text("actor_user_id").notNull().references(() => users.id),
+    sourceId: text("source_id").notNull().references(() => sources.id),
+    aiJobId: text("ai_job_id").references(() => aiJobs.id),
+    status: intakeStatusEnum("status").notNull().default("ENTWURF"),
+    /** Vorschlag im Schema intakeProposalSchema (src/modules/ai/schemas.ts) */
+    payload: jsonb("payload").notNull(),
+    resultAccountId: text("result_account_id").references(() => accounts.id),
+    resultSetupId: text("result_setup_id").references(() => projectSetups.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+);
+
+/** Modellwahl je KI-Aufgabe (Verwaltung → KI). Der API-Schlüssel steht nie in der Datenbank. */
+export const aiTaskSettings = pgTable(
+  "ai_task_settings",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    task: text("task").notNull(), // STRUCTURE_NOTE, ANALYZE_DOCUMENT, …
+    model: text("model").notNull(),
+    temperature: real("temperature").notNull().default(0.2),
+    maxOutputTokens: integer("max_output_tokens").notNull().default(4000),
+    enabled: boolean("enabled").notNull().default(true),
+    updatedBy: text("updated_by").notNull().references(() => users.id),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("ai_task_settings_uq").on(t.workspaceId, t.task)],
 );
 
 export const suggestions = pgTable(
@@ -1144,3 +1215,6 @@ export type OfferStatus = (typeof offerStatusEnum.enumValues)[number];
 export type OrderStatus = (typeof orderStatusEnum.enumValues)[number];
 export type EngagementStatus = (typeof engagementStatusEnum.enumValues)[number];
 export type RequirementStatus = (typeof requirementStatusEnum.enumValues)[number];
+export type SourceType = (typeof sourceTypeEnum.enumValues)[number];
+export type ExtractStatus = (typeof extractStatusEnum.enumValues)[number];
+export type IntakeStatus = (typeof intakeStatusEnum.enumValues)[number];

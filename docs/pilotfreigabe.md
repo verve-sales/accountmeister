@@ -1,6 +1,6 @@
 # Pilotfreigabe – Checkliste
 
-Stand: 19.09.2026. Die Anwendung ist als vollständiger Prototyp mit fiktiven Daten fertig (Etappen 0–5). Für den Betrieb mit echten Daten müssen die folgenden Punkte erledigt sein. Die Anwendung erzwingt einige davon technisch (Startverweigerung); die übrigen sind organisatorische Freigaben nach Briefing 2.3 und 16.3.
+Stand: 20.09.2026. Die Anwendung ist als vollständiger Prototyp mit fiktiven Daten fertig (Etappen 0–6). Ein ausgefüllter Freigabevorschlag zur Unterzeichnung liegt in `docs/pilotfreigabe-vorschlag.md`. Für den Betrieb mit echten Daten müssen die folgenden Punkte erledigt sein. Die Anwendung erzwingt einige davon technisch (Startverweigerung); die übrigen sind organisatorische Freigaben nach Briefing 2.3 und 16.3.
 
 ## A. Technisch erzwungen (Start scheitert sonst)
 
@@ -18,9 +18,9 @@ Stand: 19.09.2026. Die Anwendung ist als vollständiger Prototyp mit fiktiven Da
 | Hosting/Region | – (entschieden: IONOS Cloud Server, `docs/installation-ionos.md`) | Docker/Compose mit Caddy, Installationsskript |
 | Unternehmensanmeldung | – (entschieden: Microsoft Entra ID, umgesetzt) | App-Registrierung im Tenant (Anleitung Schritt 4); Rollen in der Verwaltung, nicht aus Gruppen |
 | Datenschutz: Zwecke, Rechtsgrundlagen, Informationen an Betroffene, DSFA-Bewertung, Beschäftigtenvertretung | Echtdatenbetrieb | Zugriffsklassen, Sperr-/Löschablauf, Protokoll ohne Inhalte, Bestandszahlen je Schutzbereich |
-| Aufbewahrung je Datenklasse und Löschkonzept inkl. Sicherungen | Echtdatenbetrieb | Sperren + Inhalt entfernen; Wiederherstellungsprüfung; keine erfundenen Fristen |
+| Aufbewahrung je Datenklasse und Löschkonzept inkl. Sicherungen | Echtdatenbetrieb | Sperren + Inhalt entfernen (auch Dokumentdateien); Wiederherstellungsprüfung; Fristenvorschlag in `docs/pilotfreigabe-vorschlag.md` Abschnitt 6 |
 | Microsoft Graph: App-Registrierung im Verve-Tenant, Redirect-URI, Token-Verschlüsselung, Datenschutzfreigabe | echter Mail-/Kalenderimport | Adapter mit minimalen lesenden Scopes im Fixture-Modus (E-018, E-023) |
-| KI-Anbieter, Modell, Vertrag, Datenklassen, Drittlandtransfer | KI-Verarbeitung echter Inhalte | Anbietervertrag, Prompt-/Schemaversionen, Evaluationsfälle, Nutzungsgrenze; Produktivadapter gesperrt |
+| KI-Anbieter, Modell, Vertrag, Datenklassen, Drittlandtransfer | – (entschieden: Langdock, EU, AV-Vertrag; E-037) | Langdock-Adapter, Modellwahl je Aufgabe unter Verwaltung → KI, Schema-/Quellenprüfung, Nutzungsgrenze, Token-Verbrauch |
 | Regelwerk Startvoraussetzungen (Vertrag, Compliance, Onboarding) | produktive Einsatzfreigabe | frei erfasste Voraussetzungen mit Nachweisen; „startbereit“ nie über leere Liste |
 | Sales-/Vergütungsregeln (A16) | Vergütungsprüfungen | keine Berechnung; Nachweise als Quellen |
 | Führendes CRM/Staffing-System | Synchronisation realer Stammdaten | eigener Pilotdatenbestand |

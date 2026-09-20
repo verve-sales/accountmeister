@@ -6,6 +6,9 @@ import { canCreateAccount } from "@/modules/identity/authz";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { createAccountAction } from "../actions";
+import { getProviderStatus } from "@/modules/suggestions/service";
+import { listMyIntakes } from "@/modules/intake/service";
+import { orgTypeLabel } from "@/lib/labels";
 import { db, schema } from "@/db/client";
 import { eq } from "drizzle-orm";
 
@@ -19,6 +22,8 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
     ? await db.select({ id: schema.users.id, displayName: schema.users.displayName }).from(schema.users).innerJoin(schema.roleAssignments, eq(schema.roleAssignments.userId, schema.users.id)).where(eq(schema.roleAssignments.role, "BD"))
     : [];
   const uniqueBd = [...new Map(bdUsers.map((u) => [u.id, u])).values()];
+  const ai = getProviderStatus();
+  const drafts = canCreateAccount(actor) ? (await listMyIntakes(actor)).filter((p) => p.status === "ENTWURF") : [];
 
   return (
     <div className="space-y-6">
@@ -44,14 +49,24 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
         )}
       </section>
       {canCreateAccount(actor) && (
+        <section className="card">
+          <h2 className="font-semibold mb-1">Kunde aus Dokument anlegen</h2>
+          <p className="muted text-sm mb-2">Ein Gesprächsprotokoll, eine Ausschreibung oder ein Extrakt hochladen – {ai.enabled ? "die KI schlägt Organisation, Setup, Ansprechpartner, Signale und mögliche Bedarfe vor, Sie prüfen und übernehmen." : "der Text wird als Quelle geführt und Sie füllen die Anlage von Hand aus (KI ist deaktiviert)."}</p>
+          <div className="flex flex-wrap gap-3 items-center">
+            <Link href="/kunden/anlage/neu" className="btn">Dokument hochladen und Vorschlag erzeugen</Link>
+            {drafts.length > 0 && <span className="text-sm">{drafts.length} offene(r) Anlagevorschlag/-vorschläge: {drafts.map((d, i) => <span key={d.id}>{i > 0 ? ", " : ""}<Link href={`/kunden/anlage/${d.id}`}>{(d.payload as { organization?: { name?: string } | null }).organization?.name ?? "ohne Organisation"}</Link></span>)}</span>}
+          </div>
+        </section>
+      )}
+      {canCreateAccount(actor) && (
         <details className="card">
-          <summary>Kunde anlegen</summary>
+          <summary>Kunde von Hand anlegen</summary>
           <form action={createAccountAction} className="mt-3 grid sm:grid-cols-2 gap-3">
             <div><label className="label" htmlFor="name">Name der Organisation</label><input id="name" name="name" className="input" required minLength={2} /></div>
             <div>
               <label className="label" htmlFor="orgType">Organisationstyp</label>
               <select id="orgType" name="orgType" className="select" defaultValue="SONSTIGE">
-                {schema.orgTypeEnum.enumValues.map((v) => <option key={v} value={v}>{v}</option>)}
+                {schema.orgTypeEnum.enumValues.map((v) => <option key={v} value={v}>{orgTypeLabel[v] ?? v}</option>)}
               </select>
             </div>
             <div>

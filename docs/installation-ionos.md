@@ -86,17 +86,36 @@ Falls das Skript mit einer Fehlermeldung abbricht: die letzte Meldung kopieren u
 
 Es gibt in Produktion keine fiktiven Demo-Daten; die Anwendung startet leer. Der erste fachliche Schritt ist „Kunden → Kunde anlegen“.
 
+## Schritt 8: KI über Langdock aktivieren (optional, Etappe 6)
+
+Die Anwendung kann Dokumente analysieren und Notizen strukturieren – über Langdock (EU-Hosting, Auftragsverarbeitung im bestehenden Langdock-Vertrag von Verve; Entscheidung E-037). Ohne diesen Schritt läuft alles ohne KI.
+
+1. In Langdock einen **API-Schlüssel** erzeugen (Einstellungen → API-Schlüssel; ein Workspace-Schlüssel ist einem persönlichen vorzuziehen). Den Schlüssel nur auf dem Server eintragen, nie in E-Mails oder Chats.
+2. Auf dem Server:
+
+```
+cd /opt/verve-sales
+nano .env.production        # zwei Zeilen ändern: AI_PROVIDER=langdock  und  LANGDOCK_API_KEY=<Schlüssel>
+docker compose --env-file .env.production up -d
+```
+
+3. In der Anwendung als Betriebsverwaltung: **Verwaltung → KI** → „Verbindung prüfen“. Erscheint die Modellliste, je Aufgabe das gewünschte Modell wählen (z. B. ein kleines, schnelles für „Notiz strukturieren“, ein stärkeres für „Dokument analysieren“) und speichern. Ohne eigene Wahl gilt `LANGDOCK_DEFAULT_MODEL` (Standard `gpt-4o-mini`).
+
+Was an Langdock geht: der Text der jeweiligen Notiz bzw. des Dokuments, Anzeigenamen beteiligter Personen und die Namen bereits bekannter Kunden – keine Datenbankinhalte darüber hinaus. Was zurückkommt, sind Vorschläge, die ein Mensch bestätigt. Auftragsprotokolle speichern Hash, Länge und Token-Verbrauch, keine Texte.
+
 ## Danach: Update, Logs, Sicherung
 
 Alles auf dem Server als root im Ordner `/opt/verve-sales`:
 
 ```
 cd /opt/verve-sales
-git pull && docker compose --env-file .env.production up -d --build   # neue Version einspielen
+bash scripts/update-server.sh                                          # neue Version: Sicherung → git pull → bauen → prüfen
 docker compose --env-file .env.production logs -f app                 # Logs der Anwendung (Strg+C beendet)
 docker compose --env-file .env.production ps                          # laufen alle drei Container?
-ls -la /var/backups/verve-sales                                        # Sicherungen
+ls -la /var/backups/verve-sales                                        # Sicherungen (Datenbank + hochgeladene Dokumente)
 ```
+
+`git pull` fragt nach GitHub-Name und Token (wie beim Klonen). Das Update-Skript sichert vorher Datenbank und Dokumente, holt den neuen Stand, baut das Abbild neu und wartet auf die Gesundheitsprüfung; Migrationen laufen beim Start automatisch.
 
 Die Sicherungen liegen auf demselben Server. Für den Pilot reicht das; vor Echtdatenbetrieb sollte eine Kopie an einen zweiten Ort gehen (z. B. IONOS-Backup-Funktion im Cloud Panel für den ganzen Server aktivieren oder wöchentlich per `scp` herunterladen). Wie eine Sicherung zurückgespielt wird, steht in `docs/betrieb.md`, Abschnitt 5.
 

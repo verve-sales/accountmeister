@@ -33,11 +33,18 @@ services:
       WORKSPACE_NAME: ${WORKSPACE_NAME:-Verve Consulting}
       AI_PROVIDER: ${AI_PROVIDER:-disabled}
       AI_DAILY_JOB_LIMIT: ${AI_DAILY_JOB_LIMIT:-200}
+      LANGDOCK_API_KEY: ${LANGDOCK_API_KEY:-}
+      LANGDOCK_BASE_URL: ${LANGDOCK_BASE_URL:-https://api.langdock.com/openai/eu/v1}
+      LANGDOCK_DEFAULT_MODEL: ${LANGDOCK_DEFAULT_MODEL:-gpt-4o-mini}
+      UPLOAD_DIR: /data/uploads
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET in .env.production setzen}
       SESSION_MAX_AGE_SECONDS: ${SESSION_MAX_AGE_SECONDS:-43200}
       SESSION_IDLE_SECONDS: ${SESSION_IDLE_SECONDS:-7200}
       RATE_LIMIT_LOGIN_PER_15MIN: ${RATE_LIMIT_LOGIN_PER_15MIN:-20}
       RATE_LIMIT_WRITES_PER_MIN: ${RATE_LIMIT_WRITES_PER_MIN:-120}
+    volumes:
+      - uploads:/data/uploads
     expose:
       - "3000"
   caddy:
@@ -57,5 +64,6 @@ services:
       - caddy_config:/config
 volumes:
   pgdata:
+  uploads:
   caddy_data:
   caddy_config:

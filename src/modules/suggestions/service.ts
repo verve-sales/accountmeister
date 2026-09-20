@@ -8,9 +8,10 @@ import { ConflictError, DomainError, ForbiddenError, NotFoundError, TransitionEr
 import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
 import { loadActor } from "@/modules/identity/actor";
-import { canEditSetup, canViewSetup, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
+import { canEditSetup, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { getAIProvider } from "@/modules/ai";
-import { STRUCTURE_NOTE_PROMPT_VERSION, type AIProvider, type StructureNoteInput } from "@/modules/ai/provider";
+import { STRUCTURE_NOTE_PROMPT_VERSION, type AIProvider, type StructureNoteInput, type TaskOptions } from "@/modules/ai/provider";
+import { requireTaskOptions } from "@/modules/ai/settings";
 import { structureNoteOutputSchema, type StructuredItem } from "@/modules/ai/schemas";
 import { requireReview } from "@/modules/reviews/service";
 import { captureObservation } from "@/modules/signals/service";
@@ -72,6 +73,29 @@ export async function structureReviewNote(actor: Actor, reviewId: string, deps: 
   }, deps);
 }
 
+/**
+ * Eine Quelle im Setup (z. B. hochgeladenes Dokument) strukturieren. Rechte: Setup-Bearbeitende mit Leserecht
+ * auf die Quelle. Der Anbieter erhält nur den Quellentext.
+ */
+export async function structureSource(actor: Actor, sourceId: string, deps: { provider?: AIProvider } = {}) {
+  const source = await db.query.sources.findFirst({ where: and(eq(schema.sources.id, sourceId), eq(schema.sources.workspaceId, actor.workspaceId)) });
+  if (!source || !source.setupId) throw new NotFoundError("Quelle");
+  const ctx = await loadSetupContext(actor, source.setupId);
+  if (!ctx || !canViewSource(actor, source, ctx)) throw new NotFoundError("Quelle");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Nur Setup-Bearbeitende strukturieren Quellen.");
+  if (source.isLocked) throw new TransitionError("Eine gesperrte Quelle wird nicht strukturiert.");
+  const text = (source.body ?? "").trim();
+  if (text.length < 12) throw new ValidationError("Die Quelle enthält keinen Text, der strukturiert werden könnte.");
+  const members = await db.query.setupMemberships.findMany({ where: eq(schema.setupMemberships.setupId, ctx.setup.id) });
+  return structureText(actor, ctx, {
+    text,
+    dedupeScope: `source:${source.id}`,
+    sourceIds: [source.id],
+    trigger: `${source.type === "DOKUMENT" ? "Dokument" : "Quelle"} „${source.title}“`,
+    participantUserIds: Array.from(new Set([actor.userId, ...members.map((m) => m.userId)])),
+  }, deps);
+}
+
 export type StructureTextInput = {
   text: string;
   /** Idempotenz-Bereich des Auftrags (z. B. Review-ID oder Import-ID) */
@@ -115,24 +139,29 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
   };
   const inputHash = sha(noteText);
   const jobDedupe = sha(`${input0.dedupeScope}:${inputHash}:${STRUCTURE_NOTE_PROMPT_VERSION}`);
+  // Modellwahl je Aufgabe (Verwaltung → KI); Anbieter ohne Modellwahl ignorieren sie
+  const taskOpts: TaskOptions = info.id === "langdock" ? await requireTaskOptions(actor.workspaceId, "STRUCTURE_NOTE") : {};
+  const modelLabel = taskOpts.model ?? info.model;
 
   const prior = await db.query.aiJobs.findFirst({ where: and(eq(schema.aiJobs.dedupeKey, jobDedupe), eq(schema.aiJobs.status, "ERFOLGREICH")) });
   if (prior) return { job: prior, created: 0, skipped: 0, rejected: 0, repeated: true, noSuggestionReason: "" };
 
   const [job] = await db
     .insert(schema.aiJobs)
-    .values({ workspaceId: actor.workspaceId, type: "STRUCTURE_NOTE", actorUserId: actor.userId, setupId: ctx.setup.id, reviewId: input0.reviewId ?? null, provider: info.id, model: info.model, promptVersion: STRUCTURE_NOTE_PROMPT_VERSION, inputHash, inputChars: noteText.length, dedupeKey: jobDedupe })
+    .values({ workspaceId: actor.workspaceId, type: "STRUCTURE_NOTE", actorUserId: actor.userId, setupId: ctx.setup.id, reviewId: input0.reviewId ?? null, provider: info.id, model: modelLabel, promptVersion: STRUCTURE_NOTE_PROMPT_VERSION, inputHash, inputChars: noteText.length, dedupeKey: jobDedupe })
     .returning();
   if (!job) throw new Error("KI-Auftrag konnte nicht angelegt werden");
 
   let raw: unknown;
   try {
-    raw = await provider.structureNote(input);
+    raw = await provider.structureNote(input, taskOpts);
   } catch (e) {
     await db.update(schema.aiJobs).set({ status: "ABGELEHNT", error: e instanceof Error ? e.message.slice(0, 300) : "Anbieterfehler", finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
     throw e;
   }
 
+  const usage = provider.lastUsage?.() ?? null;
+  if (usage) await db.update(schema.aiJobs).set({ tokensIn: usage.tokensIn, tokensOut: usage.tokensOut, model: usage.model || modelLabel }).where(eq(schema.aiJobs.id, job.id));
   const parsed = structureNoteOutputSchema.safeParse(raw);
   if (!parsed.success) {
     await db.update(schema.aiJobs).set({ status: "FEHLER", error: "Ausgabe entspricht nicht dem Schema", finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
@@ -190,7 +219,7 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
         dedupeKey,
         recheckTrigger: "Neue Notiz oder neue Quelle im Setup",
         provider: info.id,
-        model: info.model,
+        model: usage?.model || modelLabel,
         promptVersion: STRUCTURE_NOTE_PROMPT_VERSION,
         aiJobId: job.id,
       });

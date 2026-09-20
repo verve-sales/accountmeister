@@ -11,3 +11,4 @@ tests
 docs
 *.md
 .git
+data
