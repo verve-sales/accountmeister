@@ -243,6 +243,24 @@ describe("Etappe 6C: Langdock-Adapter und Modellwahl je Aufgabe", () => {
     await expect(p.analyzeDocument({ documentText: "x", fileName: "f", knownAccountNames: [] }, { model: "kaputt" })).rejects.toBeInstanceOf(LangdockError);
     await expect(p.analyzeDocument({ documentText: "x", fileName: "f", knownAccountNames: [] }, { model: "abgelehnt" })).rejects.toThrow(/Schlüssel/);
     expect(parseJsonLoose('Hier: {"a":1} fertig')).toEqual({ a: 1 });
+    // HTTP 400 auf den strikten Aufruf → genau ein konservativer zweiter Versuch (ohne JSON-Modus/Temperatur, max_completion_tokens)
+    const strictCalls: Record<string, unknown>[] = [];
+    const picky = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      strictCalls.push(body);
+      if (body.response_format) return new Response(JSON.stringify({ error: { message: "Unsupported parameter: 'response_format'" } }), { status: 400 });
+      return new Response(JSON.stringify({ model: "o-modell", usage: { prompt_tokens: 5, completion_tokens: 2 }, choices: [{ message: { content: '{"items":[]}' } }] }), { status: 200 });
+    }) as typeof fetch;
+    const p2 = new LangdockProvider({ apiKey: "k", baseUrl: "https://api.langdock.test/openai/eu/v1", defaultModel: "o-modell", fetchImpl: picky });
+    expect(await p2.structureNote({ noteText: "x", setupName: "S", participantNames: [], knownPersonNames: [], confirmedAssertions: [] })).toEqual({ items: [] });
+    expect(strictCalls).toHaveLength(2);
+    expect(strictCalls[1]).not.toHaveProperty("response_format");
+    expect(strictCalls[1]).not.toHaveProperty("temperature");
+    expect(strictCalls[1]).toHaveProperty("max_completion_tokens");
+    // Bleibt es bei 400, nennt der Fehler den Anbietertext
+    const stubborn = (async () => new Response(JSON.stringify({ error: { message: "model does not support system messages" } }), { status: 400 })) as typeof fetch;
+    const p3 = new LangdockProvider({ apiKey: "k", baseUrl: "https://api.langdock.test/openai/eu/v1", defaultModel: "m", fetchImpl: stubborn });
+    await expect(p3.ping()).rejects.toThrow(/HTTP 400.*system messages/);
     expect(() => parseJsonLoose("kein json")).toThrow(LangdockError);
   });
 
