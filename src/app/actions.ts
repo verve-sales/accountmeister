@@ -751,7 +751,7 @@ export async function saveAiTaskSettingAction(fd: FormData) {
 
 export async function testAiConnectionAction() {
   return run("/verwaltung/ki", async (actor) => {
-    const n = await testConnection(actor);
-    throw new PendingInfo(`Verbindung in Ordnung – ${n} Modell(e) verfügbar.`);
+    const r = await testConnection(actor);
+    throw new PendingInfo(`Verbindung in Ordnung – ${r.detail}`);
   }, "");
 }

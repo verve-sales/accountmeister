@@ -55,7 +55,7 @@ export default async function KiVerwaltungPage({ searchParams }: { searchParams:
 
       <section className="card">
         <h2 className="font-semibold mb-2">Modelle je Aufgabe</h2>
-        {o.modelsError && <p className="text-sm mb-2">Modellliste nicht abrufbar: {o.modelsError}. Sie können Modellnamen trotzdem von Hand eintragen.</p>}
+        {o.modelsError && <p className="text-sm mb-2">Modellliste nicht abrufbar: {o.modelsError}. Persönliche Langdock-Schlüssel dürfen nur die Completion-Endpunkte nutzen; mit einem Workspace-Schlüssel erscheint die Liste. Modellnamen (wie in Langdock angezeigt, z. B. <code>gpt-4o-mini</code>, <code>claude-sonnet-4-5</code>) lassen sich von Hand eintragen.</p>}
         {o.models.length > 0 && <p className="muted text-sm mb-2">{o.models.length} Modelle im Langdock-Arbeitsraum verfügbar.</p>}
         <div className="space-y-4">
           {o.tasks.map((t) => (

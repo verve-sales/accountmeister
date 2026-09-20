@@ -81,6 +81,10 @@ export class LangdockProvider implements AIProvider {
     return parseJsonLoose(content);
   }
 
+  async ping(opts?: TaskOptions): Promise<void> {
+    await this.completeJson("Antworte ausschließlich mit dem JSON-Objekt {\"ok\":true}.", "Verbindungstest.", { ...opts, maxOutputTokens: 20, temperature: 0 });
+  }
+
   async structureNote(input: StructureNoteInput, opts?: TaskOptions): Promise<unknown> {
     const user = [
       `Setup: ${input.setupName}`,

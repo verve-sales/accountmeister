@@ -121,12 +121,29 @@ export async function getAiOverview(actor: Actor) {
   };
 }
 
-/** Verbindungstest: Modellliste abrufen. Sendet keine Inhalte. */
-export async function testConnection(actor: Actor) {
+/**
+ * Verbindungstest. Zuerst die Modellliste (kostet nichts); ist sie mit diesem Schlüssel nicht erlaubt (persönliche
+ * Langdock-Schlüssel erreichen nur die Completion-Endpunkte), folgt eine minimale Testanfrage ohne Inhalte.
+ */
+export async function testConnection(actor: Actor): Promise<{ models: number; viaCompletion: boolean; model: string; detail: string }> {
   assertAdmin(actor);
   const provider = getAIProvider();
-  if (!provider.listModels) throw new ValidationError("Der aktive Anbieter hat keine Verbindungsprüfung (AI_PROVIDER ist nicht „langdock“).");
-  const models = await provider.listModels();
-  await recordAudit(db, actor, "ai.connection_tested", "AI_PROVIDER", provider.info().id, { models: models.length });
-  return models.length;
+  if (!provider.listModels || !provider.ping) throw new ValidationError("Der aktive Anbieter hat keine Verbindungsprüfung (AI_PROVIDER ist nicht „langdock“).");
+  let result: { models: number; viaCompletion: boolean; model: string; detail: string };
+  try {
+    const models = await provider.listModels();
+    result = { models: models.length, viaCompletion: false, model: "", detail: `${models.length} Modell(e) verfügbar.` };
+  } catch (e) {
+    const first = e instanceof Error ? e.message : "Modellliste nicht abrufbar";
+    const opts = await getTaskOptions(actor.workspaceId, "STRUCTURE_NOTE");
+    const model = opts.model ?? getConfig().LANGDOCK_DEFAULT_MODEL;
+    try {
+      await provider.ping({ model });
+      result = { models: 0, viaCompletion: true, model, detail: `Modellliste nicht erlaubt (${first}) – Testanfrage an „${model}“ erfolgreich. Vermutlich ein persönlicher Schlüssel: Modelle bitte von Hand eintragen.` };
+    } catch (e2) {
+      throw e2;
+    }
+  }
+  await recordAudit(db, actor, "ai.connection_tested", "AI_PROVIDER", provider.info().id, { models: result.models, viaCompletion: result.viaCompletion });
+  return result;
 }

@@ -46,6 +46,8 @@ export interface AIProvider {
   lastUsage?(): Usage | null;
   /** Verfügbare Modelle im Arbeitsraum des Anbieters (für die Konfigurationsseite). */
   listModels?(): Promise<ModelInfo[]>;
+  /** Minimale Testanfrage ohne Inhalte (Verbindungsprüfung, wenn die Modellliste nicht erlaubt ist). */
+  ping?(opts?: TaskOptions): Promise<void>;
 }
 
 export type { StructureNoteOutput, IntakeProposal };
