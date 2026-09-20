@@ -94,6 +94,10 @@ export const intakeSignalSchema = z.object({
 export const intakeNeedSchema = z.object({
   title: z.string().min(3).max(200),
   needDescription: z.string().min(10).max(4000),
+  /** Wofür (Etappe 10): Art der Chance und Standardrolle, wenn erkennbar */
+  kind: z.enum(["VERVE_EXPERTE", "FREELANCER_EXPERTE", "AUSSCHREIBUNG"]).optional().default("VERVE_EXPERTE"),
+  roleName: z.string().max(120).optional().default(""),
+  horizon: z.string().max(60).optional().default(""),
   ...quoted,
 });
 
@@ -169,16 +173,33 @@ export type IntakeContact = z.infer<typeof intakeContactSchema>;
 export const ASSISTANT_CARDS_MARKER = "===KARTEN===";
 
 const q = { evidenceQuote: z.string().min(3).max(500) };
+/** Wofür (Etappe 10, E-045): jede Karte nennt die Chance, der sie dient – Titel einer bestehenden Chance oder Beschreibung einer neuen. Leer = unklar. */
+const w = { purpose: z.string().max(200).optional().default("") };
+
+export const chanceKindValues = ["VERVE_EXPERTE", "FREELANCER_EXPERTE", "AUSSCHREIBUNG"] as const;
+export const chanceKindLabel: Record<(typeof chanceKindValues)[number], string> = { VERVE_EXPERTE: "Verve-Experte", FREELANCER_EXPERTE: "Freelancer-Experte", AUSSCHREIBUNG: "Ausschreibung" };
 
 export const assistantItemSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("KUNDE"), name: z.string().min(2).max(200), orgType: z.enum(orgTypeValues).optional().default("SONSTIGE"), setupName: z.string().min(3).max(200), contextNote: z.string().max(2000).optional().default(""), ...q }),
   z.object({ type: z.literal("SETUP"), name: z.string().min(3).max(200), contextNote: z.string().max(2000).optional().default(""), ...q }),
   z.object({ type: z.literal("PERSON"), displayName: z.string().min(2).max(200), functionTitle: z.string().max(200).optional().default(""), knownResponsibility: z.string().max(500).optional().default(""), decisionRole: z.enum(decisionRoleValues).nullable().optional().default(null), stance: z.enum(stanceValues).optional().default("UNBEKANNT"), influence: z.enum(influenceValues).optional().default("UNBEKANNT"), assessmentNote: z.string().max(500).optional().default(""), ...q }),
-  z.object({ type: z.literal("SIGNAL"), observation: z.string().min(5).max(2000), relevanceHypothesis: z.string().max(2000).optional().default(""), ...q }),
-  z.object({ type: z.literal("BEDARF"), title: z.string().min(3).max(200), needDescription: z.string().min(10).max(4000), ...q }),
-  z.object({ type: z.literal("AKTION"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), ownerRole: z.enum(["BD", "ANKER", "PRINCIPAL"]).default("BD"), dueHint: z.string().max(100).optional().default(""), ...q }),
-  z.object({ type: z.literal("KONTAKT"), personName: z.string().min(2).max(200), viaVerveName: z.string().max(200).optional().default(""), occasion: z.string().min(3).max(500), draftMessage: z.string().max(1500).optional().default(""), ...q }),
-  z.object({ type: z.literal("FRAGE"), question: z.string().min(3).max(500), ...q }),
+  z.object({ type: z.literal("SIGNAL"), observation: z.string().min(5).max(2000), relevanceHypothesis: z.string().max(2000).optional().default(""), ...q, ...w }),
+  z.object({
+    type: z.literal("CHANCE"),
+    title: z.string().min(3).max(200),
+    needDescription: z.string().min(10).max(4000),
+    kind: z.enum(chanceKindValues).optional().default("VERVE_EXPERTE"),
+    /** Name einer Standardrolle aus dem Katalog (wird unscharf zugeordnet) */
+    roleName: z.string().max(120).optional().default(""),
+    headcount: z.number().int().min(1).max(999).nullable().optional().default(null),
+    horizon: z.string().max(60).optional().default(""),
+    /** antizipiert = aus Beobachtungen vermutet, noch nicht vom Kunden ausgesprochen */
+    anticipated: z.boolean().optional().default(true),
+    ...q,
+  }),
+  z.object({ type: z.literal("AKTION"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), ownerRole: z.enum(["BD", "ANKER", "PRINCIPAL"]).default("BD"), dueHint: z.string().max(100).optional().default(""), ...q, ...w }),
+  z.object({ type: z.literal("KONTAKT"), personName: z.string().min(2).max(200), viaVerveName: z.string().max(200).optional().default(""), occasion: z.string().min(3).max(500), draftMessage: z.string().max(1500).optional().default(""), ...q, ...w }),
+  z.object({ type: z.literal("FRAGE"), question: z.string().min(3).max(500), ...q, ...w }),
 ]);
 export type AssistantItem = z.infer<typeof assistantItemSchema>;
 
@@ -215,7 +236,7 @@ export const strategyProposalSchema = z.object({
 });
 export type StrategyProposal = z.infer<typeof strategyProposalSchema>;
 
-export const formKinds = ["VORHABEN", "SETUP", "BEDARF"] as const;
+export const formKinds = ["VORHABEN", "SETUP", "CHANCE"] as const;
 export type FormKind = (typeof formKinds)[number];
 
 export const formSuggestionSchema = z.object({

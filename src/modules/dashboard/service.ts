@@ -58,6 +58,9 @@ export type AccountCard = {
   stage: Stage;
   stageLabel: string;
   nextStep: string;
+  /** Wofür: alle aktiven Chancen des Kunden, kompakt */
+  purpose: string;
+  chanceCount: number;
   setups: SetupAnalysis[];
   blockers: string[];
   missing: string[];
@@ -188,6 +191,8 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
       stage: top.stage,
       stageLabel: top.stageLabel,
       nextStep: top.nextStep,
+      purpose: list.some((a) => a.opportunities.length) ? list.flatMap((a) => a.opportunities).map((o) => `${o.headcount ? `${o.headcount}× ` : ""}${o.roleName ?? o.title}${o.kind !== "VERVE_EXPERTE" ? ` (${o.kindLabel})` : ""}${o.horizon ? ` ${o.horizon}` : ""} – ${o.statusKey === "ANTIZIPIERT" ? "antizipiert" : o.status.toLowerCase()}`).join("; ") : "Noch keine Chance benannt – worauf läuft es hinaus?",
+      chanceCount: list.reduce((n, a) => n + a.opportunities.length, 0),
       setups: list,
       blockers,
       missing,

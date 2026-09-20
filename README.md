@@ -1,6 +1,6 @@
 # Verve Sales-Arbeitsumgebung (Pilot)
 
-Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–9 umgesetzt – vollständige Pilotversion mit fiktiven Daten, Start-Dashboard je Rolle mit Sichtwechsler, Strategiefaden je Setup, „Vorschlagen lassen“ in Formularen, ständig verfügbarer Assistent (Dialog mit Vorschlagskarten auf jeder Seite), Dokumentenupload, Kundenanlage aus Dialog/Dokument/Interview mit Folgeaktivitäten, Kontaktaufnahme-Entwürfen und Personenbewertung (Buyingcenter), KI über Langdock (Modelle je Aufgabe unter Verwaltung → KI). Anmeldung über Microsoft 365 (Entra ID) eingebaut; Installation auf dem IONOS Cloud Server: `docs/installation-ionos.md`. Echtdatenbetrieb erst nach den Freigaben in `docs/pilotfreigabe.md`; Betrieb siehe `docs/betrieb.md`. **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
+Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–10 umgesetzt – vollständige Pilotversion mit fiktiven Daten, Chance als Zentrum (Wofür: Verve-Experte, Freelancer-Experte, Ausschreibung mit Standardrollenkatalog), Start-Dashboard je Rolle mit Sichtwechsler, Strategiefaden je Setup, „Vorschlagen lassen“ in Formularen, ständig verfügbarer Assistent (Dialog mit Vorschlagskarten auf jeder Seite), Dokumentenupload, Kundenanlage aus Dialog/Dokument/Interview mit Folgeaktivitäten, Kontaktaufnahme-Entwürfen und Personenbewertung (Buyingcenter), KI über Langdock (Modelle je Aufgabe unter Verwaltung → KI). Anmeldung über Microsoft 365 (Entra ID) eingebaut; Installation auf dem IONOS Cloud Server: `docs/installation-ionos.md`. Echtdatenbetrieb erst nach den Freigaben in `docs/pilotfreigabe.md`; Betrieb siehe `docs/betrieb.md`. **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
 
 Dokumente: `docs/briefing.md` (Auftrag), `docs/implementierungsuebersicht.md`, `docs/entscheidungsprotokoll.md`.
 
@@ -50,7 +50,7 @@ docs             Briefing, Implementierungsübersicht, Entscheidungsprotokoll, B
 scripts          Start (Produktion), Migration, Sicherung, Wiederherstellung
 ```
 
-## Bekannte Einschränkungen (Stand Etappe 9)
+## Bekannte Einschränkungen (Stand Etappe 10)
 - Kontaktwege nur tabellarisch; die grafische Beziehungskarte folgt. Buyingcenter je Bedarf folgt mit dem Bedarfsobjekt.
 - Startvoraussetzungen werden frei erfasst; ein freigegebenes Regelwerk (Vertrag/Compliance/Onboarding) und die Vergütungsregeln (A16) sind offen. Nachweise sind Quellen/Belegnotizen, keine Dokumentenverwaltung.
 - Nutzungsgrenzen laufen im Prozessspeicher (eine Instanz). Docker-Abbild in dieser Umgebung nicht gebaut (kein Docker-Daemon) – erster Build auf dem Zielsystem prüfen. Zielbeiträge sind mit Setups/Kunden verknüpft; die Koppelung an Accountplan-Prioritäten ist im Datenmodell vorhanden, in der Oberfläche noch nicht.

@@ -73,7 +73,7 @@ export default async function StrategiePage({ params, searchParams }: { params: 
           <div><div className="font-medium mb-1">Was fehlt</div>{a.missing.length === 0 ? <p className="muted">Grundlagen vollständig.</p> : <ul className="space-y-1">{a.missing.map((m, i) => <li key={i}>{m}</li>)}</ul>}</div>
           <div><div className="font-medium mb-1">Naheliegende Züge</div>{a.moves.length === 0 ? <p className="muted">Nichts vorbereitet.</p> : <ul className="space-y-1">{a.moves.map((m, i) => <li key={i}><Link href={m.href}>{m.text}</Link></li>)}</ul>}</div>
         </div>
-        <p className="muted text-xs mt-3">Bedarfe: {a.opportunities.length ? a.opportunities.map((o) => `${o.title} (${o.status}, ${o.ageDays} Tage)`).join("; ") : "keine"} · {a.counts.persons} Person(en) · {a.counts.openActions} offene Aktion(en) · letztes bestätigtes Weekly {a.weekly.daysSince === null ? "keins" : `vor ${a.weekly.daysSince} Tagen`}</p>
+        <p className="muted text-xs mt-3">Chancen: {a.opportunities.length ? a.opportunities.map((o) => `${o.title} (${o.status}, ${o.ageDays} Tage)`).join("; ") : "keine"} · {a.counts.persons} Person(en) · {a.counts.openActions} offene Aktion(en) · letztes bestätigtes Weekly {a.weekly.daysSince === null ? "keins" : `vor ${a.weekly.daysSince} Tagen`}</p>
       </section>
 
       {latest && (

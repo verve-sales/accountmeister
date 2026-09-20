@@ -35,7 +35,7 @@ export default async function SetupArtefaktePage({ params, searchParams }: { par
       <Feedback params={sp} />
       <section className="card">
         <h2 className="font-semibold mb-2">Textentwürfe ({artifacts.length})</h2>
-        {artifacts.length === 0 ? <p className="muted text-sm">Noch keine Textentwürfe. Lebende Artefakte (Setup, Personen & Zugang, Hinweise, Übergaben, Kontaktwege, Weeklys, Accountplan) sind direkt als Ansichten vorhanden.</p> : (
+        {artifacts.length === 0 ? <p className="muted text-sm">Noch keine Textentwürfe. Lebende Artefakte (Setup, Personen & Zugang, Beobachtungen, Übergaben, Kontaktwege, Weeklys, Accountplan) sind direkt als Ansichten vorhanden.</p> : (
           <table className="list">
             <thead><tr><th>Artefakt</th><th>Vorlage</th><th>Variante</th><th>Version</th><th>Status</th><th>Empfängerkreis</th><th>Zuletzt</th></tr></thead>
             <tbody>

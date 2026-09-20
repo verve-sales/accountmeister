@@ -6,6 +6,7 @@ import { getCurrentActor, } from "@/modules/identity/session";
 import { hasRole } from "@/modules/identity/actor";
 import { buildPortfolio, listGoals, listLeadershipReviews, listMySupportRequests } from "@/modules/leadership/service";
 import { listVisibleAccounts } from "@/modules/accounts/service";
+import { buildChanceOverview, MATURITY, maturityLabel } from "@/modules/strategy/chancen";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { fmtDate, fmtDateTime, goalStatusLabel, reviewStatusLabel, reviewTypeLabel, supportStatusLabel } from "@/lib/labels";
@@ -25,6 +26,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
   ]);
   let portfolio: Awaited<ReturnType<typeof buildPortfolio>> | null = null;
   if (isLeader) portfolio = await buildPortfolio(actor);
+  const chancen = await buildChanceOverview(actor);
   const openSupport = support.filter((s) => s.status === "ANGEFRAGT" || s.status === "ANGENOMMEN");
   const back = "/ziele";
 
@@ -33,12 +35,50 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
       <h1 className="text-2xl font-semibold">Ziele & Portfolio</h1>
       <Feedback params={params} />
 
+      {/* Zielbild (E-045): worauf das Portfolio hinausläuft – Chancen je Art, Rollenfamilie und Reifegrad */}
+      <section className="card">
+        <h2 className="font-semibold mb-1">Wohin läuft es – Chancen im Portfolio</h2>
+        <p className="muted text-sm mb-3">{chancen.byKind.map((k) => `${k.label}: ${k.positions} Position(en) in ${k.chances} Chance(n)`).join(" · ")}</p>
+        {chancen.matrix.length === 0 ? (
+          <p className="muted text-sm">Noch keine aktiven Chancen. Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten – jede mit Art (Verve-Experte, Freelancer-Experte, Ausschreibung) und Standardrolle.</p>
+        ) : (
+          <table className="list text-sm">
+            <thead><tr><th>Rollenfamilie</th>{MATURITY.map((m) => <th key={m}>{maturityLabel[m]}</th>)}<th>Summe</th></tr></thead>
+            <tbody>
+              {chancen.matrix.map((r) => (
+                <tr key={r.family}><td>{r.label}</td>{MATURITY.map((m) => <td key={m}>{r.cells[m] || <span className="muted">–</span>}</td>)}<td><strong>{r.total}</strong></td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {chancen.rows.length > 0 && (
+          <details className="mt-3 text-sm">
+            <summary className="muted">Alle Chancen ({chancen.rows.length})</summary>
+            <table className="list mt-2">
+              <thead><tr><th>Kunde</th><th>Chance</th><th>Wofür</th><th>Reifegrad</th><th>Horizont</th></tr></thead>
+              <tbody>
+                {chancen.rows.map((r) => (
+                  <tr key={r.id}>
+                    <td><Link href={`/kunden/${r.accountId}`}>{r.accountName}</Link></td>
+                    <td><Link href={`/bedarfe/${r.id}`}>{r.title}</Link><span className="muted"> · {r.setupName}</span></td>
+                    <td>{r.kindLabel}{r.roleName ? ` · ${r.roleName}` : ` · ${r.familyLabel}`}{r.headcount > 1 ? ` · ${r.headcount}×` : ""}</td>
+                    <td><Status label={maturityLabel[r.maturity]} /></td>
+                    <td>{r.horizon ?? <span className="muted">–</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        )}
+        <p className="muted text-xs mt-2">{chancen.note}</p>
+      </section>
+
       {portfolio && (
         <section className="card">
           <h2 className="font-semibold mb-2">Portfolio ({portfolio.entries.length} Kunden)</h2>
           <p className="muted text-sm mb-2">{portfolio.note}</p>
           <table className="list">
-            <thead><tr><th>Kunde</th><th>BD</th><th>Setups</th><th>Offene Hinweise</th><th>Offene Fragen</th><th>Zugangslücken</th><th>Prioritäten (vereinbart / vorgeschlagen)</th><th>Aktionen (offen / blockiert)</th><th>Unterstützung offen</th><th>Letztes bestätigtes Weekly</th></tr></thead>
+            <thead><tr><th>Kunde</th><th>BD</th><th>Setups</th><th>Offene Beobachtungen</th><th>Offene Fragen</th><th>Zugangslücken</th><th>Prioritäten (vereinbart / vorgeschlagen)</th><th>Aktionen (offen / blockiert)</th><th>Unterstützung offen</th><th>Letztes bestätigtes Weekly</th></tr></thead>
             <tbody>
               {portfolio.entries.map((e) => (
                 <tr key={e.accountId}>

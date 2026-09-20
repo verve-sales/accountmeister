@@ -159,7 +159,7 @@ describe("Etappe 6B: Kundenanlage aus Dokument", () => {
     expect(signals[0]?.status).toBe("NEU");
     const opps = await listOpportunitiesForSetup(david, res.setupId);
     expect(opps).toHaveLength(1);
-    expect(opps[0]?.status).toBe("IN_KLAERUNG");
+    expect(opps[0]?.status).toBe("ANTIZIPIERT"); // aus Dokument: vermutet, nicht vom Kunden ausgesprochen (E-045);
     // Zweite Übernahme ist ausgeschlossen
     await expect(applyIntake(david, proposal.id, form)).rejects.toBeInstanceOf(TransitionError);
   });

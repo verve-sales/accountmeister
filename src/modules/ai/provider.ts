@@ -52,7 +52,7 @@ export type StrategyInput = {
 
 /** Formularvorschlag (Etappe 9): welches Formular, welche Felder mit Bedeutung, bekannter Kontext. */
 export type FormSuggestInput = {
-  kind: "VORHABEN" | "SETUP" | "BEDARF";
+  kind: "VORHABEN" | "SETUP" | "CHANCE";
   fields: { name: string; label: string; options?: string[] }[];
   contextText: string;
   analysisText: string;

@@ -69,7 +69,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
       {canCreateAccount(actor) && (
         <section className="card">
           <h2 className="font-semibold mb-1">Kunde aus Dialog, Dokument oder Interview anlegen</h2>
-          <p className="muted text-sm mb-2">Ein Gesprächsprotokoll, eine Ausschreibung oder ein Extrakt hochladen – {ai.enabled ? "die KI schlägt Organisation, Setup, Ansprechpartner, Signale und mögliche Bedarfe vor, Sie prüfen und übernehmen." : "der Text wird als Quelle geführt und Sie füllen die Anlage von Hand aus (KI ist deaktiviert)."}</p>
+          <p className="muted text-sm mb-2">Ein Gesprächsprotokoll, eine Ausschreibung oder ein Extrakt hochladen – {ai.enabled ? "die KI schlägt Organisation, Setup, Ansprechpartner, Signale und mögliche Chancen vor, Sie prüfen und übernehmen." : "der Text wird als Quelle geführt und Sie füllen die Anlage von Hand aus (KI ist deaktiviert)."}</p>
           <div className="flex flex-wrap gap-3 items-center">
             <Link href="/kunden?assistent=interview" className="btn">Mit dem Assistenten erfassen (Dialog)</Link>
             <Link href="/kunden/anlage/neu" className="btn btn-secondary">Dokument hochladen und Vorschlag erzeugen</Link>

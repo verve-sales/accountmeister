@@ -4,6 +4,8 @@ import type { Actor } from "@/modules/identity/actor";
 import { canViewSetup, type SetupContext } from "@/modules/identity/authz";
 import { getBuyingCenter } from "@/modules/people/assessments";
 import { opportunityStatusLabel } from "@/lib/labels";
+import { chanceKindLabel } from "@/modules/ai/schemas";
+import { listRoles } from "@/modules/roles/catalog";
 
 /**
  * Regelbasierte Lageanalyse je Setup (Etappe 9): Wo stehen wir, was ist der nächste große Schritt, was blockiert,
@@ -16,8 +18,8 @@ export type Stage = (typeof STAGES)[number];
 
 export const stageLabel: Record<Stage, string> = {
   KONTAKT: "Kontakt & Kontext",
-  BEDARF_IN_KLAERUNG: "Bedarf in Klärung",
-  BEDARF_BESTAETIGT: "Bedarf bestätigt",
+  BEDARF_IN_KLAERUNG: "Chance in Klärung",
+  BEDARF_BESTAETIGT: "Chance bestätigt",
   ANGEBOT: "Angebot / Profil vorgestellt",
   AUSWAHL: "Auswahl / Bestellung",
   BEAUFTRAGT: "Beauftragt",
@@ -26,8 +28,8 @@ export const stageLabel: Record<Stage, string> = {
 
 /** Der nächste große Schritt je Stufe – als Satz, den der BD lesen kann. */
 export const nextBigStep: Record<Stage, string> = {
-  KONTAKT: "Ersten konkreten Bedarf in Kundensprache erfassen (aus Gespräch, Signal oder Dokument).",
-  BEDARF_IN_KLAERUNG: "Bedarf mit dem Bedarfsträger bestätigen – mit Beleg (Gesprächsnotiz, Mail).",
+  KONTAKT: "Ersten konkreten Chance in Kundensprache erfassen (aus Gespräch, Signal oder Dokument).",
+  BEDARF_IN_KLAERUNG: "Chance mit dem Bedarfsträger bestätigen – mit Beleg (Gesprächsnotiz, Mail).",
   BEDARF_BESTAETIGT: "Passendes Profil oder Angebot vorstellen und Rückmeldung vereinbaren.",
   ANGEBOT: "Rückmeldung zum Angebot einholen; Entscheidungsweg und Freigaben klären.",
   AUSWAHL: "Beauftragung mit Nachweis festhalten (Bestellung, Bestätigung).",
@@ -53,7 +55,9 @@ export type SetupAnalysis = {
   lastActivity: Date;
   daysSinceActivity: number;
   counts: { openActions: number; overdueActions: number; blockedActions: number; openSuggestions: number; mySuggestions: number; openQuestions: number; persons: number; signalsNew: number; opportunities: number };
-  opportunities: { id: string; title: string; status: string; ageDays: number }[];
+  opportunities: { id: string; title: string; status: string; statusKey: string; ageDays: number; kind: string; kindLabel: string; roleName: string | null; headcount: number | null; horizon: string | null }[];
+  /** Wofür in einem Satz: worauf die Arbeit in diesem Setup hinausläuft */
+  purpose: string;
   weekly: { lastConfirmedAt: Date | null; daysSince: number | null };
 };
 
@@ -96,6 +100,10 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
 
   const activeOpps = opps.filter((o) => !["ZURUECKGESTELLT", "BEENDET"].includes(o.status));
   const stage = stageFromOpportunities(activeOpps, offers, orders);
+  const roles = await listRoles(ctx.setup.workspaceId, { includeInactive: true });
+  const roleName = (id: string | null) => (id ? roles.find((r) => r.id === id)?.name ?? null : null);
+  const describe = (o: (typeof opps)[number]) => `${o.headcount ? `${o.headcount}× ` : ""}${roleName(o.roleId) ?? o.title}${o.kind !== "VERVE_EXPERTE" ? ` (${chanceKindLabel[o.kind]})` : ""}${o.horizon ? ` ${o.horizon}` : ""} – ${o.status === "ANTIZIPIERT" ? "antizipiert" : (opportunityStatusLabel[o.status] ?? o.status).toLowerCase()}`;
+  const purpose = activeOpps.length ? activeOpps.map(describe).join("; ") : "Noch keine Chance benannt – worauf läuft es hinaus?";
   const blockers: string[] = [];
   const missing: string[] = [];
   const moves: { text: string; href: string }[] = [];
@@ -122,10 +130,10 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
     for (const g of bcGaps.filter((g) => !g.startsWith("Keine Person mit Rolle")).slice(0, 2)) missing.push(g);
   }
 
-  // Bedarfe
+  // Chancen
   for (const o of activeOpps) {
     const age = days(o.createdAt) ?? 0;
-    if (o.status === "IN_KLAERUNG" && age > 21) blockers.push(`Bedarf „${o.title}“ ist seit ${age} Tagen in Klärung – Bestätigung mit Beleg einholen oder zurückstellen.`);
+    if (o.status === "IN_KLAERUNG" && age > 21) blockers.push(`Chance „${o.title}“ ist seit ${age} Tagen in Klärung – Bestätigung mit Beleg einholen oder zurückstellen.`);
   }
   for (const of of offers) {
     if (["VORGESTELLT", "RUECKMELDUNG_OFFEN"].includes(of.status)) moves.push({ text: "Rückmeldung zum vorgestellten Angebot einholen.", href: setupHref });
@@ -135,9 +143,11 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
     if (od.status === "BEAUFTRAGUNG_BESTAETIGT" && od.engagementStatus === "GEPLANT") moves.push({ text: "Startvoraussetzungen prüfen und Start terminieren.", href: setupHref });
   }
   if (stage === "KONTAKT" && activeOpps.length === 0) {
-    if (signals.length > 0) moves.push({ text: `${signals.length} neue(r) Hinweis(e) prüfen – daraus kann ein Bedarf entstehen.`, href: setupHref });
-    else missing.push("Noch kein Bedarf und kein Hinweis erfasst – was will der Kunde erreichen?");
+    if (signals.length > 0) moves.push({ text: `${signals.length} neue Beobachtung(en) prüfen – daraus kann eine Chance werden.`, href: setupHref });
+    else missing.push("Wofür fehlt: keine Chance benannt (Verve-Experte, Freelancer oder Ausschreibung) – worauf läuft es hinaus?");
   }
+  for (const o of activeOpps) if (!o.roleId && o.kind !== "AUSSCHREIBUNG") missing.push(`Chance „${o.title}“: Standardrolle noch offen.`);
+  if (activeOpps.length > 0 && activeOpps.every((o) => o.status === "ANTIZIPIERT")) moves.push({ text: "Alle Chancen sind nur antizipiert – im nächsten Gespräch prüfen, ob der Kunde den Bedarf ausspricht.", href: setupHref });
 
   // Aktionen
   const overdue = actions.filter((a) => a.dueDate && a.dueDate < today && a.status !== "BLOCKIERT");
@@ -174,7 +184,8 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
     lastActivity,
     daysSinceActivity: since,
     counts: { openActions: actions.length, overdueActions: overdue.length, blockedActions: blocked.length, openSuggestions: suggestions.length, mySuggestions: mine.length, openQuestions: openQuestions.length, persons: persons.length, signalsNew: signals.length, opportunities: activeOpps.length },
-    opportunities: activeOpps.map((o) => ({ id: o.id, title: o.title, status: opportunityStatusLabel[o.status] ?? o.status, ageDays: days(o.createdAt) ?? 0 })),
+    opportunities: activeOpps.map((o) => ({ id: o.id, title: o.title, status: opportunityStatusLabel[o.status] ?? o.status, statusKey: o.status, ageDays: days(o.createdAt) ?? 0, kind: o.kind, kindLabel: chanceKindLabel[o.kind], roleName: roleName(o.roleId), headcount: o.headcount, horizon: o.horizon })),
+    purpose,
     weekly: { lastConfirmedAt: lastWeekly, daysSince: weeklyDays },
   };
 }
@@ -184,8 +195,8 @@ export function analysisToText(a: SetupAnalysis): string {
   const lines = [
     `Setup: ${a.setupName} (Kunde: ${a.accountName}, Status ${a.setupStatus})`,
     `Stufe: ${a.stageLabel}. Nächster großer Schritt: ${a.nextStep}`,
-    a.opportunities.length ? `Bedarfe: ${a.opportunities.map((o) => `${o.title} [${o.status}, ${o.ageDays} Tage]`).join("; ")}` : "Bedarfe: keine",
-    `Offene Aktionen: ${a.counts.openActions} (überfällig ${a.counts.overdueActions}, blockiert ${a.counts.blockedActions}); offene Vorschläge: ${a.counts.openSuggestions}; offene Fragen: ${a.counts.openQuestions}; Personen: ${a.counts.persons}; neue Hinweise: ${a.counts.signalsNew}`,
+    a.opportunities.length ? `Chancen: ${a.opportunities.map((o) => `${o.title} [${o.status}, ${o.ageDays} Tage]`).join("; ")}` : "Chancen: keine",
+    `Offene Aktionen: ${a.counts.openActions} (überfällig ${a.counts.overdueActions}, blockiert ${a.counts.blockedActions}); offene Vorschläge: ${a.counts.openSuggestions}; offene Fragen: ${a.counts.openQuestions}; Personen: ${a.counts.persons}; neue Beobachtungen: ${a.counts.signalsNew}`,
     `Letzte Änderung vor ${a.daysSinceActivity} Tagen; letztes bestätigtes Weekly: ${a.weekly.daysSince === null ? "keins" : `vor ${a.weekly.daysSince} Tagen`}`,
     a.blockers.length ? `Blocker: ${a.blockers.join(" | ")}` : "",
     a.missing.length ? `Fehlt: ${a.missing.join(" | ")}` : "",

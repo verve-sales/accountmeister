@@ -9,7 +9,7 @@ import { useRef, useState } from "react";
  */
 export type SuggestField = { name: string; label: string; options?: string[] };
 
-export function SuggestButton({ kind, accountId, setupId, fields, label = "Vorschlagen lassen" }: { kind: "VORHABEN" | "SETUP" | "BEDARF"; accountId?: string; setupId?: string; fields: SuggestField[]; label?: string }) {
+export function SuggestButton({ kind, accountId, setupId, fields, label = "Vorschlagen lassen" }: { kind: "VORHABEN" | "SETUP" | "CHANCE"; accountId?: string; setupId?: string; fields: SuggestField[]; label?: string }) {
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<{ text: string; kind: "ok" | "hinweis" | "fehler"; missing?: string[]; quote?: string } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);

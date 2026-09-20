@@ -24,7 +24,7 @@ type View = {
   ai: { enabled: boolean; description: string };
 };
 
-const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", BEDARF: "Möglicher Bedarf", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage" };
+const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage" };
 
 function contextFromPath(pathname: string): { type: string; id: string } {
   const setup = /^\/setups\/([^/]+)/.exec(pathname);
@@ -45,7 +45,7 @@ function cardTitle(item: Item): string {
       return `${s("displayName")}${s("functionTitle") ? ` – ${s("functionTitle")}` : ""}`;
     case "SIGNAL":
       return s("observation");
-    case "BEDARF":
+    case "CHANCE":
       return s("title");
     case "AKTION":
       return `${s("title")}${s("ownerRole") ? ` (${s("ownerRole")})` : ""}${s("dueHint") ? ` · ${s("dueHint")}` : ""}`;
@@ -67,8 +67,11 @@ function cardDetail(item: Item): string {
     }
     case "SIGNAL":
       return s("relevanceHypothesis") ? `Vermutung: ${s("relevanceHypothesis")}` : "";
-    case "BEDARF":
-      return s("needDescription");
+    case "CHANCE": {
+      const kind: Record<string, string> = { VERVE_EXPERTE: "Verve-Experte", FREELANCER_EXPERTE: "Freelancer-Experte", AUSSCHREIBUNG: "Ausschreibung" };
+      const meta = [kind[s("kind")] ?? s("kind"), s("roleName"), s("headcount") && s("headcount") !== "null" ? `${s("headcount")}×` : "", s("horizon"), item.anticipated === false ? "vom Kunden ausgesprochen" : "antizipiert"].filter(Boolean).join(" · ");
+      return `${meta}\n${s("needDescription")}`;
+    }
     case "AKTION":
       return s("description");
     case "KONTAKT":
@@ -317,7 +320,8 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
                           <span className="status">{TYPE_LABEL[c.item.type] ?? c.item.type}</span>
                           <span className="font-medium">{cardTitle(c.item)}</span>
                         </div>
-                        {cardDetail(c.item) && <div className="muted text-xs mt-1">{cardDetail(c.item)}</div>}
+                        {cardDetail(c.item) && <div className="muted text-xs mt-1" style={{ whiteSpace: "pre-wrap" }}>{cardDetail(c.item)}</div>}
+                        {"purpose" in c.item && (c.item.purpose ? <div className="text-xs mt-1"><span className="muted">Wofür: </span>{String(c.item.purpose)}</div> : <div className="text-xs mt-1" style={{ color: "#8a6d1f" }}>Wofür unklar – nur übernehmen, wenn du den Zweck kennst.</div>)}
                         <div className="muted text-xs mt-1">Textstelle: „{c.item.evidenceQuote.length > 120 ? c.item.evidenceQuote.slice(0, 117) + "…" : c.item.evidenceQuote}“</div>
                         {c.status === "NEU" && view?.context.canWrite && (
                           <div className="flex gap-2 mt-2">

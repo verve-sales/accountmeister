@@ -19,6 +19,7 @@ import {
   uniqueIndex,
   index,
   primaryKey,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -318,6 +319,7 @@ export const signals = pgTable(
     id: id(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    opportunityId: text("opportunity_id").references((): AnyPgColumn => opportunities.id), // Wofür (Etappe 10)
     observation: text("observation").notNull(), // sichere Beobachtung
     relevanceHypothesis: text("relevance_hypothesis"), // Vermutung, klar getrennt
     usageLimit: text("usage_limit"), // Nutzungsgrenze („nicht gegenüber Kunde erwähnen“ etc.)
@@ -339,6 +341,7 @@ export const actions = pgTable(
   {
     id: id(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    opportunityId: text("opportunity_id").references((): AnyPgColumn => opportunities.id), // Wofür (Etappe 10)
     setupId: text("setup_id").references(() => projectSetups.id),
     signalId: text("signal_id").references(() => signals.id),
     reviewId: text("review_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => reviews.id), // im Weekly vereinbart
@@ -779,6 +782,8 @@ export const suggestions = pgTable(
     id: id(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     type: suggestionTypeEnum("type").notNull(),
+    opportunityId: text("opportunity_id").references((): AnyPgColumn => opportunities.id), // Wofür (Etappe 10)
+    purpose: text("purpose"), // Wofür als Text, wenn (noch) keine Chance existiert
     title: text("title").notNull(),
     targetRole: text("target_role").notNull(), // adressierte Rolle (BD, ANKER, PRINCIPAL …)
     setupId: text("setup_id").notNull().references(() => projectSetups.id),
@@ -827,6 +832,7 @@ export const openQuestions = pgTable(
     id: id(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    opportunityId: text("opportunity_id").references((): AnyPgColumn => opportunities.id), // Wofür (Etappe 10)
     question: text("question").notNull(),
     decisionImpact: text("decision_impact"), // Entscheidungsauswirkung
     possibleSource: text("possible_source"), // geeignete Quelle / Kontaktweg
@@ -1057,6 +1063,7 @@ export const confidentialNotes = pgTable(
 // ---------------------------------------------------------------------------
 
 export const opportunityStatusEnum = pgEnum("opportunity_status", [
+  "ANTIZIPIERT", // Vermutung aus Beobachtungen – noch nicht vom Kunden ausgesprochen (Etappe 10)
   "IN_KLAERUNG",
   "BESTAETIGT",
   "PROFIL_ANGEBOT_VORGESTELLT",
@@ -1065,6 +1072,27 @@ export const opportunityStatusEnum = pgEnum("opportunity_status", [
   "ZURUECKGESTELLT",
   "BEENDET",
 ]);
+/** Art einer Chance (Etappe 10, E-045): worauf die Arbeit beim Kunden hinausläuft. */
+export const chanceKindEnum = pgEnum("chance_kind", ["VERVE_EXPERTE", "FREELANCER_EXPERTE", "AUSSCHREIBUNG"]);
+/** Rollenfamilien des Verve-Standardrollenkatalogs. */
+export const roleFamilyEnum = pgEnum("role_family", ["DELIVERY_MANAGEMENT", "AGILE_LEADERSHIP", "BUSINESS_ANALYSE", "SOLUTION_ARCHITEKTUR", "TEST_QS"]);
+
+/** Standardrollen-Katalog je Arbeitsraum (Verwaltung → Rollen); Seed aus dem Verve-Katalog. */
+export const standardRoles = pgTable(
+  "standard_roles",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    family: roleFamilyEnum("family").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    active: boolean("active").notNull().default(true),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("standard_roles_name_uq").on(t.workspaceId, t.name), index("standard_roles_family_idx").on(t.workspaceId, t.family)],
+);
+
 export const decisionRoleEnum = pgEnum("decision_role", [
   "BEDARFSTRAEGER",
   "FACHLICHE_BEWERTUNG",
@@ -1090,6 +1118,12 @@ export const opportunities = pgTable(
     needDescription: text("need_description").notNull(), // Bedarfsbeschreibung in Kundensprache
     trigger: text("trigger"), // konkreter Anlass (Identify Pain), nur dokumentiert
     status: opportunityStatusEnum("status").notNull().default("IN_KLAERUNG"),
+    // Wofür (Etappe 10): Art der Chance, Standardrolle, Anzahl, Zeithorizont – alles außer der Art optional
+    kind: chanceKindEnum("kind").notNull().default("VERVE_EXPERTE"),
+    roleId: text("role_id").references(() => standardRoles.id),
+    roleFamily: roleFamilyEnum("role_family"), // wenn nur die Familie bekannt ist (z. B. Ausschreibung)
+    headcount: integer("headcount"),
+    horizon: text("horizon"), // z. B. „Q1 2027“, „ab Mitte 2027“
     ownerUserId: text("owner_user_id").notNull().references(() => users.id),
     fastTrack: boolean("fast_track").notNull().default(false), // direkte Anfrage (9.4)
     requestedAt: timestamp("requested_at", { withTimezone: true }), // Messstart Fast-Track, manuell gesetzt
@@ -1373,3 +1407,5 @@ export type InterviewStatus = (typeof interviewStatusEnum.enumValues)[number];
 export type Stance = (typeof stanceEnum.enumValues)[number];
 export type AssistantContext = (typeof assistantContextEnum.enumValues)[number];
 export type Influence = (typeof influenceEnum.enumValues)[number];
+export type ChanceKind = (typeof chanceKindEnum.enumValues)[number];
+export type RoleFamily = (typeof roleFamilyEnum.enumValues)[number];

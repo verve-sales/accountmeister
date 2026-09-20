@@ -5,6 +5,8 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { getOpportunityDetail, MEDDPICC_KEYS } from "@/modules/opportunities/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
+import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
+import { groupByFamily } from "@/modules/roles/catalog";
 import { decisionRoleLabel, engagementStatusLabel, epistemicLabel, fmtDate, fmtDateTime, offerStatusLabel, opportunityStatusLabel, orderStatusLabel, requirementStatusLabel, sourceTypeLabel } from "@/lib/labels";
 import {
   addParticipationAction, addStartRequirementAction, cancelOrderAction, changeOfferStatusAction, changeOpportunityStatusAction, confirmOpportunityAction, confirmOrderAction, createOfferAction,
@@ -49,7 +51,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   return (
     <div className="space-y-6">
       <p className="text-sm">
-        <Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${ctx.account.id}`}>{ctx.account.name}</Link> › <Link href={`/setups/${ctx.setup.id}`}>{ctx.setup.name}</Link> › Bedarf
+        <Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${ctx.account.id}`}>{ctx.account.name}</Link> › <Link href={`/setups/${ctx.setup.id}`}>{ctx.setup.name}</Link> › Chance
       </p>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">{opp.title}</h1>
@@ -74,13 +76,27 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         <p className="muted text-xs mt-1">Orientierung, keine Pflichtschleuse: Zugangsentwicklung läuft parallel weiter; Angebot, Auftrag und Einsatz haben eigene Zustände.</p>
       </section>
 
-      {/* Bedarf */}
+      {/* Wofür-Verknüpfungen (E-045): was schon auf diese Chance einzahlt */}
+      {(d.linked.signals.length + d.linked.actions.length + d.linked.questions.length + d.linked.suggestions.length > 0) && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Was auf diese Chance einzahlt</h2>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            {d.linked.actions.length > 0 && <div><div className="font-medium mb-1">Aktionen ({d.linked.actions.length})</div><ul className="space-y-1">{d.linked.actions.map((a) => <li key={a.id}>{a.title} <Status label={a.status} /></li>)}</ul></div>}
+            {d.linked.signals.length > 0 && <div><div className="font-medium mb-1">Beobachtungen ({d.linked.signals.length})</div><ul className="space-y-1">{d.linked.signals.map((x) => <li key={x.id}>{x.observation.slice(0, 160)}</li>)}</ul></div>}
+            {d.linked.questions.length > 0 && <div><div className="font-medium mb-1">Offene Fragen ({d.linked.questions.length})</div><ul className="space-y-1">{d.linked.questions.map((x) => <li key={x.id}>{x.question}</li>)}</ul></div>}
+            {d.linked.suggestions.length > 0 && <div><div className="font-medium mb-1">Offene Vorschläge ({d.linked.suggestions.length})</div><ul className="space-y-1">{d.linked.suggestions.map((x) => <li key={x.id}>{x.title}</li>)}</ul></div>}
+          </div>
+        </section>
+      )}
+
+      {/* Chance */}
       <section className="card">
-        <h2 className="font-semibold mb-2">Bedarf</h2>
+        <h2 className="font-semibold mb-2">Chance</h2>
         <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <div className="sm:col-span-2"><dt className="muted">Bedarfsbeschreibung (Kundensprache)</dt><dd className="whitespace-pre-wrap">{opp.needDescription}</dd></div>
+          <div className="sm:col-span-2"><dt className="muted">Wofür</dt><dd><strong>{chanceKindLabel[opp.kind]}</strong>{opp.roleId ? ` · ${d.roles.find((r) => r.id === opp.roleId)?.name ?? "Rolle"}` : " · Standardrolle noch offen"}{opp.headcount ? ` · ${opp.headcount}×` : ""}{opp.horizon ? ` · ${opp.horizon}` : ""}{opp.status === "ANTIZIPIERT" && <span className="muted"> · antizipiert – vom Kunden noch nicht ausgesprochen</span>}</dd></div>
+          <div className="sm:col-span-2"><dt className="muted">Beschreibung in Kundensprache</dt><dd className="whitespace-pre-wrap">{opp.needDescription}</dd></div>
           <div><dt className="muted">Konkreter Anlass</dt><dd>{opp.trigger ?? "–"}</dd></div>
-          <div><dt className="muted">Herkunft</dt><dd>{d.signal ? <>Hinweis: „{d.signal.observation}“</> : "direkt erfasst"}</dd></div>
+          <div><dt className="muted">Herkunft</dt><dd>{d.signal ? <>Beobachtung: „{d.signal.observation}“</> : "direkt erfasst"}</dd></div>
           <div className="sm:col-span-2">
             <dt className="muted">Bestätigung</dt>
             <dd>
@@ -92,20 +108,29 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         </dl>
         {canEdit && !closed && (
           <div className="mt-3 space-y-3">
-            {(opp.status === "IN_KLAERUNG" || opp.status === "ZURUECKGESTELLT") && (
+            {opp.status === "ANTIZIPIERT" && (
+              <form action={changeOpportunityStatusAction} className="flex flex-wrap gap-2 items-center text-sm">
+                <input type="hidden" name="opportunityId" value={opp.id} />
+                <input type="hidden" name="version" value={opp.version} />
+                <input type="hidden" name="reason" value="Vom Kunden angesprochen" />
+                <span className="muted">Der Kunde hat den Bedarf jetzt angesprochen?</span>
+                <button className="btn btn-secondary btn-small" name="status" value="IN_KLAERUNG">In Klärung nehmen</button>
+              </form>
+            )}
+            {(opp.status === "ANTIZIPIERT" || opp.status === "IN_KLAERUNG" || opp.status === "ZURUECKGESTELLT") && (
               <details>
-                <summary>Bedarf bestätigen (mit Beleg)</summary>
+                <summary>Chance bestätigen (mit Beleg)</summary>
                 <form action={confirmOpportunityAction} className="mt-2 grid sm:grid-cols-2 gap-3">
                   <input type="hidden" name="opportunityId" value={opp.id} />
                   <input type="hidden" name="version" value={opp.version} />
                   <EvidenceFields prefix="conf" sources={d.sources} label="Bestätigung durch den Kunden" />
                   <div className="sm:col-span-2"><label className="label" htmlFor="confNote">Anmerkung (optional; Budget-/Beschaffungsinfo darf noch fehlen)</label><input id="confNote" name="confirmedNote" className="input" /></div>
-                  <div className="sm:col-span-2"><button className="btn" type="submit">Bedarf bestätigen</button></div>
+                  <div className="sm:col-span-2"><button className="btn" type="submit">Chance bestätigen</button></div>
                 </form>
               </details>
             )}
             <details>
-              <summary>Bedarf bearbeiten</summary>
+              <summary>Chance bearbeiten</summary>
               <form action={updateOpportunityAction} className="mt-2 grid sm:grid-cols-2 gap-3">
                 <input type="hidden" name="opportunityId" value={opp.id} />
                 <input type="hidden" name="version" value={opp.version} />
@@ -114,8 +139,21 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
                   <label className="label" htmlFor="oOwner">Verantwortlich</label>
                   <select id="oOwner" name="ownerUserId" className="select" defaultValue={opp.ownerUserId}>{d.users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}</select>
                 </div>
-                <div className="sm:col-span-2"><label className="label" htmlFor="oNeed">Bedarfsbeschreibung</label><textarea id="oNeed" name="needDescription" className="textarea" required minLength={10} defaultValue={opp.needDescription} /></div>
+                <div className="sm:col-span-2"><label className="label" htmlFor="oNeed">Beschreibung in Kundensprache</label><textarea id="oNeed" name="needDescription" className="textarea" required minLength={10} defaultValue={opp.needDescription} /></div>
                 <div className="sm:col-span-2"><label className="label" htmlFor="oTrigger">Konkreter Anlass</label><input id="oTrigger" name="trigger" className="input" defaultValue={opp.trigger ?? ""} /></div>
+                <div>
+                  <label className="label" htmlFor="oKind">Wofür – Art der Chance</label>
+                  <select id="oKind" name="kind" className="select" defaultValue={opp.kind}>{chanceKindValues.map((k) => <option key={k} value={k}>{chanceKindLabel[k]}</option>)}</select>
+                </div>
+                <div>
+                  <label className="label" htmlFor="oRole">Standardrolle</label>
+                  <select id="oRole" name="roleId" className="select" defaultValue={opp.roleId ?? ""}>
+                    <option value="">– noch offen –</option>
+                    {groupByFamily(d.roles).map((g) => <optgroup key={g.family} label={g.label}>{g.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>)}
+                  </select>
+                </div>
+                <div><label className="label" htmlFor="oHeadcount">Anzahl</label><input id="oHeadcount" name="headcount" type="number" min={1} max={999} step={1} className="input" defaultValue={opp.headcount ?? ""} /></div>
+                <div><label className="label" htmlFor="oHorizon">Zeithorizont</label><input id="oHorizon" name="horizon" className="input" defaultValue={opp.horizon ?? ""} placeholder="z. B. Q1 2027" maxLength={60} /></div>
                 <div className="sm:col-span-2"><button className="btn" type="submit">Speichern</button></div>
               </form>
             </details>
@@ -136,7 +174,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
 
       {/* Buyingcenter (8.3) */}
       <section className="card">
-        <h2 className="font-semibold mb-2">Buyingcenter für diesen Bedarf ({d.participations.length})</h2>
+        <h2 className="font-semibold mb-2">Buyingcenter für diese Chance ({d.participations.length})</h2>
         <p className="muted text-sm mb-2">Unbekannte Funktionen ohne erfundene Person anlegen. Eine Person kann mehrere Rollen haben. Ein Titel belegt keine Entscheidungsvollmacht.</p>
         {d.participations.length === 0 ? <p className="muted text-sm">Noch keine Rollen erfasst.</p> : (
           <table className="list">
@@ -409,7 +447,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
 
       <section className="card">
         <h2 className="font-semibold mb-2">Passende Artefakte</h2>
-        <p className="text-sm">Bedarfsklärung, Profilvorstellung und Auftrags-/Startunterlagen entstehen als Textentwürfe im Setup: <Link href={`/setups/${ctx.setup.id}/artefakte`}>Artefakte des Setups →</Link> (A7 Bedarfsbriefing, A8 Risiko-/Qualifizierungsnotiz, A9 Profilangebot, A10 Auswahl-/Entscheidungsstand, A11 Auftrags-/Startübergabe, A12 Verlängerung/Entwicklung). Kundentexte enthalten keine internen Einordnungen.</p>
+        <p className="text-sm">Klärung der Chance, Profilvorstellung und Auftrags-/Startunterlagen entstehen als Textentwürfe im Setup: <Link href={`/setups/${ctx.setup.id}/artefakte`}>Artefakte des Setups →</Link> (A7 Bedarfsbriefing, A8 Risiko-/Qualifizierungsnotiz, A9 Profilangebot, A10 Auswahl-/Entscheidungsstand, A11 Auftrags-/Startübergabe, A12 Verlängerung/Entwicklung). Kundentexte enthalten keine internen Einordnungen.</p>
       </section>
     </div>
   );

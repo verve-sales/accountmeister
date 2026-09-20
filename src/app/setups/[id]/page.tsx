@@ -8,6 +8,8 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { getSetupDetail } from "@/modules/setups/service";
 import { listSupportRequestsForSetup } from "@/modules/leadership/service";
 import { listOpportunitiesForSetup } from "@/modules/opportunities/service";
+import { groupByFamily, listRoles } from "@/modules/roles/catalog";
+import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { inArray, or } from "drizzle-orm";
 import { getProviderStatus, listOpenQuestionsForSetup, listSuggestionsForSetup } from "@/modules/suggestions/service";
 import { SuggestionCard } from "@/components/SuggestionCard";
@@ -65,7 +67,9 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
 
   const ai = getProviderStatus();
   const maxUploadMb = getConfig().MAX_UPLOAD_MB;
-  const [sugg, openQuestions, support, opportunities] = await Promise.all([listSuggestionsForSetup(actor, id), listOpenQuestionsForSetup(id), listSupportRequestsForSetup(actor, id), listOpportunitiesForSetup(actor, id)]);
+  const [sugg, openQuestions, support, opportunities, roles] = await Promise.all([listSuggestionsForSetup(actor, id), listOpenQuestionsForSetup(id), listSupportRequestsForSetup(actor, id), listOpportunitiesForSetup(actor, id), listRoles(actor.workspaceId)]);
+  const roleGroups = groupByFamily(roles);
+  const roleName = new Map(roles.map((r) => [r.id, r.name]));
   const openOpportunities = opportunities.filter((o) => o.status !== "BEENDET");
   const leaderRoles = await db.query.roleAssignments.findMany({ where: or(eq(schema.roleAssignments.role, "PRINCIPAL"), eq(schema.roleAssignments.role, "CEO")) });
   const leaderIds = [...new Set(leaderRoles.map((r) => r.userId))].filter((uid) => uid !== actor.userId);
@@ -171,16 +175,17 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       </section>
 
       {/* 3. Was haben wir vereinbart? */}
-      {/* Bedarfe (Etappe 5): je Setup mehrere, unabhängige Zustände (F02); direkt erfassbar (F08) */}
+      {/* Chancen (Etappe 5): je Setup mehrere, unabhängige Zustände (F02); direkt erfassbar (F08) */}
       <section className="card">
-        <h2 className="font-semibold mb-2">Bedarfe ({openOpportunities.length} offen)</h2>
-        {opportunities.length === 0 ? <p className="muted text-sm">Noch kein Bedarf. Ein Bedarf kann direkt erfasst werden – ohne vollständiges Setup oder Qualifizierung (Fast-Track).</p> : (
+        <h2 className="font-semibold mb-2">Chancen ({openOpportunities.length} offen)</h2>
+        {opportunities.length === 0 ? <p className="muted text-sm">Noch keine Chance. Eine Chance kann direkt erfasst werden – ohne vollständiges Setup oder Qualifizierung (Fast-Track).</p> : (
           <table className="list">
-            <thead><tr><th>Bedarf</th><th>Status</th><th>Verantwortlich</th><th>Bestätigt</th><th>Geändert</th></tr></thead>
+            <thead><tr><th>Chance</th><th>Wofür</th><th>Status</th><th>Verantwortlich</th><th>Bestätigt</th><th>Geändert</th></tr></thead>
             <tbody>
               {opportunities.map((o) => (
                 <tr key={o.id}>
                   <td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link>{o.fastTrack && <span className="muted text-sm"> · direkte Anfrage</span>}</td>
+                  <td className="text-sm">{chanceKindLabel[o.kind]}{o.roleId && roleName.get(o.roleId) ? ` · ${roleName.get(o.roleId)}` : ""}{o.headcount ? ` · ${o.headcount}×` : ""}{o.horizon ? ` · ${o.horizon}` : ""}</td>
                   <td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td>
                   <td>{name(o.ownerUserId)}</td>
                   <td>{o.confirmedAt ? fmtDate(o.confirmedAt) : <span className="muted">–</span>}</td>
@@ -192,21 +197,39 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
         {d.canEdit && (
           <details className="mt-3">
-            <summary>Bedarf erfassen</summary>
+            <summary>Chance erfassen</summary>
             <form action={createOpportunityAction} className="mt-2 grid sm:grid-cols-2 gap-3">
               <input type="hidden" name="setupId" value={id} />
               <input type="hidden" name="back" value={back} />
-              <div><label className="label" htmlFor="opTitle">Titel</label><input id="opTitle" name="title" className="input" required minLength={3} /></div>
+              <div><label className="label" htmlFor="opTitle">Titel</label><input id="opTitle" name="title" className="input" required minLength={3} placeholder="z. B. Testkoordination Migrationsteam" /></div>
               <div>
-                <label className="label" htmlFor="opSignal">Hervorgegangen aus Hinweis (optional)</label>
+                <label className="label" htmlFor="opKind">Wofür – Art der Chance</label>
+                <select id="opKind" name="kind" className="select" defaultValue="VERVE_EXPERTE">{chanceKindValues.map((k) => <option key={k} value={k}>{chanceKindLabel[k]}</option>)}</select>
+              </div>
+              <div>
+                <label className="label" htmlFor="opRole">Standardrolle (optional)</label>
+                <select id="opRole" name="roleId" className="select" defaultValue="">
+                  <option value="">– noch offen –</option>
+                  {roleGroups.map((g) => <optgroup key={g.family} label={g.label}>{g.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="label" htmlFor="opHeadcount">Anzahl (optional)</label><input id="opHeadcount" name="headcount" type="number" min={1} max={999} step={1} className="input" /></div>
+                <div><label className="label" htmlFor="opHorizon">Zeithorizont (optional)</label><input id="opHorizon" name="horizon" className="input" placeholder="z. B. Q1 2027" maxLength={60} /></div>
+              </div>
+              <div>
+                <label className="label" htmlFor="opSignal">Hervorgegangen aus Beobachtung (optional)</label>
                 <select id="opSignal" name="signalId" className="select" defaultValue=""><option value="">– direkt erfasst –</option>{linkableSignals.map((s) => <option key={s.id} value={s.id}>{s.observation.slice(0, 80)}</option>)}</select>
               </div>
-              <div className="sm:col-span-2"><label className="label" htmlFor="opNeed">Bedarfsbeschreibung in Kundensprache</label><textarea id="opNeed" name="needDescription" className="textarea" required minLength={10} rows={3} /></div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="opNeed">Beschreibung in Kundensprache: was der Kunde erreichen will</label><textarea id="opNeed" name="needDescription" className="textarea" required minLength={10} rows={3} /></div>
               <div><label className="label" htmlFor="opTrigger">Konkreter Anlass (optional)</label><input id="opTrigger" name="trigger" className="input" /></div>
-              <label className="flex items-center gap-2 text-sm self-end"><input type="checkbox" name="fastTrack" value="on" /> Direkte Anfrage (Fast-Track, Messstart jetzt)</label>
+              <div className="flex flex-col gap-1 text-sm self-end">
+                <label className="flex items-center gap-2"><input type="checkbox" name="anticipated" value="on" /> Antizipiert – vermutet aus Beobachtungen, vom Kunden noch nicht ausgesprochen</label>
+                <label className="flex items-center gap-2"><input type="checkbox" name="fastTrack" value="on" /> Direkte Anfrage (Fast-Track, Messstart jetzt)</label>
+              </div>
               <div className="sm:col-span-2 flex flex-wrap items-start gap-3">
-                <button className="btn" type="submit">Bedarf anlegen</button>
-                <SuggestButton kind="BEDARF" setupId={id} fields={[{ name: "title", label: "Titel des Bedarfs (kurz)" }, { name: "needDescription", label: "Bedarfsbeschreibung in Kundensprache: was der Kunde erreichen will" }, { name: "trigger", label: "Konkreter Anlass" }]} />
+                <button className="btn" type="submit">Chance anlegen</button>
+                <SuggestButton kind="CHANCE" setupId={id} fields={[{ name: "title", label: "Titel der Chance (kurz)" }, { name: "needDescription", label: "Beschreibung in Kundensprache: was der Kunde erreichen will" }, { name: "trigger", label: "Konkreter Anlass" }, { name: "kind", label: "Art der Chance", options: [...chanceKindValues] }, { name: "horizon", label: "Zeithorizont, z. B. Q1 2027" }]} />
               </div>
             </form>
           </details>
@@ -256,6 +279,13 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
               <input type="hidden" name="setupId" value={d.setup.id} />
               <input type="hidden" name="back" value={back} />
               <div className="sm:col-span-2"><label className="label" htmlFor="actTitle">Was wird getan?</label><input id="actTitle" name="title" className="input" required minLength={3} /></div>
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="actOpp">Wofür – zahlt auf welche Chance ein?</label>
+                <select id="actOpp" name="opportunityId" className="select" defaultValue={openOpportunities.length === 1 ? openOpportunities[0]!.id : ""}>
+                  <option value="">– noch unklar –</option>
+                  {openOpportunities.map((o) => <option key={o.id} value={o.id}>{o.title}{o.roleId && roleName.get(o.roleId) ? ` · ${roleName.get(o.roleId)}` : ""}</option>)}
+                </select>
+              </div>
               <div className="sm:col-span-2"><label className="label" htmlFor="agreement">Vereinbarung / Kontext (optional)</label><input id="agreement" name="agreement" className="input" /></div>
               <div>
                 <label className="label" htmlFor="ownerUserId">Wer übernimmt?</label>
@@ -265,7 +295,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
               </div>
               <div><label className="label" htmlFor="dueDate">Termin (optional)</label><input id="dueDate" name="dueDate" type="date" className="input" /></div>
               <div>
-                <label className="label" htmlFor="signalId">Bezug zu Hinweis (optional)</label>
+                <label className="label" htmlFor="signalId">Bezug zu Beobachtung (optional)</label>
                 <select id="signalId" name="signalId" className="select" defaultValue="">
                   <option value="">–</option>
                   {openSignals.map((s) => <option key={s.id} value={s.id}>{s.observation.slice(0, 80)}</option>)}
@@ -283,7 +313,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       {/* 4. Anregungen */}
       <section className="card">
         <h2 className="font-semibold mb-1">4. Welche Anregungen sind jetzt hilfreich?</h2>
-        {!ai.enabled && <p className="muted text-sm">KI-Anbieter deaktiviert – keine automatischen Vorschläge. Offene Hinweise unten sind die manuelle Arbeitsliste.</p>}
+        {!ai.enabled && <p className="muted text-sm">KI-Anbieter deaktiviert – keine automatischen Vorschläge. Offene Beobachtungen unten sind die manuelle Arbeitsliste.</p>}
         {ai.enabled && sugg.prominent.length === 0 && <p className="muted text-sm">Keine offenen Vorschläge. Vorschläge entstehen aus strukturierten Weekly-Notizen.</p>}
         {sugg.prominent.length > 0 && (
           <ul className="space-y-3">{sugg.prominent.map((x) => <SuggestionCard key={x.id} s={x} ownerName={x.proposedOwnerUserId ? sugg.userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide={sugg.canDecide} back={back} users={allUsers} />)}</ul>
@@ -297,9 +327,9 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
       </section>
 
-      {/* Hinweise */}
+      {/* Beobachtungen */}
       <section className="card">
-        <h2 className="font-semibold mb-2">Hinweise ({openSignals.length} offen)</h2>
+        <h2 className="font-semibold mb-2">Beobachtungen ({openSignals.length} offen)</h2>
         {d.signals.length === 0 ? <p className="muted text-sm">Noch keine Beobachtungen erfasst.</p> : (
           <ul className="space-y-3">
             {d.signals.map((s) => {
@@ -374,7 +404,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
               <input type="hidden" name="setupId" value={d.setup.id} />
               <div className="sm:col-span-2"><label className="label" htmlFor="observation">Sichere Beobachtung (was wurde tatsächlich gesagt/gesehen?)</label><textarea id="observation" name="observation" className="textarea" required minLength={5} /></div>
               <div className="sm:col-span-2"><label className="label" htmlFor="relevanceHypothesis">Vermutung / mögliche Bedeutung (getrennt von der Beobachtung, optional)</label><input id="relevanceHypothesis" name="relevanceHypothesis" className="input" /></div>
-              <div><label className="label" htmlFor="usageLimit">Nutzungsgrenze (optional)</label><input id="usageLimit" name="usageLimit" className="input" placeholder="z. B. nicht als Bedarf gegenüber Kunde formulieren" /></div>
+              <div><label className="label" htmlFor="usageLimit">Nutzungsgrenze (optional)</label><input id="usageLimit" name="usageLimit" className="input" placeholder="z. B. nicht als Chance gegenüber Kunde formulieren" /></div>
               <div>
                 <label className="label" htmlFor="sourceAccessClass">Wer darf die Originalnotiz sehen?</label>
                 <select id="sourceAccessClass" name="sourceAccessClass" className="select" defaultValue="SETUP">
@@ -495,7 +525,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
             <input type="hidden" name="setupId" value={d.setup.id} />
             <Link href={`/setups/${d.setup.id}?assistent=interview`} className="btn">Mit dem Assistenten ergänzen (Dialog)</Link>
             <button className="btn btn-secondary" type="submit">Interview zu diesem Setup führen</button>
-            <span className="muted text-sm">Der Assistent fragt, was noch fehlt (Personen, Entscheidungsweg, Bedarf, nächste Schritte) und legt Vorschlagskarten für dieses Setup vor – übernommen wird nur, was Sie anklicken.</span>
+            <span className="muted text-sm">Der Assistent fragt, was noch fehlt (Personen, Entscheidungsweg, Chance, nächste Schritte) und legt Vorschlagskarten für dieses Setup vor – übernommen wird nur, was Sie anklicken.</span>
           </form>
         )}
         {d.canEdit && (

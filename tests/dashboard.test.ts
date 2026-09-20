@@ -119,7 +119,7 @@ describe("Etappe 9C: Formularvorschläge", () => {
     resetConfigCacheForTests();
     const seed = await ensureSeed();
     const david = await actorFor("david");
-    const r = await suggestFormFields(david, { kind: "BEDARF", setupId: seed.setupId, fields: [{ name: "title", label: "Titel" }, { name: "needDescription", label: "Bedarf" }, { name: "trigger", label: "Anlass" }] });
+    const r = await suggestFormFields(david, { kind: "CHANCE", setupId: seed.setupId, fields: [{ name: "title", label: "Titel" }, { name: "needDescription", label: "Bedarf" }, { name: "trigger", label: "Anlass" }] });
     expect(r.suggestion).not.toBeNull();
     expect(r.suggestion!.fields.title).toBeTruthy();
     expect(r.suggestion!.evidenceQuote.length).toBeGreaterThan(2);
@@ -130,13 +130,13 @@ describe("Etappe 9C: Formularvorschläge", () => {
     expect(s.suggestion!.fields.name).toBeTruthy();
     // Fremder BD: kein Zugriff auf das Setup; CEO darf keinen Bedarf erfassen
     const lars = await actorFor("lars");
-    await expect(suggestFormFields(lars, { kind: "BEDARF", setupId: seed.setupId, fields: [{ name: "title", label: "Titel" }] })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(suggestFormFields(lars, { kind: "CHANCE", setupId: seed.setupId, fields: [{ name: "title", label: "Titel" }] })).rejects.toBeInstanceOf(NotFoundError);
     const clemens = await actorFor("clemens");
-    await expect(suggestFormFields(clemens, { kind: "BEDARF", setupId: seed.setupId, fields: [{ name: "title", label: "Titel" }] })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(suggestFormFields(clemens, { kind: "CHANCE", setupId: seed.setupId, fields: [{ name: "title", label: "Titel" }] })).rejects.toBeInstanceOf(ForbiddenError);
     // Ohne KI: klare Ansage statt Fehler
     process.env.AI_PROVIDER = "disabled";
     resetConfigCacheForTests();
-    const off = await suggestFormFields(david, { kind: "BEDARF", setupId: seed.setupId, fields: [{ name: "title", label: "Titel" }] });
+    const off = await suggestFormFields(david, { kind: "CHANCE", setupId: seed.setupId, fields: [{ name: "title", label: "Titel" }] });
     expect(off.suggestion).toBeNull();
     expect(off.note).toMatch(/deaktiviert/);
   });

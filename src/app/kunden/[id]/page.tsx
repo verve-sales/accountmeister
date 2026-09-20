@@ -15,6 +15,8 @@ import { listPeopleForAccount } from "@/modules/people/service";
 import { relationshipStateLabel, priorityKindLabel, priorityStatusLabel } from "@/lib/labels";
 import { buildAccountPlan, canEditAccountPlan, listAccountPlanSnapshots } from "@/modules/accountplan/service";
 import { AccountPlanView } from "@/components/AccountPlanView";
+import { chanceKindLabel } from "@/modules/ai/schemas";
+import { listRoles } from "@/modules/roles/catalog";
 import { SuggestButton } from "@/components/SuggestButton";
 import { changePriorityAction, createPriorityAction, saveAccountPlanSnapshotAction } from "../../actions";
 import { db, schema } from "@/db/client";
@@ -35,6 +37,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const setups = await listSetupsForAccount(actor, id);
   const opportunities = await listOpportunitiesForAccount(actor, id);
   const people = await listPeopleForAccount(actor, id);
+  const roleNames = new Map((await listRoles(actor.workspaceId, { includeInactive: true })).map((r) => [r.id, r.name]));
   const [plan, snapshots, mayEditPlan] = await Promise.all([buildAccountPlan(actor, id), listAccountPlanSnapshots(actor, id), canEditAccountPlan(actor, id)]);
   const back = `/kunden/${id}`;
   const mayCreate = canCreateSetup(actor, account);
@@ -54,13 +57,37 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       {account.status === "ARCHIVED" && <p className="text-sm" style={{ background: "#fdf6ec", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ist archiviert. Alles bleibt erhalten; <Link href={`/kunden/${account.id}/loeschen`}>wiederherstellen oder endgültig löschen</Link>.</p>}
       <Feedback params={sp} />
 
+      {/* Wofür (E-045): worauf die Arbeit bei diesem Kunden hinausläuft – zuerst */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Wofür – Chancen ({opportunities.filter((o) => o.status !== "BEENDET" && o.status !== "ZURUECKGESTELLT").length} aktiv)</h2>
+        {opportunities.length === 0 ? (
+          <p className="text-sm" style={{ color: "#8a6d1f" }}>Noch keine Chance benannt. Worauf läuft es bei diesem Kunden hinaus – Verve-Experte in einer Standardrolle, Freelancer-Experte oder Ausschreibung? Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten.</p>
+        ) : (
+          <table className="list">
+            <thead><tr><th>Chance</th><th>Wofür</th><th>Setup</th><th>Reifegrad</th><th>Horizont</th></tr></thead>
+            <tbody>
+              {opportunities.filter((o) => o.status !== "BEENDET").map((o) => (
+                <tr key={o.id}>
+                  <td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link></td>
+                  <td className="text-sm">{chanceKindLabel[o.kind]}{o.roleId && roleNames.get(o.roleId) ? ` · ${roleNames.get(o.roleId)}` : ""}{o.headcount ? ` · ${o.headcount}×` : ""}</td>
+                  <td><Link href={`/setups/${o.setupId}`}>{o.setupName}</Link></td>
+                  <td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td>
+                  <td>{o.horizon ?? <span className="muted">–</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p className="muted text-xs mt-2">Jede Chance hat einen eigenen Reifegrad; es gibt keinen zusammengefassten Pipelinestatus je Kunde. Beobachtungen, Fragen und Aktionen zahlen auf Chancen ein.</p>
+      </section>
+
       <section className="card">
         <h2 className="font-semibold mb-2">Überblick – Accountplan</h2>
         <AccountPlanView plan={plan} live>
           {mayEditPlan && (
             <div className="grid lg:grid-cols-2 gap-6 mt-2">
               <details>
-                <summary className="text-sm">Vorhaben vorschlagen</summary>
+                <summary className="text-sm">Ausbau-Vorhaben vorschlagen (Verlängern, Ausweiten, Vertiefen, Übertragen)</summary>
                 <form action={createPriorityAction} className="mt-2 grid sm:grid-cols-2 gap-2">
                   <input type="hidden" name="accountId" value={account.id} />
                   <div className="sm:col-span-2"><label className="label" htmlFor="prTitle">Vorhaben</label><input id="prTitle" name="title" className="input" required minLength={3} placeholder="z. B. Testkoordination im Migrationsteam anbieten" /></div>
@@ -143,17 +170,6 @@ export default async function KundePage({ params, searchParams }: { params: Prom
                 </tr>
               ))}
             </tbody>
-          </table>
-        )}
-      </section>
-
-      <section className="card">
-        <h2 className="font-semibold mb-2">Bedarfe ({opportunities.filter((o) => o.status !== "BEENDET").length} offen)</h2>
-        <p className="muted text-sm mb-2">Jeder Bedarf hat einen eigenen Zustand; es gibt keinen zusammengefassten Angebots- oder Pipelinestatus je Kunde.</p>
-        {opportunities.length === 0 ? <p className="muted text-sm">Noch kein Bedarf erfasst. Bedarfe entstehen im Setup.</p> : (
-          <table className="list">
-            <thead><tr><th>Bedarf</th><th>Setup</th><th>Status</th><th>Bestätigt</th></tr></thead>
-            <tbody>{opportunities.map((o) => <tr key={o.id}><td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link></td><td><Link href={`/setups/${o.setupId}`}>{o.setupName}</Link></td><td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td><td>{o.confirmedAt ? fmtDate(o.confirmedAt) : "–"}</td></tr>)}</tbody>
           </table>
         )}
       </section>

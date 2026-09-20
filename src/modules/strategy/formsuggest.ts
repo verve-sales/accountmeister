@@ -42,7 +42,7 @@ export async function suggestFormFields(actor: Actor, raw: unknown, deps: { prov
   if (req.setupId) {
     const ctx = await loadSetupContext(actor, req.setupId);
     if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-    if (req.kind === "BEDARF" && !canEditSetup(actor, ctx)) throw new ForbiddenError("Bedarfe erfassen Beteiligte mit Bearbeitungsrecht.");
+    if (req.kind === "CHANCE" && !canEditSetup(actor, ctx)) throw new ForbiddenError("Bedarfe erfassen Beteiligte mit Bearbeitungsrecht.");
     setupId = ctx.setup.id;
     analysisText = analysisToText(await analyzeSetup(actor, ctx));
     contextText = await buildContextText(actor, await resolveContext(actor, { type: "SETUP", id: ctx.setup.id }));

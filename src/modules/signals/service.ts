@@ -10,7 +10,7 @@ import { requireEditableSetup } from "@/modules/setups/service";
 
 /**
  * „Beobachtung erfassen“ (Briefing 18.2, A3 Signalnotiz): Beobachtung, Quelle, Zeitpunkt,
- * sichere Aussage, Vermutung, Nutzungsgrenze. Eine Beobachtung ist KEIN bestätigter Bedarf.
+ * sichere Aussage, Vermutung, Nutzungsgrenze. Eine Beobachtung ist KEIN bestätigter Chance.
  */
 export const captureObservationInput = z.object({
   setupId: z.string().min(1),
@@ -61,7 +61,7 @@ export async function captureObservation(actor: Actor, raw: unknown) {
         createdBy: actor.userId,
       })
       .returning();
-    if (!signal) throw new Error("Hinweis konnte nicht angelegt werden");
+    if (!signal) throw new Error("Beobachtung konnte nicht angelegt werden");
 
     // Die Beobachtung selbst als Aussage mit Status „Aussage korrekt wiedergegeben“ (15.3) festhalten.
     const [assertion] = await tx
@@ -113,9 +113,9 @@ export function assertSignalTransition(from: SignalStatus, to: SignalStatus): vo
 
 export async function requireSignal(actor: Actor, signalId: string) {
   const signal = await db.query.signals.findFirst({ where: and(eq(schema.signals.id, signalId), eq(schema.signals.workspaceId, actor.workspaceId)) });
-  if (!signal) throw new NotFoundError("Hinweis");
+  if (!signal) throw new NotFoundError("Beobachtung");
   const ctx = await loadSetupContext(actor, signal.setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Hinweis");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Beobachtung");
   return { signal, ctx };
 }
 
@@ -154,7 +154,7 @@ export async function changeSignalStatus(actor: Actor, signalId: string, raw: un
   if (!isOwner && !canEditSetup(actor, ctx)) throw new ForbiddenError();
   assertSignalTransition(signal.status, input.status);
   if ((input.status === "BEENDET" || input.status === "ZURUECKGESTELLT") && !input.closedReason) {
-    throw new ValidationError("Bitte begründen, warum der Hinweis beendet bzw. zurückgestellt wird.");
+    throw new ValidationError("Bitte begründen, warum die Beobachtung beendet bzw. zurückgestellt wird.");
   }
   return db.transaction(async (tx) => {
     const [updated] = await tx

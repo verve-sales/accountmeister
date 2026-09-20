@@ -16,6 +16,7 @@ import { changeActionStatus, createAction } from "@/modules/actions/service";
 import { createAccount } from "@/modules/accounts/service";
 import { archiveAccount, deleteAccountPermanently, restoreAccount } from "@/modules/accounts/deletion";
 import { formToStrategyInput, saveStrategy } from "@/modules/strategy/service";
+import { addRole, setRoleActive } from "@/modules/roles/catalog";
 import { createPerson, setPersonFunction, setRelationship } from "@/modules/people/service";
 import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/modules/accesspaths/service";
 import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
@@ -56,7 +57,7 @@ function withFeedback(target: string, kind: "fehler" | "ok", message: string): n
   redirect(url.pathname + url.search);
 }
 
-/** Kein Fehler, sondern ein Hinweis, der die Erfolgsmeldung ersetzt (z. B. „Zustimmung gespeichert, noch nicht vereinbart“). */
+/** Kein Fehler, sondern ein Beobachtung, der die Erfolgsmeldung ersetzt (z. B. „Zustimmung gespeichert, noch nicht vereinbart“). */
 class PendingInfo extends Error {}
 
 async function run(back: string, fn: (actor: Actor) => Promise<string | void>, okMessage: string): Promise<never> {
@@ -129,6 +130,22 @@ export async function saveStrategyAction(fd: FormData) {
   }, "Fassung gespeichert.");
 }
 
+// --- Verwaltung → Rollen ---------------------------------------------------------
+
+export async function addRoleAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/verwaltung/rollen", async (actor) => {
+    await addRole(actor, data);
+  }, "Rolle ergänzt.");
+}
+
+export async function setRoleActiveAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/verwaltung/rollen", async (actor) => {
+    await setRoleActive(actor, data.roleId ?? "", data.active === "true");
+  }, "Rolle aktualisiert.");
+}
+
 // --- Start / Dashboard -------------------------------------------------------
 
 /** Sichtwechsel auf der Startseite: nur eine Brille, keine Rechteänderung; Wahl wird im Cookie gemerkt. */
@@ -191,14 +208,14 @@ export async function addMemberAction(fd: FormData) {
   }, "Beteiligung gespeichert.");
 }
 
-// --- Hinweise ---------------------------------------------------------------
+// --- Beobachtungen ---------------------------------------------------------------
 
 export async function captureObservationAction(fd: FormData) {
   const data = formToObject(fd);
   const id = data.setupId ?? "";
   return run(data.reviewId ? `/weeklys/${data.reviewId}` : `/setups/${id}`, async (actor) => {
     await captureObservation(actor, data);
-  }, "Beobachtung erfasst und als Hinweis (Neu) gespeichert.");
+  }, "Beobachtung erfasst und als Beobachtung (Neu) gespeichert.");
 }
 
 export async function takeOverSignalAction(fd: FormData) {
@@ -212,7 +229,7 @@ export async function changeSignalStatusAction(fd: FormData) {
   const data = formToObject(fd);
   return run(data.back ?? "/meine-arbeit", async (actor) => {
     await changeSignalStatus(actor, data.signalId ?? "", data);
-  }, "Hinweis-Status geändert.");
+  }, "Beobachtung-Status geändert.");
 }
 
 // --- Übergaben --------------------------------------------------------------
@@ -559,21 +576,21 @@ export async function addGoalContributionAction(fd: FormData) {
   }, "Zielbeitrag festgehalten.");
 }
 
-// --- Bedarfe, Angebote, Aufträge (Etappe 5) -----------------------------------------
+// --- Chancen, Angebote, Aufträge (Etappe 5) -----------------------------------------
 
 export async function createOpportunityAction(fd: FormData) {
   const data = formToObject(fd);
   return run(data.back ?? `/setups/${data.setupId}`, async (actor) => {
     const o = await createOpportunity(actor, data);
     return `/bedarfe/${o.id}`;
-  }, "Bedarf angelegt (in Klärung).");
+  }, "Chance angelegt.");
 }
 
 export async function updateOpportunityAction(fd: FormData) {
   const data = formToObject(fd);
   return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
     await updateOpportunity(actor, data.opportunityId ?? "", data);
-  }, "Bedarf aktualisiert.");
+  }, "Chance aktualisiert.");
 }
 
 export async function saveMeddpiccAction(fd: FormData) {
@@ -588,14 +605,14 @@ export async function confirmOpportunityAction(fd: FormData) {
   const data = formToObject(fd);
   return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
     await confirmOpportunity(actor, data.opportunityId ?? "", data);
-  }, "Bedarf bestätigt – mit Quelle und Zeitpunkt dokumentiert.");
+  }, "Chance bestätigt – mit Quelle und Zeitpunkt dokumentiert.");
 }
 
 export async function changeOpportunityStatusAction(fd: FormData) {
   const data = formToObject(fd);
   return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
     await changeOpportunityStatus(actor, data.opportunityId ?? "", { version: Number(data.version), status: data.status as never, reason: data.reason });
-  }, "Bedarfsstatus geändert.");
+  }, "Status der Chance geändert.");
 }
 
 export async function addParticipationAction(fd: FormData) {
@@ -783,7 +800,7 @@ export async function applyIntakeAction(fd: FormData) {
   const id = data.proposalId ?? "";
   return run(`/kunden/anlage/${id}`, async (actor) => {
     const r = await applyIntake(actor, id, formToApplyInput(data));
-    const summary = `${r.created.persons} Personen, ${r.created.signals} Signale, ${r.created.needs} Bedarfe, ${r.created.actions + r.created.contacts + r.created.questions} Vorschläge`;
+    const summary = `${r.created.persons} Personen, ${r.created.signals} Signale, ${r.created.needs} Chancen, ${r.created.actions + r.created.contacts + r.created.questions} Vorschläge`;
     if (r.problems.length > 0) throw new PendingInfo(`Übernommen (${summary}). Nicht übernommen: ${r.problems.join(" · ")}`);
     return `/setups/${r.setupId}`;
   }, "Übernommen – alles im ungeprüften Zustand; Folgeaktivitäten und Kontaktaufnahmen stehen als Vorschläge bereit.");

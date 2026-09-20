@@ -32,7 +32,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Verwaltung (Betriebsverwaltung)</h1>
-      <p className="muted text-sm">Rollen, Zugänge, Protokoll und Bestandszahlen. Kein Zugriff auf Setup-Inhalte, Quellen, Notizen oder Vorschläge (Briefing 16.2). KI-Anbieter und Modelle je Aufgabe: <Link href="/verwaltung/ki">Verwaltung → KI</Link>.</p>
+      <p className="muted text-sm">Rollen, Zugänge, Protokoll und Bestandszahlen. Kein Zugriff auf Setup-Inhalte, Quellen, Notizen oder Vorschläge (Briefing 16.2). KI-Anbieter und Modelle je Aufgabe: <Link href="/verwaltung/ki">Verwaltung → KI</Link>. Standardrollenkatalog für Chancen: <Link href="/verwaltung/rollen">Verwaltung → Rollen</Link>.</p>
       <Feedback params={sp} />
 
       <section className="card">
@@ -55,7 +55,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
             <tr><td>Kundenkontakte und externe Personen</td><td>{inventory.kundenkontakte.persons} Personen · {inventory.kundenkontakte.relationships} Beziehungen · {inventory.kundenkontakte.decisionParticipations} Buyingcenter-Rollen</td></tr>
             <tr><td>Quellen</td><td>{inventory.quellen.sources} Quellen ({inventory.quellen.locked} gesperrt, {inventory.quellen.erased} Inhalt entfernt) · {inventory.quellen.sourceVersions} Versionen</td></tr>
             <tr><td>Verve-Beschäftigte</td><td>{inventory.beschaeftigte.users} Zugänge · {inventory.beschaeftigte.goals} Ziele · {inventory.beschaeftigte.confidentialNotes} vertrauliche Notizen · {inventory.beschaeftigte.supportRequests} Unterstützungsaufträge</td></tr>
-            <tr><td>Fallbearbeitung</td><td>{inventory.fall.setups} Setups · {inventory.fall.signals} Hinweise · {inventory.fall.opportunities} Bedarfe · {inventory.fall.offers} Angebote · {inventory.fall.orders} Aufträge</td></tr>
+            <tr><td>Fallbearbeitung</td><td>{inventory.fall.setups} Setups · {inventory.fall.signals} Beobachtungen · {inventory.fall.opportunities} Chancen · {inventory.fall.offers} Angebote · {inventory.fall.orders} Aufträge</td></tr>
             <tr><td>KI</td><td>{inventory.ki.aiJobs} Aufträge (nur Hash/Länge, kein Text) · {inventory.ki.suggestions} Vorschläge</td></tr>
             <tr><td>Protokoll</td><td>{inventory.audit} Ereignisse</td></tr>
           </tbody>

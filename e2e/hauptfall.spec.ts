@@ -448,25 +448,25 @@ test("Etappe 5: Bedarf direkt erfassen → bestätigen mit Beleg → Buyingcente
   await page.getByRole("link", { name: "Kunden", exact: true }).click();
   await page.getByRole("link", { name: /Beispielkonzern/ }).click();
   await page.getByRole("link", { name: "Plattformteam", exact: true }).first().click();
-  await page.locator("summary", { hasText: "Bedarf erfassen" }).click();
+  await page.locator("summary", { hasText: "Chance erfassen" }).click();
   const title = `Testkoordination Release ${suffix}`;
   await page.locator("#opTitle").fill(title);
   await page.locator("#opNeed").fill("Der Kunde braucht kurzfristig Unterstützung in der Testkoordination für das Q4-Release.");
   await page.getByLabel(/Direkte Anfrage/).check();
-  await page.getByRole("button", { name: "Bedarf anlegen" }).click();
+  await page.getByRole("button", { name: "Chance anlegen" }).click();
   await expect(page).toHaveURL(/\/bedarfe\//);
   await expect(page.getByRole("heading", { name: title })).toBeVisible();
   await expect(page.getByText("In Klärung", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Direkte Anfrage (Fast-Track)")).toBeVisible();
 
   // Bestätigen ohne Beleg scheitert, mit Belegnotiz gelingt
-  await page.locator("summary", { hasText: "Bedarf bestätigen" }).click();
-  await page.getByRole("button", { name: "Bedarf bestätigen", exact: true }).click();
+  await page.locator("summary", { hasText: "Chance bestätigen" }).click();
+  await page.getByRole("button", { name: "Chance bestätigen", exact: true }).click();
   await expect(page.getByText(/Bitte einen Beleg angeben/)).toBeVisible();
-  await page.locator("summary", { hasText: "Bedarf bestätigen" }).click();
+  await page.locator("summary", { hasText: "Chance bestätigen" }).click();
   await page.locator("#confText").fill("Frau Keller hat den Bedarf im Termin am 15.09. ausdrücklich bestätigt.");
-  await page.getByRole("button", { name: "Bedarf bestätigen", exact: true }).click();
-  await expect(page.getByText("Bedarf bestätigt – mit Quelle")).toBeVisible();
+  await page.getByRole("button", { name: "Chance bestätigen", exact: true }).click();
+  await expect(page.getByText("Chance bestätigt – mit Quelle")).toBeVisible();
 
   // Buyingcenter: offene Funktion ohne Person
   await page.locator("summary", { hasText: "Rolle hinzufügen" }).click();
@@ -694,7 +694,7 @@ test("Etappe 8: Assistent im Seitenpanel – Dialog, Karten übernehmen (Kunde �
   await personCard.getByRole("button", { name: "Übernehmen" }).click();
   await expect(panel.getByText(/Person „Herr Winter“ angelegt/)).toBeVisible();
   // Bedarf verwerfen
-  const bedarfCard = panel.locator("li", { hasText: "Bedarf" }).first();
+  const bedarfCard = panel.locator("li", { hasText: "Chance" }).first();
   if (await bedarfCard.count()) {
     await bedarfCard.getByRole("button", { name: "Verwerfen" }).click();
     await expect(panel.getByText("Verworfen.").first()).toBeVisible();
@@ -795,4 +795,60 @@ test("Etappe 9: Start-Dashboard je Rolle, Strategiefaden mit KI-Vorschlag speich
   await loginAs(page, "Clemens", true);
   await expect(page.getByRole("heading", { name: "Ziele", exact: false })).toBeVisible();
   await expect(page.getByText("Ideen aus den Quellen")).toHaveCount(0);
+});
+
+test("Etappe 10: Chance mit Wofür erfassen (Art, Standardrolle, antizipiert) → Kundenseite und Zielbild zeigen sie; Verwaltung → Rollen", async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  await loginAs(page, "David");
+  await page.goto("/kunden");
+  await page.getByRole("link", { name: /Beispielkonzern/ }).click();
+  await page.getByRole("link", { name: "Plattformteam", exact: true }).first().click();
+  await page.locator("summary", { hasText: "Chance erfassen" }).click();
+  await page.locator("#opTitle").fill(`Ausschreibung Plattform ${suffix}`);
+  await page.locator("#opKind").selectOption("AUSSCHREIBUNG");
+  await page.locator("#opRole").selectOption({ label: "Solution Architect" });
+  await page.locator("#opHeadcount").fill("3");
+  await page.locator("#opHorizon").fill("Q1 2027");
+  await page.locator("#opNeed").fill("Der Kunde wird die Plattformentwicklung 2027 neu vergeben.");
+  await page.getByLabel(/Antizipiert/).check();
+  await page.getByRole("button", { name: "Chance anlegen" }).click();
+  // Detailseite: Wofür und Schritt „in Klärung nehmen“
+  await expect(page).toHaveURL(/\/bedarfe\//);
+  await expect(page.getByText("Chance angelegt.")).toBeVisible();
+  await expect(page.getByText(/Ausschreibung · Solution Architect · 3× · Q1 2027/)).toBeVisible();
+  await expect(page.getByText(/antizipiert – vom Kunden noch nicht ausgesprochen/)).toBeVisible();
+  const detailUrl = page.url().replace(/\?.*$/, "");
+  await page.getByRole("button", { name: "In Klärung nehmen" }).click();
+  await expect(page.getByText("Status der Chance geändert.")).toBeVisible();
+  await page.goto(detailUrl);
+  await expect(page.getByText(/antizipiert – vom Kunden noch nicht ausgesprochen/)).toHaveCount(0);
+  // Setup-Tabelle: Wofür-Spalte
+  await page.getByRole("link", { name: "Plattformteam", exact: true }).first().click();
+  const row = page.locator("tr", { hasText: `Ausschreibung Plattform ${suffix}` }).first();
+  await expect(row).toBeVisible();
+  await expect(row.getByText("In Klärung")).toBeVisible();
+  await expect(row.getByText(/Ausschreibung · Solution Architect · 3× · Q1 2027/)).toBeVisible();
+  // Kundenseite: Wofür-Tabelle zuerst
+  await page.goto("/kunden");
+  await page.getByRole("link", { name: /Beispielkonzern/ }).click();
+  await expect(page.getByRole("heading", { name: /Wofür – Chancen/ })).toBeVisible();
+  await expect(page.getByText(`Ausschreibung Plattform ${suffix}`)).toBeVisible();
+  // Zielbild
+  await page.getByRole("link", { name: "Ziele & Portfolio" }).click();
+  await expect(page.getByRole("heading", { name: /Wohin läuft es/ })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Solution & Architektur" })).toBeVisible();
+  // Start: Wofür-Zeile auf der Kundenkarte
+  await page.goto("/start");
+  await expect(page.locator("article", { hasText: "Beispielkonzern" }).first().getByText(/Wofür:/)).toBeVisible();
+  // Verwaltung → Rollen (ADMIN)
+  await logout(page);
+  await loginAs(page, "Admin");
+  await page.goto("/verwaltung/rollen");
+  await expect(page.getByRole("heading", { name: "Standardrollen" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Test & Qualitätssicherung" })).toBeVisible();
+  await page.locator("#name").fill(`Testautomatisierung ${suffix}`);
+  await page.locator("#family").selectOption("TEST_QS");
+  await page.getByRole("button", { name: "Rolle ergänzen" }).click();
+  await expect(page.getByText("Rolle ergänzt.")).toBeVisible();
+  await expect(page.getByText(`Testautomatisierung ${suffix}`)).toBeVisible();
 });

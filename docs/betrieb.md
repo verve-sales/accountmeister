@@ -87,3 +87,6 @@ Unterschrift unter den Freigabevorschlag (`docs/pilotfreigabe-vorschlag.md`: Ver
 
 ## Kunden löschen (E-042)
 Zwei Schritte auf der Kundenseite („Kunde archivieren oder löschen“): Archivieren (wiederherstellbar) und danach endgültiges Löschen mit Namensbestätigung und Begründung. Berechtigt: zuständiger BD, Principal des Kunden, ADMIN (Demo-Kunden nur ADMIN). Die Löschung läuft in einer Transaktion; Dokumentdateien unter `UPLOAD_DIR` werden mitgelöscht. Das Prüfprotokoll (`audit_events`, Aktion `account.deleted`) hält Kundenname, Begründung und Umfang je Tabelle fest. Ein gelöschter Kunde ist nur noch aus der Sicherung (Datenbank + Uploads, siehe oben) wiederherstellbar – vor Löschverlangen also den Sicherungsstand beachten (Aufbewahrungsfrist der Sicherungen).
+
+## Standardrollenkatalog (E-045)
+Der Verve-Rollenkatalog wird beim ersten Zugriff je Arbeitsraum aus dem Standard befüllt (fünf Familien, 23 Rollen) und unter Verwaltung → Rollen gepflegt (ergänzen, deaktivieren). Deaktivierte Rollen bleiben an bestehenden Chancen sichtbar. Die KI ordnet Rollennamen unscharf dem Katalog zu; unbekannte Namen landen als „Standardrolle noch offen“ an der Chance.

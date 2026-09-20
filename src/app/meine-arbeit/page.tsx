@@ -135,9 +135,9 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
 
       {myOpportunities.length > 0 && (
         <section className="card">
-          <h2 className="font-semibold mb-2">Meine offenen Bedarfe ({myOpportunities.length})</h2>
+          <h2 className="font-semibold mb-2">Meine offenen Chancen ({myOpportunities.length})</h2>
           <table className="list">
-            <thead><tr><th>Bedarf</th><th>Kunde</th><th>Status</th><th>Geändert</th></tr></thead>
+            <thead><tr><th>Chance</th><th>Kunde</th><th>Status</th><th>Geändert</th></tr></thead>
             <tbody>{myOpportunities.map((o) => <tr key={o.id}><td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link>{o.fastTrack && <span className="muted text-sm"> · direkte Anfrage</span>}</td><td>{o.accountName}</td><td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td><td>{fmtDate(o.updatedAt)}</td></tr>)}</tbody>
           </table>
         </section>

@@ -22,7 +22,7 @@ import { insertSuggestionCard } from "./suggestions";
 
 /**
  * Assistent (Etappe 8, E-041): ein Dialog je Nutzer und Kontext (allgemein, Kunde, Setup). Der Assistent antwortet
- * in Prosa, legt Vorschlagskarten daneben (Personen, Signale, Bedarfe, Aktionen, Kontaktaufnahmen, Fragen, Kunde,
+ * in Prosa, legt Vorschlagskarten daneben (Personen, Signale, Chancen, Aktionen, Kontaktaufnahmen, Fragen, Kunde,
  * Setup) und benennt, was ihm für weitere Vorschläge fehlt. Er sieht nur, was die Person sieht; er schreibt nichts
  * ohne Klick; jede Karte braucht eine Textstelle aus dem Dialog oder dem Kontext. Der Dialog wird bei der ersten
  * Übernahme zur Quelle (Typ INTERVIEW) und bleibt als Beleg erhalten.
@@ -151,7 +151,7 @@ export async function computeMissing(actor: Actor, res: Resolved): Promise<strin
     const persons = await db.query.persons.findMany({ where: eq(schema.persons.accountId, res.ctx.account.id) });
     if (persons.length === 0) m.push("Noch keine Ansprechpartner: Mit wem hast du gesprochen – Name, Funktion, Zuständigkeit?");
     const [opps] = await db.select({ n: count() }).from(schema.opportunities).where(eq(schema.opportunities.setupId, res.ctx.setup.id));
-    if (Number(opps?.n ?? 0) === 0) m.push("Kein Bedarf erfasst: Was will der Kunde erreichen, in seinen Worten – und woran macht er fest, dass ihm etwas fehlt?");
+    if (Number(opps?.n ?? 0) === 0) m.push("Kein Chance erfasst: Was will der Kunde erreichen, in seinen Worten – und woran macht er fest, dass ihm etwas fehlt?");
     const [sig] = await db.select({ n: count() }).from(schema.signals).where(eq(schema.signals.setupId, res.ctx.setup.id));
     if (Number(sig?.n ?? 0) === 0) m.push("Keine Beobachtungen: Was wurde im letzten Gespräch konkret gesagt oder gezeigt?");
     if (persons.length > 0) {
@@ -177,7 +177,8 @@ export async function buildContextText(actor: Actor, res: Resolved): Promise<str
       db.query.openQuestions.findMany({ where: and(eq(schema.openQuestions.setupId, res.ctx.setup.id), eq(schema.openQuestions.status, "OFFEN")), limit: 10 }),
     ]);
     if (persons.length) lines.push(`Bekannte Personen: ${persons.map((p) => `${p.displayName}${fns.find((f) => f.personId === p.id && !f.validTo)?.functionTitle ? ` (${fns.find((f) => f.personId === p.id && !f.validTo)!.functionTitle})` : ""}`).join("; ")}`);
-    if (opps.length) lines.push(`Bedarfe: ${opps.map((o) => `${o.title} [${o.status}]`).join("; ")}`);
+    if (opps.length) lines.push(`Chancen: ${opps.map((o) => `${o.title} [${o.status}${o.kind ? `, ${o.kind}` : ""}${o.horizon ? `, ${o.horizon}` : ""}]`).join("; ")}`);
+    else lines.push("Chancen: noch keine – worauf läuft es hinaus?");
     if (signals.length) lines.push(`Letzte Beobachtungen: ${signals.map((s) => s.observation.slice(0, 160)).join(" | ")}`);
     if (actions.length) lines.push(`Aktionen: ${actions.map((a) => `${a.title} [${a.status}${a.dueDate ? `, bis ${a.dueDate}` : ""}]`).join("; ")}`);
     if (oq.length) lines.push(`Offene Fragen: ${oq.map((q) => q.question).join(" | ")}`);
@@ -392,6 +393,14 @@ export async function decideCard(actor: Actor, raw: unknown) {
   return { card, thread: await requireThread(actor, threadId) };
 }
 
+/** Chance eines Setups nach Titel finden (unscharf) – für das Wofür der Karten. */
+async function matchOpportunity(setupId: string, purpose: string) {
+  const opps = await db.query.opportunities.findMany({ where: eq(schema.opportunities.setupId, setupId) });
+  const q = purpose.trim().toLowerCase();
+  if (!q) return null;
+  return opps.find((o) => o.title.toLowerCase() === q) ?? opps.find((o) => o.title.toLowerCase().includes(q) || q.includes(o.title.toLowerCase())) ?? null;
+}
+
 type ApplyResult = { type: string; id: string; note?: string; rebind?: { type: "SETUP"; id: string; title: string } };
 
 async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$inferSelect, res: Resolved, item: AssistantItem): Promise<ApplyResult> {
@@ -425,32 +434,36 @@ async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$i
   if (!canEditSetup(actor, res.ctx)) throw new ForbiddenError("Sie sind an diesem Setup nicht bearbeitend beteiligt.");
   const setupId = res.ctx.setup.id;
   const sourceId = await db.transaction(async (tx) => ensureThreadSource(tx, actor, thread, setupId));
+  // Wofür (E-045): purpose gegen bestehende Chancen des Setups auflösen (Titel, unscharf)
+  const purpose = "purpose" in item ? item.purpose : "";
+  const linkedOpp = purpose ? await matchOpportunity(setupId, purpose) : null;
+  const purposeNote = linkedOpp ? ` Wofür: „${linkedOpp.title}“.` : purpose ? ` Wofür (noch ohne Chance): ${purpose}.` : "";
   if (item.type === "SIGNAL") {
     const id = await db.transaction(async (tx) => {
-      const [signal] = await tx.insert(schema.signals).values({ workspaceId: actor.workspaceId, setupId, observation: item.observation, relevanceHypothesis: item.relevanceHypothesis || null, status: "NEU", sourceId, createdBy: actor.userId }).returning();
-      if (!signal) throw new Error("Hinweis");
+      const [signal] = await tx.insert(schema.signals).values({ workspaceId: actor.workspaceId, setupId, observation: item.observation, relevanceHypothesis: item.relevanceHypothesis || (purpose && !linkedOpp ? `Wofür: ${purpose}` : null), opportunityId: linkedOpp?.id ?? null, status: "NEU", sourceId, createdBy: actor.userId }).returning();
+      if (!signal) throw new Error("Beobachtung");
       const [assertion] = await tx.insert(schema.assertions).values({ workspaceId: actor.workspaceId, setupId, subjectType: "SETUP", subjectId: setupId, content: item.observation, epistemicStatus: "AUSSAGE_WIEDERGEGEBEN", createdBy: actor.userId }).returning();
       if (assertion) await tx.insert(schema.assertionEvidence).values({ assertionId: assertion.id, sourceId, excerpt: item.observation.slice(0, 500) });
       await recordAudit(tx, actor, "signal.created", "SIGNAL", signal.id, { setupId, herkunft: "ASSISTENT" });
       return signal.id;
     });
-    return { type: "SIGNAL", id, note: "Hinweis (neu) angelegt." };
+    return { type: "SIGNAL", id, note: `Beobachtung (neu) angelegt.${purposeNote}` };
   }
-  if (item.type === "BEDARF") {
-    const opp = await createOpportunity(actor, { setupId, title: item.title, needDescription: item.needDescription, trigger: origin });
-    return { type: "OPPORTUNITY", id: opp.id, note: "Bedarf (in Klärung) angelegt." };
+  if (item.type === "CHANCE") {
+    const opp = await createOpportunity(actor, { setupId, title: item.title, needDescription: item.needDescription, trigger: origin, kind: item.kind, roleName: item.roleName, headcount: item.headcount ?? undefined, horizon: item.horizon, anticipated: item.anticipated });
+    return { type: "OPPORTUNITY", id: opp.id, note: `Chance (${item.anticipated ? "antizipiert" : "in Klärung"}) angelegt${item.roleName ? ` – Rolle „${item.roleName}“` : ""}.` };
   }
   if (item.type === "AKTION") {
-    const id = await db.transaction(async (tx) => insertSuggestionCard(tx, actor, setupId, sourceId, origin, { type: "AKTION", title: item.title.slice(0, 200), targetRole: item.ownerRole, observation: item.description || item.title, evidenceQuote: item.evidenceQuote, nextStep: item.title, whyNow: item.dueHint ? `Frist/Hinweis: ${item.dueHint}` : "", uncertainty: "Vorschlag aus dem Assistenten – erst die Annahme macht daraus eine Aufgabe.", priority: "KONKRETE_ANFRAGE" }));
-    return { type: "SUGGESTION", id, note: `Als Vorschlag für ${item.ownerRole} in „Meine Arbeit“ abgelegt.` };
+    const id = await db.transaction(async (tx) => insertSuggestionCard(tx, actor, setupId, sourceId, origin, { type: "AKTION", title: item.title.slice(0, 200), targetRole: item.ownerRole, observation: item.description || item.title, evidenceQuote: item.evidenceQuote, nextStep: item.title, whyNow: item.dueHint ? `Frist/Hinweis: ${item.dueHint}` : "", uncertainty: "Vorschlag aus dem Assistenten – erst die Annahme macht daraus eine Aufgabe.", priority: "KONKRETE_ANFRAGE", opportunityId: linkedOpp?.id ?? null, purpose }));
+    return { type: "SUGGESTION", id, note: `Als Vorschlag für ${item.ownerRole} in „Meine Arbeit“ abgelegt.${purposeNote}` };
   }
   if (item.type === "KONTAKT") {
-    const id = await db.transaction(async (tx) => insertSuggestionCard(tx, actor, setupId, sourceId, origin, { type: "KONTAKTAUFNAHME", title: `Kontaktaufnahme ${item.personName}`.slice(0, 200), targetRole: "ANKER", observation: item.occasion, evidenceQuote: item.evidenceQuote, hypothesis: item.viaVerveName ? `Möglicher Weg: über ${item.viaVerveName}` : "", nextStep: item.draftMessage, mentionedPersonName: item.personName, uncertainty: "Entwurf zum Bearbeiten – wird nie automatisch versendet.", priority: "ZUGANGSLUECKE" }));
-    return { type: "SUGGESTION", id, note: "Als Kontaktaufnahme-Vorschlag für den Anker abgelegt." };
+    const id = await db.transaction(async (tx) => insertSuggestionCard(tx, actor, setupId, sourceId, origin, { type: "KONTAKTAUFNAHME", title: `Kontaktaufnahme ${item.personName}`.slice(0, 200), targetRole: "ANKER", observation: item.occasion, evidenceQuote: item.evidenceQuote, hypothesis: item.viaVerveName ? `Möglicher Weg: über ${item.viaVerveName}` : "", nextStep: item.draftMessage, mentionedPersonName: item.personName, uncertainty: "Entwurf zum Bearbeiten – wird nie automatisch versendet.", priority: "ZUGANGSLUECKE", opportunityId: linkedOpp?.id ?? null, purpose }));
+    return { type: "SUGGESTION", id, note: `Als Kontaktaufnahme-Vorschlag für den Anker abgelegt.${purposeNote}` };
   }
   if (item.type === "FRAGE") {
-    const id = await db.transaction(async (tx) => insertSuggestionCard(tx, actor, setupId, sourceId, origin, { type: "OFFENE_FRAGE", title: item.question.slice(0, 200), targetRole: "BD", observation: item.question, evidenceQuote: item.evidenceQuote, proposedQuestion: item.question, uncertainty: "Vor der Bestätigung zu klären.", priority: "NEUE_INFORMATION" }));
-    return { type: "SUGGESTION", id, note: "Als offene Frage vorgemerkt." };
+    const id = await db.transaction(async (tx) => insertSuggestionCard(tx, actor, setupId, sourceId, origin, { type: "OFFENE_FRAGE", title: item.question.slice(0, 200), targetRole: "BD", observation: item.question, evidenceQuote: item.evidenceQuote, proposedQuestion: item.question, uncertainty: "Vor der Bestätigung zu klären.", priority: "NEUE_INFORMATION", opportunityId: linkedOpp?.id ?? null, purpose }));
+    return { type: "SUGGESTION", id, note: `Als offene Frage vorgemerkt.${purposeNote}` };
   }
   throw new ValidationError("Unbekannter Kartentyp.");
 }

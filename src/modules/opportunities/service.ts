@@ -8,11 +8,12 @@ import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { canEditSetup, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { listVisibleAccounts } from "@/modules/accounts/service";
+import { listRoles, matchRole } from "@/modules/roles/catalog";
 
 /**
- * Bedarfe, Buyingcenter, Angebote, Aufträge, Startvoraussetzungen (Briefing 8.3, 9.1–9.4, 15.2, Etappe 5).
- *  - Je Setup mehrere Bedarfe mit unabhängigen Zuständen; kein gemeinsamer Kunden-Pipelinestatus (F02).
- *  - Ein Bedarf kann direkt erfasst werden – ohne vollständiges Setup oder MEDDPICC (F08, Fast-Track 9.4).
+ * Chancen, Buyingcenter, Angebote, Aufträge, Startvoraussetzungen (Briefing 8.3, 9.1–9.4, 15.2, Etappe 5).
+ *  - Je Setup mehrere Chancen mit unabhängigen Zuständen; kein gemeinsamer Kunden-Pipelinestatus (F02).
+ *  - Eine Chance kann direkt erfasst werden – ohne vollständiges Setup oder MEDDPICC (F08, Fast-Track 9.4).
  *  - Kritische Übergänge (9.3) brauchen dokumentierte Ereignisse mit Quelle: bestätigt, vorgestellt (F09),
  *    beauftragt, startbereit, gestartet. Ein Entwurf oder ein erreichtes Datum genügt nie.
  *  - Positive Rückmeldung zu einem Angebot ist kein Auftrag (F10).
@@ -25,9 +26,9 @@ import { listVisibleAccounts } from "@/modules/accounts/service";
 
 async function requireOpportunity(actor: Actor, id: string) {
   const opp = await db.query.opportunities.findFirst({ where: and(eq(schema.opportunities.id, id), eq(schema.opportunities.workspaceId, actor.workspaceId)) });
-  if (!opp) throw new NotFoundError("Bedarf");
+  if (!opp) throw new NotFoundError("Chance");
   const ctx = await loadSetupContext(actor, opp.setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Bedarf");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Chance");
   return { opp, ctx };
 }
 
@@ -59,19 +60,40 @@ async function resolveEvidence(tx: Tx | Db, actor: Actor, ctx: SetupContext, raw
 }
 
 // ---------------------------------------------------------------------------
-// Bedarfe
+// Chancen
 // ---------------------------------------------------------------------------
+
+/** Chance-Felder (Etappe 10): Art ist Pflicht (Standard: Verve-Experte), Rolle/Anzahl/Horizont optional. */
+const chanceFields = {
+  kind: z.enum(schema.chanceKindEnum.enumValues).default("VERVE_EXPERTE"),
+  roleId: z.string().optional().or(z.literal("")),
+  /** Rollenname statt ID (KI-Vorschläge) – wird unscharf gegen den Katalog aufgelöst */
+  roleName: z.string().trim().max(120).optional().or(z.literal("")),
+  roleFamily: z.enum(schema.roleFamilyEnum.enumValues).optional().or(z.literal("")),
+  headcount: z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().int().min(1).max(999).optional()),
+  horizon: z.string().trim().max(60).optional().or(z.literal("")),
+};
 
 export const createOpportunityInput = z.object({
   setupId: z.string().min(1, "Setup fehlt"),
   title: z.string().trim().min(3, "Titel fehlt").max(200),
-  needDescription: z.string().trim().min(10, "Bitte den Bedarf in Kundensprache beschreiben (mind. 10 Zeichen).").max(4000),
+  needDescription: z.string().trim().min(10, "Bitte die Chance in Kundensprache beschreiben (mind. 10 Zeichen).").max(4000),
   trigger: z.string().trim().max(2000).optional().or(z.literal("")),
   fastTrack: z.union([z.literal("on"), z.literal("true"), z.boolean()]).optional(),
   signalId: z.string().optional().or(z.literal("")),
+  /** antizipiert = Vermutung aus Beobachtungen, noch nicht vom Kunden ausgesprochen */
+  anticipated: z.union([z.literal("on"), z.literal("true"), z.boolean()]).optional(),
+  ...chanceFields,
 });
 
-/** Bedarf anlegen: minimal (Titel + Beschreibung). Kein vorgeschaltetes MEDDPICC, kein vollständiges Setup nötig (F08). */
+async function resolveChanceFields(workspaceId: string, i: { kind: "VERVE_EXPERTE" | "FREELANCER_EXPERTE" | "AUSSCHREIBUNG"; roleId?: string; roleName?: string; roleFamily?: string; headcount?: number; horizon?: string }) {
+  const roles = await listRoles(workspaceId);
+  const role = matchRole(roles, i.roleId || i.roleName || null);
+  const family = (role?.family ?? (i.roleFamily || null)) as (typeof schema.roleFamilyEnum.enumValues)[number] | null;
+  return { kind: i.kind, roleId: role?.id ?? null, roleFamily: family, headcount: i.headcount ?? null, horizon: i.horizon || null };
+}
+
+/** Chance anlegen: minimal (Titel + Beschreibung). Kein vorgeschaltetes MEDDPICC, kein vollständiges Setup nötig (F08). */
 export async function createOpportunity(actor: Actor, raw: unknown) {
   const parsed = createOpportunityInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
@@ -80,12 +102,14 @@ export async function createOpportunity(actor: Actor, raw: unknown) {
   if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
   if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Sie sind an diesem Setup nicht bearbeitend beteiligt.");
   const fastTrack = input.fastTrack === "on" || input.fastTrack === "true" || input.fastTrack === true;
+  const anticipated = input.anticipated === "on" || input.anticipated === "true" || input.anticipated === true;
+  const chance = await resolveChanceFields(actor.workspaceId, input);
   return db.transaction(async (tx) => {
     let signal: typeof schema.signals.$inferSelect | null = null;
     if (input.signalId) {
       signal = (await tx.query.signals.findFirst({ where: and(eq(schema.signals.id, input.signalId), eq(schema.signals.setupId, ctx.setup.id)) })) ?? null;
-      if (!signal) throw new NotFoundError("Hinweis");
-      if (signal.status === "BEENDET") throw new TransitionError("Ein beendeter Hinweis wird nicht mehr mit einem Bedarf verknüpft.");
+      if (!signal) throw new NotFoundError("Beobachtung");
+      if (signal.status === "BEENDET") throw new TransitionError("Ein beendeter Beobachtung wird nicht mehr mit einem Chance verknüpft.");
     }
     const [opp] = await tx
       .insert(schema.opportunities)
@@ -96,6 +120,8 @@ export async function createOpportunity(actor: Actor, raw: unknown) {
         title: input.title,
         needDescription: input.needDescription,
         trigger: input.trigger || null,
+        status: anticipated ? "ANTIZIPIERT" : "IN_KLAERUNG",
+        ...chance,
         ownerUserId: actor.userId,
         fastTrack,
         requestedAt: fastTrack ? new Date() : null,
@@ -103,13 +129,14 @@ export async function createOpportunity(actor: Actor, raw: unknown) {
         createdBy: actor.userId,
       })
       .returning();
-    if (!opp) throw new Error("Bedarf");
+    if (!opp) throw new Error("Chance");
     if (signal) {
-      // Hinweis → „mit Bedarf verknüpft“ (9.2); der Hinweis bleibt als Herkunft nachvollziehbar
+      // Beobachtung → „mit Chance verknüpft“ (9.2); die Beobachtung bleibt als Herkunft nachvollziehbar
       await tx.update(schema.signals).set({ status: "MIT_BEDARF_VERKNUEPFT", version: signal.version + 1, updatedAt: new Date() }).where(eq(schema.signals.id, signal.id));
       await recordAudit(tx, actor, "signal.status_changed", "SIGNAL", signal.id, { von: signal.status, nach: "MIT_BEDARF_VERKNUEPFT" });
     }
-    await recordAudit(tx, actor, "opportunity.created", "OPPORTUNITY", opp.id, { fastTrack });
+    if (signal) await tx.update(schema.signals).set({ opportunityId: opp.id }).where(eq(schema.signals.id, signal.id));
+    await recordAudit(tx, actor, "opportunity.created", "OPPORTUNITY", opp.id, { fastTrack, anticipated, kind: chance.kind, roleId: chance.roleId });
     return opp;
   });
 }
@@ -120,6 +147,7 @@ export const updateOpportunityInput = z.object({
   needDescription: z.string().trim().min(10).max(4000),
   trigger: z.string().trim().max(2000).optional().or(z.literal("")),
   ownerUserId: z.string().optional().or(z.literal("")),
+  ...chanceFields,
 });
 
 export async function updateOpportunity(actor: Actor, id: string, raw: unknown) {
@@ -127,10 +155,11 @@ export async function updateOpportunity(actor: Actor, id: string, raw: unknown) 
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const { opp } = await requireEditableOpportunity(actor, id);
-  if (opp.status === "BEENDET") throw new TransitionError("Ein beendeter Bedarf wird nicht mehr geändert.");
+  if (opp.status === "BEENDET") throw new TransitionError("Eine beendete Chance wird nicht mehr geändert.");
+  const chance = await resolveChanceFields(actor.workspaceId, { ...input, kind: input.kind ?? opp.kind });
   const [u] = await db
     .update(schema.opportunities)
-    .set({ title: input.title, needDescription: input.needDescription, trigger: input.trigger || null, ownerUserId: input.ownerUserId || opp.ownerUserId, version: input.version + 1, updatedAt: new Date() })
+    .set({ title: input.title, needDescription: input.needDescription, trigger: input.trigger || null, ownerUserId: input.ownerUserId || opp.ownerUserId, ...chance, version: input.version + 1, updatedAt: new Date() })
     .where(and(eq(schema.opportunities.id, id), eq(schema.opportunities.version, input.version)))
     .returning();
   if (!u) throw new ConflictError();
@@ -170,12 +199,13 @@ export async function saveMeddpicc(actor: Actor, id: string, raw: { version: num
 }
 
 const oppTransitions: Record<OpportunityStatus, OpportunityStatus[]> = {
+  ANTIZIPIERT: ["IN_KLAERUNG", "BESTAETIGT", "ZURUECKGESTELLT", "BEENDET"],
   IN_KLAERUNG: ["BESTAETIGT", "ZURUECKGESTELLT", "BEENDET"],
   BESTAETIGT: ["PROFIL_ANGEBOT_VORGESTELLT", "ZURUECKGESTELLT", "BEENDET"],
   PROFIL_ANGEBOT_VORGESTELLT: ["AUSWAHL_BESTELLUNG", "ZURUECKGESTELLT", "BEENDET"],
   AUSWAHL_BESTELLUNG: ["BEAUFTRAGT", "ZURUECKGESTELLT", "BEENDET"],
   BEAUFTRAGT: ["BEENDET"],
-  ZURUECKGESTELLT: ["IN_KLAERUNG", "BESTAETIGT", "BEENDET"],
+  ZURUECKGESTELLT: ["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT", "BEENDET"],
   BEENDET: [],
 };
 
@@ -186,7 +216,7 @@ export const confirmOpportunityInput = z.object({
   confirmedNote: z.string().trim().max(1000).optional().or(z.literal("")),
 });
 
-/** „Bedarf bestätigt“ (9.3): dokumentierte Bestätigung mit Quelle und Zeitpunkt; Budget-/Beschaffungsinfo nicht zwingend. */
+/** „Chance bestätigt“ (9.3): dokumentierte Bestätigung mit Quelle und Zeitpunkt; Budget-/Beschaffungsinfo nicht zwingend. */
 export async function confirmOpportunity(actor: Actor, id: string, raw: unknown) {
   const parsed = confirmOpportunityInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
@@ -194,7 +224,7 @@ export async function confirmOpportunity(actor: Actor, id: string, raw: unknown)
   const { opp, ctx } = await requireEditableOpportunity(actor, id);
   if (!oppTransitions[opp.status].includes("BESTAETIGT")) throw new TransitionError(`Aus „${opp.status}“ ist keine Bestätigung vorgesehen.`);
   return db.transaction(async (tx) => {
-    const sourceId = await resolveEvidence(tx, actor, ctx, { sourceId: input.sourceId || undefined, evidenceText: input.evidenceText || undefined }, `Bedarfsbestätigung: ${opp.title}`);
+    const sourceId = await resolveEvidence(tx, actor, ctx, { sourceId: input.sourceId || undefined, evidenceText: input.evidenceText || undefined }, `Bestätigung der Chance: ${opp.title}`);
     const [u] = await tx
       .update(schema.opportunities)
       .set({ status: "BESTAETIGT", confirmedAt: new Date(), confirmedSourceId: sourceId, confirmedNote: input.confirmedNote || null, statusReason: null, version: input.version + 1, updatedAt: new Date() })
@@ -210,12 +240,12 @@ export async function confirmOpportunity(actor: Actor, id: string, raw: unknown)
 export async function changeOpportunityStatus(actor: Actor, id: string, raw: { version: number; status: OpportunityStatus; reason?: string }) {
   const { opp } = await requireEditableOpportunity(actor, id);
   const to = raw.status;
-  if (to === "BESTAETIGT") throw new TransitionError("Bestätigung erfolgt über „Bedarf bestätigen“ mit Beleg.");
+  if (to === "BESTAETIGT") throw new TransitionError("Bestätigung erfolgt über „Chance bestätigen“ mit Beleg.");
   if (to === "PROFIL_ANGEBOT_VORGESTELLT") throw new TransitionError("„Vorgestellt“ entsteht nur über ein tatsächlich vorgestelltes Angebot (F09).");
   if (to === "BEAUFTRAGT") throw new TransitionError("„Beauftragt“ entsteht nur über einen Auftrag mit Nachweis.");
   if (!oppTransitions[opp.status].includes(to)) throw new TransitionError(`Übergang von „${opp.status}“ nach „${to}“ ist nicht vorgesehen.`);
   const reason = (raw.reason ?? "").trim();
-  if ((to === "ZURUECKGESTELLT" || to === "BEENDET") && reason.length < 3) throw new ValidationError("Bitte begründen, warum der Bedarf zurückgestellt bzw. beendet wird.");
+  if ((to === "ZURUECKGESTELLT" || to === "BEENDET") && reason.length < 3) throw new ValidationError("Bitte begründen, warum die Chance zurückgestellt bzw. beendet wird.");
   const [u] = await db
     .update(schema.opportunities)
     .set({ status: to, statusReason: reason || null, version: Number(raw.version) + 1, updatedAt: new Date() })
@@ -317,7 +347,7 @@ export async function createOffer(actor: Actor, raw: unknown) {
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const { opp } = await requireEditableOpportunity(actor, input.opportunityId);
-  if (opp.status === "BEENDET" || opp.status === "BEAUFTRAGT") throw new TransitionError("Für diesen Bedarf werden keine neuen Angebote mehr angelegt.");
+  if (opp.status === "BEENDET" || opp.status === "BEAUFTRAGT") throw new TransitionError("Für diese Chance werden keine neuen Angebote mehr angelegt.");
   const refs = input.profileReferenceIds ?? [];
   if (refs.length) {
     const found = await db.query.candidateProfileReferences.findMany({ where: and(inArray(schema.candidateProfileReferences.id, refs), eq(schema.candidateProfileReferences.workspaceId, actor.workspaceId)) });
@@ -379,7 +409,7 @@ export async function presentOffer(actor: Actor, offerId: string, raw: unknown) 
   });
 }
 
-/** Übrige Angebotsübergänge. Akzeptiert ≠ Auftrag (F10): Der Bedarf wechselt höchstens nach „Auswahl/Bestellung“. */
+/** Übrige Angebotsübergänge. Akzeptiert ≠ Auftrag (F10): Die Chance wechselt höchstens nach „Auswahl/Bestellung“. */
 export async function changeOfferStatus(actor: Actor, offerId: string, raw: { version: number; status: OfferStatus; note?: string }) {
   const offer = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, offerId), eq(schema.offers.workspaceId, actor.workspaceId)) });
   if (!offer) throw new NotFoundError("Angebot");
@@ -424,7 +454,7 @@ export async function createOrder(actor: Actor, raw: unknown) {
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const { opp } = await requireEditableOpportunity(actor, input.opportunityId);
-  if (opp.status === "BEENDET" || opp.status === "ZURUECKGESTELLT") throw new TransitionError("Für einen beendeten oder zurückgestellten Bedarf wird kein Auftrag angelegt.");
+  if (opp.status === "BEENDET" || opp.status === "ZURUECKGESTELLT") throw new TransitionError("Für einen beendeten oder zurückgestellten Chance wird kein Auftrag angelegt.");
   if (input.offerId) {
     const offer = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, input.offerId), eq(schema.offers.opportunityId, opp.id)) });
     if (!offer) throw new NotFoundError("Angebot");
@@ -613,10 +643,10 @@ export async function listOpportunitiesForSetup(actor: Actor, setupId: string) {
   return db.query.opportunities.findMany({ where: eq(schema.opportunities.setupId, setupId), orderBy: desc(schema.opportunities.updatedAt) });
 }
 
-/** Bedarfe eines Kunden – jeder Bedarf mit eigenem Zustand, keine Verdichtung zu einem Kundenstatus (F02). */
+/** Chancen eines Kunden – jede Chance mit eigenem Zustand, keine Verdichtung zu einem Kundenstatus (F02). */
 export async function listOpportunitiesForAccount(actor: Actor, accountId: string) {
   const rows = await db.query.opportunities.findMany({ where: and(eq(schema.opportunities.accountId, accountId), eq(schema.opportunities.workspaceId, actor.workspaceId)), orderBy: desc(schema.opportunities.updatedAt) });
-  const out = [];
+  const out: (typeof schema.opportunities.$inferSelect & { setupName: string })[] = [];
   for (const o of rows) {
     const ctx = await loadSetupContext(actor, o.setupId);
     if (ctx && canViewSetup(actor, ctx)) out.push({ ...o, setupName: ctx.setup.name });
@@ -624,7 +654,7 @@ export async function listOpportunitiesForAccount(actor: Actor, accountId: strin
   return out;
 }
 
-/** Offene Bedarfe, für die der Akteur verantwortlich ist (Meine Arbeit). */
+/** Offene Chancen, für die der Akteur verantwortlich ist (Meine Arbeit). */
 export async function listMyOpportunities(actor: Actor) {
   const rows = await db.query.opportunities.findMany({ where: and(eq(schema.opportunities.ownerUserId, actor.userId), eq(schema.opportunities.workspaceId, actor.workspaceId)), orderBy: desc(schema.opportunities.updatedAt) });
   const visibleAccounts = new Map((await listVisibleAccounts(actor)).map((a) => [a.id, a.name]));
@@ -662,6 +692,14 @@ export async function getOpportunityDetail(actor: Actor, id: string) {
     sources: visibleSources.map((s) => ({ id: s.id, title: s.title, type: s.type })),
     profileRefs,
     signal: signal ?? null,
+    roles: await listRoles(actor.workspaceId),
+    /** Was für diese Chance schon dokumentiert ist (Wofür-Verknüpfungen) */
+    linked: {
+      signals: await db.query.signals.findMany({ where: eq(schema.signals.opportunityId, id) }),
+      actions: await db.query.actions.findMany({ where: eq(schema.actions.opportunityId, id) }),
+      questions: await db.query.openQuestions.findMany({ where: eq(schema.openQuestions.opportunityId, id) }),
+      suggestions: await db.query.suggestions.findMany({ where: and(eq(schema.suggestions.opportunityId, id), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT"])) }),
+    },
   };
 }
 

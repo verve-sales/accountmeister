@@ -46,7 +46,7 @@ const DETACH: ReadonlySet<string> = new Set([
 ]);
 
 /** Tabellen, deren Zeilen nie über die Kaskade gelöscht werden dürfen. */
-const PROTECTED: ReadonlySet<string> = new Set(["users", "workspaces", "audit_events", "ai_jobs", "goals", "goal_versions", "import_jobs", "merge_review_items", "artifact_templates", "integration_connections", "ai_task_settings", "role_assignments_workspace"]);
+const PROTECTED: ReadonlySet<string> = new Set(["users", "workspaces", "audit_events", "ai_jobs", "goals", "goal_versions", "import_jobs", "merge_review_items", "artifact_templates", "integration_connections", "ai_task_settings", "role_assignments_workspace", "standard_roles"]);
 
 type Fk = { table: string; column: string; refTable: string };
 

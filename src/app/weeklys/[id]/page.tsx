@@ -57,7 +57,7 @@ export default async function WeeklyPage({ params, searchParams }: { params: Pro
           <div className="text-sm space-y-1">
             <p>Letzter bestätigter Stand: <strong>{p.lastConfirmed.reviewTitle}</strong> ({fmtDate(p.lastConfirmed.scheduledFor)}), bestätigt von {p.lastConfirmed.confirmedBy} am {fmtDateTime(p.lastConfirmed.confirmedAt)}.</p>
             {p.lastConfirmed.note && <details><summary className="text-sm">Notiz des letzten Weeklys</summary><pre className="whitespace-pre-wrap text-sm mt-1" style={{ fontFamily: "inherit" }}>{p.lastConfirmed.note}</pre></details>}
-            <p className="muted">Damals offen: {p.lastConfirmed.snapshot.openSignalCount} Hinweise, {p.lastConfirmed.snapshot.openActionCount} Aktionen, {p.lastConfirmed.snapshot.openHandoverCount} Übergaben.</p>
+            <p className="muted">Damals offen: {p.lastConfirmed.snapshot.openSignalCount} Beobachtungen, {p.lastConfirmed.snapshot.openActionCount} Aktionen, {p.lastConfirmed.snapshot.openHandoverCount} Übergaben.</p>
           </div>
         ) : (
           <p className="muted text-sm">Noch kein bestätigtes Weekly für dieses Setup – dies ist der erste dokumentierte Stand.</p>

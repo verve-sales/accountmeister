@@ -187,11 +187,20 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
   }
 
   const nameToUser = new Map(users.map((u) => [u.displayName, u.id]));
+  // Wofür (E-045): aktive Chancen des Setups; eine einzige Chance ist das Wofür aller Vorschläge, sonst unscharf nach Titelwörtern
+  const chances = (await db.query.opportunities.findMany({ where: eq(schema.opportunities.setupId, ctx.setup.id) })).filter((o) => !["ZURUECKGESTELLT", "BEENDET"].includes(o.status));
+  const purposeFor = (text: string): { id: string | null; purpose: string | null } => {
+    if (chances.length === 1) return { id: chances[0]!.id, purpose: chances[0]!.title };
+    const t = text.toLowerCase();
+    const hit = chances.find((c) => c.title.toLowerCase().split(/\s+/).filter((w) => w.length > 4).some((w) => t.includes(w)));
+    return hit ? { id: hit.id, purpose: hit.title } : { id: null, purpose: null };
+  };
   let created = 0;
   let skipped = 0;
   await db.transaction(async (tx) => {
     for (const item of valid) {
       const dedupeKey = sha(`${item.type}:${normalize(item.evidenceQuote)}`);
+      const wofuer = purposeFor(`${item.title} ${item.observation} ${item.evidenceQuote}`);
       const existing = await tx.query.suggestions.findFirst({ where: and(eq(schema.suggestions.setupId, ctx.setup.id), eq(schema.suggestions.dedupeKey, dedupeKey)) });
       if (existing) {
         skipped++;
@@ -201,6 +210,8 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
         workspaceId: actor.workspaceId,
         type: item.type,
         title: item.title,
+        opportunityId: wofuer.id,
+        purpose: wofuer.purpose,
         targetRole: item.type === "PERSON" || item.type === "OFFENE_FRAGE" ? "BD" : "TEILNEHMENDE",
         setupId: ctx.setup.id,
         reviewId: input0.reviewId ?? null,
@@ -294,13 +305,13 @@ export async function acceptSuggestion(actor: Actor, id: string, raw: unknown) {
   } else if (s.type === "AKTION") {
     const owner = input.ownerUserId || s.proposedOwnerUserId || actor.userId;
     // Nie „vereinbart“ aus einem Vorschlag: Aktion startet als Vorschlag (außer der Akteur übernimmt sie selbst)
-    const a = await createAction(actor, { setupId: s.setupId, title: text.slice(0, 300), ownerUserId: owner, reviewId: s.reviewId ?? "", agreedInConversation: false });
+    const a = await createAction(actor, { setupId: s.setupId, title: text.slice(0, 300), ownerUserId: owner, reviewId: s.reviewId ?? "", agreedInConversation: false, opportunityId: s.opportunityId ?? "" });
     acceptedObjectType = "ACTION";
     acceptedObjectId = a.id;
   } else if (s.type === "KONTAKTAUFNAHME") {
     // Kontaktaufnahme → Aktion für den Anker/BD mit dem Entwurf als Vereinbarungstext; Versand bleibt Handarbeit
     const owner = input.ownerUserId || s.proposedOwnerUserId || actor.userId;
-    const a = await createAction(actor, { setupId: s.setupId, title: `Kontaktaufnahme ${s.mentionedPersonName ?? ""}: ${text}`.slice(0, 300), agreement: (s.nextStep ?? "").slice(0, 2000), ownerUserId: owner, agreedInConversation: false });
+    const a = await createAction(actor, { setupId: s.setupId, title: `Kontaktaufnahme ${s.mentionedPersonName ?? ""}: ${text}`.slice(0, 300), agreement: (s.nextStep ?? "").slice(0, 2000), ownerUserId: owner, agreedInConversation: false, opportunityId: s.opportunityId ?? "" });
     acceptedObjectType = "ACTION";
     acceptedObjectId = a.id;
   } else if (s.type === "ENTSCHEIDUNG") {
@@ -314,6 +325,7 @@ export async function acceptSuggestion(actor: Actor, id: string, raw: unknown) {
       .values({
         workspaceId: actor.workspaceId,
         setupId: s.setupId,
+        opportunityId: s.opportunityId ?? null,
         question: s.type === "PERSON" ? `Welche Funktion und Zuständigkeit hat ${s.mentionedPersonName ?? "die genannte Person"}? (${text})` : text,
         decisionImpact: s.uncertainty ?? null,
         possibleSource: s.nextStep ?? null,

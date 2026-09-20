@@ -80,7 +80,8 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                 <Status label={c.stageLabel} />
                 <span className="muted text-sm">{c.setups.length} Setup(s){c.responsibleBdName ? ` · BD ${c.responsibleBdName}` : " · BD offen"} · letzte Änderung vor {c.daysSinceActivity} Tag(en)</span>
               </div>
-              <p className="text-sm mt-2"><span className="muted">Nächster großer Schritt: </span>{c.nextStep}</p>
+              <p className="text-sm mt-2"><span className="muted">Wofür: </span>{c.chanceCount ? <strong>{c.purpose}</strong> : <span style={{ color: "#8a6d1f" }}>{c.purpose}</span>}</p>
+              <p className="text-sm mt-1"><span className="muted">Nächster großer Schritt: </span>{c.nextStep}</p>
               <div className="grid sm:grid-cols-3 gap-4 mt-3 text-sm">
                 <div>
                   <div className="font-medium mb-1">Blockiert</div>
@@ -101,7 +102,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                   {c.setups.map((s) => (
                     <li key={s.setupId}>
                       <Link href={`/setups/${s.setupId}`}>{s.setupName}</Link> <Status label={s.stageLabel} />
-                      <span className="muted"> · {s.counts.openActions} Aktion(en){s.counts.overdueActions ? `, ${s.counts.overdueActions} überfällig` : ""} · {s.counts.opportunities} Bedarf(e) · {s.counts.persons} Person(en){s.counts.openSuggestions ? ` · ${s.counts.openSuggestions} Vorschläge` : ""}</span>
+                      <span className="muted"> · {s.counts.openActions} Aktion(en){s.counts.overdueActions ? `, ${s.counts.overdueActions} überfällig` : ""} · {s.counts.opportunities} Chance(e) · {s.counts.persons} Person(en){s.counts.openSuggestions ? ` · ${s.counts.openSuggestions} Vorschläge` : ""}</span>
                       <span className="ml-2"><Link href={`/setups/${s.setupId}/strategie`}>Strategiefaden</Link> · <Link href={`/setups/${s.setupId}?assistent=1`}>Assistent</Link></span>
                     </li>
                   ))}

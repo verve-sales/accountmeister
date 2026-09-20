@@ -18,6 +18,9 @@ export type SuggestionSeed = {
   proposedQuestion?: string;
   mentionedPersonName?: string;
   priority: (typeof schema.priorityCategoryEnum.enumValues)[number];
+  /** Wofür (Etappe 10): Chance, der der Vorschlag dient, bzw. Zweck als Text */
+  opportunityId?: string | null;
+  purpose?: string;
 };
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -44,6 +47,8 @@ export async function insertSuggestionCard(tx: Tx, actor: Actor, setupId: string
       whyNow: s.whyNow || null,
       nextStep: s.nextStep || null,
       proposedQuestion: s.proposedQuestion || null,
+      opportunityId: s.opportunityId ?? null,
+      purpose: s.purpose || null,
       mentionedPersonName: s.mentionedPersonName || null,
       priorityCategory: s.priority,
       dedupeKey,

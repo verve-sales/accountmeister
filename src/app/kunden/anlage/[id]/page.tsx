@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { notFound, redirect } from "next/navigation";
 import { schema } from "@/db/client";
 import { DomainError } from "@/lib/errors";
@@ -136,7 +137,7 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
 
             <section className="card">
               <h2 className="font-semibold mb-2">4. Beobachtungen / Signale ({p.signals.length} vorgeschlagen)</h2>
-              <p className="muted text-sm mb-2">Entstehen als Hinweis „neu“ mit dem Dokument als Quelle. Beobachtung und Vermutung bleiben getrennt.</p>
+              <p className="muted text-sm mb-2">Entstehen als Beobachtung „neu“ mit dem Dokument als Quelle. Beobachtung und Vermutung bleiben getrennt.</p>
               <div className="space-y-3">
                 {p.signals.map((x, i) => (
                   <div key={i} className="grid sm:grid-cols-[auto_1fr] gap-2 items-start border-t pt-2">
@@ -152,15 +153,20 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
             </section>
 
             <section className="card">
-              <h2 className="font-semibold mb-2">5. Mögliche Bedarfe ({p.needs.length} vorgeschlagen)</h2>
-              <p className="muted text-sm mb-2">Entstehen im Status „in Klärung“ – nie bestätigt. Beschreibung in Kundensprache.</p>
+              <h2 className="font-semibold mb-2">5. Mögliche Chancen ({p.needs.length} vorgeschlagen)</h2>
+              <p className="muted text-sm mb-2">Entstehen als „antizipiert“ – nie bestätigt. Beschreibung in Kundensprache; Wofür: Art und Standardrolle, soweit erkennbar.</p>
               <div className="space-y-3">
                 {p.needs.map((x, i) => (
                   <div key={i} className="grid sm:grid-cols-[auto_1fr] gap-2 items-start border-t pt-2">
                     <label className="flex items-center gap-2 text-sm pt-2"><input type="checkbox" name={`needs.${i}.include`} defaultChecked /> übernehmen</label>
                     <div>
                       <input name={`needs.${i}.title`} className="input" defaultValue={x.title} aria-label="Titel" maxLength={200} />
-                      <textarea name={`needs.${i}.needDescription`} className="textarea mt-1" defaultValue={x.needDescription} aria-label="Bedarf" maxLength={4000} rows={2} />
+                      <textarea name={`needs.${i}.needDescription`} className="textarea mt-1" defaultValue={x.needDescription} aria-label="Chance" maxLength={4000} rows={2} />
+                      <div className="grid sm:grid-cols-3 gap-2 mt-1">
+                        <select name={`needs.${i}.kind`} className="select" defaultValue={x.kind ?? "VERVE_EXPERTE"} aria-label="Art der Chance">{chanceKindValues.map((k) => <option key={k} value={k}>{chanceKindLabel[k]}</option>)}</select>
+                        <input name={`needs.${i}.roleName`} className="input" defaultValue={x.roleName ?? ""} placeholder="Standardrolle (z. B. Test Management)" aria-label="Standardrolle" maxLength={120} />
+                        <input name={`needs.${i}.horizon`} className="input" defaultValue={x.horizon ?? ""} placeholder="Zeithorizont (z. B. Q1 2027)" aria-label="Zeithorizont" maxLength={60} />
+                      </div>
                       {quote(x.evidenceQuote)}
                     </div>
                   </div>

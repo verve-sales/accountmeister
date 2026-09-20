@@ -23,6 +23,7 @@ export function SuggestionCard({ s, ownerName, canDecide, back, users }: { s: Su
         <div><dt className="muted">Sachverhalt aus der Quelle</dt><dd>{s.observation}</dd></div>
         {s.hypothesis && <div><dt className="muted">Idee / Vermutung (nicht belegt)</dt><dd>{s.hypothesis}</dd></div>}
         <div><dt className="muted">Beleg (Zitat)</dt><dd>„{s.evidenceQuote}“ <span className="muted">– {s.trigger}</span></dd></div>
+        <div><dt className="muted">Wofür</dt><dd>{s.purpose ? s.purpose : <span style={{ color: "#8a6d1f" }}>unklar – worauf läuft das hinaus?</span>}</dd></div>
         {s.uncertainty && <div><dt className="muted">Unsicherheit / Voraussetzung</dt><dd>{s.uncertainty}</dd></div>}
         {s.whyNow && <div><dt className="muted">Warum jetzt</dt><dd>{s.whyNow}</dd></div>}
         {s.nextStep && <div><dt className="muted">Konkreter nächster Schritt</dt><dd>{s.nextStep}</dd></div>}

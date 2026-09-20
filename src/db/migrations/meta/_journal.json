@@ -99,6 +99,13 @@
       "when": 1789920649417,
       "tag": "0013_strategiefaden",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789933165896,
+      "tag": "0014_chancen",
+      "breakpoints": true
     }
   ]
 }

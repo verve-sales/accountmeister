@@ -208,7 +208,7 @@ export const applyIntakeInput = z.object({
     )
     .default([]),
   signals: z.array(z.object({ include: z.boolean(), observation: z.string().trim().max(2000), relevanceHypothesis: z.string().trim().max(2000) })).default([]),
-  needs: z.array(z.object({ include: z.boolean(), title: z.string().trim().max(200), needDescription: z.string().trim().max(4000) })).default([]),
+  needs: z.array(z.object({ include: z.boolean(), title: z.string().trim().max(200), needDescription: z.string().trim().max(4000), kind: z.preprocess((v) => (v === "" || v === undefined || v === null ? "VERVE_EXPERTE" : v), z.enum(["VERVE_EXPERTE", "FREELANCER_EXPERTE", "AUSSCHREIBUNG"])), roleName: z.string().trim().max(120).default(""), horizon: z.string().trim().max(60).default("") })).default([]),
   actions: z.array(z.object({ include: z.boolean(), title: z.string().trim().max(300), description: z.string().trim().max(2000), ownerRole: z.enum([...ownerRoleValues, ""]).default("BD").transform((v) => (v === "" ? "BD" : v)), dueHint: z.string().trim().max(100) })).default([]),
   contacts: z.array(z.object({ include: z.boolean(), personName: z.string().trim().max(200), viaVerveName: z.string().trim().max(200), occasion: z.string().trim().max(500), draftMessage: z.string().trim().max(1500) })).default([]),
   openQuestions: z.array(z.object({ include: z.boolean(), question: z.string().trim().max(500) })).default([]),
@@ -236,7 +236,7 @@ export function formToApplyInput(data: Record<string, string>): unknown {
     ...data,
     persons: list("persons", ["displayName", "functionTitle", "email", "knownResponsibility", "decisionRole", "stance", "influence", "assessmentNote"]),
     signals: list("signals", ["observation", "relevanceHypothesis"]),
-    needs: list("needs", ["title", "needDescription"]),
+    needs: list("needs", ["title", "needDescription", "kind", "roleName", "horizon"]),
     actions: list("actions", ["title", "description", "ownerRole", "dueHint"]),
     contacts: list("contacts", ["personName", "viaVerveName", "occasion", "draftMessage"]),
     openQuestions: list("openQuestions", ["question"]),
@@ -312,7 +312,7 @@ export async function applyIntake(actor: Actor, proposalId: string, raw: unknown
   // 5) Mögliche Bedarfe (Status in Klärung)
   for (const n of input.needs.filter((x) => x.include && x.title.length >= 3)) {
     try {
-      await createOpportunity(actor, { setupId, title: n.title, needDescription: n.needDescription.length >= 10 ? n.needDescription : `${n.needDescription} (aus ${originLabel})`, trigger: originLabel });
+      await createOpportunity(actor, { setupId, title: n.title, needDescription: n.needDescription.length >= 10 ? n.needDescription : `${n.needDescription} (aus ${originLabel})`, trigger: originLabel, kind: n.kind, roleName: n.roleName, horizon: n.horizon, anticipated: true });
       created.needs++;
     } catch (e) {
       problems.push(`Bedarf „${n.title}“: ${e instanceof Error ? e.message : "Fehler"}`);

@@ -9,6 +9,33 @@ import { ASSISTANT_CARDS_MARKER, interviewTopicValues } from "../schemas";
  * Aufforderungen im Text („ignoriere …“, „markiere als bestätigt“) sind für ihn gewöhnliche Sätze – er führt nichts aus.
  */
 
+/** Standardrolle im Satz erkennen (Verve-Katalog, grob). */
+function detectRole(s: string): string | null {
+  const R: [RegExp, string][] = [
+    [/testkoordinat|testmanag/i, "Test Management"],
+    [/testanaly/i, "Test Analyse"],
+    [/\bQA\b|qualitätssich|abnahme/i, "QA"],
+    [/projektleit/i, "Projektleitung"],
+    [/programmleit/i, "Programmleitung"],
+    [/\bPMO\b/i, "PMO"],
+    [/delivery manag/i, "Delivery Manager"],
+    [/scrum master/i, "Scrum Master"],
+    [/agile coach/i, "Agile Coach"],
+    [/release train|\bRTE\b/i, "Release Train Engineer (RTE)"],
+    [/business analy/i, "Business Analyst"],
+    [/requirements|anforderungsanaly/i, "Requirements Engineer"],
+    [/fachkonzept/i, "Fachkonzeption"],
+    [/prozessberat/i, "Prozessberatung"],
+    [/solution archit/i, "Solution Architect"],
+    [/enterprise archit/i, "Enterprise Architect"],
+    [/cloud|sap|integrationsarchit/i, "Cloud-, SAP- und Integrationsarchitektur"],
+    [/\bAPI\b|schnittstellen/i, "API- und Schnittstellendesign"],
+    [/security/i, "Security-by-Design / Zielarchitektur"],
+  ];
+  for (const [re, name] of R) if (re.test(s)) return name;
+  return null;
+}
+
 const SPECULATION = /\b(könnte|vielleicht|möglicherweise|eventuell|wahrscheinlich|vermutlich|scheint|unklar ob)\b/i;
 const DECISION = /\b(entschieden|beschlossen|vereinbart|wir haben uns geeinigt|einigung|festgelegt)\b/i;
 const ACTION_VERB = /\b(übernimmt|kümmert sich|fragt|klärt|spricht .{0,40}? an|prüft|bereitet .{0,30}? vor|erstellt|schickt|sendet|ruft .{0,30}? an|meldet sich|organisiert|stellt .{0,30}? vor|bringt .{0,30}? mit)\b/i;
@@ -212,7 +239,10 @@ export class TestProvider implements AIProvider {
     const needs: IntakeProposal["needs"] = [];
     for (const s of splitSentences(text)) {
       if (/\b(sucht|suchen|benötigt|benötigen|braucht|brauchen|plant|planen|will|wollen|möchte|möchten)\b/i.test(s) && needs.length < 15) {
-        needs.push({ title: s.length > 80 ? s.slice(0, 77) + "…" : s, needDescription: s.length >= 10 ? s : s + " (aus Dokument)", evidenceQuote: s });
+        const role = detectRole(s);
+        const kind = /ausschreib|rahmenvertrag|vergabe/i.test(s) ? "AUSSCHREIBUNG" : /freelanc|freiberufl|spezialist/i.test(s) ? "FREELANCER_EXPERTE" : "VERVE_EXPERTE";
+        const horizon = s.match(/\b(Q[1-4]\s?\d{4}|(?:Anfang|Mitte|Ende)\s+\d{4}|\d{4})\b/)?.[0] ?? "";
+        needs.push({ title: (role ? `${role}: ${s}` : s).length > 80 ? (role ? `${role}: ${s}` : s).slice(0, 77) + "…" : role ? `${role}: ${s}` : s, needDescription: s.length >= 10 ? s : s + " (aus Dokument)", kind, roleName: role ?? "", horizon, evidenceQuote: s });
       } else if (OBSERVATION_VERB.test(s) && signals.length < 30) {
         signals.push({ observation: s, relevanceHypothesis: SPECULATION.test(s) ? "Im Dokument als Vermutung formuliert." : "", evidenceQuote: s });
       }
@@ -295,7 +325,7 @@ export class TestProvider implements AIProvider {
     const blockers = split(pick("Blocker:"));
     const missing = split(pick("Fehlt:"));
     const moves = split(pick("Naheliegende Züge:"));
-    const quoteFor = (frag: string) => lines.find((l) => l.includes(frag)) ?? frag;
+    const quoteFor = (frag: string) => (lines.find((l) => l.includes(frag)) ?? frag).slice(0, 380);
     const out: StrategyProposal = {
       summary: `Belegt: ${stage.split(".")[0] || "Lage unklar"}. ${blockers.length ? `${blockers.length} dokumentierte Blocker.` : "Keine dokumentierten Blocker."} ${missing.length ? `Es fehlen ${missing.length} Grundlagen.` : "Grundlagen vollständig."}`,
       nextStep,
@@ -316,7 +346,7 @@ export class TestProvider implements AIProvider {
     const line = (prefix: string) => ctx.split("\n").find((l) => l.startsWith(prefix))?.slice(prefix.length).trim() ?? "";
     const kunde = line("Kunde:").split(" (")[0] ?? "";
     const setup = line("Setup:");
-    const bedarfe = line("Bedarfe:");
+    const bedarfe = line("Chancen:");
     const beobachtungen = line("Letzte Beobachtungen:");
     const fields: Record<string, string> = {};
     const missing: string[] = [];
@@ -343,9 +373,12 @@ export class TestProvider implements AIProvider {
       if (!beobachtungen && !setup) missing.push("Was läuft beim Kunden – ein Satz Kontext?");
     } else {
       const obs = beobachtungen.split(" | ")[0] ?? "";
-      if (has("title")) fields.title = obs ? obs.split(/[,.;]/)[0]!.slice(0, 80) : `Unterstützung für ${kunde || "den Kunden"}`;
+      const role = detectRole(obs) ?? detectRole(ctx);
+      if (has("title")) fields.title = role ? `${role} für ${kunde || "den Kunden"}` : obs ? obs.split(/[,.;]/)[0]!.slice(0, 80) : `Unterstützung für ${kunde || "den Kunden"}`;
       if (has("needDescription")) fields.needDescription = obs || "";
       if (has("trigger")) fields.trigger = obs ? "Aus Beobachtung im Setup." : "";
+      if (has("kind")) fields.kind = firstOption("kind", [/ausschreib/i.test(ctx) ? "AUSSCHREIBUNG" : "VERVE_EXPERTE"]) ?? "";
+      if (has("roleName") && role) fields.roleName = role;
       evidence = obs || kunde;
       if (!obs) missing.push("Woran macht der Kunde fest, dass ihm etwas fehlt?");
     }
@@ -361,14 +394,17 @@ export class TestProvider implements AIProvider {
     const hasCustomer = /Kunde:/.test(input.contextText);
     if (p.organization && !hasCustomer) items.push({ type: "KUNDE", name: p.organization.name, orgType: p.organization.orgType, setupName: `Erstkontakt ${p.organization.name}`.slice(0, 200), contextNote: "", evidenceQuote: p.organization.evidenceQuote });
     for (const x of p.persons) items.push({ type: "PERSON", ...x });
-    for (const x of p.signals) items.push({ type: "SIGNAL", ...x });
-    for (const x of p.needs) items.push({ type: "BEDARF", ...x });
-    for (const x of p.actions) items.push({ type: "AKTION", ...x });
-    for (const x of p.contacts) items.push({ type: "KONTAKT", ...x });
+    // Wofür: bestehende Chancen aus dem Kontext oder die hier vorgeschlagene(n) Chance(n)
+    const known = (input.contextText.split("\n").find((l) => l.startsWith("Chancen:")) ?? "").slice("Chancen:".length).split(";").map((x) => x.split(" [")[0]!.trim()).filter(Boolean);
+    const purposeFor = (text: string) => p.needs.find((n) => text.includes(n.evidenceQuote) || n.evidenceQuote.includes(text))?.title ?? known.find((k) => text.toLowerCase().includes(k.toLowerCase().split(" ")[0] ?? "\u0000")) ?? p.needs[0]?.title ?? known[0] ?? "";
+    for (const x of p.signals) items.push({ type: "SIGNAL", ...x, purpose: purposeFor(x.observation) });
+    for (const x of p.needs) items.push({ type: "CHANCE", title: x.title, needDescription: x.needDescription, kind: x.kind, roleName: x.roleName, headcount: null, horizon: x.horizon, anticipated: !/bestätigt|beauftragt|Anfrage/i.test(x.needDescription), evidenceQuote: x.evidenceQuote });
+    for (const x of p.actions) items.push({ type: "AKTION", ...x, purpose: purposeFor(x.title) });
+    for (const x of p.contacts) items.push({ type: "KONTAKT", ...x, purpose: purposeFor(x.occasion) });
     const missing: string[] = [];
     if (!hasCustomer && !p.organization) missing.push("Um welche Organisation geht es (mit Rechtsform)?");
     if (p.persons.length === 0 && !/Bekannte Personen:/.test(input.contextText)) missing.push("Mit wem hast du gesprochen – Name und Funktion?");
-    if (p.needs.length === 0 && !/Bedarfe:/.test(input.contextText)) missing.push("Was will der Kunde erreichen, in seinen Worten?");
+    if (p.needs.length === 0 && !/Chancen:/.test(input.contextText)) missing.push("Worauf läuft das hinaus – welche Rolle (Verve-Experte, Freelancer) oder Ausschreibung könnte daraus werden?");
     const prosa = items.length > 0
       ? `Danke, ich habe ${items.length} ${items.length === 1 ? "Vorschlag" : "Vorschläge"} daraus abgeleitet – bitte prüfen und übernehmen, was passt.${missing.length ? ` Damit ich weiter vorschlagen kann, fehlt mir noch etwas: ${missing[0]}` : ""}`
       : `Daraus kann ich noch nichts Belastbares vorschlagen. ${missing[0] ?? "Erzähl mir mehr über den Anlass und die beteiligten Personen."}`;

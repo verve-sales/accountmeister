@@ -35,7 +35,7 @@ export function AccountPlanView({ plan, live, children }: { plan: Plan; live: bo
 
         <section>
           <h3 className="font-medium mb-1">Relevante Veränderungen ({plan.changes.length})</h3>
-          {plan.changes.length === 0 ? <p className="muted text-sm">Keine offenen Hinweise.</p> : (
+          {plan.changes.length === 0 ? <p className="muted text-sm">Keine offenen Beobachtungen.</p> : (
             <ul className="text-sm list-disc ml-5">{plan.changes.map((c) => <li key={c.id}><Status label={signalStatusLabel[c.status] ?? c.status} /> {c.observation} <span className="muted">({c.setupName}, {fmtDate(c.createdAt)}{c.owner ? `, Prüfung: ${c.owner}` : ""})</span></li>)}</ul>
           )}
         </section>
@@ -55,7 +55,7 @@ export function AccountPlanView({ plan, live, children }: { plan: Plan; live: bo
 
         <section>
           <h3 className="font-medium mb-1">Offene Fragen und Risiken ({plan.openQuestions.length})</h3>
-          {plan.openQuestions.length === 0 ? <p className="muted text-sm">Keine zurückgestellten Hinweise oder blockierten Aktionen.</p> : (
+          {plan.openQuestions.length === 0 ? <p className="muted text-sm">Keine zurückgestellten Beobachtungen oder blockierten Aktionen.</p> : (
             <ul className="text-sm list-disc ml-5">{plan.openQuestions.map((q, i) => <li key={i}><Status label={q.kind === "BLOCKIERT" ? "Blockiert" : "Zurückgestellt"} /> {q.text} <span className="muted">({q.setupName})</span></li>)}</ul>
           )}
         </section>

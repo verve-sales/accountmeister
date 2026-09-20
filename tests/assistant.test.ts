@@ -82,7 +82,7 @@ describe("Etappe 8: Assistent (Dialog mit Vorschlagskarten)", () => {
     expect(p.card.resultType).toBe("PERSON");
     const persons = await db.query.persons.findMany({ where: eq(schema.persons.accountId, account!.id) });
     expect(persons.map((x) => x.displayName)).toContain("Herr Berger");
-    const bedarf = r1.cards.find((c) => c.item.type === "BEDARF");
+    const bedarf = r1.cards.find((c) => c.item.type === "CHANCE");
     if (bedarf) {
       const b = await decideCard(david, { threadId: view.thread.id, messageId: r1.message.id, cardId: bedarf.id, decision: "UEBERNEHMEN" });
       expect(b.card.resultType).toBe("OPPORTUNITY");
@@ -90,7 +90,7 @@ describe("Etappe 8: Assistent (Dialog mit Vorschlagskarten)", () => {
       expect(opps.length).toBeGreaterThan(0);
     }
     // Verwerfen einer Karte
-    const rest = r1.cards.find((c) => c.status === "NEU" && !["KUNDE", "PERSON", "BEDARF"].includes(c.item.type) || (c.item.type === "PERSON" && c.id !== person.id));
+    const rest = r1.cards.find((c) => c.status === "NEU" && !["KUNDE", "PERSON", "CHANCE"].includes(c.item.type) || (c.item.type === "PERSON" && c.id !== person.id));
     if (rest) {
       const v = await decideCard(david, { threadId: view.thread.id, messageId: r1.message.id, cardId: rest.id, decision: "VERWERFEN" });
       expect(v.card.status).toBe("VERWORFEN");

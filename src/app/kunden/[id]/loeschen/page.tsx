@@ -37,8 +37,8 @@ export default async function KundeLoeschenPage({ params, searchParams }: { para
             <tr><td>Setups</td><td>{p.setups.length}{p.setups.length > 0 && <span className="muted"> – {p.setups.map((s) => s.name).join(", ")}</span>}</td></tr>
             <tr><td>Ansprechpartner (mit Beziehungen und Einschätzungen)</td><td>{p.persons}</td></tr>
             <tr><td>Quellen (Notizen, Dokumente samt Dateien, Interview- und Assistentenverläufe)</td><td>{p.sources}</td></tr>
-            <tr><td>Hinweise</td><td>{p.signals}</td></tr>
-            <tr><td>Bedarfe (mit Angeboten und Aufträgen)</td><td>{p.opportunities}</td></tr>
+            <tr><td>Beobachtungen</td><td>{p.signals}</td></tr>
+            <tr><td>Chancen (mit Angeboten und Aufträgen)</td><td>{p.opportunities}</td></tr>
             <tr><td>Aktionen</td><td>{p.actions}</td></tr>
             <tr><td>Vorschläge</td><td>{p.suggestions}</td></tr>
             <tr><td>Reviews</td><td>{p.reviews}</td></tr>
