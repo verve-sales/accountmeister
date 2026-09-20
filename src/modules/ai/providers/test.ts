@@ -1,5 +1,6 @@
-import type { AIProvider, AnalyzeDocumentInput, ProviderInfo, StructureNoteInput } from "../provider";
-import type { IntakeProposal, StructuredItem, StructureNoteOutput } from "../schemas";
+import type { AIProvider, AnalyzeDocumentInput, InterviewNextInput, ProviderInfo, StructureNoteInput } from "../provider";
+import type { IntakeProposal, InterviewNext, StructuredItem, StructureNoteOutput } from "../schemas";
+import { interviewTopicValues } from "../schemas";
 
 /**
  * Deterministischer Testanbieter (Briefing 2.3): regelbasiert, ohne Netzwerk, ohne Modell.
@@ -17,7 +18,7 @@ const PERSON_TITLE = /\b(Frau|Herr|Hr\.|Fr\.)\s+([A-ZÄÖÜ][\wäöüß-]+)/g;
 
 function splitSentences(text: string): string[] {
   return text
-    .split(/(?<=[.!?])\s+|\n+/)
+    .split(/(?<!\b(?:Dr|Prof|Hr|Fr|Nr|ca|bzw|z\.B)\.)(?<=[.!?])\s+|\n+/)
     .map((s) => s.replace(/^[-–•*\s]+/, "").trim())
     .filter((s) => s.length >= 12);
 }
@@ -195,13 +196,17 @@ export class TestProvider implements AIProvider {
       }
     }
     const persons: IntakeProposal["persons"] = [];
-    const seen = new Set<string>();
-    for (const m of text.matchAll(/\b(Frau|Herr|Hr\.|Fr\.)\s+([A-ZÄÖÜ][\wäöüß-]+(?:\s[A-ZÄÖÜ][\wäöüß-]+)?)(?:\s*[,(]\s*([^,.;()\n]{3,60}))?/g)) {
-      const name = `${m[1]} ${m[2]}`;
-      if (seen.has(name) || persons.length >= 30) continue;
-      seen.add(name);
-      persons.push({ displayName: name, functionTitle: (m[3] ?? "").trim(), email: "", knownResponsibility: "", evidenceQuote: m[0] });
+    const byName = new Map<string, IntakeProposal["persons"][number]>();
+    for (const m of text.matchAll(/\b(Frau|Herrn?|Hr\.|Fr\.)\s+((?:Dr\.\s+|Prof\.\s+)?[A-ZÄÖÜ][\wäöüß-]+(?:\s[A-ZÄÖÜ][\wäöüß-]+)?)(?:\s*[,(]\s*([^,.;()\n]{3,60}))?/g)) {
+      const name = `${m[1] === "Herrn" ? "Herr" : m[1]} ${m[2]}`;
+      const fn = (m[3] ?? "").trim();
+      const existing = byName.get(name);
+      if (existing && (existing.functionTitle || !fn)) continue;
+      if (!existing && byName.size >= 30) continue;
+      const decisionRole = /einkauf/i.test(fn) ? "EINKAUF_VERTRAGSWEG" : /leiter|leitung|head|cio|cto|cfo|geschäftsführ/i.test(fn) ? "BUDGETVERANTWORTUNG" : null;
+      byName.set(name, { displayName: name, functionTitle: fn, email: "", knownResponsibility: "", decisionRole, stance: "UNBEKANNT", influence: decisionRole ? "HOCH" : "UNBEKANNT", assessmentNote: decisionRole ? `Aus der Funktion „${fn}“ abgeleitet.` : "", evidenceQuote: m[0] });
     }
+    persons.push(...byName.values());
     const signals: IntakeProposal["signals"] = [];
     const needs: IntakeProposal["needs"] = [];
     for (const s of splitSentences(text)) {
@@ -211,15 +216,70 @@ export class TestProvider implements AIProvider {
         signals.push({ observation: s, relevanceHypothesis: SPECULATION.test(s) ? "Im Dokument als Vermutung formuliert." : "", evidenceQuote: s });
       }
     }
+    // Folgeaktivitäten aus Zusagen („schickt … bis“), Kontaktaufnahmen für Personen ohne Kontakt („noch kein Kontakt“)
+    const actions: IntakeProposal["actions"] = [];
+    for (const s of splitSentences(text)) {
+      if (/\b(schickt|sendet|meldet sich|liefert|bereitet .* vor|klärt|prüft)\b/i.test(s) && actions.length < 15) {
+        const due = s.match(/bis\s+(\d{1,2}\.\d{1,2}\.?(\d{2,4})?|Ende \w+|Mitte \w+|Anfang \w+)/i)?.[0] ?? "";
+        actions.push({ title: s.length > 120 ? s.slice(0, 117) + "…" : s, description: "", ownerRole: /Kontakt|vorstell|Beziehung/i.test(s) ? "ANKER" : "BD", dueHint: due, evidenceQuote: s });
+      }
+    }
+    const contacts: IntakeProposal["contacts"] = [];
+    for (const s of splitSentences(text)) {
+      const m = /\b(Frau|Herrn?|Hr\.|Fr\.)\s+((?:Dr\.\s+|Prof\.\s+)?[A-ZÄÖÜ][\wäöüß-]+)/.exec(s);
+      if (m && /noch kein Kontakt|nicht bekannt|kennen wir nicht|kein direkter Kontakt/i.test(s) && contacts.length < 15) {
+        const via = /über\s+([A-ZÄÖÜ][\wäöüß]+(?:\s[A-ZÄÖÜ][\wäöüß]+)?)/.exec(s)?.[1] ?? "";
+        const anrede = m[1] === "Herrn" ? "Herr" : m[1];
+        contacts.push({ personName: `${anrede} ${m[2]}`, viaVerveName: via, occasion: s, draftMessage: `Guten Tag ${anrede} ${m[2]}, wir sind über ${organization?.name ?? "Ihr Haus"} im Austausch und würden uns gern kurz vorstellen. Hätten Sie in den nächsten zwei Wochen 20 Minuten Zeit? (Entwurf)`, evidenceQuote: s });
+      }
+    }
+    const artifacts: IntakeProposal["artifacts"] = organization ? [{ code: "A6", why: "Vor dem nächsten Gespräch die Gesprächsvorbereitung aus den erfassten Beobachtungen ableiten." }] : [];
+    if (contacts.length > 0) artifacts.push({ code: "A5", why: "Für die vorgeschlagenen Kontaktaufnahmen einen Anbahnungsplan festhalten." });
     return {
       organization,
       setup: organization ? { name: `Erstkontakt ${organization.name}`.slice(0, 200), contextNote: `Angelegt aus Dokument „${input.fileName}“.` } : null,
       persons,
       signals,
       needs,
+      actions,
+      contacts,
+      artifacts,
       openQuestions: organization ? [] : ["Welche Organisation ist gemeint? Im Dokument wurde keine Rechtsform gefunden."],
       summary: lines.slice(0, 3).join(" ").slice(0, 600),
       noProposalReason: organization ? "" : "Keine Organisation mit erkennbarer Rechtsform im Text gefunden.",
     };
+  }
+
+  /** Interview – regelbasiert: feste Reihenfolge der Themen, ein Nachhaken bei vagen Antworten, Abschluss auf „fertig“. */
+  async interviewNext(input: InterviewNextInput): Promise<InterviewNext> {
+    const QUESTIONS: Record<(typeof interviewTopicValues)[number], string> = {
+      ORGANISATION: "Um welche Organisation geht es – bitte mit Rechtsform, und gehört sie zu einem Konzern?",
+      ANLASS_KONTEXT: "Was ist der Anlass, dass ihr jetzt im Gespräch seid, und woran arbeitet der Kunde gerade?",
+      PERSONEN_ROLLEN: "Mit wem hast du gesprochen – Name, Funktion und wofür die Person zuständig ist?",
+      ENTSCHEIDUNGSWEG: "Wer entscheidet dort über eine Beauftragung, und wer bewertet fachlich oder muss freigeben?",
+      BEDARF: "Was will der Kunde erreichen, in seinen Worten – und woran macht er fest, dass ihm etwas fehlt?",
+      ZEIT_BUDGET: "Welche Termine wurden genannt, und wie ist der Stand beim Budget?",
+      WETTBEWERB_BESTAND: "Wer arbeitet dort bisher, und welche Alternativen zu Verve sind im Spiel?",
+      BEZIEHUNGEN_ZUGANG: "Wer bei Verve kennt jemanden dort, und zu wem besteht noch kein Kontakt?",
+      NAECHSTE_SCHRITTE: "Was wurde konkret zugesagt oder vereinbart, und was ist noch zu klären?",
+    };
+    const last = input.transcript[input.transcript.length - 1];
+    const topicOf = (q: string) => interviewTopicValues.find((k) => QUESTIONS[k] === q) ?? null;
+    if (last?.role === "NUTZER" && /^(fertig|das war.?s|mehr weiß ich nicht|ende)\.?$/i.test(last.text.trim())) return { question: "", rationale: "", topic: null, covered: [...interviewTopicValues], done: true };
+    // Abgedeckt = Themenfrage gestellt und beantwortet
+    const covered: (typeof interviewTopicValues)[number][] = [];
+    input.transcript.forEach((t, i) => {
+      const k = t.role === "KI" ? topicOf(t.text) : null;
+      if (k && input.transcript[i + 1]?.role === "NUTZER" && !covered.includes(k)) covered.push(k);
+    });
+    const alreadyProbed = input.transcript.some((t) => t.role === "KI" && t.text.startsWith("Du sagtest"));
+    if (last?.role === "NUTZER" && !alreadyProbed && /\b(bald|irgendwann|irgendwer|weiß nicht genau|keine ahnung)\b/i.test(last.text)) {
+      const prevQ = input.transcript[input.transcript.length - 2];
+      return { question: `Du sagtest „${last.text.slice(0, 60)}“ – woran machst du das fest, oder gibt es eine konkretere Angabe?`, rationale: "Nachfrage bei vager Antwort.", topic: prevQ?.role === "KI" ? topicOf(prevQ.text) : null, covered, done: false };
+    }
+    const known = input.knownContext.toLowerCase();
+    const next = interviewTopicValues.find((k) => !covered.includes(k) && !(k === "ORGANISATION" && known.includes("kunde:")));
+    if (!next || input.questionCount >= input.maxQuestions) return { question: "", rationale: "", topic: null, covered, done: true };
+    return { question: QUESTIONS[next], rationale: `Thema „${next}“ ist noch offen.`, topic: next, covered, done: false };
   }
 }

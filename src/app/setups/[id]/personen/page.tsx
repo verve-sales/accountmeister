@@ -11,7 +11,9 @@ import { listAccessPlansForSetup } from "@/modules/accesspaths/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { accessClassLabel, accessPlanStatusLabel, fmtDate, readinessLabel, relationshipStateLabel, stepKindLabel } from "@/lib/labels";
-import { addAccessPlanStepAction, changeAccessPlanStatusAction, createAccessPlanAction, createPersonAction, setPersonFunctionAction, setRelationshipAction } from "../../../actions";
+import { addAccessPlanStepAction, changeAccessPlanStatusAction, createAccessPlanAction, createPersonAction, saveAssessmentAction, setPersonFunctionAction, setRelationshipAction } from "../../../actions";
+import { getBuyingCenter } from "@/modules/people/assessments";
+import { decisionRoleLabel, epistemicLabel, influenceLabel, stanceLabel } from "@/lib/labels";
 
 export default async function PersonenPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
@@ -35,6 +37,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
     db.query.sources.findMany({ where: eq(schema.sources.setupId, id) }),
   ]);
   const sources = allSources.filter((s) => canViewSource(actor, s, ctx));
+  const bc = await getBuyingCenter(actor, id);
   const personName = new Map(people.map((p) => [p.person.id, p.person.displayName]));
   const allRelationships = people.flatMap((p) => p.relationships.map((r) => ({ ...r, personName: p.person.displayName })));
   const openPlans = plans.filter((p) => p.status !== "BEENDET");
@@ -263,6 +266,66 @@ export default async function PersonenPage({ params, searchParams }: { params: P
               <div className="sm:col-span-2"><button className="btn" type="submit">Kontaktweg anlegen</button></div>
             </form>
           </details>
+        )}
+      </section>
+      {/* Buyingcenter (Etappe 7B) */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Buyingcenter – Einschätzung je Person</h2>
+        <p className="muted text-sm mb-2">Rolle in der Entscheidung, Haltung zu Verve und Einfluss – jede Einschätzung ist eine Hypothese, bis sie mit Quelle bestätigt wird. Sichtbar für BD, Principal und den Beziehungshalter der Person.</p>
+        {bc.gaps.length > 0 && (
+          <div className="mb-3 text-sm">
+            <strong>Lücken:</strong>
+            <ul className="list-disc ml-5">{bc.gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
+          </div>
+        )}
+        {bc.rows.length === 0 ? <p className="muted text-sm">Noch keine Personen.</p> : (
+          <table className="list">
+            <thead><tr><th>Person</th><th>Entscheidungsrolle</th><th>Haltung</th><th>Einfluss</th><th>Status</th><th>Beziehung</th>{bc.canEdit && <th></th>}</tr></thead>
+            <tbody>
+              {bc.rows.map((r) => (
+                <tr key={r.person.id}>
+                  <td>{r.person.displayName}<div className="muted text-sm">{r.functionTitle ?? "–"}</div></td>
+                  {r.assessmentHidden ? <td colSpan={4} className="muted">Einschätzung für Ihre Rolle nicht sichtbar</td> : (
+                    <>
+                      <td>{r.assessment?.decisionRole ? decisionRoleLabel[r.assessment.decisionRole] ?? r.assessment.decisionRole : <span className="muted">–</span>}</td>
+                      <td>{r.assessment ? stanceLabel[r.assessment.stance] : <span className="muted">–</span>}</td>
+                      <td>{r.assessment ? influenceLabel[r.assessment.influence] : <span className="muted">–</span>}</td>
+                      <td>{r.assessment ? <Status label={epistemicLabel[r.assessment.epistemicStatus] ?? r.assessment.epistemicStatus} /> : <span className="muted">nicht bewertet</span>}{r.assessment?.note && <div className="muted text-sm">{r.assessment.note}</div>}</td>
+                    </>
+                  )}
+                  <td>{r.relationshipState ? relationshipStateLabel[r.relationshipState] ?? r.relationshipState : <span className="muted">kein Kontakt</span>}</td>
+                  {bc.canEdit && (
+                    <td>
+                      <details>
+                        <summary className="text-sm">Bewerten</summary>
+                        <form action={saveAssessmentAction} className="mt-2 grid gap-2" style={{ minWidth: "18rem" }}>
+                          <input type="hidden" name="personId" value={r.person.id} />
+                          <input type="hidden" name="setupId" value={id} />
+                          <input type="hidden" name="back" value={back} />
+                          {r.assessment && <input type="hidden" name="version" value={r.assessment.version} />}
+                          <select name="decisionRole" className="select" defaultValue={r.assessment?.decisionRole ?? ""} aria-label="Entscheidungsrolle">
+                            <option value="">Rolle unbekannt</option>
+                            {schema.decisionRoleEnum.enumValues.map((v) => <option key={v} value={v}>{decisionRoleLabel[v] ?? v}</option>)}
+                          </select>
+                          <div className="flex gap-2">
+                            <select name="stance" className="select" defaultValue={r.assessment?.stance ?? "UNBEKANNT"} aria-label="Haltung">{schema.stanceEnum.enumValues.map((v) => <option key={v} value={v}>Haltung: {stanceLabel[v]}</option>)}</select>
+                            <select name="influence" className="select" defaultValue={r.assessment?.influence ?? "UNBEKANNT"} aria-label="Einfluss">{schema.influenceEnum.enumValues.map((v) => <option key={v} value={v}>Einfluss: {influenceLabel[v]}</option>)}</select>
+                          </div>
+                          <input name="note" className="input" placeholder="Woran machen Sie das fest?" defaultValue={r.assessment?.note ?? ""} maxLength={500} aria-label="Begründung" />
+                          <select name="sourceId" className="select" defaultValue={r.assessment?.sourceId ?? ""} aria-label="Quelle">
+                            <option value="">– Quelle (für Bestätigung nötig) –</option>
+                            {sources.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+                          </select>
+                          <label className="text-sm flex items-center gap-2"><input type="checkbox" name="confirm" /> mit dieser Quelle bestätigen (sonst Hypothese)</label>
+                          <button className="btn btn-small" type="submit">Speichern</button>
+                        </form>
+                      </details>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </section>
       <p className="muted text-sm">Die grafische Beziehungskarte folgt; die Tabelle ist die gleichwertige Darstellung (Briefing 8.4). {personName.size} Personen bekannt.</p>

@@ -52,7 +52,7 @@ export const relationshipStateEnum = pgEnum("relationship_state", [
   "NICHT_AKTIV",
 ]);
 
-export const sourceTypeEnum = pgEnum("source_type", ["NOTIZ", "PROTOKOLL", "EMAIL", "TERMIN", "OEFFENTLICH", "DOKUMENT"]);
+export const sourceTypeEnum = pgEnum("source_type", ["NOTIZ", "PROTOKOLL", "EMAIL", "TERMIN", "OEFFENTLICH", "DOKUMENT", "INTERVIEW"]);
 export const accessClassEnum = pgEnum("access_class", [
   "PERSOENLICH", // nur Quelleninhaber
   "SETUP", // zugeordnete Setup-Beteiligte
@@ -618,7 +618,7 @@ export const artifactVersions = pgTable(
 // ---------------------------------------------------------------------------
 
 export const suggestionStatusEnum = pgEnum("suggestion_status", ["NEU", "GEPRUEFT", "ANGENOMMEN", "VERAENDERT", "ZURUECKGESTELLT", "ABGELEHNT", "ERLEDIGT", "UEBERHOLT"]);
-export const suggestionTypeEnum = pgEnum("suggestion_type", ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT"]);
+export const suggestionTypeEnum = pgEnum("suggestion_type", ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT", "KONTAKTAUFNAHME"]);
 export const priorityCategoryEnum = pgEnum("priority_category", [
   "KONKRETE_ANFRAGE", // konkrete Anfrage oder vereinbarter Termin
   "BLOCKIERTE_AKTION",
@@ -704,10 +704,57 @@ export const intakeProposals = pgTable(
     payload: jsonb("payload").notNull(),
     resultAccountId: text("result_account_id").references(() => accounts.id),
     resultSetupId: text("result_setup_id").references(() => projectSetups.id),
+    /** Etappe 7: Herkunft (Dokument oder Interview) und Ziel-Setup bei Ergänzung eines bestehenden Setups */
+    kind: text("kind").notNull().default("DOKUMENT"), // DOKUMENT | INTERVIEW
+    interviewId: text("interview_id"),
+    targetSetupId: text("target_setup_id").references(() => projectSetups.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
 );
+
+// ---------------------------------------------------------------------------
+// Etappe 7: Interview, Personenbewertung
+// ---------------------------------------------------------------------------
+
+export const interviewKindEnum = pgEnum("interview_kind", ["KUNDE_NEU", "SETUP_ERGAENZUNG"]);
+export const interviewStatusEnum = pgEnum("interview_status", ["LAUFEND", "ABGESCHLOSSEN", "VERWORFEN"]);
+
+/** Geführtes Interview (Initialisierung eines Kunden oder Ergänzung eines Setups). Der Verlauf ist die Quelle. */
+export const interviews = pgTable("interviews", {
+  id: id(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  actorUserId: text("actor_user_id").notNull().references(() => users.id),
+  kind: interviewKindEnum("kind").notNull(),
+  setupId: text("setup_id").references(() => projectSetups.id), // bei SETUP_ERGAENZUNG
+  status: interviewStatusEnum("status").notNull().default("LAUFEND"),
+  title: text("title").notNull(),
+  /** Abdeckung der Themen laut KI (Schlüssel → erledigt) */
+  coverage: jsonb("coverage").notNull().default(sql`'{}'::jsonb`),
+  questionCount: integer("question_count").notNull().default(0),
+  sourceId: text("source_id").references(() => sources.id), // Transkript-Quelle nach Abschluss
+  proposalId: text("proposal_id"), // intake_proposals.id nach Abschluss
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const interviewTurns = pgTable(
+  "interview_turns",
+  {
+    id: id(),
+    interviewId: text("interview_id").notNull().references(() => interviews.id),
+    seq: integer("seq").notNull(),
+    role: text("role").notNull(), // KI | NUTZER
+    text: text("text").notNull(),
+    /** Begründung/Ziel der Frage (nur bei KI) */
+    rationale: text("rationale"),
+    aiJobId: text("ai_job_id").references(() => aiJobs.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("interview_turns_seq_uq").on(t.interviewId, t.seq)],
+);
+
+
 
 /** Modellwahl je KI-Aufgabe (Verwaltung → KI). Der API-Schlüssel steht nie in der Datenbank. */
 export const aiTaskSettings = pgTable(
@@ -1188,6 +1235,35 @@ export const auditEvents = pgTable(
   (t) => [index("audit_events_object_idx").on(t.objectType, t.objectId)],
 );
 
+export const stanceEnum = pgEnum("stance", ["UNBEKANNT", "POSITIV", "NEUTRAL", "KRITISCH"]);
+export const influenceEnum = pgEnum("influence", ["UNBEKANNT", "HOCH", "MITTEL", "NIEDRIG"]);
+
+/**
+ * Bewertung einer Person im Kontext eines Setups (an MEDDPICC angelehnt): Rolle in der Entscheidung, Haltung zu Verve,
+ * Einfluss. Jede Bewertung ist Hypothese, bis sie mit Quelle bestätigt wird. Sichtbar für BD, Principal und den
+ * Beziehungshalter (Anker) – nicht pauschal für CEO.
+ */
+export const personAssessments = pgTable(
+  "person_assessments",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    personId: text("person_id").notNull().references(() => persons.id),
+    setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    decisionRole: decisionRoleEnum("decision_role"),
+    stance: stanceEnum("stance").notNull().default("UNBEKANNT"),
+    influence: influenceEnum("influence").notNull().default("UNBEKANNT"),
+    epistemicStatus: epistemicStatusEnum("epistemic_status").notNull().default("HYPOTHESE"),
+    note: text("note"),
+    sourceId: text("source_id").references(() => sources.id),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [uniqueIndex("person_assessments_uq").on(t.personId, t.setupId)],
+);
+
 export type Role = (typeof roleEnum.enumValues)[number];
 export type AccessClass = (typeof accessClassEnum.enumValues)[number];
 export type SignalStatus = (typeof signalStatusEnum.enumValues)[number];
@@ -1218,3 +1294,7 @@ export type RequirementStatus = (typeof requirementStatusEnum.enumValues)[number
 export type SourceType = (typeof sourceTypeEnum.enumValues)[number];
 export type ExtractStatus = (typeof extractStatusEnum.enumValues)[number];
 export type IntakeStatus = (typeof intakeStatusEnum.enumValues)[number];
+export type InterviewKind = (typeof interviewKindEnum.enumValues)[number];
+export type InterviewStatus = (typeof interviewStatusEnum.enumValues)[number];
+export type Stance = (typeof stanceEnum.enumValues)[number];
+export type Influence = (typeof influenceEnum.enumValues)[number];

@@ -43,6 +43,7 @@ export function getProviderStatus() {
 /** Priorisierung nach transparenten Kategorien (14.3) – keine KI-Scores. */
 export function categorize(item: StructuredItem): PriorityCategory {
   if (item.type === "KONFLIKT") return "PLANUNGSANLASS";
+  if (item.type === "KONTAKTAUFNAHME") return "ZUGANGSLUECKE";
   if (item.type === "AKTION" && /termin|bis \d|deadline|frist|anfrage|angefragt/i.test(item.observation)) return "KONKRETE_ANFRAGE";
   if (item.type === "OFFENE_FRAGE" && /wer (entscheidet|koordiniert|plant|verantwortet)|zuständig/i.test(item.observation)) return "ZUGANGSLUECKE";
   if (item.type === "PERSON") return "ZUGANGSLUECKE";
@@ -294,6 +295,12 @@ export async function acceptSuggestion(actor: Actor, id: string, raw: unknown) {
     const owner = input.ownerUserId || s.proposedOwnerUserId || actor.userId;
     // Nie „vereinbart“ aus einem Vorschlag: Aktion startet als Vorschlag (außer der Akteur übernimmt sie selbst)
     const a = await createAction(actor, { setupId: s.setupId, title: text.slice(0, 300), ownerUserId: owner, reviewId: s.reviewId ?? "", agreedInConversation: false });
+    acceptedObjectType = "ACTION";
+    acceptedObjectId = a.id;
+  } else if (s.type === "KONTAKTAUFNAHME") {
+    // Kontaktaufnahme → Aktion für den Anker/BD mit dem Entwurf als Vereinbarungstext; Versand bleibt Handarbeit
+    const owner = input.ownerUserId || s.proposedOwnerUserId || actor.userId;
+    const a = await createAction(actor, { setupId: s.setupId, title: `Kontaktaufnahme ${s.mentionedPersonName ?? ""}: ${text}`.slice(0, 300), agreement: (s.nextStep ?? "").slice(0, 2000), ownerUserId: owner, agreedInConversation: false });
     acceptedObjectType = "ACTION";
     acceptedObjectId = a.id;
   } else if (s.type === "ENTSCHEIDUNG") {

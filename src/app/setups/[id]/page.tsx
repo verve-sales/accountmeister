@@ -40,6 +40,7 @@ import {
   respondSupportRequestAction,
   takeOverSignalAction,
   uploadDocumentAction,
+  startInterviewAction,
   updateSetupAction,
 } from "../../actions";
 
@@ -483,6 +484,14 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           </table>
         )}
         {d.hiddenSourceCount > 0 && <p className="muted text-sm mt-2">{d.hiddenSourceCount} weitere Quelle(n) sind für Ihre Rolle nicht einsehbar.</p>}
+        {d.canEdit && (
+          <form action={startInterviewAction} className="mt-4 flex flex-wrap items-center gap-3">
+            <input type="hidden" name="kind" value="SETUP_ERGAENZUNG" />
+            <input type="hidden" name="setupId" value={d.setup.id} />
+            <button className="btn btn-secondary" type="submit">Interview zu diesem Setup führen</button>
+            <span className="muted text-sm">Die KI fragt, was noch fehlt (Personen, Entscheidungsweg, Bedarf, nächste Schritte); daraus entstehen Vorschläge für dieses Setup.</span>
+          </form>
+        )}
         {d.canEdit && (
           <details className="mt-4">
             <summary>Dokument hochladen (PDF, Word, Excel, CSV, Text, E-Mail)</summary>

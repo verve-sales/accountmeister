@@ -593,7 +593,7 @@ test("Etappe 6: Kunde aus Dokument anlegen (Upload → Vorschlag → Übernahme)
   await page.locator("#setupName").fill(`Erstkontakt ${suffix}`);
   await page.getByRole("button", { name: /Kunde, Setup und ausgewählte Elemente anlegen/ }).click();
   await expect(page).toHaveURL(/\/setups\//);
-  await expect(page.getByText(/Kunde, Setup und ausgewählte Elemente angelegt/)).toBeVisible();
+  await expect(page.getByText(/Übernommen – alles im ungeprüften Zustand/)).toBeVisible();
   await expect(page.getByRole("heading", { name: `Erstkontakt ${suffix}` })).toBeVisible();
   // Dokument ist Quelle des Setups; Person angelegt; Bedarf in Klärung
   await expect(page.getByRole("link", { name: `Gesprächsnotiz ${suffix}` })).toBeVisible();
@@ -616,5 +616,47 @@ test("Etappe 6: Kunde aus Dokument anlegen (Upload → Vorschlag → Übernahme)
   await page.locator('form:has(#model-ANALYZE_DOCUMENT) button[type="submit"]').click();
   await expect(page.getByText("Einstellung gespeichert.")).toBeVisible();
   await expect(page.locator("#model-ANALYZE_DOCUMENT")).toHaveValue("gpt-4o");
+  await logout(page);
+});
+
+test("Etappe 7: Interview (neuer Kunde) → Antworten → Auswertung → Übernahme mit Folgeaktivität und Kontaktaufnahme; Buyingcenter mit Einschätzung", async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const org = `Interviewwerk ${suffix} GmbH`;
+  await loginAs(page, "David");
+  await page.goto("/kunden");
+  await page.getByRole("button", { name: "Interview führen (neuer Kunde)" }).click();
+  await expect(page).toHaveURL(/\/interviews\//);
+  await expect(page.getByText("Interview gestartet")).toBeVisible();
+  await expect(page.getByText(/Organisation geht es/).first()).toBeVisible();
+
+  await page.locator("#text").fill(`Es geht um die ${org}, ein Logistiker aus Hamburg.`);
+  await page.getByRole("button", { name: "Antwort senden" }).click();
+  await expect(page.getByText("Antwort gespeichert.")).toBeVisible();
+  await page.locator("#text").fill("Anlass ist die Ablösung des Lagersystems bis Mitte 2027.");
+  await page.getByRole("button", { name: "Antwort senden" }).click();
+  await page.locator("#text").fill("Gesprochen habe ich mit Herrn Winter, Leiter Logistik. Zu Frau Adler, CIO, besteht noch kein Kontakt. Herr Winter schickt bis 30.09. das Konzept.");
+  await page.getByRole("button", { name: "Antwort senden" }).click();
+  await expect(page.getByText(/3 Antworten/)).toBeVisible();
+  await page.getByRole("button", { name: "Interview abschließen und auswerten" }).click();
+  await expect(page).toHaveURL(/\/kunden\/anlage\//);
+  await expect(page.getByText("Interview ausgewertet")).toBeVisible();
+  await expect(page.locator("#orgName")).toHaveValue(new RegExp(org));
+  await expect(page.locator('input[name="persons.0.displayName"]')).toHaveValue("Herr Winter");
+  await expect(page.getByRole("heading", { name: /Folgeaktivitäten \(/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Kontaktaufnahmen \(/ })).toBeVisible();
+  await expect(page.locator('input[name="contacts.0.personName"]')).toHaveValue("Frau Adler");
+  await page.locator("#orgName").fill(org);
+  await page.locator("#setupName").fill(`Erstkontakt ${suffix}`);
+  await page.getByRole("button", { name: /Kunde, Setup und ausgewählte Elemente anlegen/ }).click();
+  await expect(page).toHaveURL(/\/setups\//);
+  await expect(page.getByText(/Folgeaktivitäten und Kontaktaufnahmen stehen als Vorschläge bereit/)).toBeVisible();
+  // Vorschläge im Setup: Kontaktaufnahme für den Anker
+  await expect(page.getByText("Kontaktaufnahme (Vorschlag)").first()).toBeVisible();
+  // Buyingcenter: Herr Winter mit Rolle aus der Funktion (Hypothese)
+  await page.getByRole("link", { name: /Personen & Zugang/ }).first().click();
+  await expect(page.getByRole("heading", { name: /Buyingcenter/ })).toBeVisible();
+  const row = page.locator("tr", { hasText: "Herr Winter" }).filter({ hasText: "Budgetverantwortung" });
+  await expect(row.first()).toBeVisible();
+  await expect(page.getByText(/Hypothesen ohne bestätigte Quelle/)).toBeVisible();
   await logout(page);
 });

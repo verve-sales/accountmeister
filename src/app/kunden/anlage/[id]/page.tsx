@@ -6,7 +6,8 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { getIntake } from "@/modules/intake/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
-import { accessClassLabel, extractStatusLabel, intakeStatusLabel, orgTypeLabel } from "@/lib/labels";
+import { accessClassLabel, decisionRoleLabel, extractStatusLabel, influenceLabel, intakeStatusLabel, orgTypeLabel, stanceLabel } from "@/lib/labels";
+import { getTemplate } from "@/modules/artifacts/templates";
 import { applyIntakeAction, discardIntakeAction } from "../../../actions";
 
 /**
@@ -32,16 +33,16 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
 
   return (
     <div className="space-y-6">
-      <p className="text-sm"><Link href="/kunden">← Kunden</Link></p>
+      <p className="text-sm">{d.targetCtx ? <><Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${d.targetCtx.account.id}`}>{d.targetCtx.account.name}</Link> › <Link href={`/setups/${d.targetCtx.setup.id}`}>{d.targetCtx.setup.name}</Link> › Vorschlag</> : <Link href="/kunden">← Kunden</Link>}</p>
       <div className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-2xl font-semibold">Anlagevorschlag {p.organization?.name ? `„${p.organization.name}“` : ""}</h1>
+        <h1 className="text-2xl font-semibold">{d.targetCtx ? `Ergänzungsvorschlag für „${d.targetCtx.setup.name}“` : `Anlagevorschlag ${p.organization?.name ? `„${p.organization.name}“` : ""}`}</h1>
         <Status label={intakeStatusLabel[d.proposal.status] ?? d.proposal.status} />
       </div>
       <Feedback params={sp} />
 
       <section className="card text-sm">
         <div className="grid sm:grid-cols-3 gap-x-6 gap-y-1">
-          <div><span className="muted">Dokument: </span>{d.source ? <Link href={`/quellen/${d.source.id}`}>{d.source.title}</Link> : "–"}{d.document ? <> · <Status label={extractStatusLabel[d.document.extractStatus] ?? d.document.extractStatus} /></> : null}</div>
+          <div><span className="muted">{d.proposal.kind === "INTERVIEW" ? "Interview: " : "Dokument: "}</span>{d.source ? <Link href={`/quellen/${d.source.id}`}>{d.source.title}</Link> : "–"}{d.document ? <> · <Status label={extractStatusLabel[d.document.extractStatus] ?? d.document.extractStatus} /></> : null}</div>
           <div><span className="muted">KI: </span>{p.aiStatus === "vorschlag" ? "Vorschlag erzeugt" : p.aiStatus === "fehler" ? "Fehler" : "ohne KI"}{p.rejected > 0 ? ` · ${p.rejected} Element(e) ohne Textbeleg verworfen` : ""}</div>
           <div><span className="muted">Erstellt: </span>{d.proposal.createdAt.toLocaleString("de-DE", { timeZone: "Europe/Berlin" })}</div>
         </div>
@@ -59,6 +60,15 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
           <form action={applyIntakeAction} className="space-y-6">
             <input type="hidden" name="proposalId" value={d.proposal.id} />
 
+            {d.targetCtx && (
+              <section className="card text-sm">
+                <h2 className="font-semibold mb-1">Ziel: bestehendes Setup</h2>
+                <p>Kunde <strong>{d.targetCtx.account.name}</strong>, Setup <strong>{d.targetCtx.setup.name}</strong>. Es wird kein neuer Kunde angelegt; die ausgewählten Elemente ergänzen dieses Setup.</p>
+                <div className="mt-2"><label className="label" htmlFor="documentAccessClass">Wer darf die Quelle (Transkript/Dokument) im Setup sehen?</label>
+                  <select id="documentAccessClass" name="documentAccessClass" className="select" defaultValue="SETUP">{schema.accessClassEnum.enumValues.map((v) => <option key={v} value={v}>{accessClassLabel[v]}</option>)}</select></div>
+              </section>
+            )}
+            {!d.targetCtx && (<>
             <section className="card">
               <h2 className="font-semibold mb-2">1. Kunde</h2>
               {existing && <p className="text-sm mb-2">Die KI vermutet, dass das Dokument zum bestehenden Kunden <strong>{existing.name}</strong> gehört. Wählen Sie ihn unten, wenn das stimmt – dann wird kein neuer Kunde angelegt.</p>}
@@ -100,6 +110,7 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
                 <div className="sm:col-span-2"><label className="label" htmlFor="contextNote">Was läuft hier? (Kontextnotiz)</label><textarea id="contextNote" name="contextNote" className="textarea" maxLength={2000} defaultValue={p.setup?.contextNote ?? ""} /></div>
               </div>
             </section>
+            </>)}
 
             <section className="card">
               <h2 className="font-semibold mb-2">3. Ansprechpartner ({p.persons.length} vorgeschlagen)</h2>
@@ -111,6 +122,12 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
                     <label className="flex items-center gap-2 text-sm pt-2"><input type="checkbox" name={`persons.${i}.include`} defaultChecked /> übernehmen</label>
                     <div><input name={`persons.${i}.displayName`} className="input" defaultValue={x.displayName} aria-label="Name" maxLength={200} /><input name={`persons.${i}.email`} className="input mt-1" defaultValue={x.email} placeholder="E-Mail (optional)" aria-label="E-Mail" maxLength={200} /></div>
                     <div><input name={`persons.${i}.functionTitle`} className="input" defaultValue={x.functionTitle} placeholder="Funktion" aria-label="Funktion" maxLength={200} /><input name={`persons.${i}.knownResponsibility`} className="input mt-1" defaultValue={x.knownResponsibility} placeholder="Bekannte Zuständigkeit (optional)" aria-label="Zuständigkeit" maxLength={500} /></div>
+                    <div className="sm:col-span-3 grid sm:grid-cols-3 gap-2">
+                      <select name={`persons.${i}.decisionRole`} className="select" defaultValue={x.decisionRole ?? ""} aria-label="Entscheidungsrolle"><option value="">Entscheidungsrolle unbekannt</option>{schema.decisionRoleEnum.enumValues.map((v) => <option key={v} value={v}>{decisionRoleLabel[v] ?? v}</option>)}</select>
+                      <select name={`persons.${i}.stance`} className="select" defaultValue={x.stance} aria-label="Haltung">{schema.stanceEnum.enumValues.map((v) => <option key={v} value={v}>Haltung: {stanceLabel[v]}</option>)}</select>
+                      <select name={`persons.${i}.influence`} className="select" defaultValue={x.influence} aria-label="Einfluss">{schema.influenceEnum.enumValues.map((v) => <option key={v} value={v}>Einfluss: {influenceLabel[v]}</option>)}</select>
+                      <input name={`persons.${i}.assessmentNote`} className="input sm:col-span-3" defaultValue={x.assessmentNote} placeholder="Begründung der Einschätzung (Hypothese)" aria-label="Begründung" maxLength={500} />
+                    </div>
                     <div className="sm:col-span-3">{quote(x.evidenceQuote)}</div>
                   </div>
                 ))}
@@ -151,15 +168,78 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
               </div>
             </section>
 
+            <section className="card">
+              <h2 className="font-semibold mb-2">6. Folgeaktivitäten ({p.actions.length} vorgeschlagen)</h2>
+              <p className="muted text-sm mb-2">Landen als Vorschlag bei der adressierten Rolle in „Meine Arbeit“; erst die Annahme macht daraus eine Aufgabe.</p>
+              <div className="space-y-3">
+                {p.actions.map((x, i) => (
+                  <div key={i} className="grid sm:grid-cols-[auto_1fr] gap-2 items-start border-t pt-2">
+                    <label className="flex items-center gap-2 text-sm pt-2"><input type="checkbox" name={`actions.${i}.include`} defaultChecked /> übernehmen</label>
+                    <div className="grid sm:grid-cols-[1fr_auto_auto] gap-2">
+                      <input name={`actions.${i}.title`} className="input" defaultValue={x.title} aria-label="Aktion" maxLength={300} />
+                      <select name={`actions.${i}.ownerRole`} className="select" defaultValue={x.ownerRole} aria-label="Rolle"><option value="BD">BD</option><option value="ANKER">Anker</option><option value="PRINCIPAL">Principal</option></select>
+                      <input name={`actions.${i}.dueHint`} className="input" defaultValue={x.dueHint} placeholder="Frist" aria-label="Frist" maxLength={100} style={{ width: "10rem" }} />
+                      <input name={`actions.${i}.description`} className="input sm:col-span-3" defaultValue={x.description} placeholder="Beschreibung (optional)" aria-label="Beschreibung" maxLength={2000} />
+                      <div className="sm:col-span-3">{quote(x.evidenceQuote)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="card">
+              <h2 className="font-semibold mb-2">7. Kontaktaufnahmen ({p.contacts.length} vorgeschlagen)</h2>
+              <p className="muted text-sm mb-2">Vorschlag für den Anker: Anlass, möglicher Weg, Entwurf zum Bearbeiten. Es wird nichts versendet.</p>
+              <div className="space-y-3">
+                {p.contacts.map((x, i) => (
+                  <div key={i} className="grid sm:grid-cols-[auto_1fr] gap-2 items-start border-t pt-2">
+                    <label className="flex items-center gap-2 text-sm pt-2"><input type="checkbox" name={`contacts.${i}.include`} defaultChecked /> übernehmen</label>
+                    <div className="grid sm:grid-cols-2 gap-2">
+                      <input name={`contacts.${i}.personName`} className="input" defaultValue={x.personName} aria-label="Person" maxLength={200} />
+                      <input name={`contacts.${i}.viaVerveName`} className="input" defaultValue={x.viaVerveName} placeholder="Über wen bei Verve? (optional)" aria-label="Über wen" maxLength={200} />
+                      <input name={`contacts.${i}.occasion`} className="input sm:col-span-2" defaultValue={x.occasion} placeholder="Anlass" aria-label="Anlass" maxLength={500} />
+                      <textarea name={`contacts.${i}.draftMessage`} className="textarea sm:col-span-2" defaultValue={x.draftMessage} rows={3} placeholder="Entwurf der Nachricht (zum Bearbeiten)" aria-label="Entwurf" maxLength={1500} />
+                      <div className="sm:col-span-2">{quote(x.evidenceQuote)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {p.openQuestions.length > 0 && (
+              <section className="card">
+                <h2 className="font-semibold mb-2">8. Offene Fragen ({p.openQuestions.length})</h2>
+                <p className="muted text-sm mb-2">Als Vorschlag „offene Frage“ für den BD – fürs nächste Kundengespräch.</p>
+                <div className="space-y-2">
+                  {p.openQuestions.map((q, i) => (
+                    <div key={i} className="grid sm:grid-cols-[auto_1fr] gap-2 items-center">
+                      <label className="flex items-center gap-2 text-sm"><input type="checkbox" name={`openQuestions.${i}.include`} defaultChecked /> übernehmen</label>
+                      <input name={`openQuestions.${i}.question`} className="input" defaultValue={q} aria-label="Frage" maxLength={500} />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {p.artifacts.length > 0 && (
+              <section className="card text-sm">
+                <h2 className="font-semibold mb-2">Empfohlene Artefakte</h2>
+                <ul className="list-disc ml-5">
+                  {p.artifacts.map((a, i) => <li key={i}><strong>{a.code} {getTemplate(a.code)?.name ?? ""}</strong> – {a.why}</li>)}
+                </ul>
+                <p className="muted mt-2">Artefakte legen Sie nach der Übernahme im Setup unter „Artefakte“ an; sie greifen dann auf die hier übernommenen Quellen und Objekte zu.</p>
+              </section>
+            )}
+
             <div className="flex flex-wrap gap-3 items-center">
-              <button className="btn" type="submit">Kunde, Setup und ausgewählte Elemente anlegen</button>
+              <button className="btn" type="submit">{d.targetCtx ? "Ausgewählte Elemente ins Setup übernehmen" : "Kunde, Setup und ausgewählte Elemente anlegen"}</button>
               <span className="muted text-sm">Alles entsteht im ungeprüften Zustand und kann danach im Setup bearbeitet werden.</span>
             </div>
           </form>
 
           <aside className="space-y-3">
             <section className="card">
-              <h2 className="font-semibold mb-2">Dokumenttext</h2>
+              <h2 className="font-semibold mb-2">{d.proposal.kind === "INTERVIEW" ? "Interviewverlauf" : "Dokumenttext"}</h2>
               <pre className="whitespace-pre-wrap text-xs" style={{ fontFamily: "inherit", maxHeight: "70vh", overflow: "auto" }}>{d.source?.body ?? "(kein Text)"}</pre>
             </section>
             <form action={discardIntakeAction}>

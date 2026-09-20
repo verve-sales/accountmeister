@@ -5,7 +5,7 @@ import { listVisibleAccounts, getUsersByIds } from "@/modules/accounts/service";
 import { canCreateAccount } from "@/modules/identity/authz";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
-import { createAccountAction } from "../actions";
+import { createAccountAction, startInterviewAction } from "../actions";
 import { getProviderStatus } from "@/modules/suggestions/service";
 import { listMyIntakes } from "@/modules/intake/service";
 import { orgTypeLabel } from "@/lib/labels";
@@ -50,10 +50,14 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
       </section>
       {canCreateAccount(actor) && (
         <section className="card">
-          <h2 className="font-semibold mb-1">Kunde aus Dokument anlegen</h2>
+          <h2 className="font-semibold mb-1">Kunde aus Dokument oder Interview anlegen</h2>
           <p className="muted text-sm mb-2">Ein Gesprächsprotokoll, eine Ausschreibung oder ein Extrakt hochladen – {ai.enabled ? "die KI schlägt Organisation, Setup, Ansprechpartner, Signale und mögliche Bedarfe vor, Sie prüfen und übernehmen." : "der Text wird als Quelle geführt und Sie füllen die Anlage von Hand aus (KI ist deaktiviert)."}</p>
           <div className="flex flex-wrap gap-3 items-center">
             <Link href="/kunden/anlage/neu" className="btn">Dokument hochladen und Vorschlag erzeugen</Link>
+            <form action={startInterviewAction}>
+              <input type="hidden" name="kind" value="KUNDE_NEU" />
+              <button className="btn btn-secondary" type="submit">Interview führen (neuer Kunde)</button>
+            </form>
             {drafts.length > 0 && <span className="text-sm">{drafts.length} offene(r) Anlagevorschlag/-vorschläge: {drafts.map((d, i) => <span key={d.id}>{i > 0 ? ", " : ""}<Link href={`/kunden/anlage/${d.id}`}>{(d.payload as { organization?: { name?: string } | null }).organization?.name ?? "ohne Organisation"}</Link></span>)}</span>}
           </div>
         </section>

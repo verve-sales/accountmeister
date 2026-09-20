@@ -16,7 +16,8 @@ import type { ModelInfo, TaskOptions } from "./provider";
 
 export const AI_TASKS = [
   { key: "STRUCTURE_NOTE", label: "Notiz strukturieren", description: "Weekly-Notizen und importierte Quellen in prüffähige Vorschläge zerlegen (Beobachtung, Aktion, Entscheidung, offene Frage, Person, Konflikt)." },
-  { key: "ANALYZE_DOCUMENT", label: "Dokument analysieren (Kundenanlage)", description: "Aus einem hochgeladenen Dokument Organisation, Setup, Personen, Signale und mögliche Bedarfe vorschlagen – zur Bestätigung durch den BD." },
+  { key: "ANALYZE_DOCUMENT", label: "Dokument/Interview auswerten (Anlagevorschlag)", description: "Aus einem Dokument oder Interviewverlauf Organisation, Setup, Personen mit Einschätzung, Signale, Bedarfe, Folgeaktivitäten, Kontaktaufnahmen und Artefaktempfehlungen vorschlagen – zur Bestätigung durch den BD." },
+  { key: "INTERVIEW_NEXT", label: "Interview: nächste Frage", description: "Im geführten Interview die jeweils nächste Frage stellen, abgeleitet aus dem, was noch fehlt. Kleines, schnelles Modell genügt." },
 ] as const;
 
 export type AiTaskKey = (typeof AI_TASKS)[number]["key"];

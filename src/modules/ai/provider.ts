@@ -1,7 +1,8 @@
 import type { IntakeProposal, StructureNoteOutput } from "./schemas";
 
 export const STRUCTURE_NOTE_PROMPT_VERSION = "structure-note.v1";
-export const ANALYZE_DOCUMENT_PROMPT_VERSION = "analyze-document.v1";
+export const ANALYZE_DOCUMENT_PROMPT_VERSION = "analyze-document.v2";
+export const INTERVIEW_NEXT_PROMPT_VERSION = "interview-next.v1";
 
 /** Berechtigter Kontext, den der Anbieter erhalten darf – keine Rohquellen außer dem zu strukturierenden Text. */
 export type StructureNoteInput = {
@@ -20,6 +21,16 @@ export type AnalyzeDocumentInput = {
   documentText: string;
   fileName: string;
   knownAccountNames: string[];
+};
+
+/** Kontext für die nächste Interviewfrage: bekannter Stand als Text, bisheriger Verlauf, Grenzen. */
+export type InterviewNextInput = {
+  kind: "KUNDE_NEU" | "SETUP_ERGAENZUNG";
+  /** Kurzer, berechtigter Kontext (Namen, Setup, bekannte Personen, offene Bedarfe) als Text */
+  knownContext: string;
+  transcript: { role: "KI" | "NUTZER"; text: string }[];
+  questionCount: number;
+  maxQuestions: number;
 };
 
 /** Aufgabenbezogene Modellwahl (Verwaltung → KI). Anbieter ohne Modellwahl ignorieren sie. */
@@ -42,6 +53,8 @@ export interface AIProvider {
   structureNote(input: StructureNoteInput, opts?: TaskOptions): Promise<unknown>;
   /** Kundenanlage aus Dokument – optional; Anbieter ohne diese Fähigkeit werfen oder lassen es weg. */
   analyzeDocument?(input: AnalyzeDocumentInput, opts?: TaskOptions): Promise<unknown>;
+  /** Nächste Interviewfrage (Etappe 7A) – optional. */
+  interviewNext?(input: InterviewNextInput, opts?: TaskOptions): Promise<unknown>;
   /** Verbrauch des letzten Aufrufs (Kostenspur), falls der Anbieter ihn liefert. */
   lastUsage?(): Usage | null;
   /** Verfügbare Modelle im Arbeitsraum des Anbieters (für die Konfigurationsseite). */

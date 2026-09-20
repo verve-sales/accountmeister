@@ -6,7 +6,7 @@ import { z } from "zod";
  * Version des Schemas = Version des Prompts (STRUCTURE_NOTE_PROMPT_VERSION).
  */
 
-export const suggestionTypeValues = ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT"] as const;
+export const suggestionTypeValues = ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT", "KONTAKTAUFNAHME"] as const;
 export type SuggestionType = (typeof suggestionTypeValues)[number];
 
 export const structuredItemSchema = z.object({
@@ -47,13 +47,43 @@ export const orgTypeValues = ["KONZERN", "TOCHTERGESELLSCHAFT", "EINZELUNTERNEHM
 
 const quoted = { evidenceQuote: z.string().min(3).max(500) };
 
+export const decisionRoleValues = ["BEDARFSTRAEGER", "FACHLICHE_BEWERTUNG", "BUDGETVERANTWORTUNG", "EINKAUF_VERTRAGSWEG", "ZUSAETZLICHE_FREIGABE", "UNTERSTUETZER_SPONSOR"] as const;
+export const stanceValues = ["UNBEKANNT", "POSITIV", "NEUTRAL", "KRITISCH"] as const;
+export const influenceValues = ["UNBEKANNT", "HOCH", "MITTEL", "NIEDRIG"] as const;
+
 export const intakePersonSchema = z.object({
   displayName: z.string().min(2).max(200),
   functionTitle: z.string().max(200).optional().default(""),
   email: z.string().max(200).optional().default(""),
   knownResponsibility: z.string().max(500).optional().default(""),
+  /** Etappe 7B: Einschätzung (Hypothese) zur Rolle in der Entscheidung, Haltung zu Verve, Einfluss – leer, wenn der Text nichts hergibt */
+  decisionRole: z.enum(decisionRoleValues).nullable().optional().default(null),
+  stance: z.enum(stanceValues).optional().default("UNBEKANNT"),
+  influence: z.enum(influenceValues).optional().default("UNBEKANNT"),
+  assessmentNote: z.string().max(500).optional().default(""),
   ...quoted,
 });
+
+/** Folgeaktivität mit adressierter Rolle (Etappe 7A) */
+export const intakeActionSchema = z.object({
+  title: z.string().min(3).max(300),
+  description: z.string().max(2000).optional().default(""),
+  ownerRole: z.enum(["BD", "ANKER", "PRINCIPAL"]).default("BD"),
+  dueHint: z.string().max(100).optional().default(""),
+  ...quoted,
+});
+
+/** Vorschlag für eine Kontaktaufnahme: über wen, mit welchem Anlass, Entwurf zum Bearbeiten – nie zum Versand */
+export const intakeContactSchema = z.object({
+  personName: z.string().min(2).max(200),
+  viaVerveName: z.string().max(200).optional().default(""),
+  occasion: z.string().min(3).max(500),
+  draftMessage: z.string().max(1500).optional().default(""),
+  ...quoted,
+});
+
+export const artifactCodeValues = ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10", "A11", "A12", "A13", "A14", "A15", "A16"] as const;
+export const intakeArtifactSchema = z.object({ code: z.enum(artifactCodeValues), why: z.string().min(3).max(500) });
 
 export const intakeSignalSchema = z.object({
   observation: z.string().min(5).max(2000),
@@ -85,12 +115,49 @@ export const intakeProposalSchema = z.object({
   signals: z.array(intakeSignalSchema).max(30).default([]),
   needs: z.array(intakeNeedSchema).max(15).default([]),
   openQuestions: z.array(z.string().min(3).max(500)).max(15).default([]),
+  /** Etappe 7A: Folgeaktivitäten, Kontaktaufnahmen, Artefaktempfehlungen */
+  actions: z.array(intakeActionSchema).max(15).default([]),
+  contacts: z.array(intakeContactSchema).max(15).default([]),
+  artifacts: z.array(intakeArtifactSchema).max(6).default([]),
   /** Kurze Zusammenfassung des Dokuments in Kundensprache (Sachverhalt, keine Bewertung) */
   summary: z.string().max(2000).optional().default(""),
   noProposalReason: z.string().max(500).optional().default(""),
 });
 
+// ---------------------------------------------------------------------------
+// Etappe 7A: Interview – nächste Frage
+// ---------------------------------------------------------------------------
+
+export const interviewTopicValues = ["ORGANISATION", "ANLASS_KONTEXT", "PERSONEN_ROLLEN", "ENTSCHEIDUNGSWEG", "BEDARF", "ZEIT_BUDGET", "WETTBEWERB_BESTAND", "BEZIEHUNGEN_ZUGANG", "NAECHSTE_SCHRITTE"] as const;
+export type InterviewTopic = (typeof interviewTopicValues)[number];
+
+export const interviewTopicLabel: Record<InterviewTopic, string> = {
+  ORGANISATION: "Organisation",
+  ANLASS_KONTEXT: "Anlass und Kontext",
+  PERSONEN_ROLLEN: "Personen und Funktionen",
+  ENTSCHEIDUNGSWEG: "Entscheidungsweg",
+  BEDARF: "Bedarf in Kundensprache",
+  ZEIT_BUDGET: "Zeit und Budget",
+  WETTBEWERB_BESTAND: "Bestand und Wettbewerb",
+  BEZIEHUNGEN_ZUGANG: "Beziehungen und Zugang",
+  NAECHSTE_SCHRITTE: "Nächste Schritte",
+};
+
+export const interviewNextSchema = z.object({
+  /** Leer, wenn done=true */
+  question: z.string().max(600).default(""),
+  /** Warum diese Frage jetzt (wird dem Nutzer gezeigt) */
+  rationale: z.string().max(300).optional().default(""),
+  topic: z.enum(interviewTopicValues).optional().nullable().default(null),
+  /** Welche Themen der Verlauf bereits ausreichend abdeckt */
+  covered: z.array(z.enum(interviewTopicValues)).default([]),
+  done: z.boolean().default(false),
+});
+export type InterviewNext = z.infer<typeof interviewNextSchema>;
+
 export type IntakeProposal = z.infer<typeof intakeProposalSchema>;
 export type IntakePerson = z.infer<typeof intakePersonSchema>;
 export type IntakeSignal = z.infer<typeof intakeSignalSchema>;
 export type IntakeNeed = z.infer<typeof intakeNeedSchema>;
+export type IntakeAction = z.infer<typeof intakeActionSchema>;
+export type IntakeContact = z.infer<typeof intakeContactSchema>;

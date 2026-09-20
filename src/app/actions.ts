@@ -26,6 +26,8 @@ import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, 
 import { uploadDocument } from "@/modules/documents/service";
 import { applyIntake, discardIntake, formToApplyInput, startIntake } from "@/modules/intake/service";
 import { saveTaskSetting, testConnection } from "@/modules/ai/settings";
+import { answerInterview, discardInterview, finishInterview, startInterview } from "@/modules/interviews/service";
+import { upsertAssessment } from "@/modules/people/assessments";
 import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
 /**
@@ -730,9 +732,10 @@ export async function applyIntakeAction(fd: FormData) {
   const id = data.proposalId ?? "";
   return run(`/kunden/anlage/${id}`, async (actor) => {
     const r = await applyIntake(actor, id, formToApplyInput(data));
-    if (r.problems.length > 0) throw new PendingInfo(`Kunde und Setup angelegt (${r.created.persons} Personen, ${r.created.signals} Signale, ${r.created.needs} Bedarfe). Nicht übernommen: ${r.problems.join(" · ")}`);
+    const summary = `${r.created.persons} Personen, ${r.created.signals} Signale, ${r.created.needs} Bedarfe, ${r.created.actions + r.created.contacts + r.created.questions} Vorschläge`;
+    if (r.problems.length > 0) throw new PendingInfo(`Übernommen (${summary}). Nicht übernommen: ${r.problems.join(" · ")}`);
     return `/setups/${r.setupId}`;
-  }, "Kunde, Setup und ausgewählte Elemente angelegt – alles im ungeprüften Zustand.");
+  }, "Übernommen – alles im ungeprüften Zustand; Folgeaktivitäten und Kontaktaufnahmen stehen als Vorschläge bereit.");
 }
 
 export async function discardIntakeAction(fd: FormData) {
@@ -754,4 +757,47 @@ export async function testAiConnectionAction() {
     const r = await testConnection(actor);
     throw new PendingInfo(`Verbindung in Ordnung – ${r.detail}`);
   }, "");
+}
+
+// --- Etappe 7: Interview, Personenbewertung ----------------------------------
+
+export async function startInterviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  const back = data.setupId ? `/setups/${data.setupId}` : "/kunden";
+  return run(back, async (actor) => {
+    const iv = await startInterview(actor, data);
+    return `/interviews/${iv.id}`;
+  }, "Interview gestartet. Antworten Sie in eigenen Worten – Diktierfunktion (Windows-Taste + H) funktioniert im Textfeld.");
+}
+
+export async function answerInterviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.interviewId ?? "";
+  return run(`/interviews/${id}`, async (actor) => {
+    const r = await answerInterview(actor, data);
+    if (r.done) throw new PendingInfo("Alle Themen sind abgedeckt – Sie können das Interview abschließen oder weitere Angaben ergänzen.");
+  }, "Antwort gespeichert.");
+}
+
+export async function finishInterviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.interviewId ?? "";
+  return run(`/interviews/${id}`, async (actor) => {
+    const r = await finishInterview(actor, id);
+    return `/kunden/anlage/${r.proposal.id}`;
+  }, "Interview ausgewertet. Bitte den Vorschlag prüfen und übernehmen.");
+}
+
+export async function discardInterviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/kunden", async (actor) => {
+    await discardInterview(actor, data.interviewId ?? "");
+  }, "Interview verworfen.");
+}
+
+export async function saveAssessmentAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? `/setups/${data.setupId ?? ""}/personen`, async (actor) => {
+    await upsertAssessment(actor, data);
+  }, "Einschätzung gespeichert.");
 }

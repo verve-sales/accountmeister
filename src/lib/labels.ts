@@ -45,8 +45,11 @@ export const epistemicLabel: Record<string, string> = {
   WIDERSPRUECHLICH: "Widersprüchlich",
   UEBERHOLT: "Überholt",
 };
-export const sourceTypeLabel: Record<string, string> = { NOTIZ: "Notiz", PROTOKOLL: "Protokoll", EMAIL: "E-Mail", TERMIN: "Termin", OEFFENTLICH: "Öffentliche Quelle", DOKUMENT: "Dokument" };
+export const sourceTypeLabel: Record<string, string> = { NOTIZ: "Notiz", PROTOKOLL: "Protokoll", EMAIL: "E-Mail", TERMIN: "Termin", OEFFENTLICH: "Öffentliche Quelle", DOKUMENT: "Dokument", INTERVIEW: "Interview" };
 export const orgTypeLabel: Record<string, string> = { KONZERN: "Konzern", TOCHTERGESELLSCHAFT: "Tochtergesellschaft", EINZELUNTERNEHMEN: "Einzelunternehmen", OEFFENTLICH: "Öffentliche Einrichtung", SONSTIGE: "Sonstige" };
+export const stanceLabel: Record<string, string> = { UNBEKANNT: "unbekannt", POSITIV: "positiv", NEUTRAL: "neutral", KRITISCH: "kritisch" };
+export const influenceLabel: Record<string, string> = { UNBEKANNT: "unbekannt", HOCH: "hoch", MITTEL: "mittel", NIEDRIG: "niedrig" };
+export const interviewStatusLabel: Record<string, string> = { LAUFEND: "Läuft", ABGESCHLOSSEN: "Abgeschlossen", VERWORFEN: "Verworfen" };
 export const extractStatusLabel: Record<string, string> = { OK: "Vollständig", TEILWEISE: "Teilweise", LEER: "Kein Text", FEHLER: "Fehler" };
 export const intakeStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", UEBERNOMMEN: "Übernommen", VERWORFEN: "Verworfen" };
 export const roleLabel: Record<string, string> = { ANKER: "Anker", BD: "BD", PRINCIPAL: "Principal", CEO: "CEO", ADMIN: "Administration" };
@@ -93,7 +96,7 @@ export const artifactStatusLabel: Record<string, string> = { ENTWURF: "Entwurf",
 export const artifactVariantLabel: Record<string, string> = { INTERN: "Interne Notiz", EXTERN: "Kundentext" };
 export const implementationLabel: Record<string, string> = { ANSICHT: "Als Ansicht umgesetzt", TEXTENTWURF: "Textentwurf verfügbar", FOLGT: "Textentwurf verfügbar; Objektbezug folgt" };
 export const suggestionStatusLabel: Record<string, string> = { NEU: "Neu", GEPRUEFT: "Geprüft", ANGENOMMEN: "Angenommen", VERAENDERT: "Verändert übernommen", ZURUECKGESTELLT: "Zurückgestellt", ABGELEHNT: "Abgelehnt", ERLEDIGT: "Erledigt", UEBERHOLT: "Überholt" };
-export const suggestionTypeLabel: Record<string, string> = { BEOBACHTUNG: "Beobachtung", AKTION: "Aktion (Vorschlag)", ENTSCHEIDUNG: "Entscheidung", OFFENE_FRAGE: "Offene Frage", PERSON: "Person erwähnt", KONFLIKT: "Widerspruch" };
+export const suggestionTypeLabel: Record<string, string> = { BEOBACHTUNG: "Beobachtung", AKTION: "Aktion (Vorschlag)", ENTSCHEIDUNG: "Entscheidung", OFFENE_FRAGE: "Offene Frage", PERSON: "Person erwähnt", KONFLIKT: "Widerspruch", KONTAKTAUFNAHME: "Kontaktaufnahme (Vorschlag)" };
 export const priorityCategoryLabel: Record<string, string> = { KONKRETE_ANFRAGE: "Konkrete Anfrage / Termin", BLOCKIERTE_AKTION: "Blockierte Aktion", NEUE_INFORMATION: "Neue Information", ZUGANGSLUECKE: "Zugangslücke", PLANUNGSANLASS: "Planungs-/Verlängerungsanlass", VERBESSERUNGSIDEE: "Verbesserungsidee" };
 export const feedbackReasonLabel: Record<string, string> = { FALSCHE_ANNAHME: "Falsche Annahme", BEREITS_ERLEDIGT: "Bereits erledigt", UNPASSEND: "Unpassend", NICHT_ZULAESSIG: "Nicht zulässig", KEIN_AKTUELLER_ANLASS: "Kein aktueller Anlass", SONSTIGES: "Sonstiges" };
 export const importStatusLabel: Record<string, string> = { VORGESCHLAGEN: "Vorgeschlagen", UEBERNOMMEN: "Übernommen", AUSGEWERTET: "Ausgewertet", BESTAETIGT: "Bestätigt", FEHLER: "Fehler", VERWORFEN: "Verworfen" };

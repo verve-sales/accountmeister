@@ -144,7 +144,7 @@ describe("Etappe 6B: Kundenanlage aus Dokument", () => {
     });
     const res = await applyIntake(david, proposal.id, form);
     expect(res.problems).toEqual([]);
-    expect(res.created).toEqual({ persons: 1, signals: 1, needs: 1 });
+    expect(res.created).toMatchObject({ persons: 1, signals: 1, needs: 1 });
     const account = await db.query.accounts.findFirst({ where: eq(schema.accounts.id, res.accountId) });
     expect(account?.name).toBe("Musterwerk GmbH");
     expect(account?.responsibleBdUserId).toBe(david.userId);

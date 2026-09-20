@@ -78,6 +78,13 @@
       "when": 1789890510576,
       "tag": "0010_dokumente_ki",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789900362415,
+      "tag": "0011_interview_bewertung",
+      "breakpoints": true
     }
   ]
 }
