@@ -1264,6 +1264,50 @@ export const personAssessments = pgTable(
   (t) => [uniqueIndex("person_assessments_uq").on(t.personId, t.setupId)],
 );
 
+// ---------------------------------------------------------------------------
+// Etappe 8: Assistent (Dialog je Nutzer und Kontext, Vorschlagskarten)
+// ---------------------------------------------------------------------------
+
+export const assistantContextEnum = pgEnum("assistant_context", ["GLOBAL", "ACCOUNT", "SETUP"]);
+
+/** Ein Gesprächsfaden je Nutzer und Kontext. Der Verlauf wird bei der ersten Übernahme zur Quelle (INTERVIEW). */
+export const assistantThreads = pgTable(
+  "assistant_threads",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    userId: text("user_id").notNull().references(() => users.id),
+    contextType: assistantContextEnum("context_type").notNull(),
+    contextId: text("context_id"), // accountId oder setupId
+    title: text("title").notNull(),
+    /** Interview-Modus: der Assistent führt aktiv durch die neun Themen */
+    interviewMode: boolean("interview_mode").notNull().default(false),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
+    sourceId: text("source_id").references(() => sources.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("assistant_threads_user_idx").on(t.userId, t.contextType, t.contextId)],
+);
+
+export const assistantMessages = pgTable(
+  "assistant_messages",
+  {
+    id: id(),
+    threadId: text("thread_id").notNull().references(() => assistantThreads.id),
+    seq: integer("seq").notNull(),
+    role: text("role").notNull(), // NUTZER | ASSISTENT | SYSTEM
+    text: text("text").notNull(),
+    /** Vorschlagskarten des Assistenten: AssistantCard[] (Typ, Felder, Status, Ergebnis) */
+    cards: jsonb("cards").notNull().default(sql`'[]'::jsonb`),
+    /** Fehlende Informationen, nach denen gefragt wurde */
+    missing: jsonb("missing").notNull().default(sql`'[]'::jsonb`),
+    aiJobId: text("ai_job_id").references(() => aiJobs.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("assistant_messages_seq_uq").on(t.threadId, t.seq)],
+);
+
 export type Role = (typeof roleEnum.enumValues)[number];
 export type AccessClass = (typeof accessClassEnum.enumValues)[number];
 export type SignalStatus = (typeof signalStatusEnum.enumValues)[number];
@@ -1297,4 +1341,5 @@ export type IntakeStatus = (typeof intakeStatusEnum.enumValues)[number];
 export type InterviewKind = (typeof interviewKindEnum.enumValues)[number];
 export type InterviewStatus = (typeof interviewStatusEnum.enumValues)[number];
 export type Stance = (typeof stanceEnum.enumValues)[number];
+export type AssistantContext = (typeof assistantContextEnum.enumValues)[number];
 export type Influence = (typeof influenceEnum.enumValues)[number];

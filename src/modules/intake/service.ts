@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, count, desc, eq, gte } from "drizzle-orm";
 import { z } from "zod";
-import { db, schema, type Tx } from "@/db/client";
+import { db, schema } from "@/db/client";
 import { getConfig } from "@/lib/config";
 import { ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
@@ -18,6 +18,7 @@ import { createSetup } from "@/modules/setups/service";
 import { createPerson } from "@/modules/people/service";
 import { createOpportunity } from "@/modules/opportunities/service";
 import { upsertAssessment } from "@/modules/people/assessments";
+import { insertSuggestionCard } from "@/modules/assistant/suggestions";
 
 /**
  * Anlagevorschlag (Etappe 6B/7A): aus einem Dokument oder einem Interview schlägt die KI Organisation, Setup, Personen
@@ -299,66 +300,22 @@ export async function applyIntake(actor: Actor, proposalId: string, raw: unknown
   await db.transaction(async (tx) => {
     for (const a of input.actions.filter((x) => x.include && x.title.length >= 3)) {
       const ev = quoteOf(a.title, payload.actions, (x) => x.title === a.title);
-      await insertSuggestion(tx, actor, setupId, source.id, originLabel, { type: "AKTION", title: a.title.slice(0, 200), targetRole: a.ownerRole, observation: a.description || a.title, evidenceQuote: ev, nextStep: a.title, whyNow: a.dueHint ? `Frist/Hinweis: ${a.dueHint}` : "", uncertainty: "Vorschlag aus der Auswertung – erst die Annahme macht daraus eine Aufgabe.", priority: "KONKRETE_ANFRAGE" });
+      await insertSuggestionCard(tx, actor, setupId, source.id, originLabel, { type: "AKTION", title: a.title.slice(0, 200), targetRole: a.ownerRole, observation: a.description || a.title, evidenceQuote: ev, nextStep: a.title, whyNow: a.dueHint ? `Frist/Hinweis: ${a.dueHint}` : "", uncertainty: "Vorschlag aus der Auswertung – erst die Annahme macht daraus eine Aufgabe.", priority: "KONKRETE_ANFRAGE" });
       created.actions++;
     }
     for (const c of input.contacts.filter((x) => x.include && x.personName.length >= 2)) {
       const ev = quoteOf(c.occasion, payload.contacts, (x) => x.personName === c.personName);
-      await insertSuggestion(tx, actor, setupId, source.id, originLabel, { type: "KONTAKTAUFNAHME", title: `Kontaktaufnahme ${c.personName}`.slice(0, 200), targetRole: "ANKER", observation: c.occasion, evidenceQuote: ev, hypothesis: c.viaVerveName ? `Möglicher Weg: über ${c.viaVerveName}` : "", nextStep: c.draftMessage, mentionedPersonName: c.personName, uncertainty: "Entwurf zum Bearbeiten – wird nie automatisch versendet.", priority: "ZUGANGSLUECKE" });
+      await insertSuggestionCard(tx, actor, setupId, source.id, originLabel, { type: "KONTAKTAUFNAHME", title: `Kontaktaufnahme ${c.personName}`.slice(0, 200), targetRole: "ANKER", observation: c.occasion, evidenceQuote: ev, hypothesis: c.viaVerveName ? `Möglicher Weg: über ${c.viaVerveName}` : "", nextStep: c.draftMessage, mentionedPersonName: c.personName, uncertainty: "Entwurf zum Bearbeiten – wird nie automatisch versendet.", priority: "ZUGANGSLUECKE" });
       created.contacts++;
     }
     for (const q of input.openQuestions.filter((x) => x.include && x.question.length >= 3)) {
-      await insertSuggestion(tx, actor, setupId, source.id, originLabel, { type: "OFFENE_FRAGE", title: q.question.slice(0, 200), targetRole: "BD", observation: q.question, evidenceQuote: q.question.slice(0, 200), proposedQuestion: q.question, uncertainty: "Vor der Bestätigung zu klären.", priority: "NEUE_INFORMATION" });
+      await insertSuggestionCard(tx, actor, setupId, source.id, originLabel, { type: "OFFENE_FRAGE", title: q.question.slice(0, 200), targetRole: "BD", observation: q.question, evidenceQuote: q.question.slice(0, 200), proposedQuestion: q.question, uncertainty: "Vor der Bestätigung zu klären.", priority: "NEUE_INFORMATION" });
       created.questions++;
     }
     await tx.update(schema.intakeProposals).set({ status: "UEBERNOMMEN", resultAccountId: accountId, resultSetupId: setupId, updatedAt: new Date() }).where(eq(schema.intakeProposals.id, proposal.id));
     await recordAudit(tx, actor, "intake.applied", "INTAKE", proposal.id, { accountId, setupId, ...created, probleme: problems.length, kind: proposal.kind });
   });
   return { accountId, setupId, created, problems };
-}
-
-type SuggestionSeed = {
-  type: (typeof schema.suggestionTypeEnum.enumValues)[number];
-  title: string;
-  targetRole: string;
-  observation: string;
-  evidenceQuote: string;
-  hypothesis?: string;
-  nextStep?: string;
-  whyNow?: string;
-  uncertainty?: string;
-  proposedQuestion?: string;
-  mentionedPersonName?: string;
-  priority: (typeof schema.priorityCategoryEnum.enumValues)[number];
-};
-
-async function insertSuggestion(tx: Tx, actor: Actor, setupId: string, sourceId: string, trigger: string, s: SuggestionSeed) {
-  const dedupeKey = sha(`${s.type}:${normalize(s.title)}:${sourceId}`);
-  const existing = await tx.query.suggestions.findFirst({ where: and(eq(schema.suggestions.setupId, setupId), eq(schema.suggestions.dedupeKey, dedupeKey)) });
-  if (existing) return;
-  await tx.insert(schema.suggestions).values({
-    workspaceId: actor.workspaceId,
-    type: s.type,
-    title: s.title,
-    targetRole: s.targetRole,
-    setupId,
-    trigger,
-    sourceIds: [sourceId],
-    evidenceQuote: s.evidenceQuote.slice(0, 500),
-    observation: s.observation.slice(0, 2000),
-    hypothesis: s.hypothesis || null,
-    uncertainty: s.uncertainty || null,
-    whyNow: s.whyNow || null,
-    nextStep: s.nextStep || null,
-    proposedQuestion: s.proposedQuestion || null,
-    mentionedPersonName: s.mentionedPersonName || null,
-    priorityCategory: s.priority,
-    dedupeKey,
-    recheckTrigger: "Neue Quelle im Setup",
-    provider: "intake",
-    model: "uebernahme",
-    promptVersion: ANALYZE_DOCUMENT_PROMPT_VERSION,
-  });
 }
 
 export async function discardIntake(actor: Actor, proposalId: string) {

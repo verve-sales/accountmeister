@@ -3,6 +3,7 @@ import type { IntakeProposal, StructureNoteOutput } from "./schemas";
 export const STRUCTURE_NOTE_PROMPT_VERSION = "structure-note.v1";
 export const ANALYZE_DOCUMENT_PROMPT_VERSION = "analyze-document.v2";
 export const INTERVIEW_NEXT_PROMPT_VERSION = "interview-next.v1";
+export const ASSISTANT_PROMPT_VERSION = "assistant.v1";
 
 /** Berechtigter Kontext, den der Anbieter erhalten darf – keine Rohquellen außer dem zu strukturierenden Text. */
 export type StructureNoteInput = {
@@ -33,6 +34,15 @@ export type InterviewNextInput = {
   maxQuestions: number;
 };
 
+/** Kontext für den Assistenten: berechtigter Kontext als Text, Verlauf, Modus. */
+export type AssistantInput = {
+  contextText: string;
+  history: { role: "NUTZER" | "ASSISTENT"; text: string }[];
+  interviewMode: boolean;
+  /** Vom System ermittelte offene Punkte und fehlende Informationen (Text) */
+  openPoints: string;
+};
+
 /** Aufgabenbezogene Modellwahl (Verwaltung → KI). Anbieter ohne Modellwahl ignorieren sie. */
 export type TaskOptions = { model?: string; temperature?: number; maxOutputTokens?: number };
 
@@ -55,6 +65,11 @@ export interface AIProvider {
   analyzeDocument?(input: AnalyzeDocumentInput, opts?: TaskOptions): Promise<unknown>;
   /** Nächste Interviewfrage (Etappe 7A) – optional. */
   interviewNext?(input: InterviewNextInput, opts?: TaskOptions): Promise<unknown>;
+  /**
+   * Assistent (Etappe 8): Antwort als Text (Prosa, dann ===KARTEN=== und JSON). onDelta liefert Textstücke zum
+   * Streamen; die Rückgabe ist der vollständige Text.
+   */
+  assistantReply?(input: AssistantInput, opts?: TaskOptions, onDelta?: (chunk: string) => void): Promise<string>;
   /** Verbrauch des letzten Aufrufs (Kostenspur), falls der Anbieter ihn liefert. */
   lastUsage?(): Usage | null;
   /** Verfügbare Modelle im Arbeitsraum des Anbieters (für die Konfigurationsseite). */

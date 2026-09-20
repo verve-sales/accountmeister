@@ -161,3 +161,33 @@ export type IntakeSignal = z.infer<typeof intakeSignalSchema>;
 export type IntakeNeed = z.infer<typeof intakeNeedSchema>;
 export type IntakeAction = z.infer<typeof intakeActionSchema>;
 export type IntakeContact = z.infer<typeof intakeContactSchema>;
+
+// ---------------------------------------------------------------------------
+// Etappe 8: Assistent – Antwort in Prosa plus Vorschlagskarten
+// ---------------------------------------------------------------------------
+
+export const ASSISTANT_CARDS_MARKER = "===KARTEN===";
+
+const q = { evidenceQuote: z.string().min(3).max(500) };
+
+export const assistantItemSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("KUNDE"), name: z.string().min(2).max(200), orgType: z.enum(orgTypeValues).optional().default("SONSTIGE"), setupName: z.string().min(3).max(200), contextNote: z.string().max(2000).optional().default(""), ...q }),
+  z.object({ type: z.literal("SETUP"), name: z.string().min(3).max(200), contextNote: z.string().max(2000).optional().default(""), ...q }),
+  z.object({ type: z.literal("PERSON"), displayName: z.string().min(2).max(200), functionTitle: z.string().max(200).optional().default(""), knownResponsibility: z.string().max(500).optional().default(""), decisionRole: z.enum(decisionRoleValues).nullable().optional().default(null), stance: z.enum(stanceValues).optional().default("UNBEKANNT"), influence: z.enum(influenceValues).optional().default("UNBEKANNT"), assessmentNote: z.string().max(500).optional().default(""), ...q }),
+  z.object({ type: z.literal("SIGNAL"), observation: z.string().min(5).max(2000), relevanceHypothesis: z.string().max(2000).optional().default(""), ...q }),
+  z.object({ type: z.literal("BEDARF"), title: z.string().min(3).max(200), needDescription: z.string().min(10).max(4000), ...q }),
+  z.object({ type: z.literal("AKTION"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), ownerRole: z.enum(["BD", "ANKER", "PRINCIPAL"]).default("BD"), dueHint: z.string().max(100).optional().default(""), ...q }),
+  z.object({ type: z.literal("KONTAKT"), personName: z.string().min(2).max(200), viaVerveName: z.string().max(200).optional().default(""), occasion: z.string().min(3).max(500), draftMessage: z.string().max(1500).optional().default(""), ...q }),
+  z.object({ type: z.literal("FRAGE"), question: z.string().min(3).max(500), ...q }),
+]);
+export type AssistantItem = z.infer<typeof assistantItemSchema>;
+
+export const assistantOutputSchema = z.object({
+  items: z.array(assistantItemSchema).max(20).default([]),
+  /** Informationen, die für weitere Vorschläge fehlen – als konkrete Fragen formuliert */
+  missing: z.array(z.string().min(3).max(300)).max(8).default([]),
+});
+export type AssistantOutput = z.infer<typeof assistantOutputSchema>;
+
+/** Gespeicherte Karte: Vorschlag plus Entscheidung */
+export type AssistantCard = { id: string; item: AssistantItem; status: "NEU" | "UEBERNOMMEN" | "VERWORFEN"; resultType?: string; resultId?: string; note?: string };

@@ -488,8 +488,9 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           <form action={startInterviewAction} className="mt-4 flex flex-wrap items-center gap-3">
             <input type="hidden" name="kind" value="SETUP_ERGAENZUNG" />
             <input type="hidden" name="setupId" value={d.setup.id} />
+            <Link href={`/setups/${d.setup.id}?assistent=interview`} className="btn">Mit dem Assistenten ergänzen (Dialog)</Link>
             <button className="btn btn-secondary" type="submit">Interview zu diesem Setup führen</button>
-            <span className="muted text-sm">Die KI fragt, was noch fehlt (Personen, Entscheidungsweg, Bedarf, nächste Schritte); daraus entstehen Vorschläge für dieses Setup.</span>
+            <span className="muted text-sm">Der Assistent fragt, was noch fehlt (Personen, Entscheidungsweg, Bedarf, nächste Schritte) und legt Vorschlagskarten für dieses Setup vor – übernommen wird nur, was Sie anklicken.</span>
           </form>
         )}
         {d.canEdit && (

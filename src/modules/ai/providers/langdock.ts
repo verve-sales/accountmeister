@@ -1,6 +1,6 @@
 import { DomainError } from "@/lib/errors";
-import type { AIProvider, AnalyzeDocumentInput, InterviewNextInput, ModelInfo, ProviderInfo, StructureNoteInput, TaskOptions, Usage } from "../provider";
-import { ANALYZE_DOCUMENT_SYSTEM, INTERVIEW_NEXT_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
+import type { AIProvider, AnalyzeDocumentInput, AssistantInput, InterviewNextInput, ModelInfo, ProviderInfo, StructureNoteInput, TaskOptions, Usage } from "../provider";
+import { ANALYZE_DOCUMENT_SYSTEM, ASSISTANT_SYSTEM, INTERVIEW_NEXT_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
 
 /**
  * Produktivanbieter über Langdock (EU-Hosting, Auftragsverarbeitung im Langdock-Vertrag von Verve).
@@ -98,6 +98,85 @@ export class LangdockProvider implements AIProvider {
     const content = body.choices?.[0]?.message?.content ?? "";
     this.usage = { tokensIn: body.usage?.prompt_tokens ?? null, tokensOut: body.usage?.completion_tokens ?? null, model: body.model ?? model };
     return parseJsonLoose(content);
+  }
+
+  /**
+   * Freitext-Antwort mit Streaming (SSE, OpenAI-Format). Ohne JSON-Modus, weil Prosa und Karten in einer Antwort
+   * stehen; die Karten folgen nach dem Marker und werden vom Aufrufer geparst.
+   */
+  async completeTextStream(messages: { role: "system" | "user" | "assistant"; content: string }[], opts: TaskOptions = {}, onDelta?: (chunk: string) => void): Promise<string> {
+    const model = opts.model || this.cfg.defaultModel;
+    const payload: Record<string, unknown> = { model, messages, stream: true, max_tokens: opts.maxOutputTokens ?? 2500 };
+    if (opts.temperature !== undefined) payload.temperature = opts.temperature;
+    let res: Response;
+    try {
+      res = await this.fetch(`${this.cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers: this.headers(), body: JSON.stringify(payload), signal: AbortSignal.timeout(180_000) });
+    } catch (e) {
+      throw new LangdockError(`KI-Anbieter nicht erreichbar (${e instanceof Error ? e.name : "Netzwerkfehler"}).`);
+    }
+    if (res.status === 400) {
+      // Modell mag Temperatur/max_tokens nicht: konservativ wiederholen
+      const lenient = { model, messages, stream: true, max_completion_tokens: opts.maxOutputTokens ?? 2500 };
+      const detail = await safeText(res);
+      try {
+        res = await this.fetch(`${this.cfg.baseUrl.replace(/\/$/, "")}/chat/completions`, { method: "POST", headers: this.headers(), body: JSON.stringify(lenient), signal: AbortSignal.timeout(180_000) });
+      } catch (e) {
+        throw new LangdockError(`KI-Anbieter nicht erreichbar (${e instanceof Error ? e.name : "Netzwerkfehler"}).`);
+      }
+      if (!res.ok) throw this.errorFor(res.status, model, `${await safeText(res)} | erster Versuch: ${detail}`);
+    } else if (!res.ok) {
+      throw this.errorFor(res.status, model, await safeText(res));
+    }
+    const ct = res.headers.get("content-type") ?? "";
+    if (!ct.includes("text/event-stream")) {
+      // Anbieter hat nicht gestreamt: normale Antwort lesen
+      const body = (await res.json()) as ChatResponse;
+      const content = body.choices?.[0]?.message?.content ?? "";
+      this.usage = { tokensIn: body.usage?.prompt_tokens ?? null, tokensOut: body.usage?.completion_tokens ?? null, model: body.model ?? model };
+      onDelta?.(content);
+      return content;
+    }
+    if (!res.body) throw new LangdockError("Leere Antwort des KI-Anbieters.");
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let full = "";
+    let usage: Usage | null = null;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (data === "[DONE]") continue;
+        try {
+          const j = JSON.parse(data) as { choices?: { delta?: { content?: string } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number }; model?: string };
+          const delta = j.choices?.[0]?.delta?.content ?? "";
+          if (delta) {
+            full += delta;
+            onDelta?.(delta);
+          }
+          if (j.usage) usage = { tokensIn: j.usage.prompt_tokens ?? null, tokensOut: j.usage.completion_tokens ?? null, model: j.model ?? model };
+        } catch {
+          /* unvollständige Zeile – nächster Chunk */
+        }
+      }
+    }
+    this.usage = usage ?? { tokensIn: null, tokensOut: null, model };
+    return full;
+  }
+
+  async assistantReply(input: AssistantInput, opts?: TaskOptions, onDelta?: (chunk: string) => void): Promise<string> {
+    const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+      { role: "system", content: ASSISTANT_SYSTEM },
+      { role: "system", content: `Modus: ${input.interviewMode ? "Interview (aktiv führen)" : "Dialog"}\n\n=== KONTEXT (Daten) ===\n${clip(input.contextText) || "– kein Kontext (allgemeines Gespräch) –"}\n=== ENDE KONTEXT ===\n\n=== OFFENE PUNKTE (vom System ermittelt) ===\n${input.openPoints || "–"}\n=== ENDE OFFENE PUNKTE ===` },
+    ];
+    for (const h of input.history.slice(-30)) messages.push({ role: h.role === "NUTZER" ? "user" : "assistant", content: h.text });
+    return this.completeTextStream(messages, { maxOutputTokens: 2500, ...opts }, onDelta);
   }
 
   async ping(opts?: TaskOptions): Promise<void> {

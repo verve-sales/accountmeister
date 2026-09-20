@@ -6,6 +6,7 @@ import { getConfig } from "@/lib/config";
 import { getCurrentActor } from "@/modules/identity/session";
 import { logoutAction } from "./actions";
 import { roleLabel } from "@/lib/labels";
+import { AssistantPanel } from "@/components/AssistantPanel";
 
 export const metadata: Metadata = { title: "Accountmeister – Verve AI", description: "Interne Sales-Arbeitsumgebung von Verve Consulting", icons: { icon: "/verve-ai-lockup.png" } };
 export const dynamic = "force-dynamic";
@@ -68,6 +69,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+        {actor ? <AssistantPanel signedIn /> : null}
       </body>
     </html>
   );

@@ -13,6 +13,7 @@ import { captureObservation, changeSignalStatus, takeOverSignal } from "@/module
 import { createHandover, respondToHandover } from "@/modules/handovers/service";
 import { changeActionStatus, createAction } from "@/modules/actions/service";
 import { createAccount } from "@/modules/accounts/service";
+import { archiveAccount, deleteAccountPermanently, restoreAccount } from "@/modules/accounts/deletion";
 import { createPerson, setPersonFunction, setRelationship } from "@/modules/people/service";
 import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/modules/accesspaths/service";
 import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
@@ -114,6 +115,31 @@ export async function createAccountAction(fd: FormData) {
     const a = await createAccount(actor, { ...data, responsibleBdUserId: data.responsibleBdUserId || null });
     return `/kunden/${a.id}`;
   }, "Kunde angelegt.");
+}
+
+export async function archiveAccountAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.accountId ?? "";
+  return run(`/kunden/${id}`, async (actor) => {
+    await archiveAccount(actor, id);
+  }, "Kunde archiviert. Alles bleibt erhalten; endgültiges Löschen ist jetzt möglich.");
+}
+
+export async function restoreAccountAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.accountId ?? "";
+  return run(`/kunden/${id}`, async (actor) => {
+    await restoreAccount(actor, id);
+  }, "Kunde wiederhergestellt.");
+}
+
+export async function deleteAccountAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.accountId ?? "";
+  return run(`/kunden/${id}/loeschen`, async (actor) => {
+    await deleteAccountPermanently(actor, data);
+    return "/kunden";
+  }, "Kunde endgültig gelöscht – mit allen Setups, Ansprechpartnern, Quellen und Vorschlägen. Der Vorgang steht mit Begründung im Prüfprotokoll.");
 }
 
 export async function createSetupAction(fd: FormData) {

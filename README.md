@@ -1,6 +1,6 @@
 # Verve Sales-Arbeitsumgebung (Pilot)
 
-Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–7 umgesetzt – vollständige Pilotversion mit fiktiven Daten, Dokumentenupload, geführtes Interview und Kundenanlage aus Dokument/Interview mit Folgeaktivitäten, Kontaktaufnahme-Entwürfen und Personenbewertung (Buyingcenter), KI über Langdock (Modelle je Aufgabe unter Verwaltung → KI). Anmeldung über Microsoft 365 (Entra ID) eingebaut; Installation auf dem IONOS Cloud Server: `docs/installation-ionos.md`. Echtdatenbetrieb erst nach den Freigaben in `docs/pilotfreigabe.md`; Betrieb siehe `docs/betrieb.md`. **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
+Interne, datenbankgestützte Sales-Arbeitsumgebung für Verve Consulting. Stand: Etappen 0–8 umgesetzt – vollständige Pilotversion mit fiktiven Daten, ständig verfügbarer Assistent (Dialog mit Vorschlagskarten auf jeder Seite), Dokumentenupload, Kundenanlage aus Dialog/Dokument/Interview mit Folgeaktivitäten, Kontaktaufnahme-Entwürfen und Personenbewertung (Buyingcenter), KI über Langdock (Modelle je Aufgabe unter Verwaltung → KI). Anmeldung über Microsoft 365 (Entra ID) eingebaut; Installation auf dem IONOS Cloud Server: `docs/installation-ionos.md`. Echtdatenbetrieb erst nach den Freigaben in `docs/pilotfreigabe.md`; Betrieb siehe `docs/betrieb.md`. **Ausschließlich fiktive Daten. Kein Produktivbetrieb.**
 
 Dokumente: `docs/briefing.md` (Auftrag), `docs/implementierungsuebersicht.md`, `docs/entscheidungsprotokoll.md`.
 
@@ -50,11 +50,12 @@ docs             Briefing, Implementierungsübersicht, Entscheidungsprotokoll, B
 scripts          Start (Produktion), Migration, Sicherung, Wiederherstellung
 ```
 
-## Bekannte Einschränkungen (Stand Etappe 7)
+## Bekannte Einschränkungen (Stand Etappe 8)
 - Kontaktwege nur tabellarisch; die grafische Beziehungskarte folgt. Buyingcenter je Bedarf folgt mit dem Bedarfsobjekt.
 - Startvoraussetzungen werden frei erfasst; ein freigegebenes Regelwerk (Vertrag/Compliance/Onboarding) und die Vergütungsregeln (A16) sind offen. Nachweise sind Quellen/Belegnotizen, keine Dokumentenverwaltung.
 - Nutzungsgrenzen laufen im Prozessspeicher (eine Instanz). Docker-Abbild in dieser Umgebung nicht gebaut (kein Docker-Daemon) – erster Build auf dem Zielsystem prüfen. Zielbeiträge sind mit Setups/Kunden verknüpft; die Koppelung an Accountplan-Prioritäten ist im Datenmodell vorhanden, in der Oberfläche noch nicht.
 - Outlook: Der Microsoft-Graph-Adapter läuft im Fixture-Modus mit fiktiven Testquellen; ein echter Abruf braucht eine App-Registrierung im Verve-Tenant und die Datenschutzfreigabe.
 - KI: In der Entwicklung läuft der deterministische Testanbieter (`AI_PROVIDER=test`, kein Sprachmodell). Produktiv: Langdock (`AI_PROVIDER=langdock`, E-037); der Langdock-Adapter wurde gegen die dokumentierte Schnittstelle mit Attrappen getestet, der erste echte Aufruf ist auf dem Server über „Verwaltung → KI → Verbindung prüfen“ zu bestätigen. Dokumente: kein OCR (gescannte PDFs ohne Textebene ergeben „kein Text“); Dokumente werden nur einmal extrahiert, keine Versionierung bei erneutem Upload.
-- Interview: Antworten per Text (Windows-Diktierfunktion nutzbar); Audioaufnahme mit Transkription ist als Etappe 7B/8 offen (Transkriptionsanbieter zu klären). Strategiefaden je Setup und Dashboard folgen in Etappe 8.
+- Assistent und Interview: Eingabe per Text (Windows-Diktierfunktion Win + H nutzbar); Audioaufnahme mit Transkription ist offen (Transkriptionsanbieter zu klären). Der Assistent hält je Nutzer und Kontext ein Gespräch; Gespräche anderer Nutzer sind nicht einsehbar. Strategiefaden je Setup und Dashboard folgen in Etappe 9.
+- Kunden löschen: nur als Ganzes (zwei Schritte, E-042); einzelne Setups oder Personen werden nicht gelöscht, sondern archiviert bzw. über den Sperr-/Löschablauf für Quellen behandelt.
 - Keine echte Mail-/Kalenderanbindung (Entscheidung offen, siehe Entscheidungsprotokoll). Unternehmensanmeldung über Microsoft Entra ID vorhanden (`AUTH_MODE=oidc`).

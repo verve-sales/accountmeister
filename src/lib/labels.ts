@@ -46,6 +46,7 @@ export const epistemicLabel: Record<string, string> = {
   UEBERHOLT: "Überholt",
 };
 export const sourceTypeLabel: Record<string, string> = { NOTIZ: "Notiz", PROTOKOLL: "Protokoll", EMAIL: "E-Mail", TERMIN: "Termin", OEFFENTLICH: "Öffentliche Quelle", DOKUMENT: "Dokument", INTERVIEW: "Interview" };
+export const accountStatusLabel: Record<string, string> = { ACTIVE: "aktiv", DORMANT: "ruhend", ARCHIVED: "archiviert" };
 export const orgTypeLabel: Record<string, string> = { KONZERN: "Konzern", TOCHTERGESELLSCHAFT: "Tochtergesellschaft", EINZELUNTERNEHMEN: "Einzelunternehmen", OEFFENTLICH: "Öffentliche Einrichtung", SONSTIGE: "Sonstige" };
 export const stanceLabel: Record<string, string> = { UNBEKANNT: "unbekannt", POSITIV: "positiv", NEUTRAL: "neutral", KRITISCH: "kritisch" };
 export const influenceLabel: Record<string, string> = { UNBEKANNT: "unbekannt", HOCH: "hoch", MITTEL: "mittel", NIEDRIG: "niedrig" };

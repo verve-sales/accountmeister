@@ -660,3 +660,96 @@ test("Etappe 7: Interview (neuer Kunde) → Antworten → Auswertung → Überna
   await expect(page.getByText(/Hypothesen ohne bestätigte Quelle/)).toBeVisible();
   await logout(page);
 });
+
+test("Etappe 8: Assistent im Seitenpanel – Dialog, Karten übernehmen (Kunde → Setup), Kontextwechsel, Interviewmodus per Schaltfläche", async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const org = `Assistenzwerk ${suffix} GmbH`;
+  await loginAs(page, "David");
+  await page.goto("/kunden");
+  // Panel öffnen: Eröffnung nennt, was fehlt
+  await page.getByRole("button", { name: "Assistent", exact: true }).click();
+  const panel = page.getByRole("complementary", { name: "Assistent" });
+  await expect(panel).toBeVisible();
+  // Frisches Gespräch (frühere Läufe hinterlassen Verlauf)
+  await panel.getByRole("button", { name: "Neu" }).click();
+  await expect(panel.getByText("Damit ich Vorschläge machen kann")).toBeVisible();
+  await expect(panel.getByText(/Allgemein/)).toBeVisible();
+
+  // Nachricht senden → Karten
+  const input = panel.getByLabel("Nachricht an den Assistenten");
+  await input.fill(`Es geht um die ${org}, ein Logistiker aus Hamburg. Gesprochen habe ich mit Herrn Winter, Leiter Logistik. Herr Winter sucht Unterstützung bei der Testkoordination.`);
+  await panel.getByRole("button", { name: "Senden" }).click();
+  await expect(panel.getByText(/Vorschl(ag|äge) daraus abgeleitet/)).toBeVisible();
+  const kundeCard = panel.locator("li", { hasText: "Kunde" }).filter({ hasText: org }).first();
+  await expect(kundeCard).toBeVisible();
+  // Karte übernehmen → Kunde + Setup entstehen, Gespräch wechselt in das Setup
+  await kundeCard.getByRole("button", { name: "Übernehmen" }).click();
+  await expect(panel.getByText(/Übernommen\. Kunde „/)).toBeVisible();
+  await expect(page).toHaveURL(/\/setups\//);
+  await expect(panel.getByText(new RegExp(`${org} · Erstkontakt`))).toBeVisible();
+  // Person übernehmen im Setup-Kontext
+  const personCard = panel.locator("li", { hasText: "Person" }).filter({ hasText: "Herr Winter" }).first();
+  await personCard.getByRole("button", { name: "Übernehmen" }).click();
+  await expect(panel.getByText(/Person „Herr Winter“ angelegt/)).toBeVisible();
+  // Bedarf verwerfen
+  const bedarfCard = panel.locator("li", { hasText: "Bedarf" }).first();
+  if (await bedarfCard.count()) {
+    await bedarfCard.getByRole("button", { name: "Verwerfen" }).click();
+    await expect(panel.getByText("Verworfen.").first()).toBeVisible();
+  }
+  // Schließen, Setup-Seite zeigt die Person
+  await page.getByRole("button", { name: "Assistent schließen" }).click();
+  const setupUrl = page.url();
+  await page.goto(`${setupUrl.replace(/\?.*$/, "")}/personen`);
+  await expect(page.getByText("Herr Winter").first()).toBeVisible();
+  await page.goto(setupUrl.replace(/\?.*$/, ""));
+
+  // Interviewmodus per Schaltfläche auf der Setup-Seite
+  await page.getByRole("link", { name: "Mit dem Assistenten ergänzen (Dialog)" }).click();
+  await expect(page.getByRole("complementary", { name: "Assistent" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Interview: an" })).toBeVisible();
+  await expect(page.getByText(/ich führe dich durch die Erfassung/)).toBeVisible();
+});
+
+test("Kunden löschen: Archivieren → Bestätigung mit Name und Begründung → Kunde samt Setup verschwindet", async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const org = `Löschwerk ${suffix} GmbH`;
+  await loginAs(page, "David");
+  await page.goto("/kunden");
+  await page.locator("summary", { hasText: "Kunde von Hand anlegen" }).click();
+  await page.locator("#name").fill(org);
+  const bdOptions = await page.locator("#responsibleBdUserId option").allTextContents();
+  await page.locator("#responsibleBdUserId").selectOption({ label: bdOptions.find((o) => o.includes("David"))! });
+  await page.getByRole("button", { name: "Anlegen", exact: true }).click();
+  await expect(page).toHaveURL(/\/kunden\//);
+  await expect(page.getByRole("heading", { name: org })).toBeVisible();
+  await expect(page.getByText("Kunde angelegt.")).toBeVisible();
+  // Ohne Setups ist der Aufklapper bereits geöffnet
+  if (!(await page.getByLabel("Verständlicher Setup-Name").isVisible())) await page.locator("summary", { hasText: "Setup anlegen" }).click();
+  await expect(page.getByLabel("Verständlicher Setup-Name")).toBeVisible();
+  await page.getByLabel("Verständlicher Setup-Name").fill(`Setup ${suffix}`);
+  await page.getByRole("button", { name: "Setup anlegen" }).click();
+  await expect(page).toHaveURL(/\/setups\//);
+
+  await page.goto("/kunden");
+  await page.getByRole("link", { name: org }).click();
+  await page.getByRole("link", { name: "Kunde archivieren oder löschen" }).click();
+  await expect(page.getByRole("heading", { name: `Kunde „${org}“ löschen` })).toBeVisible();
+  await expect(page.getByText("Schritt 1: Archivieren")).toBeVisible();
+  await page.getByRole("button", { name: "Kunde archivieren" }).click();
+  await expect(page.getByText("Kunde archiviert.")).toBeVisible();
+  await expect(page.getByText("Dieser Kunde ist archiviert.")).toBeVisible();
+  await page.getByRole("link", { name: "wiederherstellen oder endgültig löschen" }).click();
+  await expect(page.getByText("Schritt 2: Endgültig löschen")).toBeVisible();
+  // Falscher Name → Fehler, nichts gelöscht
+  await page.locator("#confirmName").fill("Falsch");
+  await page.locator("#reason").fill("Testkunde aus dem E2E-Lauf.");
+  await page.getByRole("button", { name: "Kunde mit allen Daten endgültig löschen" }).click();
+  await expect(page.getByText(/stimmt nicht mit dem Kundennamen/)).toBeVisible();
+  await page.locator("#confirmName").fill(org);
+  await page.locator("#reason").fill("Testkunde aus dem E2E-Lauf.");
+  await page.getByRole("button", { name: "Kunde mit allen Daten endgültig löschen" }).click();
+  await expect(page).toHaveURL(/\/kunden(\?|$)/);
+  await expect(page.getByText(/Kunde endgültig gelöscht/)).toBeVisible();
+  await expect(page.getByRole("link", { name: org })).toHaveCount(0);
+});

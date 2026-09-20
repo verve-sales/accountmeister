@@ -1,6 +1,6 @@
-import type { AIProvider, AnalyzeDocumentInput, InterviewNextInput, ProviderInfo, StructureNoteInput } from "../provider";
-import type { IntakeProposal, InterviewNext, StructuredItem, StructureNoteOutput } from "../schemas";
-import { interviewTopicValues } from "../schemas";
+import type { AIProvider, AnalyzeDocumentInput, AssistantInput, InterviewNextInput, ProviderInfo, StructureNoteInput } from "../provider";
+import type { AssistantItem, IntakeProposal, InterviewNext, StructuredItem, StructureNoteOutput } from "../schemas";
+import { ASSISTANT_CARDS_MARKER, interviewTopicValues } from "../schemas";
 
 /**
  * Deterministischer Testanbieter (Briefing 2.3): regelbasiert, ohne Netzwerk, ohne Modell.
@@ -188,7 +188,8 @@ export class TestProvider implements AIProvider {
     for (const l of lines) {
       const m = ORG.exec(l);
       if (m) {
-        const name = m[1]!.trim();
+        // Satzanfänge wie „Es geht um die …“ oder „Kunde ist die …“ vom Namen trennen: bis zum letzten Kleinwort abschneiden.
+        const name = m[1]!.trim().replace(/^(?:[A-ZÄÖÜ][a-zäöüß]*\s+)?(?:[a-zäöüß][\wäöüß]*\s+)+/u, "").trim() || m[1]!.trim();
         const known = input.knownAccountNames.find((k) => name.toLowerCase().includes(k.toLowerCase()) || k.toLowerCase().includes(name.toLowerCase())) ?? "";
         const orgType = /Stadt|Landkreis|Ministerium/.test(name) ? "OEFFENTLICH" : /AG|SE/.test(m[2] ?? "") ? "KONZERN" : "SONSTIGE";
         organization = { name, orgType, possibleExistingAccount: known, evidenceQuote: m[0] };
@@ -281,5 +282,31 @@ export class TestProvider implements AIProvider {
     const next = interviewTopicValues.find((k) => !covered.includes(k) && !(k === "ORGANISATION" && known.includes("kunde:")));
     if (!next || input.questionCount >= input.maxQuestions) return { question: "", rationale: "", topic: null, covered, done: true };
     return { question: QUESTIONS[next], rationale: `Thema „${next}“ ist noch offen.`, topic: next, covered, done: false };
+  }
+
+  /** Assistent – regelbasiert: Karten aus der letzten Nutzernachricht (über analyzeDocument), fehlende Themen als Fragen. */
+  async assistantReply(input: AssistantInput, _opts?: unknown, onDelta?: (chunk: string) => void): Promise<string> {
+    void _opts;
+    const lastUser = [...input.history].reverse().find((h) => h.role === "NUTZER")?.text ?? "";
+    const allUser = input.history.filter((h) => h.role === "NUTZER").map((h) => h.text).join("\n");
+    const p = await this.analyzeDocument({ documentText: lastUser || allUser, fileName: "Dialog", knownAccountNames: [] });
+    const items: AssistantItem[] = [];
+    const hasCustomer = /Kunde:/.test(input.contextText);
+    if (p.organization && !hasCustomer) items.push({ type: "KUNDE", name: p.organization.name, orgType: p.organization.orgType, setupName: `Erstkontakt ${p.organization.name}`.slice(0, 200), contextNote: "", evidenceQuote: p.organization.evidenceQuote });
+    for (const x of p.persons) items.push({ type: "PERSON", ...x });
+    for (const x of p.signals) items.push({ type: "SIGNAL", ...x });
+    for (const x of p.needs) items.push({ type: "BEDARF", ...x });
+    for (const x of p.actions) items.push({ type: "AKTION", ...x });
+    for (const x of p.contacts) items.push({ type: "KONTAKT", ...x });
+    const missing: string[] = [];
+    if (!hasCustomer && !p.organization) missing.push("Um welche Organisation geht es (mit Rechtsform)?");
+    if (p.persons.length === 0 && !/Bekannte Personen:/.test(input.contextText)) missing.push("Mit wem hast du gesprochen – Name und Funktion?");
+    if (p.needs.length === 0 && !/Bedarfe:/.test(input.contextText)) missing.push("Was will der Kunde erreichen, in seinen Worten?");
+    const prosa = items.length > 0
+      ? `Danke, ich habe ${items.length} ${items.length === 1 ? "Vorschlag" : "Vorschläge"} daraus abgeleitet – bitte prüfen und übernehmen, was passt.${missing.length ? ` Damit ich weiter vorschlagen kann, fehlt mir noch etwas: ${missing[0]}` : ""}`
+      : `Daraus kann ich noch nichts Belastbares vorschlagen. ${missing[0] ?? "Erzähl mir mehr über den Anlass und die beteiligten Personen."}`;
+    const out = `${prosa}\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items: items.slice(0, 20), missing })}`;
+    onDelta?.(out);
+    return out;
   }
 }

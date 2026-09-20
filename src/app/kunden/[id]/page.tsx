@@ -5,10 +5,11 @@ import { getAccount } from "@/modules/accounts/service";
 import { listSetupsForAccount } from "@/modules/setups/service";
 import { listOpportunitiesForAccount } from "@/modules/opportunities/service";
 import { canCreateSetup } from "@/modules/identity/authz";
+import { canDeleteAccount } from "@/modules/accounts/deletion";
 import { DomainError } from "@/lib/errors";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
-import { fmtDate, setupStatusLabel, visibilityLabel, contributionLabel, opportunityStatusLabel } from "@/lib/labels";
+import { accountStatusLabel, fmtDate, setupStatusLabel, visibilityLabel, contributionLabel, opportunityStatusLabel } from "@/lib/labels";
 import { createSetupAction } from "../../actions";
 import { listPeopleForAccount } from "@/modules/people/service";
 import { relationshipStateLabel, priorityKindLabel, priorityStatusLabel } from "@/lib/labels";
@@ -36,6 +37,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const [plan, snapshots, mayEditPlan] = await Promise.all([buildAccountPlan(actor, id), listAccountPlanSnapshots(actor, id), canEditAccountPlan(actor, id)]);
   const back = `/kunden/${id}`;
   const mayCreate = canCreateSetup(actor, account);
+  const mayDelete = canDeleteAccount(actor, account);
   const bdUsers = mayCreate
     ? [...new Map((await db.select({ id: schema.users.id, displayName: schema.users.displayName }).from(schema.users).innerJoin(schema.roleAssignments, eq(schema.roleAssignments.userId, schema.users.id)).where(eq(schema.roleAssignments.role, "BD"))).map((u) => [u.id, u])).values()]
     : [];
@@ -43,7 +45,12 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   return (
     <div className="space-y-6">
       <p className="text-sm"><Link href="/kunden">Kunden</Link> › {account.name}</p>
-      <h1 className="text-2xl font-semibold">{account.name}</h1>
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h1 className="text-2xl font-semibold">{account.name}</h1>
+        {account.status === "ARCHIVED" && <Status label={accountStatusLabel.ARCHIVED!} />}
+        {mayDelete && <Link href={`/kunden/${account.id}/loeschen`} className="muted text-sm ml-auto">Kunde archivieren oder löschen</Link>}
+      </div>
+      {account.status === "ARCHIVED" && <p className="text-sm" style={{ background: "#fdf6ec", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ist archiviert. Alles bleibt erhalten; <Link href={`/kunden/${account.id}/loeschen`}>wiederherstellen oder endgültig löschen</Link>.</p>}
       <Feedback params={sp} />
 
       <section className="card">
