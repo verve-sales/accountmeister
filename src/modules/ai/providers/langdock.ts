@@ -1,6 +1,6 @@
 import { DomainError } from "@/lib/errors";
 import type { AIProvider, AnalyzeDocumentInput, AssistantInput, FormSuggestInput, InterviewNextInput, ModelInfo, ProviderInfo, StrategyInput, StructureNoteInput, TaskOptions, Usage } from "../provider";
-import { ANALYZE_DOCUMENT_SYSTEM, ASSISTANT_SYSTEM, FORM_SUGGEST_SYSTEM, INTERVIEW_NEXT_SYSTEM, STRATEGY_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
+import { ANALYZE_DOCUMENT_SYSTEM, ASSISTANT_CARDS_SYSTEM, ASSISTANT_SYSTEM, FORM_SUGGEST_SYSTEM, INTERVIEW_NEXT_SYSTEM, STRATEGY_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
 
 /**
  * Produktivanbieter über Langdock (EU-Hosting, Auftragsverarbeitung im Langdock-Vertrag von Verve).
@@ -176,7 +176,17 @@ export class LangdockProvider implements AIProvider {
       { role: "system", content: `Modus: ${input.interviewMode ? "Interview (aktiv führen)" : "Dialog"}\n\n=== KONTEXT (Daten) ===\n${clip(input.contextText) || "– kein Kontext (allgemeines Gespräch) –"}\n=== ENDE KONTEXT ===\n\n=== OFFENE PUNKTE (vom System ermittelt) ===\n${input.openPoints || "–"}\n=== ENDE OFFENE PUNKTE ===` },
     ];
     for (const h of input.history.slice(-30)) messages.push({ role: h.role === "NUTZER" ? "user" : "assistant", content: h.text });
-    return this.completeTextStream(messages, { maxOutputTokens: 2500, ...opts }, onDelta);
+    // Lange Dossiers erzeugen viele Karten: unter 6000 Ausgabetoken wird das JSON sonst abgeschnitten.
+    return this.completeTextStream(messages, { ...opts, maxOutputTokens: Math.max(opts?.maxOutputTokens ?? 0, 6000) }, onDelta);
+  }
+
+  async assistantCards(input: AssistantInput & { prose: string }, opts?: TaskOptions): Promise<unknown> {
+    const user = [
+      `=== KONTEXT (Daten) ===\n${clip(input.contextText) || "–"}\n=== ENDE KONTEXT ===`,
+      `\n=== VERLAUF (Daten) ===\n${input.history.slice(-12).map((h) => `${h.role === "NUTZER" ? "Person" : "Assistent"}: ${h.text}`).join("\n\n")}\n=== ENDE VERLAUF ===`,
+      `\n=== LETZTE ANTWORT DES ASSISTENTEN (Daten) ===\n${input.prose}\n=== ENDE ===`,
+    ].join("\n");
+    return this.completeJson(ASSISTANT_CARDS_SYSTEM, user, { ...opts, maxOutputTokens: Math.max(opts?.maxOutputTokens ?? 0, 6000) });
   }
 
   async ping(opts?: TaskOptions): Promise<void> {

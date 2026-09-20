@@ -90,3 +90,6 @@ Zwei Schritte auf der Kundenseite („Kunde archivieren oder löschen“): Archi
 
 ## Standardrollenkatalog (E-045)
 Der Verve-Rollenkatalog wird beim ersten Zugriff je Arbeitsraum aus dem Standard befüllt (fünf Familien, 23 Rollen) und unter Verwaltung → Rollen gepflegt (ergänzen, deaktivieren). Deaktivierte Rollen bleiben an bestehenden Chancen sichtbar. Die KI ordnet Rollennamen unscharf dem Katalog zu; unbekannte Namen landen als „Standardrolle noch offen“ an der Chance.
+
+## Assistent: Kartenformat und Produktionsmodelle
+Der Assistent erwartet Prosa, dann eine Zeile `===KARTEN===` und ein JSON-Objekt. Produktionsmodelle halten das nicht immer ein (Codezäune, Markervarianten, abgeschnittenes JSON, Ankündigungen ohne Karten). Deshalb: Der Marker wird tolerant erkannt, Karten werden je Element geprüft (ein fehlerhaftes Element verwirft nicht alle), und kommen keine Karten zustande, zieht die Anwendung sie in einem zweiten Schritt im JSON-Modus nach (Aufgabe „Assistent“, derselbe Modelleintrag; die Ausgabegrenze wird auf mindestens 6000 Token angehoben). Behauptet die Antwort trotzdem „angelegt“, ohne Karten zu liefern, wird das dem Nutzer ausdrücklich gesagt. Häufen sich Meldungen „nicht schemakonform“ bei einem Modell, hilft unter Verwaltung → KI ein Modell mit besserer Instruktionstreue oder eine niedrigere Temperatur.

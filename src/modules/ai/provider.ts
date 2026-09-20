@@ -85,6 +85,8 @@ export interface AIProvider {
    * Streamen; die Rückgabe ist der vollständige Text.
    */
   assistantReply?(input: AssistantInput, opts?: TaskOptions, onDelta?: (chunk: string) => void): Promise<string>;
+  /** Karten nachziehen (JSON-Modus), wenn die Assistenten-Antwort keine auswertbaren Karten enthielt – optional. */
+  assistantCards?(input: AssistantInput & { prose: string }, opts?: TaskOptions): Promise<unknown>;
   /** Strategiefaden-Vorschlag (Etappe 9) – optional. */
   strategize?(input: StrategyInput, opts?: TaskOptions): Promise<unknown>;
   /** Formularfelder vorbelegen (Etappe 9) – optional. */

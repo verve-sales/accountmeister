@@ -172,3 +172,53 @@ describe("Etappe 8: Assistent (Dialog mit Vorschlagskarten)", () => {
     await expect(sendMessage(nina, { threadId: view.thread.id, text: "Hallo" })).rejects.toBeInstanceOf(TransitionError);
   });
 });
+
+describe("Robuste Kartenauswertung (Produktionsmodelle halten das Format nicht immer ein)", () => {
+  it("splitReply erkennt Markervarianten, Codezäune und markerloses JSON; validateCards rettet gültige Karten einzeln", async () => {
+    const { validateCards } = await import("@/modules/assistant/service");
+    const json = JSON.stringify({ items: [{ type: "FRAGE", question: "Wer entscheidet?", purpose: "", evidenceQuote: "Wer entscheidet" }], missing: ["Budget?"] });
+    expect(splitReply(`Prosa.\n=== KARTEN ===\n${json}`).json).not.toBeNull();
+    expect(splitReply(`Prosa.\n===KARTEN===\n\`\`\`json\n${json}\n\`\`\``).json).not.toBeNull();
+    expect(splitReply(`Prosa.\n\`\`\`json\n${json}\n\`\`\``).json).not.toBeNull();
+    expect(splitReply(`Prosa ohne Marker. ${json}`).prose).toBe("Prosa ohne Marker.");
+    expect(splitReply("Nur Prosa.").json).toBeNull();
+    const v = validateCards({ items: [{ type: "FRAGE", question: "Wer entscheidet?", evidenceQuote: "Wer entscheidet" }, { type: "PERSON", displayName: "X" /* evidenceQuote fehlt */ }, { type: "SIGNAL", observation: "Budget frei", evidenceQuote: "gibt es nicht" }], missing: ["Budget?", 7] }, "Frage: Wer entscheidet über das Budget?");
+    expect(v.items).toHaveLength(1);
+    expect(v.invalid).toBe(1);
+    expect(v.rejected).toBe(1);
+    expect(v.missing).toEqual(["Budget?"]);
+  });
+
+  it("Ohne auswertbare Karten werden sie im zweiten Schritt (JSON-Modus) nachgezogen; Behauptungen wie „ich habe angelegt“ bekommen einen Hinweis", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const seed = await ensureSeed();
+    const david = await actorFor("david");
+    const view = await getThreadView(david, { type: "SETUP", id: seed.setupId });
+    const text = "Frau Keller sagte: Budget ist freigegeben. Herr Berger schickt bis 30.09. das Konzept.";
+    // Anbieter, der im Dialog das Format nicht einhält, im JSON-Modus aber liefert
+    const flaky: AIProvider = {
+      ...new TestProvider(),
+      info: () => ({ id: "test", enabled: true, model: "test", description: "Flaky" }),
+      assistantReply: async (_i: AssistantInput, _o?: unknown, onDelta?: (c: string) => void) => {
+        const reply = "Ich habe Kunde, Personen und Aktionen angelegt und unten als Karten angehängt.";
+        onDelta?.(reply);
+        return reply;
+      },
+      assistantCards: async () => ({ items: [{ type: "SIGNAL", observation: "Budget ist freigegeben", relevanceHypothesis: "", purpose: "", evidenceQuote: "Budget ist freigegeben" }, { type: "AKTION", title: "Konzept von Herrn Berger nachhalten", description: "", ownerRole: "BD", dueHint: "30.09.", purpose: "", evidenceQuote: "schickt bis 30.09. das Konzept" }], missing: [] }),
+    } as AIProvider;
+    const r = await sendMessage(david, { threadId: view.thread.id, text }, { provider: flaky });
+    expect(r.cards).toHaveLength(2);
+    expect(r.message.text).toMatch(/zweiten Schritt/);
+    // Gar keine Karten möglich + Behauptung „angelegt“ → ehrlicher Hinweis
+    const liar: AIProvider = {
+      ...new TestProvider(),
+      info: () => ({ id: "test", enabled: true, model: "test", description: "Liar" }),
+      assistantReply: async () => "Ich habe den Kunden jetzt angelegt.",
+      assistantCards: async () => ({ items: [], missing: [] }),
+    } as AIProvider;
+    const r2 = await sendMessage(david, { threadId: view.thread.id, text: "Und?" }, { provider: liar });
+    expect(r2.cards).toHaveLength(0);
+    expect(r2.message.text).toMatch(/lege nichts selbst an/);
+  });
+});

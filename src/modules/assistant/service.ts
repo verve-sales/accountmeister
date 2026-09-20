@@ -9,7 +9,7 @@ import { hasRole, type Actor } from "@/modules/identity/actor";
 import { canCreateAccount, canCreateSetup, canEditSetup, canViewSetup, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { getAIProvider } from "@/modules/ai";
 import { ASSISTANT_PROMPT_VERSION, type AIProvider, type AssistantInput, type TaskOptions } from "@/modules/ai/provider";
-import { ASSISTANT_CARDS_MARKER, assistantOutputSchema, interviewTopicLabel, interviewTopicValues, type AssistantCard, type AssistantItem } from "@/modules/ai/schemas";
+import { ASSISTANT_CARDS_MARKER, assistantItemSchema, interviewTopicLabel, interviewTopicValues, type AssistantCard, type AssistantItem } from "@/modules/ai/schemas";
 import { requireTaskOptions } from "@/modules/ai/settings";
 import { parseJsonLoose } from "@/modules/ai/providers/langdock";
 import { UsageLimitError } from "@/modules/suggestions/service";
@@ -276,21 +276,33 @@ export async function sendMessage(actor: Actor, raw: unknown, deps: { provider?:
       if (!markerSeen && carry && deps.onDelta) deps.onDelta(carry);
       const parsedOut = splitReply(full);
       replyText = parsedOut.prose;
-      const validated = assistantOutputSchema.safeParse(parsedOut.json);
       const usage = provider.lastUsage?.() ?? null;
-      if (validated.success) {
-        const allowedText = `${history.map((h) => h.text).join("\n")}\n${contextText}`;
-        const norm = normalize(allowedText);
-        let rejected = 0;
-        const items = validated.data.items.filter((it) => (allowedText.includes(it.evidenceQuote) || norm.includes(normalize(it.evidenceQuote)) ? true : (rejected++, false)));
-        cards = items.map((item) => ({ id: randomUUID(), item, status: "NEU" as const }));
-        missing = validated.data.missing;
-        if (rejected > 0) note = `${rejected} Vorschlag/Vorschläge ohne belegbare Textstelle wurden verworfen.`;
-        if (job) await db.update(schema.aiJobs).set({ status: "ERFOLGREICH", itemCount: cards.length, rejectedCount: rejected, tokensIn: usage?.tokensIn ?? null, tokensOut: usage?.tokensOut ?? null, model: usage?.model || job.model, finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
-      } else {
-        note = parsedOut.json === null ? "Die Antwort enthielt keine auswertbaren Karten." : "Die Karten entsprachen nicht dem Schema und wurden verworfen.";
-        if (job) await db.update(schema.aiJobs).set({ status: "FEHLER", error: "Karten nicht schemakonform", tokensIn: usage?.tokensIn ?? null, tokensOut: usage?.tokensOut ?? null, finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
+      const allowedText = `${history.map((h) => h.text).join("\n")}\n${contextText}`;
+      // Karten je Element prüfen (ein fehlerhaftes Element verwirft nicht alle), fehlende Karten im JSON-Modus nachziehen
+      let outcome = validateCards(parsedOut.json, allowedText);
+      let secondStep = false;
+      if (outcome.items.length === 0 && (parsedOut.json === null || outcome.invalid > 0 || /karte|vorschl|angelegt|erstellt|vorbereitet/i.test(replyText)) && provider.assistantCards) {
+        try {
+          const raw = await provider.assistantCards({ ...input, prose: replyText }, taskOpts);
+          const second = validateCards(raw, allowedText);
+          if (second.items.length > 0 || second.missing.length > 0) {
+            outcome = second;
+            secondStep = true;
+          }
+        } catch {
+          /* zweiter Schritt fehlgeschlagen – unten wird es gesagt */
+        }
       }
+      cards = outcome.items.map((item) => ({ id: randomUUID(), item, status: "NEU" as const }));
+      missing = outcome.missing;
+      const notes: string[] = [];
+      if (outcome.rejected > 0) notes.push(`${outcome.rejected} Vorschlag/Vorschläge ohne belegbare Textstelle wurden verworfen.`);
+      if (outcome.invalid > 0) notes.push(`${outcome.invalid} Karte(n) waren nicht schemakonform und wurden verworfen.`);
+      if (secondStep) notes.push("Die Karten wurden in einem zweiten Schritt aus der Antwort erzeugt.");
+      if (cards.length === 0 && /\b(angelegt|erstellt|gespeichert|erzeugt|angehängt|vorbereitet)\b/i.test(replyText)) notes.push("Hinweis: Ich lege nichts selbst an – gespeichert wird nur, was du aus einer Karte übernimmst. Diesmal kamen keine Karten zustande; schreib kurz, was angelegt werden soll (z. B. „Kunde X anlegen“), dann schlage ich Karten vor.");
+      else if (cards.length === 0 && parsedOut.json === null && !secondStep) notes.push("Die Antwort enthielt keine auswertbaren Karten.");
+      note = notes.join(" ");
+      if (job) await db.update(schema.aiJobs).set({ status: cards.length > 0 || parsedOut.json !== null || secondStep ? "ERFOLGREICH" : "FEHLER", itemCount: cards.length, rejectedCount: outcome.rejected + outcome.invalid, error: cards.length === 0 && parsedOut.json === null && !secondStep ? "Keine Karten" : null, tokensIn: usage?.tokensIn ?? null, tokensOut: usage?.tokensOut ?? null, model: usage?.model || job.model, finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
       if (!replyText.trim()) replyText = cards.length ? `Ich habe ${cards.length} Vorschläge abgeleitet.` : "Ich konnte daraus nichts Belastbares ableiten.";
     } catch (e) {
       const msg = (e instanceof Error ? e.message : "Anbieterfehler").slice(0, 300);
@@ -317,16 +329,50 @@ function fallbackReply(openPoints: OpenPoint[], missing: string[], head: string)
   return parts.join("\n\n");
 }
 
+/** Antwort in Prosa und Karten-JSON trennen – tolerant gegenüber Markervarianten, Codezäunen und fehlendem Marker. */
 export function splitReply(full: string): { prose: string; json: unknown | null } {
-  const idx = full.indexOf(ASSISTANT_CARDS_MARKER);
-  if (idx < 0) return { prose: full.trim(), json: null };
-  const prose = full.slice(0, idx).trim();
-  const rest = full.slice(idx + ASSISTANT_CARDS_MARKER.length).trim();
+  const markerRe = /^[ \t]*`{0,3}[ \t]*={2,}\s*KARTEN\s*={2,}[ \t]*`{0,3}[ \t]*$|^\s*KARTEN\s*:\s*$/im;
+  const m = markerRe.exec(full);
+  let prose: string;
+  let rest: string;
+  if (m) {
+    prose = full.slice(0, m.index).trim();
+    rest = full.slice(m.index + m[0].length).trim();
+  } else {
+    // Kein Marker: JSON-Objekt mit "items" im Text suchen (typisch am Ende, ggf. in einem Codezaun)
+    const idx = full.search(/\{\s*"items"\s*:/);
+    if (idx < 0) return { prose: full.replace(/```(?:json)?\s*```/g, "").trim(), json: null };
+    prose = full.slice(0, idx).replace(/```(?:json)?\s*$/, "").trim();
+    rest = full.slice(idx).trim();
+  }
   try {
     return { prose, json: parseJsonLoose(rest) };
   } catch {
     return { prose, json: null };
   }
+}
+
+/** Karten einzeln prüfen: Schema je Element, Textstelle im erlaubten Text. */
+export function validateCards(json: unknown, allowedText: string): { items: AssistantItem[]; missing: string[]; rejected: number; invalid: number } {
+  if (!json || typeof json !== "object") return { items: [], missing: [], rejected: 0, invalid: 0 };
+  const obj = json as { items?: unknown; missing?: unknown };
+  const rawItems = Array.isArray(obj.items) ? obj.items : [];
+  const norm = normalize(allowedText);
+  const items: AssistantItem[] = [];
+  let rejected = 0;
+  let invalid = 0;
+  for (const raw of rawItems.slice(0, 30)) {
+    const r = assistantItemSchema.safeParse(raw);
+    if (!r.success) {
+      invalid++;
+      continue;
+    }
+    const q = r.data.evidenceQuote;
+    if (allowedText.includes(q) || norm.includes(normalize(q))) items.push(r.data);
+    else rejected++;
+  }
+  const missing = Array.isArray(obj.missing) ? obj.missing.filter((x): x is string => typeof x === "string" && x.trim().length >= 3).map((x) => x.trim().slice(0, 300)).slice(0, 8) : [];
+  return { items: items.slice(0, 20), missing, rejected, invalid };
 }
 
 // ---------------------------------------------------------------------------

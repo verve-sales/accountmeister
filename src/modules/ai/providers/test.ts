@@ -385,6 +385,12 @@ export class TestProvider implements AIProvider {
     return { fields, rationale: Object.keys(fields).length ? "Aus dem bekannten Kontext abgeleitet – bitte prüfen und anpassen." : "Zu wenig Kontext für einen Vorschlag.", evidenceQuote: evidence || "Kunde", missing };
   }
 
+  async assistantCards(input: AssistantInput & { prose: string }): Promise<unknown> {
+    const full = await this.assistantReply(input);
+    const idx = full.indexOf(ASSISTANT_CARDS_MARKER);
+    return idx >= 0 ? JSON.parse(full.slice(idx + ASSISTANT_CARDS_MARKER.length).trim()) : { items: [], missing: [] };
+  }
+
   async assistantReply(input: AssistantInput, _opts?: unknown, onDelta?: (chunk: string) => void): Promise<string> {
     void _opts;
     const lastUser = [...input.history].reverse().find((h) => h.role === "NUTZER")?.text ?? "";
