@@ -4,7 +4,7 @@ import { getSetupDetail, createSetup } from "@/modules/setups/service";
 import { getSource } from "@/modules/knowledge/service";
 import { getAccount, listVisibleAccounts } from "@/modules/accounts/service";
 import { takeOverSignal } from "@/modules/signals/service";
-import { assertSafeForEnvironment } from "@/lib/config";
+import { assertSafeForEnvironment, normalizeEnv } from "@/lib/config";
 import { actorFor, ensureSeed } from "./helpers";
 
 describe("Zugriff (Briefing 16.2, S01/S02/S09)", () => {
@@ -75,5 +75,8 @@ describe("Zugriff (Briefing 16.2, S01/S02/S09)", () => {
     // OIDC ohne Anbieterdaten: auch außerhalb Produktion abgelehnt (statt stiller Fehlfunktion)
     expect(() => assertSafeForEnvironment({ NODE_ENV: "development", AUTH_MODE: "oidc", AI_PROVIDER: "disabled", SESSION_SECRET: "x".repeat(40) })).toThrow(/OIDC_ISSUER/);
     expect(() => assertSafeForEnvironment({ NODE_ENV: "development", AUTH_MODE: "development", AI_PROVIDER: "test", SESSION_SECRET: "entwicklung-x".padEnd(40, "0") })).not.toThrow();
+    // Langdock ohne Schlüssel wird abgelehnt; leere Werte aus Compose (`LANGDOCK_API_KEY=`) gelten als nicht gesetzt
+    expect(() => assertSafeForEnvironment({ ...base, AUTH_MODE: "oidc", AI_PROVIDER: "langdock" })).toThrow(/LANGDOCK_API_KEY/);
+    expect(normalizeEnv({ A: "", B: "  ", C: "wert", D: undefined })).toEqual({ C: "wert" });
   });
 });

@@ -39,9 +39,16 @@ let cached: AppConfig | undefined;
  * Liest und validiert die Konfiguration. Unsichere Produktivkonfigurationen
  * (Entwicklungsanmeldung oder Test-KI in Produktion) führen zum Abbruch (Briefing 17.4, S09).
  */
+/** Leere Werte (z. B. `LANGDOCK_API_KEY=` aus Compose) gelten als nicht gesetzt, damit Standardwerte und Optionalität greifen. */
+export function normalizeEnv(env: Record<string, string | undefined>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(env)) if (v !== undefined && v.trim() !== "") out[k] = v;
+  return out;
+}
+
 export function getConfig(): AppConfig {
   if (cached) return cached;
-  const parsed = envSchema.safeParse(process.env);
+  const parsed = envSchema.safeParse(normalizeEnv(process.env));
   if (!parsed.success) {
     throw new Error("Ungültige Konfiguration: " + parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
   }
