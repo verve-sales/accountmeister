@@ -1,3 +1,4 @@
+import { publicUrl } from "@/lib/public-url";
 import { NextResponse, type NextRequest } from "next/server";
 import { getConfig } from "@/lib/config";
 import { getSession } from "@/modules/identity/session";
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
   const session = await getSession();
   const wasOidc = session.mode === "oidc";
   session.destroy();
-  const back = new URL("/anmelden", cfg.OIDC_REDIRECT_URI ?? req.url).toString();
+  const back = publicUrl("/anmelden", req).toString();
   if (cfg.AUTH_MODE === "oidc" && wasOidc && cfg.OIDC_ISSUER) {
     try {
       const doc = await discover(cfg.OIDC_ISSUER);

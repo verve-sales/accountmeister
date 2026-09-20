@@ -1,3 +1,4 @@
+import { publicUrl } from "@/lib/public-url";
 import { NextResponse, type NextRequest } from "next/server";
 import { getConfig } from "@/lib/config";
 import { DomainError } from "@/lib/errors";
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 /** Rückkehr vom Identitätsanbieter: State prüfen, Code tauschen, ID-Token verifizieren, Zugang zuordnen, Sitzung setzen. */
 export async function GET(req: NextRequest) {
   const cfg = getConfig();
-  const fail = (msg: string) => NextResponse.redirect(new URL("/anmelden?fehler=" + encodeURIComponent(msg), req.url));
+  const fail = (msg: string) => NextResponse.redirect(publicUrl("/anmelden?fehler=" + encodeURIComponent(msg), req));
   if (cfg.AUTH_MODE !== "oidc") return fail("Unternehmensanmeldung ist nicht aktiv.");
   const session = await getSession();
   const pending = session.pendingLogin;
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     session.lastSeenAt = Date.now();
     await session.save();
     const ok = r.madeAdmin ? "?ok=" + encodeURIComponent("Willkommen. Ihnen wurde die Verwaltungsrolle zugewiesen (ADMIN_EMAILS). Rollen für weitere Personen vergeben Sie unter „Verwaltung“.") : "";
-    return NextResponse.redirect(new URL((r.madeAdmin ? "/verwaltung" : pending.returnTo) + ok, req.url));
+    return NextResponse.redirect(publicUrl((r.madeAdmin ? "/verwaltung" : pending.returnTo) + ok, req));
   } catch (e) {
     session.pendingLogin = undefined;
     await session.save();

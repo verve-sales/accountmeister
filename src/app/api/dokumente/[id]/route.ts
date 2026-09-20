@@ -1,3 +1,4 @@
+import { publicUrl } from "@/lib/public-url";
 import { NextResponse } from "next/server";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -6,7 +7,7 @@ import { getDocumentFile } from "@/modules/documents/service";
 /** Originaldatei eines Dokuments – nur mit Leserecht auf die Quelle; jeder Abruf wird protokolliert. */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const actor = await getCurrentActor();
-  if (!actor) return NextResponse.redirect(new URL("/anmelden", _req.url));
+  if (!actor) return NextResponse.redirect(publicUrl("/anmelden", _req));
   const { id } = await ctx.params;
   try {
     const { doc, data } = await getDocumentFile(actor, id);
