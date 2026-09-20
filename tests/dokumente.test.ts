@@ -282,3 +282,18 @@ describe("Etappe 6C: Langdock-Adapter und Modellwahl je Aufgabe", () => {
     expect(JSON.stringify(audit[0]?.changes)).not.toContain("Bearer");
   });
 });
+
+describe("Anlagevorschläge aus Etappe 6 (ohne Folgeaktivitäten/Kontaktaufnahmen/Artefakte)", () => {
+  it("werden beim Laden ergänzt statt die Seite abstürzen zu lassen", async () => {
+    const { normalizePayload } = await import("@/modules/intake/service");
+    const alt = normalizePayload({ organization: null, setup: null, persons: [], signals: [], needs: [], openQuestions: ["Welche Organisation?"], summary: "", noProposalReason: "Keine Organisation gefunden.", rejected: 0, aiStatus: "vorschlag", aiNote: "" });
+    expect(alt.actions).toEqual([]);
+    expect(alt.contacts).toEqual([]);
+    expect(alt.artifacts).toEqual([]);
+    expect(alt.openQuestions).toHaveLength(1);
+    expect(alt.aiStatus).toBe("vorschlag");
+    const leer = normalizePayload(null);
+    expect(leer.persons).toEqual([]);
+    expect(leer.aiStatus).toBe("ohne_ki");
+  });
+});

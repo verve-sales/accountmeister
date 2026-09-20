@@ -150,7 +150,31 @@ export async function getIntake(actor: Actor, proposalId: string) {
     targetCtx = await loadSetupContext(actor, proposal.targetSetupId);
     if (!targetCtx || !canEditSetup(actor, targetCtx)) throw new NotFoundError("Anlagevorschlag");
   }
-  return { proposal, payload: proposal.payload as IntakePayload, source, document, accounts, bds: Array.from(new Map(bds.map((b) => [b.id, b])).values()), targetCtx };
+  return { proposal, payload: normalizePayload(proposal.payload), source, document, accounts, bds: Array.from(new Map(bds.map((b) => [b.id, b])).values()), targetCtx };
+}
+
+/** Ältere Vorschläge (vor Etappe 7) kennen Folgeaktivitäten, Kontaktaufnahmen und Artefakte noch nicht – Listen ergänzen, statt die Seite abstürzen zu lassen. */
+export function normalizePayload(raw: unknown): IntakePayload {
+  const p = (raw && typeof raw === "object" ? raw : {}) as Partial<IntakePayload>;
+  const base = emptyProposal();
+  return {
+    ...base,
+    ...p,
+    organization: p.organization ?? null,
+    setup: p.setup ?? null,
+    persons: Array.isArray(p.persons) ? p.persons : [],
+    signals: Array.isArray(p.signals) ? p.signals : [],
+    needs: Array.isArray(p.needs) ? p.needs : [],
+    openQuestions: Array.isArray(p.openQuestions) ? p.openQuestions : [],
+    actions: Array.isArray(p.actions) ? p.actions : [],
+    contacts: Array.isArray(p.contacts) ? p.contacts : [],
+    artifacts: Array.isArray(p.artifacts) ? p.artifacts : [],
+    summary: typeof p.summary === "string" ? p.summary : "",
+    noProposalReason: typeof p.noProposalReason === "string" ? p.noProposalReason : "",
+    rejected: typeof p.rejected === "number" ? p.rejected : 0,
+    aiStatus: p.aiStatus ?? "ohne_ki",
+    aiNote: typeof p.aiNote === "string" ? p.aiNote : "",
+  } as IntakePayload;
 }
 
 export async function listMyIntakes(actor: Actor) {
@@ -296,7 +320,7 @@ export async function applyIntake(actor: Actor, proposalId: string, raw: unknown
   }
   // 6) Folgeaktivitäten, Kontaktaufnahmen und offene Fragen als Vorschläge – landen bei der adressierten Rolle in „Meine Arbeit“
   const quoteOf = <T extends { evidenceQuote: string }>(needle: string, arr: T[], match: (x: T) => boolean) => arr.find(match)?.evidenceQuote ?? needle.slice(0, 200);
-  const payload = proposal.payload as IntakePayload;
+  const payload = normalizePayload(proposal.payload);
   await db.transaction(async (tx) => {
     for (const a of input.actions.filter((x) => x.include && x.title.length >= 3)) {
       const ev = quoteOf(a.title, payload.actions, (x) => x.title === a.title);
