@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import "./globals.css";
 import { getConfig } from "@/lib/config";
 import { getCurrentActor } from "@/modules/identity/session";
 import { logoutAction } from "./actions";
 import { roleLabel } from "@/lib/labels";
 
-export const metadata: Metadata = { title: "Verve Sales-Arbeitsumgebung (Pilot)", description: "Interne Sales-Arbeitsumgebung – Pilot mit fiktiven Daten" };
+export const metadata: Metadata = { title: "Accountmeister – Verve AI", description: "Interne Sales-Arbeitsumgebung von Verve Consulting", icons: { icon: "/verve-ai-lockup.png" } };
 export const dynamic = "force-dynamic";
 
 const NAV = [
@@ -34,8 +35,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         )}
         <header className="border-b" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <div className="mx-auto max-w-6xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Link href="/meine-arbeit" className="font-semibold no-underline" style={{ color: "var(--text)" }}>
-              Verve Sales
+            <Link href="/meine-arbeit" className="no-underline flex items-center gap-3" style={{ color: "var(--text)" }} aria-label="Verve AI – Accountmeister, zur Startseite">
+              {/* Logo: public/verve-ai-lockup.png (Verve AI Lockup); Höhe 32px, Breite folgt dem Seitenverhältnis 815:200 */}
+              <Image src="/verve-ai-lockup.png" alt="Verve AI" width={130} height={32} priority style={{ height: 32, width: "auto" }} />
+              <span className="font-semibold">Accountmeister</span>
             </Link>
             {actor && (
               <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">

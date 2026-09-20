@@ -19,6 +19,7 @@ RUN groupadd -r verve && useradd -r -g verve -d /app verve && mkdir -p /data/upl
 COPY --from=build --chown=verve:verve /app/package.json ./
 COPY --from=build --chown=verve:verve /app/node_modules ./node_modules
 COPY --from=build --chown=verve:verve /app/.next ./.next
+COPY --from=build --chown=verve:verve /app/public ./public
 COPY --from=build --chown=verve:verve /app/next.config.ts ./
 COPY --from=build --chown=verve:verve /app/src/db/migrations ./src/db/migrations
 COPY --from=build --chown=verve:verve /app/scripts ./scripts

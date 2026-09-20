@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getConfig } from "@/lib/config";
 import { listDevLoginUsers } from "@/modules/identity/dev-login";
@@ -12,7 +13,8 @@ export default async function AnmeldenPage({ searchParams }: { searchParams: Sea
   if (cfg.AUTH_MODE !== "development") {
     return (
       <section className="card max-w-lg">
-        <h1 className="text-xl font-semibold mb-2">Anmeldung</h1>
+        <Image src="/verve-ai-lockup.png" alt="Verve AI" width={244} height={60} priority className="mb-4" style={{ height: 60, width: "auto" }} />
+        <h1 className="text-xl font-semibold mb-2">Anmeldung – Accountmeister</h1>
         <p className="muted text-sm mb-4">Anmeldung mit Ihrem Verve-Microsoft-365-Konto. Es werden nur Name und E-Mail-Adresse übernommen; Rollen und Zugriffsrechte vergibt die Betriebsverwaltung in der Anwendung.</p>
         <Feedback params={params} />
         <a className="btn" href="/api/auth/login">Mit Microsoft 365 anmelden</a>
@@ -22,6 +24,7 @@ export default async function AnmeldenPage({ searchParams }: { searchParams: Sea
   const users = await listDevLoginUsers();
   return (
     <section className="card max-w-lg">
+      <Image src="/verve-ai-lockup.png" alt="Verve AI" width={244} height={60} priority className="mb-4" style={{ height: 60, width: "auto" }} />
       <h1 className="text-xl font-semibold mb-1">Entwicklungsanmeldung</h1>
       <p className="muted mb-4 text-sm">Nur lokal. Wählen Sie eine fiktive Person, um die Anwendung aus ihrer Rollensicht zu nutzen.</p>
       <Feedback params={params} />
