@@ -73,7 +73,7 @@ export default async function KiVerwaltungPage({ searchParams }: { searchParams:
                   <input id={`model-${t.key}`} name="model" className="input" defaultValue={t.model} required />
                 )}
               </div>
-              <div className="muted text-sm">Quelle: {t.source === "konfiguriert" ? `konfiguriert${t.updatedAt ? ` (${fmtDateTime(t.updatedAt)})` : ""}` : "Standard aus Konfiguration"}</div>
+              <div className="muted text-sm">Quelle: {t.source === "konfiguriert" ? `konfiguriert${t.updatedAt ? ` (${fmtDateTime(t.updatedAt)})` : ""}` : t.source === "geerbt" ? "noch nicht gewählt – Modell von „Notiz strukturieren“ übernommen" : "Standard aus Konfiguration"}</div>
               <div><label className="label" htmlFor={`temp-${t.key}`}>Temperatur</label><input id={`temp-${t.key}`} name="temperature" type="number" step="0.1" min={0} max={1} className="input" defaultValue={t.temperature ?? 0.2} /></div>
               <div><label className="label" htmlFor={`max-${t.key}`}>Max. Ausgabe (Tokens)</label><input id={`max-${t.key}`} name="maxOutputTokens" type="number" min={256} max={32000} step={1} className="input" defaultValue={t.maxOutputTokens ?? 4000} /></div>
               <label className="flex items-center gap-2 text-sm pb-2"><input type="checkbox" name="enabled" defaultChecked={t.enabled} /> aktiv</label>

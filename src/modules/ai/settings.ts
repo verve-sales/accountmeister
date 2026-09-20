@@ -27,9 +27,14 @@ export const aiTaskKeys = AI_TASKS.map((t) => t.key) as [AiTaskKey, ...AiTaskKey
 export type TaskSettingRow = typeof schema.aiTaskSettings.$inferSelect;
 
 /** Wirksame Optionen einer Aufgabe: gespeicherte Einstellung oder Standardmodell aus der Konfiguration. */
-export async function getTaskOptions(workspaceId: string, task: AiTaskKey): Promise<TaskOptions & { enabled: boolean; source: "konfiguriert" | "standard" }> {
-  const row = await db.query.aiTaskSettings.findFirst({ where: and(eq(schema.aiTaskSettings.workspaceId, workspaceId), eq(schema.aiTaskSettings.task, task)) });
+export async function getTaskOptions(workspaceId: string, task: AiTaskKey): Promise<TaskOptions & { enabled: boolean; source: "konfiguriert" | "geerbt" | "standard" }> {
+  const rows = await db.query.aiTaskSettings.findMany({ where: eq(schema.aiTaskSettings.workspaceId, workspaceId) });
+  const row = rows.find((r) => r.task === task);
   if (row) return { model: row.model, temperature: row.temperature, maxOutputTokens: row.maxOutputTokens, enabled: row.enabled, source: "konfiguriert" };
+  // Noch nicht konfigurierte Aufgabe: das Modell einer bereits konfigurierten Aufgabe erben (funktioniert im Arbeitsraum nachweislich),
+  // sonst der Standard aus der Konfiguration.
+  const inherit = rows.find((r) => r.task === "STRUCTURE_NOTE" && r.enabled) ?? rows.find((r) => r.enabled);
+  if (inherit) return { model: inherit.model, temperature: 0.2, maxOutputTokens: task === "INTERVIEW_NEXT" ? 600 : 4000, enabled: true, source: "geerbt" };
   return { model: getConfig().LANGDOCK_DEFAULT_MODEL, temperature: 0.2, maxOutputTokens: 4000, enabled: true, source: "standard" };
 }
 

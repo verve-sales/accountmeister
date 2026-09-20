@@ -147,7 +147,8 @@ async function askNext(actor: Actor, interviewId: string, deps: { provider?: AIP
       // KI nicht verfügbar: feste Fragenfolge, das Interview läuft weiter (17.5)
       if (job) await db.update(schema.aiJobs).set({ status: "ABGELEHNT", error: (e instanceof Error ? e.message : "Anbieterfehler").slice(0, 300), finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
       next = fallbackNext(transcript, knownContext, interview.questionCount);
-      next.rationale = `KI nicht verfügbar – feste Fragenfolge. ${next.rationale}`.trim();
+      const reason = (e instanceof Error ? e.message : "Anbieterfehler").slice(0, 160);
+      next.rationale = `KI nicht verfügbar (${reason}) – feste Fragenfolge.`;
     }
   } else {
     next = fallbackNext(transcript, knownContext, interview.questionCount);
