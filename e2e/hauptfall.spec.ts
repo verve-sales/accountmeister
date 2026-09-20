@@ -5,7 +5,7 @@ import { test, expect, type Page } from "@playwright/test";
  * Läuft gegen die Entwicklungsdatenbank mit Seed-Daten (fiktiv).
  */
 
-async function loginAs(page: Page, namePart: string) {
+async function loginAs(page: Page, namePart: string, stayOnStart = false) {
   await page.goto("/anmelden");
   const select = page.getByLabel("Fiktive Person");
   const options = await select.locator("option").allTextContents();
@@ -13,7 +13,9 @@ async function loginAs(page: Page, namePart: string) {
   if (!match) throw new Error(`Person ${namePart} nicht in Anmeldeliste`);
   await select.selectOption({ label: match });
   await page.getByRole("button", { name: "Anmelden" }).click();
-  await expect(page).toHaveURL(/meine-arbeit/);
+  await expect(page).toHaveURL(/\/start/);
+  // Die älteren Fälle arbeiten auf „Meine Arbeit“ (Listen); die Startseite prüft der Etappe-9-Fall.
+  if (!stayOnStart) await page.goto("/meine-arbeit");
 }
 
 async function logout(page: Page) {
@@ -96,7 +98,7 @@ test("Health-Endpunkt meldet erreichbare Datenbank und Entwicklungsmodus", async
 test("Personen & Zugang: Beziehungsstand mit Beleg, Kontaktweg mit belegter und hypothetischer Verbindung", async ({ page }) => {
   await loginAs(page, "David");
   await page.getByRole("link", { name: "Plattformteam", exact: true }).first().click();
-  await page.getByRole("link", { name: "Personen & Zugang →" }).click();
+  await page.locator("nav[aria-label=\"Setup-Bereiche\"]").getByRole("link", { name: "Personen & Zugang" }).click();
   await expect(page.getByRole("heading", { name: /Personen & Zugang/ })).toBeVisible();
   await expect(page.getByText("Frau Keller (fiktiv)").first()).toBeVisible();
 
@@ -144,7 +146,7 @@ test("Etappe 2: Zwei Weeklys bauen aufeinander auf (Vorbereitung → Notiz → E
   await expect(page.getByRole("heading", { name: `E2E Weekly-Setup ${tag}` })).toBeVisible();
 
   // Weekly 1 anlegen
-  await page.getByRole("link", { name: "Weeklys →" }).click();
+  await page.locator("nav[aria-label=\"Setup-Bereiche\"]").getByRole("link", { name: "Weeklys" }).click();
   await page.waitForURL(/\/weeklys\?setup=/);
   await page.locator("#scheduledFor").fill("2026-09-21");
   await page.getByLabel("Titel (optional)").fill(`W1 ${tag}`);
@@ -184,7 +186,7 @@ test("Etappe 2: Zwei Weeklys bauen aufeinander auf (Vorbereitung → Notiz → E
   await expect(page.getByText("Beobachtung erfasst")).toBeVisible();
 
   // Weekly 2: Vorbereitung zeigt W1 als letzten Stand und die neue Beobachtung
-  await page.getByRole("link", { name: "Weeklys →" }).click();
+  await page.locator("nav[aria-label=\"Setup-Bereiche\"]").getByRole("link", { name: "Weeklys" }).click();
   await page.waitForURL(/\/weeklys\?setup=/);
   await page.locator("#scheduledFor").fill("2026-09-28");
   await page.getByLabel("Titel (optional)").fill(`W2 ${tag}`);
@@ -532,7 +534,7 @@ test("Etappe 5B: Verwaltung nur für ADMIN ohne Inhalte; Quelle sperren markiert
   const suffix = Date.now().toString(36);
   // Admin: Verwaltung sichtbar, Setup-Inhalte nicht
   await loginAs(page, "Admin");
-  await page.getByRole("link", { name: "Verwaltung" }).click();
+  await page.getByRole("link", { name: "Verwaltung", exact: true }).click();
   await expect(page.getByRole("heading", { name: /Verwaltung/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Zugänge und Rollen/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Protokoll/ })).toBeVisible();
@@ -752,4 +754,45 @@ test("Kunden löschen: Archivieren → Bestätigung mit Name und Begründung →
   await expect(page).toHaveURL(/\/kunden(\?|$)/);
   await expect(page.getByText(/Kunde endgültig gelöscht/)).toBeVisible();
   await expect(page.getByRole("link", { name: org })).toHaveCount(0);
+});
+
+test("Etappe 9: Start-Dashboard je Rolle, Strategiefaden mit KI-Vorschlag speichern, „Vorschlagen lassen“ im Vorhaben-Formular", async ({ page }) => {
+  await loginAs(page, "David", true);
+  await expect(page.getByRole("heading", { name: "Start" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Diese Woche dran" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /wo der nächste große Schritt hängt/ })).toBeVisible();
+  const card = page.locator("article", { hasText: "Beispielkonzern AG (fiktiv)" }).first();
+  await expect(card).toBeVisible();
+  await expect(card.getByText(/Nächster großer Schritt:/)).toBeVisible();
+  // Nur eine Rolle → kein Sichtwechsler
+  await expect(page.getByRole("button", { name: "Principal" })).toHaveCount(0);
+
+  // Strategiefaden mit KI-Vorschlag
+  await card.locator("summary", { hasText: "Setups im Detail" }).click();
+  await card.getByRole("link", { name: "Strategiefaden" }).first().click();
+  await expect(page).toHaveURL(/\/strategie/);
+  await expect(page.getByRole("heading", { name: /Lage \(regelbasiert/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Personen & Zugang" })).toBeVisible(); // Reiter
+  await page.getByRole("link", { name: "Vorschlag der KI einholen" }).click();
+  await expect(page.getByText(/KI-Vorschlag – jede Zeile prüfen/)).toBeVisible();
+  await expect(page.locator("#summary")).not.toHaveValue("");
+  await page.locator("#note").fill("E2E-Fassung");
+  await page.getByRole("button", { name: "Fassung speichern" }).click();
+  await expect(page.getByText("Fassung gespeichert.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Aktuelle Fassung \d+/ })).toBeVisible();
+  await expect(page.getByText("Notiz: E2E-Fassung")).toBeVisible();
+
+  // Vorschlagen lassen im Vorhaben-Formular
+  await page.goto("/kunden");
+  await page.getByRole("link", { name: /Beispielkonzern/ }).click();
+  await page.locator("summary", { hasText: "Vorhaben vorschlagen" }).click();
+  await page.locator("form", { has: page.locator("#prTitle") }).getByRole("button", { name: "Vorschlagen lassen" }).click();
+  await expect(page.getByText(/Feld\(er\) vorbelegt/)).toBeVisible();
+  await expect(page.locator("#prTitle")).not.toHaveValue("");
+
+  // Sichtwechsler bei mehreren Rollen (Petra ist Principal; CEO Clemens sieht keine Ideen)
+  await logout(page);
+  await loginAs(page, "Clemens", true);
+  await expect(page.getByRole("heading", { name: "Ziele", exact: false })).toBeVisible();
+  await expect(page.getByText("Ideen aus den Quellen")).toHaveCount(0);
 });

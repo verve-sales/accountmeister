@@ -13,6 +13,8 @@ import { getProviderStatus, listOpenQuestionsForSetup, listSuggestionsForSetup }
 import { SuggestionCard } from "@/components/SuggestionCard";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
+import { SuggestButton } from "@/components/SuggestButton";
+import { SetupTabs } from "@/components/SetupTabs";
 import {
   accessClassLabel,
   actionStatusLabel,
@@ -88,8 +90,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         <span className="muted text-sm">Sichtbarkeit: {visibilityLabel[d.setup.visibility]}</span>
         <span className="muted text-sm">BD: {d.setup.bdUserId ? name(d.setup.bdUserId) : "Zuordnung offen"}</span>
         {!d.canEdit && <span className="muted text-sm">(nur lesend)</span>}
-        <span className="ml-auto flex gap-4 text-sm"><Link href={`/setups/${id}/personen`}>Personen & Zugang →</Link><Link href={`/weeklys?setup=${id}`}>Weeklys →</Link><Link href={`/setups/${id}/artefakte`}>Artefakte →</Link></span>
       </div>
+      <SetupTabs setupId={id} active="ueberblick" />
       <Feedback params={sp} />
 
       {/* 1. Was läuft hier? */}
@@ -202,7 +204,10 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
               <div className="sm:col-span-2"><label className="label" htmlFor="opNeed">Bedarfsbeschreibung in Kundensprache</label><textarea id="opNeed" name="needDescription" className="textarea" required minLength={10} rows={3} /></div>
               <div><label className="label" htmlFor="opTrigger">Konkreter Anlass (optional)</label><input id="opTrigger" name="trigger" className="input" /></div>
               <label className="flex items-center gap-2 text-sm self-end"><input type="checkbox" name="fastTrack" value="on" /> Direkte Anfrage (Fast-Track, Messstart jetzt)</label>
-              <div className="sm:col-span-2"><button className="btn" type="submit">Bedarf anlegen</button></div>
+              <div className="sm:col-span-2 flex flex-wrap items-start gap-3">
+                <button className="btn" type="submit">Bedarf anlegen</button>
+                <SuggestButton kind="BEDARF" setupId={id} fields={[{ name: "title", label: "Titel des Bedarfs (kurz)" }, { name: "needDescription", label: "Bedarfsbeschreibung in Kundensprache: was der Kunde erreichen will" }, { name: "trigger", label: "Konkreter Anlass" }]} />
+              </div>
             </form>
           </details>
         )}

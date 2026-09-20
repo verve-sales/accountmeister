@@ -15,6 +15,7 @@ import { listPeopleForAccount } from "@/modules/people/service";
 import { relationshipStateLabel, priorityKindLabel, priorityStatusLabel } from "@/lib/labels";
 import { buildAccountPlan, canEditAccountPlan, listAccountPlanSnapshots } from "@/modules/accountplan/service";
 import { AccountPlanView } from "@/components/AccountPlanView";
+import { SuggestButton } from "@/components/SuggestButton";
 import { changePriorityAction, createPriorityAction, saveAccountPlanSnapshotAction } from "../../actions";
 import { db, schema } from "@/db/client";
 import { eq } from "drizzle-orm";
@@ -75,7 +76,10 @@ export default async function KundePage({ params, searchParams }: { params: Prom
                   <div><label className="label" htmlFor="prGoal">Zielbezug (Text, bis Ziele modelliert sind)</label><input id="prGoal" name="goalReference" className="input" /></div>
                   <div className="sm:col-span-2"><label className="label" htmlFor="prWhy">Begründung</label><input id="prWhy" name="rationale" className="input" /></div>
                   <div className="sm:col-span-2"><label className="label" htmlFor="prPre">Voraussetzungen</label><input id="prPre" name="prerequisites" className="input" placeholder="Zeit, Zugang, Freigaben …" /></div>
-                  <div className="sm:col-span-2"><button className="btn btn-small" type="submit">Als Vorschlag aufnehmen</button></div>
+                  <div className="sm:col-span-2 flex flex-wrap items-start gap-3">
+                    <button className="btn btn-small" type="submit">Als Vorschlag aufnehmen</button>
+                    <SuggestButton kind="VORHABEN" accountId={account.id} fields={[{ name: "title", label: "Vorhaben – ein Satz, was bei diesem Kunden als Nächstes erreicht werden soll" }, { name: "kind", label: "Art des Vorhabens", options: [...schema.priorityKindEnum.enumValues] }, { name: "rationale", label: "Begründung aus der Lage" }, { name: "prerequisites", label: "Voraussetzungen (Zeit, Zugang, Freigaben)" }]} />
+                  </div>
                 </form>
               </details>
               <details>
@@ -203,7 +207,10 @@ export default async function KundePage({ params, searchParams }: { params: Prom
               </select>
             </div>
             <div><label className="label" htmlFor="contributionNote">Erläuterung zum Beitrag (sachlich, optional)</label><input id="contributionNote" name="contributionNote" className="input" placeholder="z. B. Kontext beitragen, keine Ansprache neuer Personen" /></div>
-            <div className="sm:col-span-2"><button className="btn" type="submit">Setup anlegen</button></div>
+            <div className="sm:col-span-2 flex flex-wrap items-start gap-3">
+              <button className="btn" type="submit">Setup anlegen</button>
+              <SuggestButton kind="SETUP" accountId={account.id} fields={[{ name: "name", label: "Verständlicher Setup-Name (Team, Bereich oder Vorhaben beim Kunden)" }, { name: "contextNote", label: "Kontextsatz: Was läuft hier beim Kunden?" }, { name: "visibility", label: "Sichtbarkeit", options: [...schema.setupVisibilityEnum.enumValues] }]} />
+            </div>
           </form>
         </details>
       )}

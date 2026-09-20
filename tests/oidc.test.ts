@@ -35,7 +35,7 @@ describe("Unternehmensanmeldung (OIDC / Microsoft Entra ID)", () => {
     expect(url.searchParams.get("scope")).toBe("openid profile email");
     expect(url.searchParams.get("client_id")).toBe("client-fiktiv");
     expect(pending.returnTo).toBe("/kunden");
-    expect(createPendingLogin("https://boese.example").returnTo).toBe("/meine-arbeit");
+    expect(createPendingLogin("https://boese.example").returnTo).toBe("/start");
   });
 
   it("Claims: Nonce muss passen, E-Mail wird normalisiert, oid vor sub", () => {

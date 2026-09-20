@@ -191,3 +191,41 @@ export type AssistantOutput = z.infer<typeof assistantOutputSchema>;
 
 /** Gespeicherte Karte: Vorschlag plus Entscheidung */
 export type AssistantCard = { id: string; item: AssistantItem; status: "NEU" | "UEBERNOMMEN" | "VERWORFEN"; resultType?: string; resultId?: string; note?: string };
+
+// ---------------------------------------------------------------------------
+// Etappe 9: Strategiefaden und Formularvorschläge
+// ---------------------------------------------------------------------------
+
+export const strategyMoveSchema = z.object({
+  title: z.string().trim().min(3).max(200),
+  why: z.string().trim().max(600).default(""),
+  ownerRole: z.enum(["BD", "ANKER", "PRINCIPAL"]).default("BD"),
+  /** Wörtliche Textstelle aus der Lage (Analyse/Kontext), auf die sich der Zug stützt */
+  evidenceQuote: z.string().trim().min(3).max(400),
+});
+
+export const strategyProposalSchema = z.object({
+  /** Lage in 2–4 Sätzen: Wo stehen wir, was ist der Kern */
+  summary: z.string().trim().min(10).max(1500),
+  /** Der nächste große Schritt (Meilenstein), ein Satz */
+  nextStep: z.string().trim().min(5).max(400),
+  moves: z.array(strategyMoveSchema).max(5).default([]),
+  risks: z.array(z.object({ text: z.string().trim().min(3).max(400), evidenceQuote: z.string().trim().min(3).max(400) })).max(5).default([]),
+  openQuestions: z.array(z.string().trim().min(3).max(300)).max(5).default([]),
+});
+export type StrategyProposal = z.infer<typeof strategyProposalSchema>;
+
+export const formKinds = ["VORHABEN", "SETUP", "BEDARF"] as const;
+export type FormKind = (typeof formKinds)[number];
+
+export const formSuggestionSchema = z.object({
+  /** Feldname → Wert; nur Felder, für die es im Kontext eine Grundlage gibt */
+  fields: z.record(z.string(), z.string().max(2000)),
+  /** Warum so – ein bis zwei Sätze, werden angezeigt */
+  rationale: z.string().trim().max(600).default(""),
+  /** Wörtliche Textstelle aus dem Kontext, auf die sich der Vorschlag stützt */
+  evidenceQuote: z.string().trim().min(3).max(400),
+  /** Was fehlt, um besser vorschlagen zu können */
+  missing: z.array(z.string().trim().min(3).max(300)).max(4).default([]),
+});
+export type FormSuggestion = z.infer<typeof formSuggestionSchema>;

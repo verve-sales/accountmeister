@@ -8,6 +8,7 @@ import { canEditSetup } from "@/modules/identity/authz";
 import { listArtifactsForSetup, templatesForSetupDrafts } from "@/modules/artifacts/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
+import { SetupTabs } from "@/components/SetupTabs";
 import { accessClassLabel, artifactStatusLabel, artifactVariantLabel, fmtDateTime } from "@/lib/labels";
 import { createArtifactDraftAction } from "../../../actions";
 
@@ -30,6 +31,7 @@ export default async function SetupArtefaktePage({ params, searchParams }: { par
     <div className="space-y-6">
       <p className="text-sm"><Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${ctx.account.id}`}>{ctx.account.name}</Link> › <Link href={`/setups/${id}`}>{ctx.setup.name}</Link> › Artefakte</p>
       <h1 className="text-2xl font-semibold">Artefakte – {ctx.setup.name}</h1>
+      <SetupTabs setupId={id} active="artefakte" />
       <Feedback params={sp} />
       <section className="card">
         <h2 className="font-semibold mb-2">Textentwürfe ({artifacts.length})</h2>

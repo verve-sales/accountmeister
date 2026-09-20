@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor, getSession, touchSession } from "@/modules/identity/session";
@@ -14,6 +15,7 @@ import { createHandover, respondToHandover } from "@/modules/handovers/service";
 import { changeActionStatus, createAction } from "@/modules/actions/service";
 import { createAccount } from "@/modules/accounts/service";
 import { archiveAccount, deleteAccountPermanently, restoreAccount } from "@/modules/accounts/deletion";
+import { formToStrategyInput, saveStrategy } from "@/modules/strategy/service";
 import { createPerson, setPersonFunction, setRelationship } from "@/modules/people/service";
 import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/modules/accesspaths/service";
 import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
@@ -97,7 +99,7 @@ export async function devLoginAction(fd: FormData) {
   session.issuedAt = Date.now();
   session.lastSeenAt = Date.now();
   await session.save();
-  redirect("/meine-arbeit");
+  redirect("/start");
 }
 
 export async function logoutAction() {
@@ -115,6 +117,29 @@ export async function createAccountAction(fd: FormData) {
     const a = await createAccount(actor, { ...data, responsibleBdUserId: data.responsibleBdUserId || null });
     return `/kunden/${a.id}`;
   }, "Kunde angelegt.");
+}
+
+// --- Strategiefaden ------------------------------------------------------------
+
+export async function saveStrategyAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.setupId ?? "";
+  return run(`/setups/${id}/strategie`, async (actor) => {
+    await saveStrategy(actor, formToStrategyInput(data));
+  }, "Fassung gespeichert.");
+}
+
+// --- Start / Dashboard -------------------------------------------------------
+
+/** Sichtwechsel auf der Startseite: nur eine Brille, keine Rechteänderung; Wahl wird im Cookie gemerkt. */
+export async function setDashboardViewAction(fd: FormData) {
+  await requireActor();
+  const view = String(fd.get("view") ?? "");
+  if (["BD", "ANKER", "PRINCIPAL", "CEO"].includes(view)) {
+    const store = await cookies();
+    store.set("am_sicht", view, { path: "/", httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 24 * 90 });
+  }
+  redirect("/start");
 }
 
 export async function archiveAccountAction(fd: FormData) {

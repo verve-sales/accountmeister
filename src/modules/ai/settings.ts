@@ -19,6 +19,8 @@ export const AI_TASKS = [
   { key: "ANALYZE_DOCUMENT", label: "Dokument/Interview auswerten (Anlagevorschlag)", description: "Aus einem Dokument oder Interviewverlauf Organisation, Setup, Personen mit Einschätzung, Signale, Bedarfe, Folgeaktivitäten, Kontaktaufnahmen und Artefaktempfehlungen vorschlagen – zur Bestätigung durch den BD." },
   { key: "INTERVIEW_NEXT", label: "Interview: nächste Frage", description: "Im geführten Interview die jeweils nächste Frage stellen, abgeleitet aus dem, was noch fehlt. Kleines, schnelles Modell genügt." },
   { key: "ASSISTANT", label: "Assistent (Dialog mit Vorschlagskarten)", description: "Laufender Dialog im Seitenpanel: antwortet, schlägt Karten vor (Personen, Signale, Bedarfe, Aktionen, Kontaktaufnahmen, Fragen) und benennt fehlende Informationen. Ein schnelles Modell mit guter Instruktionstreue empfohlen." },
+  { key: "STRATEGY", label: "Strategiefaden (Lage, nächster Schritt, Züge)", description: "Aus der regelbasierten Lageanalyse und dem bekannten Kontext einen Strategiefaden je Setup vorschlagen – Züge und Risiken nur mit Textstelle; der BD prüft und speichert eine Fassung." },
+  { key: "FORM_SUGGEST", label: "Formularvorschläge (Vorhaben, Setup, Bedarf)", description: "Formularfelder aus dem bekannten Kundenkontext vorbelegen („Vorschlagen lassen“). Kleines, schnelles Modell genügt." },
 ] as const;
 
 export type AiTaskKey = (typeof AI_TASKS)[number]["key"];
@@ -35,7 +37,7 @@ export async function getTaskOptions(workspaceId: string, task: AiTaskKey): Prom
   // Noch nicht konfigurierte Aufgabe: das Modell einer bereits konfigurierten Aufgabe erben (funktioniert im Arbeitsraum nachweislich),
   // sonst der Standard aus der Konfiguration.
   const inherit = rows.find((r) => r.task === "STRUCTURE_NOTE" && r.enabled) ?? rows.find((r) => r.enabled);
-  if (inherit) return { model: inherit.model, temperature: 0.2, maxOutputTokens: task === "INTERVIEW_NEXT" ? 600 : 4000, enabled: true, source: "geerbt" };
+  if (inherit) return { model: inherit.model, temperature: 0.2, maxOutputTokens: task === "INTERVIEW_NEXT" || task === "FORM_SUGGEST" ? 800 : 4000, enabled: true, source: "geerbt" };
   return { model: getConfig().LANGDOCK_DEFAULT_MODEL, temperature: 0.2, maxOutputTokens: 4000, enabled: true, source: "standard" };
 }
 

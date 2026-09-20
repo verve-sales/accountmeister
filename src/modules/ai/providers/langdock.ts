@@ -1,6 +1,6 @@
 import { DomainError } from "@/lib/errors";
-import type { AIProvider, AnalyzeDocumentInput, AssistantInput, InterviewNextInput, ModelInfo, ProviderInfo, StructureNoteInput, TaskOptions, Usage } from "../provider";
-import { ANALYZE_DOCUMENT_SYSTEM, ASSISTANT_SYSTEM, INTERVIEW_NEXT_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
+import type { AIProvider, AnalyzeDocumentInput, AssistantInput, FormSuggestInput, InterviewNextInput, ModelInfo, ProviderInfo, StrategyInput, StructureNoteInput, TaskOptions, Usage } from "../provider";
+import { ANALYZE_DOCUMENT_SYSTEM, ASSISTANT_SYSTEM, FORM_SUGGEST_SYSTEM, INTERVIEW_NEXT_SYSTEM, STRATEGY_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
 
 /**
  * Produktivanbieter über Langdock (EU-Hosting, Auftragsverarbeitung im Langdock-Vertrag von Verve).
@@ -202,6 +202,25 @@ export class LangdockProvider implements AIProvider {
       `\n=== BISHERIGER VERLAUF (Daten) ===\n${input.transcript.map((t) => `${t.role === "KI" ? "Frage" : "Antwort"}: ${t.text}`).join("\n") || "(noch keine Frage gestellt)"}\n=== ENDE VERLAUF ===`,
     ].join("\n");
     return this.completeJson(INTERVIEW_NEXT_SYSTEM, user, { maxOutputTokens: 600, ...opts });
+  }
+
+  async strategize(input: StrategyInput, opts?: TaskOptions): Promise<unknown> {
+    const user = [
+      `\n=== LAGEANALYSE (Daten) ===\n${clip(input.analysisText)}\n=== ENDE ===`,
+      `\n=== BEKANNTER KONTEXT (Daten) ===\n${clip(input.contextText) || "–"}\n=== ENDE ===`,
+      input.previous ? `\n=== LETZTE FASSUNG DES STRATEGIEFADENS (${input.previous.createdAt}) ===\n${input.previous.summary}\nNächster Schritt damals: ${input.previous.nextStep}\n=== ENDE ===` : "\nNoch keine frühere Fassung.",
+    ].join("\n");
+    return this.completeJson(STRATEGY_SYSTEM, user, { maxOutputTokens: 2500, ...opts });
+  }
+
+  async suggestForm(input: FormSuggestInput, opts?: TaskOptions): Promise<unknown> {
+    const user = [
+      `Formularart: ${input.kind}`,
+      `Felder:\n${input.fields.map((f) => `- ${f.name}: ${f.label}${f.options ? ` (Optionen: ${f.options.join(" | ")})` : ""}`).join("\n")}`,
+      `\n=== LAGE (Daten) ===\n${clip(input.analysisText) || "–"}\n=== ENDE ===`,
+      `\n=== BEKANNTER KONTEXT (Daten) ===\n${clip(input.contextText) || "–"}\n=== ENDE ===`,
+    ].join("\n");
+    return this.completeJson(FORM_SUGGEST_SYSTEM, user, { maxOutputTokens: 800, ...opts });
   }
 
   async analyzeDocument(input: AnalyzeDocumentInput, opts?: TaskOptions): Promise<unknown> {

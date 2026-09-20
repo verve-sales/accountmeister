@@ -42,8 +42,8 @@ function b64url(buf: Buffer): string {
 
 export type PendingLogin = { state: string; nonce: string; verifier: string; returnTo: string; startedAt: number };
 
-export function createPendingLogin(returnTo = "/meine-arbeit"): PendingLogin {
-  return { state: b64url(randomBytes(24)), nonce: b64url(randomBytes(24)), verifier: b64url(randomBytes(48)), returnTo: returnTo.startsWith("/") ? returnTo : "/meine-arbeit", startedAt: Date.now() };
+export function createPendingLogin(returnTo = "/start"): PendingLogin {
+  return { state: b64url(randomBytes(24)), nonce: b64url(randomBytes(24)), verifier: b64url(randomBytes(48)), returnTo: returnTo.startsWith("/") ? returnTo : "/start", startedAt: Date.now() };
 }
 
 export function buildAuthorizationUrl(doc: DiscoveryDocument, pending: PendingLogin, cfg = getConfig()): string {

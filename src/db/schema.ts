@@ -1308,6 +1308,36 @@ export const assistantMessages = pgTable(
   (t) => [uniqueIndex("assistant_messages_seq_uq").on(t.threadId, t.seq)],
 );
 
+// ---------------------------------------------------------------------------
+// Etappe 9: Strategiefaden je Setup – versionierte Hypothese (E-044)
+// ---------------------------------------------------------------------------
+
+export const strategyThreads = pgTable(
+  "strategy_threads",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    versionNo: integer("version_no").notNull(),
+    summary: text("summary").notNull(),
+    nextStep: text("next_step").notNull(),
+    /** Züge: {title, why, ownerRole, evidenceQuote, done?} */
+    moves: jsonb("moves").notNull().default([]),
+    /** Risiken: {text, evidenceQuote} */
+    risks: jsonb("risks").notNull().default([]),
+    openQuestions: jsonb("open_questions").notNull().default([]),
+    /** Textfassung der Lageanalyse zum Zeitpunkt der Fassung (Nachvollziehbarkeit) */
+    basis: text("basis").notNull(),
+    /** Stufe der Analyse zum Zeitpunkt der Fassung */
+    stage: text("stage").notNull(),
+    note: text("note"),
+    aiJobId: text("ai_job_id").references(() => aiJobs.id),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("strategy_threads_version_uq").on(t.setupId, t.versionNo), index("strategy_threads_setup_idx").on(t.setupId)],
+);
+
 export type Role = (typeof roleEnum.enumValues)[number];
 export type AccessClass = (typeof accessClassEnum.enumValues)[number];
 export type SignalStatus = (typeof signalStatusEnum.enumValues)[number];

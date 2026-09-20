@@ -12,10 +12,15 @@ export const metadata: Metadata = { title: "Accountmeister – Verve AI", descri
 export const dynamic = "force-dynamic";
 
 const NAV = [
-  { href: "/meine-arbeit", label: "Meine Arbeit" },
+  { href: "/start", label: "Start" },
   { href: "/kunden", label: "Kunden" },
   { href: "/weeklys", label: "Weeklys" },
   { href: "/ziele", label: "Ziele & Portfolio" },
+];
+
+/** Weitere Bereiche – erreichbar, aber nicht in der ersten Reihe (E-043: fünf Einträge in der Hauptnavigation). */
+const MORE = [
+  { href: "/meine-arbeit", label: "Meine Arbeit" },
   { href: "/eingang", label: "Eingang" },
   { href: "/artefakte", label: "Artefakte" },
   { href: "/einstellungen", label: "Einstellungen" },
@@ -36,7 +41,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         )}
         <header className="border-b" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
           <div className="mx-auto max-w-6xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Link href="/meine-arbeit" className="no-underline flex items-center gap-3" style={{ color: "var(--text)" }} aria-label="Verve AI – Accountmeister, zur Startseite">
+            <Link href="/start" className="no-underline flex items-center gap-3" style={{ color: "var(--text)" }} aria-label="Verve AI – Accountmeister, zur Startseite">
               {/* Logo: public/verve-ai-lockup.png (Verve AI Lockup); Höhe 32px, Breite folgt dem Seitenverhältnis 815:200 */}
               <Image src="/verve-ai-lockup.png" alt="Verve AI" width={130} height={32} priority style={{ height: 32, width: "auto" }} />
               <span className="font-semibold">Accountmeister</span>
@@ -50,9 +55,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 ))}
               </nav>
             )}
-            <div className="ml-auto text-sm muted flex items-center gap-3">
+            <div className="ml-auto text-sm muted flex flex-wrap items-center gap-3">
               {actor ? (
                 <>
+                  <nav aria-label="Weitere Bereiche" className="flex flex-wrap gap-x-3 text-xs">
+                    {MORE.map((n) => (
+                      <Link key={n.href} href={n.href} className="muted">
+                        {n.label}
+                      </Link>
+                    ))}
+                  </nav>
                   <span>
                     {actor.displayName} · {roles.join(", ") || "keine Rolle"}
                   </span>

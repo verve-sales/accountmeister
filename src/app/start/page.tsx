@@ -1,0 +1,168 @@
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { getCurrentActor } from "@/modules/identity/session";
+import { buildDashboard, viewDescription, viewLabel, type DashboardView } from "@/modules/dashboard/service";
+import { Feedback, type SearchParams } from "@/components/Feedback";
+import { Status } from "@/components/Status";
+import { goalStatusLabel } from "@/lib/labels";
+import { setDashboardViewAction } from "../actions";
+
+const DASHBOARD_VIEW_COOKIE = "am_sicht";
+/** So viele Kunden mit dem größten Aufmerksamkeitsbedarf werden ausführlich gezeigt. */
+const FOCUS = 5;
+
+export default async function StartPage({ searchParams }: { searchParams: SearchParams }) {
+  const params = await searchParams;
+  const actor = await getCurrentActor();
+  if (!actor) redirect("/anmelden");
+  const store = await cookies();
+  const requested = store.get(DASHBOARD_VIEW_COOKIE)?.value ?? null;
+  const d = await buildDashboard(actor, requested);
+  if (!d) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-semibold">Start</h1>
+        <p className="muted text-sm">Für dein Konto ist keine fachliche Rolle hinterlegt. {actor.roles.has("ADMIN") ? <Link href="/verwaltung">Zur Verwaltung</Link> : "Bitte an die Betriebsverwaltung wenden."}</p>
+      </div>
+    );
+  }
+  const kindLabel: Record<string, string> = { AKTION: "Aktion", UEBERGABE: "Übergabe", VORSCHLAG: "Vorschlag", UNTERSTUETZUNG: "Unterstützung", REVIEW: "Weekly", FRAGE: "Frage" };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-baseline gap-4">
+        <h1 className="text-2xl font-semibold">Start</h1>
+        {d.available.length > 1 && (
+          <form action={setDashboardViewAction} className="flex flex-wrap items-center gap-2 text-sm" aria-label="Sicht wählen">
+            <span className="muted">Sicht:</span>
+            {d.available.map((v: DashboardView) => (
+              <button key={v} name="view" value={v} type="submit" className={v === d.view ? "btn btn-small" : "btn btn-secondary btn-small"} aria-pressed={v === d.view}>
+                {viewLabel[v]}
+              </button>
+            ))}
+          </form>
+        )}
+        <Link href="/meine-arbeit" className="muted text-sm ml-auto">Alle Listen (Meine Arbeit)</Link>
+      </div>
+      <p className="muted text-sm">{viewDescription[d.view]}</p>
+      <Feedback params={params} />
+
+      {d.empty && <p className="card text-sm">{d.empty}</p>}
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        <section className="card lg:col-span-1">
+          <h2 className="font-semibold mb-2">Diese Woche dran</h2>
+          {d.week.length === 0 ? (
+            <p className="muted text-sm">Nichts Fälliges bis Wochenende. Unten steht, wo der nächste große Schritt hängt.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {d.week.map((w, i) => (
+                <li key={i} className="flex gap-2 items-baseline" style={w.overdue ? { color: "#a12b1e" } : w.today ? { fontWeight: 600 } : undefined}>
+                  <span className="status shrink-0">{kindLabel[w.kind] ?? w.kind}</span>
+                  <span>
+                    <Link href={w.href}>{w.text}</Link>
+                    {w.due && <span className="muted"> · {w.overdue ? "überfällig seit" : w.today ? "heute" : "fällig"} {w.today ? "" : w.due}</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="lg:col-span-2 space-y-4">
+          <h2 className="font-semibold">Kunden – wo der nächste große Schritt hängt</h2>
+          {d.accounts.length === 0 && !d.empty && <p className="muted text-sm card">Keine aktiven Setups im Bereich dieser Sicht.</p>}
+          {d.accounts.slice(0, FOCUS).map((c) => (
+            <article key={c.accountId} className="card">
+              <div className="flex flex-wrap items-baseline gap-3">
+                <h3 className="font-semibold text-lg"><Link href={`/kunden/${c.accountId}`}>{c.accountName}</Link></h3>
+                <Status label={c.stageLabel} />
+                <span className="muted text-sm">{c.setups.length} Setup(s){c.responsibleBdName ? ` · BD ${c.responsibleBdName}` : " · BD offen"} · letzte Änderung vor {c.daysSinceActivity} Tag(en)</span>
+              </div>
+              <p className="text-sm mt-2"><span className="muted">Nächster großer Schritt: </span>{c.nextStep}</p>
+              <div className="grid sm:grid-cols-3 gap-4 mt-3 text-sm">
+                <div>
+                  <div className="font-medium mb-1">Blockiert</div>
+                  {c.blockers.length === 0 ? <p className="muted">Nichts Dokumentiertes.</p> : <ul className="space-y-1">{c.blockers.map((b, i) => <li key={i} style={{ color: "#a12b1e" }}>{b}</li>)}</ul>}
+                </div>
+                <div>
+                  <div className="font-medium mb-1">Was fehlt</div>
+                  {c.missing.length === 0 ? <p className="muted">Grundlagen vollständig.</p> : <ul className="space-y-1">{c.missing.map((m, i) => <li key={i}>{m}</li>)}</ul>}
+                </div>
+                <div>
+                  <div className="font-medium mb-1">Naheliegende Züge</div>
+                  {c.moves.length === 0 ? <p className="muted">Nichts vorbereitet – Assistent fragen.</p> : <ul className="space-y-1">{c.moves.map((m, i) => <li key={i}><Link href={m.href}>{m.text}</Link></li>)}</ul>}
+                </div>
+              </div>
+              <details className="mt-3 text-sm">
+                <summary className="muted">Setups im Detail</summary>
+                <ul className="mt-2 space-y-1">
+                  {c.setups.map((s) => (
+                    <li key={s.setupId}>
+                      <Link href={`/setups/${s.setupId}`}>{s.setupName}</Link> <Status label={s.stageLabel} />
+                      <span className="muted"> · {s.counts.openActions} Aktion(en){s.counts.overdueActions ? `, ${s.counts.overdueActions} überfällig` : ""} · {s.counts.opportunities} Bedarf(e) · {s.counts.persons} Person(en){s.counts.openSuggestions ? ` · ${s.counts.openSuggestions} Vorschläge` : ""}</span>
+                      <span className="ml-2"><Link href={`/setups/${s.setupId}/strategie`}>Strategiefaden</Link> · <Link href={`/setups/${s.setupId}?assistent=1`}>Assistent</Link></span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            </article>
+          ))}
+          {d.accounts.length > FOCUS && (
+            <details className="card">
+              <summary>Weitere Kunden ({d.accounts.length - FOCUS}) – weniger Aufmerksamkeit nötig</summary>
+              <table className="list mt-2 text-sm">
+                <thead><tr><th>Kunde</th><th>Stufe</th><th>Blockiert</th><th>Fehlt</th><th>Züge</th><th>Letzte Änderung</th></tr></thead>
+                <tbody>
+                  {d.accounts.slice(FOCUS).map((c) => (
+                    <tr key={c.accountId}>
+                      <td><Link href={`/kunden/${c.accountId}`}>{c.accountName}</Link></td>
+                      <td><Status label={c.stageLabel} /></td>
+                      <td>{c.blockers.length}</td>
+                      <td>{c.missing.length}</td>
+                      <td>{c.moves.length}</td>
+                      <td>vor {c.daysSinceActivity} Tag(en)</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          )}
+        </section>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        {d.view !== "CEO" && (
+          <section className="card">
+            <h2 className="font-semibold mb-2">Ideen aus den Quellen ({d.ideas.length})</h2>
+            {d.ideas.length === 0 ? (
+              <p className="muted text-sm">Keine offenen KI-Vorschläge im Bereich. Neue entstehen aus Weekly-Notizen, Dokumenten und dem Assistenten.</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {d.ideas.map((i, k) => (
+                  <li key={k}>
+                    <Link href={i.href}>{i.text}</Link>
+                    <span className="muted"> · {i.setupName}</span>
+                    {i.detail && <div className="muted text-xs">{i.detail.slice(0, 160)}</div>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+        {(d.view === "PRINCIPAL" || d.view === "CEO") && (
+          <section className="card">
+            <h2 className="font-semibold mb-2">Ziele ({d.goals.length})</h2>
+            {d.goals.length === 0 ? (
+              <p className="muted text-sm">Keine laufenden Ziele. <Link href="/ziele">Zu Ziele & Portfolio</Link></p>
+            ) : (
+              <ul className="space-y-1 text-sm">{d.goals.map((g, i) => <li key={i}><Link href={g.href}>{g.title}</Link> <Status label={goalStatusLabel[g.status] ?? g.status} /></li>)}</ul>
+            )}
+          </section>
+        )}
+      </div>
+      <p className="muted text-xs">{d.note}</p>
+    </div>
+  );
+}

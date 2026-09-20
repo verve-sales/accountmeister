@@ -10,6 +10,7 @@ import { listOrgUnits, listPeopleForAccount } from "@/modules/people/service";
 import { listAccessPlansForSetup } from "@/modules/accesspaths/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
+import { SetupTabs } from "@/components/SetupTabs";
 import { accessClassLabel, accessPlanStatusLabel, fmtDate, readinessLabel, relationshipStateLabel, stepKindLabel } from "@/lib/labels";
 import { addAccessPlanStepAction, changeAccessPlanStatusAction, createAccessPlanAction, createPersonAction, saveAssessmentAction, setPersonFunctionAction, setRelationshipAction } from "../../../actions";
 import { getBuyingCenter } from "@/modules/people/assessments";
@@ -48,6 +49,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
         <Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${ctx.account.id}`}>{ctx.account.name}</Link> › <Link href={`/setups/${id}`}>{ctx.setup.name}</Link> › Personen & Zugang
       </p>
       <h1 className="text-2xl font-semibold">Personen & Zugang – {ctx.setup.name}</h1>
+      <SetupTabs setupId={id} active="personen" />
       <Feedback params={sp} />
       <p className="muted text-sm">
         Nur berufliche Angaben. Ein Beziehungsstand braucht Kontext und ab „Vorgestellt“ einen Beleg. Eine bekannte Person ist nicht automatisch Sponsor. Kontaktwege trennen belegte, geplante und hypothetische Verbindungen (Briefing 8).

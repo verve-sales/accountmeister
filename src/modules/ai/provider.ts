@@ -43,6 +43,21 @@ export type AssistantInput = {
   openPoints: string;
 };
 
+/** Strategiefaden (Etappe 9): Lageanalyse (regelbasiert) + Kontext als Text, letzte Fassung des Fadens. */
+export type StrategyInput = {
+  analysisText: string;
+  contextText: string;
+  previous: { summary: string; nextStep: string; createdAt: string } | null;
+};
+
+/** Formularvorschlag (Etappe 9): welches Formular, welche Felder mit Bedeutung, bekannter Kontext. */
+export type FormSuggestInput = {
+  kind: "VORHABEN" | "SETUP" | "BEDARF";
+  fields: { name: string; label: string; options?: string[] }[];
+  contextText: string;
+  analysisText: string;
+};
+
 /** Aufgabenbezogene Modellwahl (Verwaltung → KI). Anbieter ohne Modellwahl ignorieren sie. */
 export type TaskOptions = { model?: string; temperature?: number; maxOutputTokens?: number };
 
@@ -70,6 +85,10 @@ export interface AIProvider {
    * Streamen; die Rückgabe ist der vollständige Text.
    */
   assistantReply?(input: AssistantInput, opts?: TaskOptions, onDelta?: (chunk: string) => void): Promise<string>;
+  /** Strategiefaden-Vorschlag (Etappe 9) – optional. */
+  strategize?(input: StrategyInput, opts?: TaskOptions): Promise<unknown>;
+  /** Formularfelder vorbelegen (Etappe 9) – optional. */
+  suggestForm?(input: FormSuggestInput, opts?: TaskOptions): Promise<unknown>;
   /** Verbrauch des letzten Aufrufs (Kostenspur), falls der Anbieter ihn liefert. */
   lastUsage?(): Usage | null;
   /** Verfügbare Modelle im Arbeitsraum des Anbieters (für die Konfigurationsseite). */

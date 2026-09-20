@@ -1,5 +1,5 @@
-import type { AIProvider, AnalyzeDocumentInput, AssistantInput, InterviewNextInput, ProviderInfo, StructureNoteInput } from "../provider";
-import type { AssistantItem, IntakeProposal, InterviewNext, StructuredItem, StructureNoteOutput } from "../schemas";
+import type { AIProvider, AnalyzeDocumentInput, AssistantInput, FormSuggestInput, InterviewNextInput, ProviderInfo, StrategyInput, StructureNoteInput } from "../provider";
+import type { AssistantItem, FormSuggestion, IntakeProposal, InterviewNext, StrategyProposal, StructuredItem, StructureNoteOutput } from "../schemas";
 import { ASSISTANT_CARDS_MARKER, interviewTopicValues } from "../schemas";
 
 /**
@@ -285,6 +285,73 @@ export class TestProvider implements AIProvider {
   }
 
   /** Assistent – regelbasiert: Karten aus der letzten Nutzernachricht (über analyzeDocument), fehlende Themen als Fragen. */
+  /** Strategiefaden aus der Lageanalyse: Züge aus Blockern/Lücken/Zügen der Analyse, jeweils mit der Zeile als Textstelle. */
+  async strategize(input: StrategyInput): Promise<StrategyProposal> {
+    const lines = input.analysisText.split("\n").map((l) => l.trim()).filter(Boolean);
+    const pick = (prefix: string) => lines.find((l) => l.startsWith(prefix))?.slice(prefix.length).trim() ?? "";
+    const stage = pick("Stufe:");
+    const nextStep = stage.includes("Nächster großer Schritt:") ? stage.split("Nächster großer Schritt:")[1]!.trim() : "Nächsten Schritt festlegen.";
+    const split = (v: string) => (v ? v.split(" | ").map((x) => x.trim()).filter(Boolean) : []);
+    const blockers = split(pick("Blocker:"));
+    const missing = split(pick("Fehlt:"));
+    const moves = split(pick("Naheliegende Züge:"));
+    const quoteFor = (frag: string) => lines.find((l) => l.includes(frag)) ?? frag;
+    const out: StrategyProposal = {
+      summary: `Belegt: ${stage.split(".")[0] || "Lage unklar"}. ${blockers.length ? `${blockers.length} dokumentierte Blocker.` : "Keine dokumentierten Blocker."} ${missing.length ? `Es fehlen ${missing.length} Grundlagen.` : "Grundlagen vollständig."}`,
+      nextStep,
+      moves: [
+        ...moves.slice(0, 2).map((m) => ({ title: m.replace(/\.$/, ""), why: "Bereits im Tool vorbereitet – geringster Aufwand.", ownerRole: "BD" as const, evidenceQuote: quoteFor(m) })),
+        ...blockers.slice(0, 2).map((b) => ({ title: `Blocker lösen: ${b.split(" – ")[0]!.replace(/\.$/, "").slice(0, 120)}`, why: "Blockiert den nächsten großen Schritt.", ownerRole: "BD" as const, evidenceQuote: quoteFor(b) })),
+        ...missing.slice(0, 1).map((m) => ({ title: `Lücke schließen: ${m.replace(/\.$/, "").slice(0, 120)}`, why: "Ohne diese Grundlage bleibt der Schritt Hypothese.", ownerRole: (/Anker|Kontext/i.test(m) ? "ANKER" : "BD") as "ANKER" | "BD", evidenceQuote: quoteFor(m) })),
+      ].slice(0, 5),
+      risks: blockers.filter((b) => /Tagen|überfällig|Blockiert/i.test(b)).slice(0, 2).map((b) => ({ text: `Vermutlich: Stillstand – ${b.replace(/\.$/, "")}.`, evidenceQuote: quoteFor(b) })),
+      openQuestions: missing.filter((m) => m.endsWith("?")).slice(0, 3),
+    };
+    return out;
+  }
+
+  /** Formularvorschlag: nimmt Titel/Kontext aus Kontextzeilen, wählt Optionen regelbasiert. */
+  async suggestForm(input: FormSuggestInput): Promise<FormSuggestion> {
+    const ctx = input.contextText;
+    const line = (prefix: string) => ctx.split("\n").find((l) => l.startsWith(prefix))?.slice(prefix.length).trim() ?? "";
+    const kunde = line("Kunde:").split(" (")[0] ?? "";
+    const setup = line("Setup:");
+    const bedarfe = line("Bedarfe:");
+    const beobachtungen = line("Letzte Beobachtungen:");
+    const fields: Record<string, string> = {};
+    const missing: string[] = [];
+    let evidence = "";
+    const has = (n: string) => input.fields.some((f) => f.name === n);
+    const firstOption = (n: string, prefer: string[]) => {
+      const f = input.fields.find((x) => x.name === n);
+      if (!f?.options) return undefined;
+      return prefer.find((p) => f.options!.includes(p)) ?? f.options[0];
+    };
+    if (input.kind === "VORHABEN") {
+      const stage = input.analysisText.split("\n").find((l) => l.startsWith("Stufe:")) ?? "";
+      const running = /gestartet|Beauftragt/i.test(stage);
+      if (has("title")) fields.title = running ? `Einsatz bei ${kunde || "dem Kunden"} verlängern und ausweiten` : bedarfe ? `Bedarf „${bedarfe.split(" [")[0]}“ zur Beauftragung führen` : `Ersten Bedarf bei ${kunde || "dem Kunden"} erschließen`;
+      if (has("kind")) fields.kind = firstOption("kind", running ? ["VERLAENGERN", "AUSWEITEN"] : ["VERTIEFEN", "AUSWEITEN"]) ?? "";
+      if (has("rationale")) fields.rationale = stage ? `Belegt: ${stage.replace(/^Stufe:\s*/, "")}` : "Aus der Lage abgeleitet.";
+      evidence = stage || bedarfe || kunde;
+      if (!bedarfe) missing.push("Welchen Bedarf soll das Vorhaben adressieren?");
+    } else if (input.kind === "SETUP") {
+      if (has("name")) fields.name = bedarfe ? `Team ${bedarfe.split(" [")[0]!.split(" ").slice(0, 3).join(" ")}` : `Erstkontakt ${kunde || "Kunde"}`;
+      if (has("contextNote")) fields.contextNote = beobachtungen ? beobachtungen.split(" | ")[0]! : setup ? setup.split(" – ").slice(1).join(" – ") : "";
+      if (has("visibility")) fields.visibility = firstOption("visibility", ["ACCOUNT_TEAM"]) ?? "";
+      evidence = beobachtungen.split(" | ")[0] || bedarfe || kunde;
+      if (!beobachtungen && !setup) missing.push("Was läuft beim Kunden – ein Satz Kontext?");
+    } else {
+      const obs = beobachtungen.split(" | ")[0] ?? "";
+      if (has("title")) fields.title = obs ? obs.split(/[,.;]/)[0]!.slice(0, 80) : `Unterstützung für ${kunde || "den Kunden"}`;
+      if (has("needDescription")) fields.needDescription = obs || "";
+      if (has("trigger")) fields.trigger = obs ? "Aus Beobachtung im Setup." : "";
+      evidence = obs || kunde;
+      if (!obs) missing.push("Woran macht der Kunde fest, dass ihm etwas fehlt?");
+    }
+    return { fields, rationale: Object.keys(fields).length ? "Aus dem bekannten Kontext abgeleitet – bitte prüfen und anpassen." : "Zu wenig Kontext für einen Vorschlag.", evidenceQuote: evidence || "Kunde", missing };
+  }
+
   async assistantReply(input: AssistantInput, _opts?: unknown, onDelta?: (chunk: string) => void): Promise<string> {
     void _opts;
     const lastUser = [...input.history].reverse().find((h) => h.role === "NUTZER")?.text ?? "";
