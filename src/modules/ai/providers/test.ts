@@ -1,6 +1,7 @@
-import type { AIProvider, AnalyzeDocumentInput, AssistantInput, FormSuggestInput, InterviewNextInput, ProviderInfo, StrategyInput, StructureNoteInput } from "../provider";
-import type { AssistantItem, FormSuggestion, IntakeProposal, InterviewNext, StrategyProposal, StructuredItem, StructureNoteOutput } from "../schemas";
-import { ASSISTANT_CARDS_MARKER, interviewTopicValues } from "../schemas";
+import { decisionRoleLabel } from "@/lib/labels";
+import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdviceInput, FormSuggestInput, InterviewNextInput, ProviderInfo, StrategyInput, StructureNoteInput } from "../provider";
+import type { AssistantItem, BuyingCenterProposal, FormSuggestion, IntakeProposal, InterviewNext, StrategyProposal, StructuredItem, StructureNoteOutput } from "../schemas";
+import { ASSISTANT_CARDS_MARKER, decisionRoleValues, interviewTopicValues } from "../schemas";
 
 /**
  * Deterministischer Testanbieter (Briefing 2.3): regelbasiert, ohne Netzwerk, ohne Modell.
@@ -365,6 +366,42 @@ export class TestProvider implements AIProvider {
     return out;
   }
 
+  /** Buying-Center-Berater: aus dem Buyingcenter-Stand (Zeilen „Rolle: offen/Hypothese/bestätigt – Personen“) je offener/Hypothese-Rolle einen Hinweis. */
+  async adviseBuyingCenter(input: BuyingCenterAdviceInput): Promise<BuyingCenterProposal> {
+    const lines = input.analysisText.split("\n").map((l) => l.trim()).filter(Boolean);
+    const HINT: Record<string, string> = {
+      BEDARFSTRAEGER: "Im nächsten Gespräch klären, wer den Bedarf tatsächlich formuliert hat.",
+      FACHLICHE_BEWERTUNG: "Klären, wer die fachliche Eignung bewertet.",
+      BUDGETVERANTWORTUNG: "Gezielt fragen, wer die Budgetentscheidung tatsächlich trifft.",
+      EINKAUF_VERTRAGSWEG: "Den Einkaufs-/Vertragsweg erfragen.",
+      ZUSAETZLICHE_FREIGABE: "Prüfen, ob eine zusätzliche Freigabe nötig ist.",
+      UNTERSTUETZER_SPONSOR: "Einen internen Unterstützer identifizieren.",
+    };
+    const roles: BuyingCenterProposal["roles"] = [];
+    let gapCount = 0;
+    for (const role of decisionRoleValues) {
+      const label = decisionRoleLabel[role] ?? role;
+      const line = lines.find((l) => l.startsWith(`${label}:`));
+      if (!line) continue;
+      const rest = line.slice(label.length + 1).trim();
+      if (rest.startsWith("bestätigt")) continue;
+      gapCount++;
+      const isHypothese = rest.startsWith("Hypothese");
+      const personMatch = rest.match(/–\s*([^(]+)\s*\(/);
+      roles.push({
+        role,
+        hint: isHypothese ? `Nur Hypothese – mit Quelle bestätigen. ${HINT[role] ?? ""}`.trim() : (HINT[role] ?? "Lücke schließen."),
+        proposedPersonName: isHypothese && personMatch ? personMatch[1]!.trim() : "",
+        evidenceQuote: isHypothese ? line : "",
+      });
+    }
+    return {
+      summary: `Belegt: ${gapCount === 0 ? "Alle sechs Rollen bestätigt." : `${gapCount} von 6 Rollen offen oder nur Hypothese.`}`,
+      roles,
+      openQuestions: roles.filter((r) => !r.evidenceQuote).slice(0, 5).map((r) => `Wer übernimmt bei diesem Kunden die Rolle „${decisionRoleLabel[r.role] ?? r.role}“?`),
+    };
+  }
+
   /** Formularvorschlag: nimmt Titel/Kontext aus Kontextzeilen, wählt Optionen regelbasiert. */
   async suggestForm(input: FormSuggestInput): Promise<FormSuggestion> {
     const ctx = input.contextText;
@@ -396,7 +433,7 @@ export class TestProvider implements AIProvider {
       if (has("visibility")) fields.visibility = firstOption("visibility", ["ACCOUNT_TEAM"]) ?? "";
       evidence = beobachtungen.split(" | ")[0] || bedarfe || kunde;
       if (!beobachtungen && !setup) missing.push("Was läuft beim Kunden – ein Satz Kontext?");
-    } else {
+    } else if (input.kind === "CHANCE") {
       const obs = beobachtungen.split(" | ")[0] ?? "";
       const role = detectRole(obs) ?? detectRole(ctx);
       if (has("title")) fields.title = role ? `${role} für ${kunde || "den Kunden"}` : obs ? obs.split(/[,.;]/)[0]!.slice(0, 80) : `Unterstützung für ${kunde || "den Kunden"}`;
@@ -406,6 +443,21 @@ export class TestProvider implements AIProvider {
       if (has("roleName") && role) fields.roleName = role;
       evidence = obs || kunde;
       if (!obs) missing.push("Woran macht der Kunde fest, dass ihm etwas fehlt?");
+    } else {
+      // MEDDPICC (Etappe 17): aus Bedarfsbeschreibung/Anlass und dem Buyingcenter-Stand dieser Chance.
+      const lines = input.analysisText.split("\n").map((l) => l.trim()).filter(Boolean);
+      const pick = (prefix: string) => lines.find((l) => l.startsWith(prefix))?.slice(prefix.length).trim() ?? "";
+      const anlass = pick("Anlass:");
+      const bedarf = pick("Bedarfsbeschreibung:");
+      const budget = lines.find((l) => l.startsWith(`${decisionRoleLabel.BUDGETVERANTWORTUNG}:`)) ?? "";
+      const champion = lines.find((l) => l.startsWith(`${decisionRoleLabel.UNTERSTUETZER_SPONSOR}:`)) ?? "";
+      const nameFrom = (line: string) => line.match(/–\s*([^(]+)\s*\(/)?.[1]?.trim() ?? "";
+      if (has("identifyPain") && (anlass || bedarf)) fields.identifyPain = anlass || bedarf;
+      if (has("economicBuyer") && nameFrom(budget)) fields.economicBuyer = nameFrom(budget);
+      if (has("champion") && nameFrom(champion)) fields.champion = nameFrom(champion);
+      evidence = anlass || bedarf || budget || champion;
+      if (!anlass && !bedarf) missing.push("Was ist der konkrete Anlass (Identify Pain)?");
+      if (!nameFrom(budget)) missing.push("Wer entscheidet über das Budget (Economic Buyer)?");
     }
     return { fields, rationale: Object.keys(fields).length ? "Aus dem bekannten Kontext abgeleitet – bitte prüfen und anpassen." : "Zu wenig Kontext für einen Vorschlag.", evidenceQuote: evidence || "Kunde", missing };
   }

@@ -17,6 +17,7 @@ import { createAccount } from "@/modules/accounts/service";
 import { archiveAccount, deleteAccountPermanently, restoreAccount } from "@/modules/accounts/deletion";
 import { formToStrategyInput, saveStrategy } from "@/modules/strategy/service";
 import { formToOpportunityAdviceInput, saveOpportunityAdvice } from "@/modules/opportunities/advisor";
+import { formToBuyingCenterAdviceInput, saveBuyingCenterAdvice } from "@/modules/opportunities/buyingCenterAdvisor";
 import { addRole, setRoleActive } from "@/modules/roles/catalog";
 import { createPerson, setPersonFunction, setRelationship } from "@/modules/people/service";
 import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/modules/accesspaths/service";
@@ -139,6 +140,16 @@ export async function saveOpportunityAdviceAction(fd: FormData) {
   const id = data.opportunityId ?? "";
   return run(`/bedarfe/${id}`, async (actor) => {
     await saveOpportunityAdvice(actor, formToOpportunityAdviceInput(data));
+  }, "Fassung gespeichert.");
+}
+
+// --- Buying-Center-Berater (Etappe 17) --------------------------------------
+
+export async function saveBuyingCenterAdviceAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.opportunityId ?? "";
+  return run(`/bedarfe/${id}`, async (actor) => {
+    await saveBuyingCenterAdvice(actor, formToBuyingCenterAdviceInput(data));
   }, "Fassung gespeichert.");
 }
 

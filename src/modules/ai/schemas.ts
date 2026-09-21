@@ -259,7 +259,7 @@ export const strategyProposalSchema = z.object({
 });
 export type StrategyProposal = z.infer<typeof strategyProposalSchema>;
 
-export const formKinds = ["VORHABEN", "SETUP", "CHANCE"] as const;
+export const formKinds = ["VORHABEN", "SETUP", "CHANCE", "MEDDPICC"] as const;
 export type FormKind = (typeof formKinds)[number];
 
 export const formSuggestionSchema = z.object({
@@ -273,3 +273,27 @@ export const formSuggestionSchema = z.object({
   missing: z.array(z.string().trim().min(3).max(300)).max(4).default([]),
 });
 export type FormSuggestion = z.infer<typeof formSuggestionSchema>;
+
+// ---------------------------------------------------------------------------
+// Etappe 17: Buying-Center-Berater (Rollen je Chance durchgehen, Hinweise zu Lücken)
+// ---------------------------------------------------------------------------
+
+/** Hinweis zu genau einer der sechs Entscheidungsrollen – nur für Rollen, zu denen die KI etwas Belastbares sagt. */
+export const buyingCenterRoleHintSchema = z.object({
+  role: z.enum(decisionRoleValues),
+  /** Handlungsempfehlung, wie die Lücke zu dieser Rolle geschlossen werden kann (Methodik, keine erfundene Aussage) */
+  hint: z.string().trim().min(3).max(600),
+  /** Name einer bereits bekannten Person, falls im Kontext erkennbar für diese Rolle – sonst leer, nie erfunden */
+  proposedPersonName: z.string().trim().max(200).optional().default(""),
+  /** Wörtliche Textstelle, falls sich proposedPersonName oder hint auf eine konkrete Angabe stützt – sonst leer */
+  evidenceQuote: z.string().trim().max(400).optional().default(""),
+});
+
+export const buyingCenterProposalSchema = z.object({
+  /** Lage des Buyingcenters dieser Chance in 2–4 Sätzen */
+  summary: z.string().trim().min(10).max(1200),
+  roles: z.array(buyingCenterRoleHintSchema).max(6).default([]),
+  openQuestions: z.array(z.string().trim().min(3).max(300)).max(5).default([]),
+});
+export type BuyingCenterRoleHint = z.infer<typeof buyingCenterRoleHintSchema>;
+export type BuyingCenterProposal = z.infer<typeof buyingCenterProposalSchema>;

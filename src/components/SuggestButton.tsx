@@ -9,7 +9,7 @@ import { useRef, useState } from "react";
  */
 export type SuggestField = { name: string; label: string; options?: string[] };
 
-export function SuggestButton({ kind, accountId, setupId, fields, label = "Vorschlagen lassen" }: { kind: "VORHABEN" | "SETUP" | "CHANCE"; accountId?: string; setupId?: string; fields: SuggestField[]; label?: string }) {
+export function SuggestButton({ kind, accountId, setupId, opportunityId, fields, label = "Vorschlagen lassen" }: { kind: "VORHABEN" | "SETUP" | "CHANCE" | "MEDDPICC"; accountId?: string; setupId?: string; opportunityId?: string; fields: SuggestField[]; label?: string }) {
   const [busy, setBusy] = useState(false);
   const [info, setInfo] = useState<{ text: string; kind: "ok" | "hinweis" | "fehler"; missing?: string[]; quote?: string } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
@@ -20,7 +20,7 @@ export function SuggestButton({ kind, accountId, setupId, fields, label = "Vorsc
     setBusy(true);
     setInfo(null);
     try {
-      const res = await fetch("/api/vorschlag", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, accountId: accountId ?? "", setupId: setupId ?? "", fields }) });
+      const res = await fetch("/api/vorschlag", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, accountId: accountId ?? "", setupId: setupId ?? "", opportunityId: opportunityId ?? "", fields }) });
       const j = (await res.json().catch(() => ({}))) as { error?: string; suggestion?: { fields: Record<string, string>; rationale: string; evidenceQuote: string; missing: string[] } | null; note?: string; missing?: string[] };
       if (!res.ok) throw new Error(j.error ?? "Fehler");
       if (!j.suggestion) {

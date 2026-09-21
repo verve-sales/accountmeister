@@ -1408,6 +1408,36 @@ export const opportunityAdvice = pgTable(
 );
 
 /**
+ * Buying-Center-Berater je Chance (Etappe 17, Anker-/BD-Wunsch „Assistent, der die Rollen durchgeht, berät und
+ * Hinweise zum Lückenfüllen gibt"): analog zum Chancen-Berater (Etappe 15) eine versionierte Fassung – geht die
+ * sechs Entscheidungsrollen (decision_role) durch und gibt je Lücke einen Hinweis. Die KI schlägt nur mit
+ * Textstelle vor; gespeichert wird erst durch den Menschen. Status je Rolle wird nicht hier gespeichert, sondern
+ * bei jedem Aufruf aus dem Buyingcenter (decision_participations) berechnet – kein zweiter Datenbestand.
+ */
+export const buyingCenterAdvice = pgTable(
+  "buying_center_advice",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
+    versionNo: integer("version_no").notNull(),
+    summary: text("summary").notNull(),
+    /** je Rolle mit Inhalt: {role, hint, proposedPersonName?, evidenceQuote?} */
+    roles: jsonb("roles").notNull().default([]),
+    openQuestions: jsonb("open_questions").notNull().default([]),
+    /** Textfassung von Chancen-Lage und Buyingcenter-Stand zum Zeitpunkt der Fassung (Nachvollziehbarkeit) */
+    basis: text("basis").notNull(),
+    /** Status der Chance zum Zeitpunkt der Fassung */
+    status: text("status").notNull(),
+    note: text("note"),
+    aiJobId: text("ai_job_id").references(() => aiJobs.id),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("buying_center_advice_version_uq").on(t.opportunityId, t.versionNo), index("buying_center_advice_opportunity_idx").on(t.opportunityId)],
+);
+
+/**
  * Öffentliche Unternehmensrecherche je Kunde (Etappe 16): eng begrenzte Ausnahme von „die KI recherchiert nicht
  * im Internet“ – ausschließlich öffentliche Firmendaten (Branche, Sitz, Größenordnung, Rechtsform), NIE benannte
  * Einzelpersonen. Fixture-Anbieter analog zur Microsoft-Graph-Integration (Etappe 3B): Struktur und Begrenzung

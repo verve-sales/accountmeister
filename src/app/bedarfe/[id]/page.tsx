@@ -4,16 +4,19 @@ import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getOpportunityDetail, MEDDPICC_KEYS } from "@/modules/opportunities/service";
 import { getOpportunityAdvice, proposeOpportunityAdvice, ruleBasedOpportunityAdvice, type OpportunityAdviceRow } from "@/modules/opportunities/advisor";
+import { getBuyingCenterAdvice, proposeBuyingCenterAdvice, ruleBasedBuyingCenterAdvice, type BuyingCenterAdviceRow } from "@/modules/opportunities/buyingCenterAdvisor";
 import type { StrategyMove } from "@/modules/strategy/service";
-import type { StrategyProposal } from "@/modules/ai/schemas";
+import type { BuyingCenterProposal, StrategyProposal } from "@/modules/ai/schemas";
+import { decisionRoleValues } from "@/modules/ai/schemas";
 import { Feedback } from "@/components/Feedback";
 import { Status } from "@/components/Status";
+import { SuggestButton } from "@/components/SuggestButton";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { groupByFamily } from "@/modules/roles/catalog";
 import { decisionRoleLabel, engagementStatusLabel, epistemicLabel, fmtDate, fmtDateTime, offerStatusLabel, opportunityStatusLabel, orderStatusLabel, requirementStatusLabel, sourceTypeLabel } from "@/lib/labels";
 import {
   addParticipationAction, addStartRequirementAction, cancelOrderAction, changeOfferStatusAction, changeOpportunityStatusAction, confirmOpportunityAction, confirmOrderAction, createOfferAction,
-  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, removeParticipationAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction,
+  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction,
 } from "../../actions";
 
 const VERLAUF = ["IN_KLAERUNG", "BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG", "BEAUFTRAGT"] as const;
@@ -33,7 +36,7 @@ function EvidenceFields({ prefix, sources, label = "Beleg" }: { prefix: string; 
   );
 }
 
-export default async function BedarfPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; berater?: string }> }) {
+export default async function BedarfPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; berater?: string; bcberater?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const actor = await getCurrentActor();
@@ -75,6 +78,32 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   const adviceMoves = [...adviceDraft.moves, ...Array.from({ length: Math.max(0, 5 - adviceDraft.moves.length) }, () => ({ title: "", why: "", ownerRole: "BD" as const, evidenceQuote: "" }))].slice(0, 8);
   const adviceRisks = [...adviceDraft.risks, ...Array.from({ length: Math.max(0, 3 - adviceDraft.risks.length) }, () => ({ text: "", evidenceQuote: "" }))].slice(0, 6);
   const adviceQuestions = [...adviceDraft.openQuestions, ...Array.from({ length: Math.max(0, 3 - adviceDraft.openQuestions.length) }, () => "")].slice(0, 6);
+
+  // Buying-Center-Berater (Etappe 17): geht die sechs Entscheidungsrollen dieser Chance durch, gibt Hinweise zu Lücken.
+  const bc = await getBuyingCenterAdvice(actor, id);
+  let bcDraft: BuyingCenterProposal;
+  let bcDraftNote = "";
+  let bcAiJobId: string | null = null;
+  let bcProposalError: string | null = null;
+  if (sp.bcberater && bc.canEdit) {
+    try {
+      const p = await proposeBuyingCenterAdvice(actor, id);
+      bcDraft = p.proposal;
+      bcDraftNote = p.note || "KI-Vorschlag – jede Zeile prüfen, ändern oder entfernen; gespeichert wird erst mit „Fassung speichern“.";
+      bcAiJobId = p.aiJobId;
+    } catch (e) {
+      bcProposalError = e instanceof DomainError ? e.message : "Der KI-Vorschlag ist gerade nicht möglich.";
+      bcDraft = bc.latest ? bcAdviceFromRow(bc.latest) : ruleBasedBuyingCenterAdvice(bc.analysis, bc.roleStatus);
+    }
+  } else if (bc.latest) {
+    bcDraft = bcAdviceFromRow(bc.latest);
+    bcDraftNote = `Vorbelegt mit Fassung ${bc.latest.versionNo} vom ${fmtDate(bc.latest.createdAt)}.`;
+  } else {
+    bcDraft = ruleBasedBuyingCenterAdvice(bc.analysis, bc.roleStatus);
+    bcDraftNote = "Noch keine Fassung – regelbasierter Entwurf aus dem dokumentierten Buyingcenter-Stand.";
+  }
+  const bcHintByRole = new Map(bcDraft.roles.map((r) => [r.role, r]));
+  const bcQuestions = [...bcDraft.openQuestions, ...Array.from({ length: Math.max(0, 3 - bcDraft.openQuestions.length) }, () => "")].slice(0, 6);
   const closed = opp.status === "BEENDET";
   const verlaufIdx = VERLAUF.indexOf(opp.status as (typeof VERLAUF)[number]);
   const md = opp.meddpicc ?? {};
@@ -259,6 +288,104 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         )}
       </section>
 
+      {/* Buying-Center-Berater (Etappe 17, Anker-/BD-Wunsch: Rollen durchgehen, beraten, Hinweise zum Lückenfüllen) */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Buying-Center-Berater</h2>
+        <p className="muted text-sm mb-2">Geht die sechs Entscheidungsrollen dieser Chance durch und gibt bei Lücken einen Hinweis, wie sie zu schließen sind. Beruht auf dem oben erfassten Buyingcenter – kein zweiter Datenbestand.</p>
+        {bcProposalError && <p className="error text-sm" role="alert">{bcProposalError}</p>}
+        <table className="list text-sm">
+          <thead><tr><th>Rolle</th><th>Status</th><th>Person(en)</th></tr></thead>
+          <tbody>
+            {bc.roleStatus.map((r) => (
+              <tr key={r.role}>
+                <td>{r.label}</td>
+                <td><Status label={r.state === "OFFEN" ? "offen" : r.state === "BESTAETIGT" ? "bestätigt" : "Hypothese"} /></td>
+                <td>{r.participants.length ? r.participants.map((p) => p.name).join(", ") : <span className="muted">–</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {bc.latest && (
+          <div className="mt-4 border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
+            <div className="flex flex-wrap items-baseline gap-3">
+              <div className="font-medium">Aktuelle Fassung {bc.latest.versionNo}</div>
+              <span className="muted text-sm">vom {fmtDate(bc.latest.createdAt)}{bc.latest.aiJobId ? " · mit KI-Vorschlag" : ""}</span>
+            </div>
+            <p className="text-sm mt-2" style={{ whiteSpace: "pre-wrap" }}>{bc.latest.summary}</p>
+            {(bc.latest.roles as BuyingCenterProposal["roles"]).length > 0 && (
+              <ul className="text-sm mt-2 space-y-1">
+                {(bc.latest.roles as BuyingCenterProposal["roles"]).map((r, i) => (
+                  <li key={i}><strong>{decisionRoleLabel[r.role] ?? r.role}:</strong> {r.hint}{r.proposedPersonName && <span className="muted"> – Vorschlag: {r.proposedPersonName}</span>}</li>
+                ))}
+              </ul>
+            )}
+            {bc.latest.note && <p className="muted text-xs mt-2">Notiz: {bc.latest.note}</p>}
+          </div>
+        )}
+
+        {bc.canEdit && !closed && (
+          <div className="mt-4">
+            <div className="flex flex-wrap items-baseline gap-3 mb-2">
+              <span className="muted text-sm">{bcDraftNote}</span>
+              {!sp.bcberater && <Link href={`/bedarfe/${id}?bcberater=1`} className="btn btn-secondary btn-small ml-auto">Vorschlag der KI einholen</Link>}
+            </div>
+            <details>
+              <summary>Neue Fassung erfassen</summary>
+              <form action={saveBuyingCenterAdviceAction} className="mt-2 grid gap-4 text-sm">
+                <input type="hidden" name="opportunityId" value={id} />
+                {bcAiJobId && <input type="hidden" name="aiJobId" value={bcAiJobId} />}
+                <div>
+                  <label className="label" htmlFor="bcSummary">Lage des Buyingcenters (belegt / vermutlich trennen)</label>
+                  <textarea id="bcSummary" name="summary" className="textarea" required minLength={10} defaultValue={bcDraft.summary} rows={3} />
+                </div>
+                <div>
+                  <div className="label">Hinweis je Rolle (leer lassen = weglassen)</div>
+                  <div className="space-y-3">
+                    {decisionRoleValues.map((role) => {
+                      const h = bcHintByRole.get(role);
+                      const status = bc.roleStatus.find((r) => r.role === role);
+                      return (
+                        <div key={role} className="grid sm:grid-cols-12 gap-2 items-start">
+                          <div className="sm:col-span-3 text-sm"><strong>{decisionRoleLabel[role] ?? role}</strong> <span className="muted">({status?.state === "OFFEN" ? "offen" : status?.state === "BESTAETIGT" ? "bestätigt" : "Hypothese"})</span></div>
+                          <textarea name={`role_${role}_hint`} className="textarea sm:col-span-6" rows={2} placeholder="Hinweis zum Lückenfüllen" defaultValue={h?.hint ?? ""} maxLength={600} />
+                          <input name={`role_${role}_person`} className="input sm:col-span-3" placeholder="Vorschlag Person (optional)" defaultValue={h?.proposedPersonName ?? ""} maxLength={200} />
+                          <input type="hidden" name={`role_${role}_evidence`} value={h?.evidenceQuote ?? ""} />
+                          {h?.evidenceQuote && <div className="muted text-xs sm:col-span-12">Textstelle: „{h.evidenceQuote.slice(0, 140)}“</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <div className="label">Offene Fragen</div>
+                  <div className="space-y-2">{bcQuestions.map((q, k) => <input key={k} name={`openQuestions.${k}.text`} className="input" placeholder={`Frage ${k + 1}`} defaultValue={q} maxLength={300} />)}</div>
+                </div>
+                <div>
+                  <label className="label" htmlFor="bcNote">Notiz zur Fassung (optional)</label>
+                  <input id="bcNote" name="note" className="input" maxLength={600} />
+                </div>
+                <div><button className="btn" type="submit">Fassung speichern</button> <span className="muted text-xs ml-2">Es entsteht immer eine neue Version; frühere bleiben nachlesbar.</span></div>
+              </form>
+            </details>
+          </div>
+        )}
+
+        {bc.versions.length > 1 && (
+          <details className="mt-3">
+            <summary>Frühere Fassungen ({bc.versions.length - 1})</summary>
+            <ul className="mt-2 space-y-3 text-sm">
+              {bc.versions.slice(1).map((v) => (
+                <li key={v.id}>
+                  <div className="font-medium">Fassung {v.versionNo} · {fmtDate(v.createdAt)}</div>
+                  <p style={{ whiteSpace: "pre-wrap" }}>{v.summary}</p>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </section>
+
       {/* MEDDPICC (9.4) */}
       <section className="card">
         <h2 className="font-semibold mb-2">Qualifizierungshilfe (MEDDPICC) – optional</h2>
@@ -270,6 +397,9 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
             {MEDDPICC_KEYS.map(([k, label]) => (
               <div key={k}><label className="label" htmlFor={`md-${k}`}>{label}</label><input id={`md-${k}`} name={k} className="input" defaultValue={md[k] ?? ""} /></div>
             ))}
+            <div className="sm:col-span-2">
+              <SuggestButton kind="MEDDPICC" opportunityId={opp.id} setupId={ctx.setup.id} fields={MEDDPICC_KEYS.map(([k, label]) => ({ name: k, label }))} />
+            </div>
             <div className="sm:col-span-2"><button className="btn btn-secondary" type="submit">Speichern</button></div>
           </form>
         ) : (
@@ -592,4 +722,8 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
 
 function adviceFromRow(r: OpportunityAdviceRow): StrategyProposal {
   return { summary: r.summary, nextStep: r.nextStep, moves: (r.moves as StrategyMove[]).map((m) => ({ title: m.title, why: m.why ?? "", ownerRole: m.ownerRole ?? "BD", evidenceQuote: m.evidenceQuote ?? "" })), risks: (r.risks as { text: string; evidenceQuote: string }[]) ?? [], openQuestions: (r.openQuestions as string[]) ?? [] };
+}
+
+function bcAdviceFromRow(r: BuyingCenterAdviceRow): BuyingCenterProposal {
+  return { summary: r.summary, roles: (r.roles as BuyingCenterProposal["roles"]) ?? [], openQuestions: (r.openQuestions as string[]) ?? [] };
 }

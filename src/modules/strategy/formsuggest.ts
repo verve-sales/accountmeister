@@ -11,6 +11,9 @@ import type { AIProvider, FormSuggestInput } from "@/modules/ai/provider";
 import { formKinds, formSuggestionSchema, type FormSuggestion } from "@/modules/ai/schemas";
 import { evidenceFound, runAiJob } from "@/modules/ai/jobs";
 import { buildContextText, resolveContext } from "@/modules/assistant/service";
+import { analyzeOpportunity, opportunityAnalysisToText } from "@/modules/opportunities/advisor";
+import { computeRoleStatus, roleStatusToText } from "@/modules/opportunities/buyingCenterAdvisor";
+import { getOpportunityDetail } from "@/modules/opportunities/service";
 import { analysisToText, analyzeSetup } from "./analysis";
 
 /**
@@ -25,6 +28,8 @@ export const formSuggestRequest = z.object({
   kind: z.enum(formKinds),
   accountId: z.string().optional().or(z.literal("")),
   setupId: z.string().optional().or(z.literal("")),
+  /** Nur für kind=MEDDPICC: die Chance, deren Qualifizierungshilfe vorbelegt werden soll. */
+  opportunityId: z.string().optional().or(z.literal("")),
   fields: z.array(z.object({ name: z.string().min(1).max(60), label: z.string().min(1).max(200), options: z.array(z.string().max(60)).max(20).optional() })).min(1).max(12),
 });
 
@@ -39,7 +44,18 @@ export async function suggestFormFields(actor: Actor, raw: unknown, deps: { prov
   let contextText = "";
   let analysisText = "";
   let setupId: string | null = null;
-  if (req.setupId) {
+  if (req.kind === "MEDDPICC") {
+    // MEDDPICC (Etappe 17, Anker-/BD-Wunsch): Vorbefüllung aus Bedarfsbeschreibung/Anlass dieser Chance und
+    // ihrem Buyingcenter-Stand. Wer die Qualifizierungshilfe pflegen darf, darf sich auch vorbelegen lassen.
+    if (!req.opportunityId) throw new ValidationError("Für MEDDPICC-Vorschläge braucht es die Chance.");
+    const { analysis, ctx, canEdit } = await analyzeOpportunity(actor, req.opportunityId);
+    if (!canEdit) throw new ForbiddenError("Die Qualifizierungshilfe pflegen Beteiligte mit Bearbeitungsrecht am Setup.");
+    const d = await getOpportunityDetail(actor, req.opportunityId);
+    const roleStatus = computeRoleStatus(d.participations);
+    setupId = ctx.setup.id;
+    analysisText = [`Chance: ${d.opp.title}`, `Bedarfsbeschreibung: ${d.opp.needDescription}`, d.opp.trigger ? `Anlass: ${d.opp.trigger}` : "", roleStatusToText(analysis, roleStatus), opportunityAnalysisToText(analysis)].filter(Boolean).join("\n");
+    contextText = await buildContextText(actor, await resolveContext(actor, { type: "SETUP", id: ctx.setup.id }));
+  } else if (req.setupId) {
     const ctx = await loadSetupContext(actor, req.setupId);
     if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
     if (req.kind === "CHANCE" && !canEditSetup(actor, ctx)) throw new ForbiddenError("Bedarfe erfassen Beteiligte mit Bearbeitungsrecht.");

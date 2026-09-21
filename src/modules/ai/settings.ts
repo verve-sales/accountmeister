@@ -21,7 +21,8 @@ export const AI_TASKS = [
   { key: "ASSISTANT", label: "Assistent (Dialog mit Vorschlagskarten)", description: "Laufender Dialog im Seitenpanel: antwortet, schlägt Karten vor (Personen, Signale, Chancen, Aktionen, Kontaktaufnahmen, Fragen) und benennt fehlende Informationen. Ein schnelles Modell mit guter Instruktionstreue empfohlen." },
   { key: "STRATEGY", label: "Strategiefaden (Lage, nächster Schritt, Züge)", description: "Aus der regelbasierten Lageanalyse und dem bekannten Kontext einen Strategiefaden je Setup vorschlagen – Züge und Risiken nur mit Textstelle; der BD prüft und speichert eine Fassung." },
   { key: "OPPORTUNITY_ADVICE", label: "Chancen-Berater (nächste Schritte je Bedarf)", description: "Persönlicher KI-Berater je Chance: aus der Lageanalyse der einen Chance und dem bekannten Kontext die nächsten Schritte zur Konvertierung vorschlagen – Züge und Risiken nur mit Textstelle; der BD prüft und speichert eine Fassung." },
-  { key: "FORM_SUGGEST", label: "Formularvorschläge (Vorhaben, Setup, Chance)", description: "Formularfelder aus dem bekannten Kundenkontext vorbelegen („Vorschlagen lassen“). Kleines, schnelles Modell genügt." },
+  { key: "BUYING_CENTER_ADVICE", label: "Buying-Center-Berater (Rollen je Chance)", description: "Geht die sechs Entscheidungsrollen einer Chance durch und gibt je Lücke einen Hinweis zum Füllen – nur mit Textstelle, wo eine konkrete Angabe gemeint ist; der BD prüft und speichert eine Fassung." },
+  { key: "FORM_SUGGEST", label: "Formularvorschläge (Vorhaben, Setup, Chance, MEDDPICC)", description: "Formularfelder aus dem bekannten Kundenkontext vorbelegen („Vorschlagen lassen“), inklusive der MEDDPICC-Qualifizierungshilfe je Chance. Kleines, schnelles Modell genügt." },
 ] as const;
 
 export type AiTaskKey = (typeof AI_TASKS)[number]["key"];

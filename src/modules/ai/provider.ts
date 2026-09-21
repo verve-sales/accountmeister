@@ -56,9 +56,19 @@ export type StrategyInput = {
  */
 export type OpportunityAdviceInput = StrategyInput;
 
+/**
+ * Buying-Center-Berater (Etappe 17): identische Form wie der Chancen-Berater, aber ohne nextStep – hier geht es
+ * um die sechs Entscheidungsrollen dieser einen Chance, nicht um den nächsten großen Schritt zur Konvertierung.
+ */
+export type BuyingCenterAdviceInput = {
+  analysisText: string;
+  contextText: string;
+  previous: { summary: string; createdAt: string } | null;
+};
+
 /** Formularvorschlag (Etappe 9): welches Formular, welche Felder mit Bedeutung, bekannter Kontext. */
 export type FormSuggestInput = {
-  kind: "VORHABEN" | "SETUP" | "CHANCE";
+  kind: "VORHABEN" | "SETUP" | "CHANCE" | "MEDDPICC";
   fields: { name: string; label: string; options?: string[] }[];
   contextText: string;
   analysisText: string;
@@ -97,6 +107,8 @@ export interface AIProvider {
   strategize?(input: StrategyInput, opts?: TaskOptions): Promise<unknown>;
   /** Chancen-Berater-Vorschlag (Etappe 15): nächste Schritte zur Konvertierung genau einer Chance – optional. */
   adviseOpportunity?(input: OpportunityAdviceInput, opts?: TaskOptions): Promise<unknown>;
+  /** Buying-Center-Berater (Etappe 17): geht die sechs Entscheidungsrollen einer Chance durch – optional. */
+  adviseBuyingCenter?(input: BuyingCenterAdviceInput, opts?: TaskOptions): Promise<unknown>;
   /** Formularfelder vorbelegen (Etappe 9) – optional. */
   suggestForm?(input: FormSuggestInput, opts?: TaskOptions): Promise<unknown>;
   /** Verbrauch des letzten Aufrufs (Kostenspur), falls der Anbieter ihn liefert. */
