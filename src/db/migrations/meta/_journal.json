@@ -120,6 +120,13 @@
       "when": 1790007161998,
       "tag": "0016_opportunity_advice",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790008663088,
+      "tag": "0017_company_research",
+      "breakpoints": true
     }
   ]
 }

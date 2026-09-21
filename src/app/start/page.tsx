@@ -8,7 +8,7 @@ import { BarChart, CHART_COLORS } from "@/components/charts/BarChart";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { goalStatusLabel } from "@/lib/labels";
-import { createOpportunityAction, setDashboardViewAction } from "../actions";
+import { createOpportunityAction, setDashboardViewAction, smartDumpAction } from "../actions";
 
 const DASHBOARD_VIEW_COOKIE = "am_sicht";
 /** So viele Kunden mit dem größten Aufmerksamkeitsbedarf werden ausführlich gezeigt. */
@@ -266,6 +266,29 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             </table>
           )}
           <p className="muted text-xs mt-2">{d.bdPerformance.note} Personenbezogen (nicht rollengebündelt): nur eigene dokumentierte Ereignisse und eigene Chancen (Verantwortlich = ich).</p>
+        </section>
+      )}
+
+      {d.view === "ANKER" && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Smart-Dump: Text einfügen</h2>
+          <p className="muted text-sm mb-2">Notiz, E-Mail-Ausschnitt oder Gedächtnisprotokoll direkt einfügen – die KI schlägt daraus wie gewohnt Karten vor (Beobachtung, Person, Aktion, …), mit Textstelle belegt. Gespeichert wird nichts automatisch; die Vorschläge werden im Setup geprüft.</p>
+          {d.accounts.every((c) => c.setups.length === 0) ? (
+            <p className="muted text-sm">Noch kein Setup, dem ein Text zugeordnet werden könnte.</p>
+          ) : (
+            <form action={smartDumpAction} className="grid gap-3 text-sm">
+              <div>
+                <label className="label" htmlFor="dumpSetup">Setup</label>
+                <select id="dumpSetup" name="setupId" className="select" required defaultValue="">
+                  <option value="">– wählen –</option>
+                  {d.accounts.map((c) => c.setups.map((s) => <option key={s.setupId} value={s.setupId}>{c.accountName} · {s.setupName}</option>))}
+                </select>
+              </div>
+              <div><label className="label" htmlFor="dumpTitle">Titel (optional)</label><input id="dumpTitle" name="title" className="input" maxLength={200} /></div>
+              <div><label className="label" htmlFor="dumpText">Text</label><textarea id="dumpText" name="text" className="textarea" required minLength={12} rows={6} placeholder="Text einfügen …" /></div>
+              <div><button className="btn" type="submit">Einfügen und Vorschläge erzeugen</button></div>
+            </form>
+          )}
         </section>
       )}
 

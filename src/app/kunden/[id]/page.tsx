@@ -18,9 +18,10 @@ import { AccountPlanView } from "@/components/AccountPlanView";
 import { chanceKindLabel } from "@/modules/ai/schemas";
 import { listRoles } from "@/modules/roles/catalog";
 import { SuggestButton } from "@/components/SuggestButton";
-import { changePriorityAction, createPriorityAction, saveAccountPlanSnapshotAction } from "../../actions";
+import { changePriorityAction, createPriorityAction, refreshCompanyResearchAction, saveAccountPlanSnapshotAction } from "../../actions";
 import { db, schema } from "@/db/client";
 import { eq } from "drizzle-orm";
+import { getCompanyResearch, type CompanyFact } from "@/modules/research/service";
 
 export default async function KundePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
@@ -39,6 +40,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const people = await listPeopleForAccount(actor, id);
   const roleNames = new Map((await listRoles(actor.workspaceId, { includeInactive: true })).map((r) => [r.id, r.name]));
   const [plan, snapshots, mayEditPlan] = await Promise.all([buildAccountPlan(actor, id), listAccountPlanSnapshots(actor, id), canEditAccountPlan(actor, id)]);
+  const research = await getCompanyResearch(actor, id);
   const back = `/kunden/${id}`;
   const mayCreate = canCreateSetup(actor, account);
   const mayDelete = canDeleteAccount(actor, account);
@@ -56,6 +58,40 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       </div>
       {account.status === "ARCHIVED" && <p className="text-sm" style={{ background: "#fdf6ec", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ist archiviert. Alles bleibt erhalten; <Link href={`/kunden/${account.id}/loeschen`}>wiederherstellen oder endgültig löschen</Link>.</p>}
       <Feedback params={sp} />
+
+      {/* Öffentliche Unternehmensrecherche (Etappe 16): eng begrenzte Ausnahme – nur öffentliche Firmendaten, nie Personennamen */}
+      <section className="card">
+        <div className="flex flex-wrap items-baseline gap-3 mb-2">
+          <h2 className="font-semibold">Öffentliche Informationen zum Unternehmen</h2>
+          <form action={refreshCompanyResearchAction} className="ml-auto">
+            <input type="hidden" name="accountId" value={account.id} />
+            <button className="btn btn-secondary btn-small" type="submit">{research.latest ? "Aktualisieren" : "Recherche starten"}</button>
+          </form>
+        </div>
+        <p className="muted text-xs mb-2">Ausschließlich öffentliche, unternehmensbezogene Angaben mit Quelle (Branche, Sitz, Größenordnung, öffentliche Meldungen) – nie zu benannten Einzelpersonen. Fixture-Daten (fiktiv): kein echter Internetzugriff, bis ein Suchdienst konfiguriert ist.</p>
+        {!research.latest ? (
+          <p className="muted text-sm">Noch keine Recherche gestartet.</p>
+        ) : (
+          <>
+            {(research.latest.facts as CompanyFact[]).length === 0 ? (
+              <p className="muted text-sm">{research.latest.note}</p>
+            ) : (
+              <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                {(research.latest.facts as CompanyFact[]).map((f, i) => (
+                  <div key={i}>
+                    <dt className="muted">{f.label}</dt>
+                    <dd>
+                      {f.value}
+                      <span className="muted"> · {f.sourceUrl ? <a href={f.sourceUrl} target="_blank" rel="noopener noreferrer">{f.sourceLabel}</a> : f.sourceLabel}{f.asOf ? ` (Stand ${f.asOf})` : ""}</span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            <p className="muted text-xs mt-2">{research.latest.note} Zuletzt abgerufen {fmtDate(research.latest.fetchedAt)}.</p>
+          </>
+        )}
+      </section>
 
       {/* Wofür (E-045): worauf die Arbeit bei diesem Kunden hinausläuft – zuerst */}
       <section className="card">

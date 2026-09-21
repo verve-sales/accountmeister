@@ -97,6 +97,35 @@ export async function structureSource(actor: Actor, sourceId: string, deps: { pr
   }, deps);
 }
 
+export const smartDumpInput = z.object({
+  setupId: z.string().min(1, "Setup fehlt"),
+  text: z.string().trim().min(12, "Bitte mehr Text einfügen (mind. 12 Zeichen).").max(20000),
+  title: z.string().trim().max(200).optional().or(z.literal("")),
+});
+
+/**
+ * Smart-Dump (Etappe 16, Anker-Wunsch): beliebigen Text direkt einfügen – ohne den Umweg über eine eigene
+ * Quellen-Unterseite. Legt eine NOTIZ-Quelle an und strukturiert sie sofort (dieselbe Kette wie bei einem
+ * hochgeladenen Dokument): die KI schlägt nur Karten mit wörtlicher Textstelle vor, gespeichert wird nichts
+ * automatisch. Rechte wie bei jeder Quelle: nur Setup-Bearbeitende.
+ */
+export async function smartDump(actor: Actor, raw: unknown, deps: { provider?: AIProvider } = {}) {
+  const parsed = smartDumpInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
+  const input = parsed.data;
+  const ctx = await loadSetupContext(actor, input.setupId);
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Nur Setup-Bearbeitende können einen Smart-Dump erfassen.");
+  const title = input.title || `Smart-Dump ${new Date().toISOString().slice(0, 10)}`;
+  const [source] = await db
+    .insert(schema.sources)
+    .values({ workspaceId: actor.workspaceId, setupId: ctx.setup.id, type: "NOTIZ", title, body: input.text, origin: "Smart-Dump", sourceTime: new Date(), ownerUserId: actor.userId, accessClass: "SETUP" })
+    .returning();
+  if (!source) throw new Error("Quelle");
+  const result = await structureSource(actor, source.id, deps);
+  return { sourceId: source.id, ...result };
+}
+
 export type StructureTextInput = {
   text: string;
   /** Idempotenz-Bereich des Auftrags (z. B. Review-ID oder Import-ID) */

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
-import { ForbiddenError, TransitionError, ValidationError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { resetConfigCacheForTests } from "@/lib/config";
 import { createReview, saveReviewDraft, confirmReview } from "@/modules/reviews/service";
-import { acceptSuggestion, giveFeedback, listSuggestionsForSetup, structureReviewNote, getProviderStatus, UsageLimitError } from "@/modules/suggestions/service";
+import { acceptSuggestion, giveFeedback, listSuggestionsForSetup, smartDump, structureReviewNote, getProviderStatus, UsageLimitError } from "@/modules/suggestions/service";
 import { createSetup } from "@/modules/setups/service";
 import { AIDisabledError } from "@/modules/ai/providers/disabled";
 import { TestProvider } from "@/modules/ai/providers/test";
@@ -168,5 +168,31 @@ describe("KI-Vorschläge (Briefing 14, S05, S06, F15)", () => {
     await expect(structureReviewNote(david, review.id)).rejects.toBeInstanceOf(UsageLimitError);
     process.env.AI_DAILY_JOB_LIMIT = "200";
     resetConfigCacheForTests();
+  });
+});
+
+describe("Etappe 16: Smart-Dump (beliebigen Text einfügen, KI schlägt Karten vor)", () => {
+  it("legt eine Notiz-Quelle an und strukturiert sie sofort; nur Setup-Bearbeitende dürfen", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const nina = await actorFor("nina");
+    const setup = await createSetup(david, { accountId: s.accountId, name: `Smart-Dump-Test ${Date.now().toString(36)}`, contextNote: "Kontext", bdUserId: david.userId });
+
+    const res = await smartDump(david, { setupId: setup.id, text: NOTE });
+    expect(res.created).toBeGreaterThanOrEqual(4);
+    expect(res.sourceId).toBeTruthy();
+    const source = await db.query.sources.findFirst({ where: eq(schema.sources.id, res.sourceId) });
+    expect(source?.type).toBe("NOTIZ");
+    expect(source?.origin).toBe("Smart-Dump");
+    expect(source?.body).toBe(NOTE);
+    const list = await listSuggestionsForSetup(david, setup.id);
+    expect([...list.prominent, ...list.more].every((x) => NOTE.includes(x.evidenceQuote))).toBe(true);
+
+    // Nina ist an diesem frischen Setup kein Mitglied – kein Zugriff
+    await expect(smartDump(nina, { setupId: setup.id, text: NOTE })).rejects.toBeInstanceOf(NotFoundError);
+    // Zu kurzer Text wird abgelehnt, statt eine leere Quelle anzulegen
+    await expect(smartDump(david, { setupId: setup.id, text: "kurz" })).rejects.toBeInstanceOf(ValidationError);
   });
 });

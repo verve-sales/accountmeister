@@ -23,8 +23,9 @@ import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/m
 import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
 import { changePriority, createPriority, saveAccountPlanSnapshot } from "@/modules/accountplan/service";
 import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/artifacts/service";
-import { acceptSuggestion, giveFeedback, structureReviewNote, structureSource } from "@/modules/suggestions/service";
+import { acceptSuggestion, giveFeedback, smartDump, structureReviewNote, structureSource } from "@/modules/suggestions/service";
 import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
+import { refreshCompanyResearch } from "@/modules/research/service";
 import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
 import { assignRole, createUserAccess, eraseSourceContent, lockSource, revokeRole, setUserStatus } from "@/modules/governance/service";
 import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, changeOpportunityStatus, confirmOpportunity, confirmOrder, createOffer, createOpportunity, createOrder, createProfileReference, markOrderEvidenceIncomplete, markReady, markStarted, presentOffer, removeParticipation, saveMeddpicc, setRequirementStatus, updateOpportunity } from "@/modules/opportunities/service";
@@ -456,6 +457,16 @@ export async function revokeMailboxAction() {
   }, "Verbindung widerrufen; Zugangsdaten gelöscht.");
 }
 
+// --- Öffentliche Unternehmensrecherche (Etappe 16) -------------------------
+
+export async function refreshCompanyResearchAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.accountId ?? "";
+  return run(`/kunden/${id}`, async (actor) => {
+    await refreshCompanyResearch(actor, id);
+  }, "Recherche aktualisiert (Fixture-Daten, kein echter Internetzugriff).");
+}
+
 export async function importProtocolAction(fd: FormData) {
   const data = formToObject(fd);
   const file = fd.get("file");
@@ -785,6 +796,16 @@ export async function uploadDocumentAction(fd: FormData) {
     if (r.extract.status !== "OK") throw new PendingInfo(`Dokument gespeichert. ${r.extract.note ?? ""}`.trim());
     return `/quellen/${r.sourceId}`;
   }, "Dokument als Quelle gespeichert. Text wurde extrahiert.");
+}
+
+export async function smartDumpAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/start", async (actor) => {
+    const r = await smartDump(actor, data);
+    if (r.repeated) throw new PendingInfo("Dieser Text wurde schon einmal so eingefügt; es wurden keine neuen Vorschläge erzeugt.");
+    if (r.created === 0) throw new PendingInfo(r.noSuggestionReason ? `Gespeichert, aber keine Vorschläge: ${r.noSuggestionReason}` : `Gespeichert, aber keine neuen Vorschläge (${r.skipped} bereits vorhanden, ${r.rejected} zurückgewiesen).`);
+    return `/setups/${data.setupId ?? ""}`;
+  }, "Text gespeichert und Vorschläge erzeugt – bitte im Setup prüfen.");
 }
 
 export async function structureSourceAction(fd: FormData) {

@@ -1407,6 +1407,30 @@ export const opportunityAdvice = pgTable(
   (t) => [uniqueIndex("opportunity_advice_version_uq").on(t.opportunityId, t.versionNo), index("opportunity_advice_opportunity_idx").on(t.opportunityId)],
 );
 
+/**
+ * Öffentliche Unternehmensrecherche je Kunde (Etappe 16): eng begrenzte Ausnahme von „die KI recherchiert nicht
+ * im Internet“ – ausschließlich öffentliche Firmendaten (Branche, Sitz, Größenordnung, Rechtsform), NIE benannte
+ * Einzelpersonen. Fixture-Anbieter analog zur Microsoft-Graph-Integration (Etappe 3B): Struktur und Begrenzung
+ * stehen, ein echter Web-Suchdienst ist bewusst nicht angebunden. Nur die jeweils letzte Fassung je Kunde – kein
+ * Verlauf nötig, es handelt sich um Anzeigedaten, keine geprüften Vorschläge in den Domänenobjekten.
+ */
+export const companyResearch = pgTable(
+  "company_research",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    companyName: text("company_name").notNull(),
+    /** Öffentliche Einzelangaben: {label, value, sourceLabel, sourceUrl, asOf} */
+    facts: jsonb("facts").notNull().default([]),
+    note: text("note").notNull(),
+    fixtureMode: boolean("fixture_mode").notNull().default(true),
+    fetchedBy: text("fetched_by").notNull().references(() => users.id),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("company_research_account_uq").on(t.accountId)],
+);
+
 export type Role = (typeof roleEnum.enumValues)[number];
 export type AccessClass = (typeof accessClassEnum.enumValues)[number];
 export type SignalStatus = (typeof signalStatusEnum.enumValues)[number];
