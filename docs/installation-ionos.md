@@ -48,6 +48,22 @@ Damit sich das Team mit dem Microsoft-Konto anmelden kann, muss die Anwendung eu
 
 Die Anwendung fordert keine weiteren Berechtigungen an; sie liest nur Name und E-Mail-Adresse der angemeldeten Person. Die Anbindung an Outlook (Mail und Kalender) ist ein separater, späterer Schritt mit eigener Freigabe.
 
+## Schritt 4b: Mail-/Kalender-Anbindung freischalten (Entra ID) – erst nach eigener Freigabe
+
+Dieser Schritt ist **kein** Teil der Erstinstallation. Er wird erst nötig, wenn – wie jetzt mit der unterschriebenen Pilotfreigabe geschehen – der Import ausgewählter Microsoft-365-Postfächer und -Kalender ausdrücklich erlaubt ist. Bis dahin (und solange dieser Schritt nicht durchgeführt ist) weist die Anwendung jeden echten Verbindungsversuch bewusst ab und zeigt nur Beispieldaten (Fixture-Modus) – das ist kein Fehler, sondern Absicht (Entscheidung E-018/E-023).
+
+Es wird **keine neue App-Registrierung** gebraucht; die App-Registrierung aus Schritt 4 („Verve Sales-Arbeitsumgebung“) wird um zusätzliche, rein lesende Rechte erweitert.
+
+1. entra.microsoft.com öffnen → „Anwendungen → App-Registrierungen“ → die bestehende Registrierung „Verve Sales-Arbeitsumgebung“ öffnen (dieselbe wie in Schritt 4).
+2. Links „API-Berechtigungen → Berechtigung hinzufügen → Microsoft Graph → Delegierte Berechtigungen“. Diese drei hinzufügen (User.Read ist bereits vorhanden):
+   - `Mail.Read` (Postfach lesen)
+   - `Calendars.Read` (Kalender lesen)
+   - `offline_access` (damit die Verbindung nicht ständig neu bestätigt werden muss)
+3. Auf derselben Seite oben „Administratorzustimmung für Verve Consulting erteilen“ klicken und bestätigen. Ohne diesen Klick kann sich niemand verbinden, weil jede einzelne Person sonst selbst zustimmen müsste – das wollen wir nicht (Briefing 13.1: nur der Nutzer selbst verbindet sein eigenes Postfach, aber die Zustimmung zu den Berechtigungsarten wird zentral einmal erteilt).
+4. Links „Authentifizierung → Plattform hinzufügen → Web“. Umleitungs-URI: `https://accountmeister.verveconsulting.ai/api/integrations/microsoft/callback` (eine **zweite**, eigene Umleitungs-URI – zusätzlich zu der aus Schritt 4, nicht anstelle davon). Speichern.
+5. Keine weiteren Werte werden hier gebraucht – Client-ID, Verzeichnis-ID und der geheime Clientschlüssel aus Schritt 4 werden wiederverwendet. Es muss also nichts Neues notiert oder im Chat geteilt werden.
+6. Danach kurz Bescheid geben: „Berechtigungen sind gesetzt“ – dann wird der echte Abruf im Code freigeschaltet und beim nächsten Update scharf. Einzelne Personen verbinden ihr eigenes Postfach danach selbst unter „Einstellungen“; es wird nichts pauschal eingelesen (nur eine Auswahl-Liste, aus der man einzelne Mails/Termine importiert).
+
 ## Schritt 5: Auf dem Server anmelden
 
 Unter Windows: Windows-Terminal oder PowerShell öffnen (Startmenü → „Terminal“). Eingeben:
