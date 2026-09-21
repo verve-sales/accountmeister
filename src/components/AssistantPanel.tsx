@@ -24,7 +24,7 @@ type View = {
   ai: { enabled: boolean; description: string };
 };
 
-const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage" };
+const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung" };
 const ROLE_FAMILY_LABEL: Record<string, string> = { DELIVERY_MANAGEMENT: "Delivery Management", AGILE_LEADERSHIP: "Agile Leadership", BUSINESS_ANALYSE: "Business Analyse & Beratung", SOLUTION_ARCHITEKTUR: "Solution & Architektur", TEST_QS: "Test & Qualitätssicherung" };
 
 function contextFromPath(pathname: string): { type: string; id: string } {
@@ -56,6 +56,8 @@ function cardTitle(item: Item): string {
       return `${s("personName")} – ${s("occasion")}`;
     case "FRAGE":
       return s("question");
+    case "EINSORTIERUNG":
+      return `→ ${s("accountName")}${s("setupName") ? ` · ${s("setupName")}` : ""}`;
     default:
       return item.type;
   }
@@ -86,6 +88,8 @@ function cardDetail(item: Item): string {
     case "KUNDE":
     case "SETUP":
       return s("contextNote");
+    case "EINSORTIERUNG":
+      return s("reasoning");
     default:
       return "";
   }

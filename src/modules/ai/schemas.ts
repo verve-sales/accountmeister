@@ -214,6 +214,15 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("AKTION"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), ownerRole: z.enum(["BD", "ANKER", "PRINCIPAL"]).default("BD"), dueHint: z.string().max(100).optional().default(""), ...q, ...w }),
   z.object({ type: z.literal("KONTAKT"), personName: z.string().min(2).max(200), viaVerveName: z.string().max(200).optional().default(""), occasion: z.string().min(3).max(500), draftMessage: z.string().max(1500).optional().default(""), ...q, ...w }),
   z.object({ type: z.literal("FRAGE"), question: z.string().min(3).max(500), ...q, ...w }),
+  z.object({
+    type: z.literal("EINSORTIERUNG"),
+    /** Name exakt wie in der Liste der bekannten Kunden – nie erfunden. */
+    accountName: z.string().min(1).max(200),
+    /** Name eines bestehenden Setups dieses Kunden, wenn im Text erkennbar – sonst leer. */
+    setupName: z.string().max(200).optional().default(""),
+    reasoning: z.string().max(300).optional().default(""),
+    ...q,
+  }),
 ]);
 export type AssistantItem = z.infer<typeof assistantItemSchema>;
 

@@ -13,7 +13,7 @@ import { ASSISTANT_CARDS_MARKER, assistantItemSchema, interviewTopicLabel, inter
 import { requireTaskOptions } from "@/modules/ai/settings";
 import { parseJsonLoose } from "@/modules/ai/providers/langdock";
 import { UsageLimitError } from "@/modules/suggestions/service";
-import { getAccount, createAccount } from "@/modules/accounts/service";
+import { getAccount, createAccount, listVisibleAccounts } from "@/modules/accounts/service";
 import { createSetup } from "@/modules/setups/service";
 import { createPerson } from "@/modules/people/service";
 import { createOpportunity } from "@/modules/opportunities/service";
@@ -166,6 +166,11 @@ export async function computeMissing(actor: Actor, res: Resolved): Promise<strin
 /** Berechtigter Kontext als Text für das Modell – nur, was die Person selbst sieht. */
 export async function buildContextText(actor: Actor, res: Resolved): Promise<string> {
   const lines: string[] = [`Angemeldet: ${actor.displayName} (Rollen: ${[...actor.roles].join(", ") || "keine"})`];
+  if (res.ref.type === "GLOBAL") {
+    // Einsortierung (Etappe 14): nur so kann das Modell einen eingefügten Text/E-Mail-Text einem bekannten Kunden zuordnen.
+    const known = (await listVisibleAccounts(actor)).filter((a) => a.status !== "ARCHIVED").map((a) => a.name);
+    if (known.length) lines.push(`Bekannte Kunden (nur exakt so vorschlagen, wenn einer davon gemeint ist – nie abwandeln oder neue Namen erfinden): ${known.join("; ")}`);
+  }
   if (res.account) lines.push(`Kunde: ${res.account.name} (${res.account.orgType})`);
   if (res.ctx) {
     lines.push(`Setup: ${res.ctx.setup.name} [${res.ctx.setup.status}]${res.ctx.setup.contextNote ? ` – ${res.ctx.setup.contextNote}` : ""}`);
@@ -448,7 +453,7 @@ async function matchOpportunity(setupId: string, purpose: string) {
   return opps.find((o) => o.title.toLowerCase() === q) ?? opps.find((o) => o.title.toLowerCase().includes(q) || q.includes(o.title.toLowerCase())) ?? null;
 }
 
-type ApplyResult = { type: string; id: string; note?: string; rebind?: { type: "SETUP"; id: string; title: string } };
+type ApplyResult = { type: string; id: string; note?: string; rebind?: { type: "SETUP" | "ACCOUNT"; id: string; title: string } };
 
 async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$inferSelect, res: Resolved, item: AssistantItem): Promise<ApplyResult> {
   const origin = "Assistent-Dialog";
@@ -481,6 +486,22 @@ async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$i
     if (!hasRole(actor, "PRINCIPAL") && !hasRole(actor, "CEO")) throw new ForbiddenError("Accountziele legen Principal oder CEO an.");
     const goal = await createAccountGoal(actor, { accountId: res.account.id, title: item.title, desiredOutcome: item.desiredOutcome, roleFamily: item.roleFamily ?? "", targetHeadcount: item.targetHeadcount ?? undefined, horizon: item.horizon, successCriterion: item.successCriterion });
     return { type: "GOAL", id: goal.id, note: `Accountziel „${goal.title}“ als Entwurf angelegt – zur Abstimmung mit dem CEO bereit (Ziele → „${goal.title}“).` };
+  }
+  if (item.type === "EINSORTIERUNG") {
+    const accounts = await listVisibleAccounts(actor);
+    const account = accounts.find((a) => a.name === item.accountName);
+    if (!account) throw new ValidationError(`Kunde „${item.accountName}“ wurde nicht gefunden oder ist für dich nicht sichtbar.`);
+    let matchedSetup: typeof schema.projectSetups.$inferSelect | null = null;
+    if (item.setupName) {
+      const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, account.id) });
+      matchedSetup = setups.find((s) => s.name.toLowerCase() === item.setupName.toLowerCase()) ?? null;
+    }
+    if (matchedSetup) {
+      const ctx = await loadSetupContext(actor, matchedSetup.id);
+      if (!ctx || !canViewSetup(actor, ctx)) throw new ForbiddenError("Dieses Setup ist für dich nicht sichtbar.");
+      return { type: "SETUP", id: matchedSetup.id, note: `Zuordnung übernommen – das Gespräch bezieht sich jetzt auf „${account.name} · ${matchedSetup.name}“.`, rebind: { type: "SETUP", id: matchedSetup.id, title: "Assistent · Setup" } };
+    }
+    return { type: "ACCOUNT", id: account.id, note: `Zuordnung übernommen – das Gespräch bezieht sich jetzt auf „${account.name}“. Als Nächstes kannst du z. B. ein Setup vorschlagen lassen.`, rebind: { type: "ACCOUNT", id: account.id, title: "Assistent · Kunde" } };
   }
   // Alles Weitere braucht ein Setup mit Bearbeitungsrecht
   if (!res.ctx) throw new ValidationError("Dafür braucht es ein Setup. Lege zuerst Kunde und Setup an (Karten „Kunde“/„Setup“) oder öffne den Assistenten in einem Setup.");

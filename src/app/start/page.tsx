@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildDashboard, viewDescription, viewLabel, type DashboardView } from "@/modules/dashboard/service";
+import { maturityLabel } from "@/modules/strategy/chancen";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { goalStatusLabel } from "@/lib/labels";
@@ -163,6 +164,63 @@ export default async function StartPage({ searchParams }: { searchParams: Search
           </section>
         )}
       </div>
+      {d.view === "PRINCIPAL" && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Zusammenarbeit der letzten Woche &amp; Top-Chancen je Kunde</h2>
+          {d.activity.length === 0 ? (
+            <p className="muted text-sm">Keine sichtbaren Kunden mit Aktivität.</p>
+          ) : (
+            <table className="list text-sm">
+              <thead>
+                <tr>
+                  <th>Kunde</th>
+                  <th>Anker</th>
+                  <th>BD</th>
+                  <th>Koeffizient</th>
+                  <th>Top-Chancen</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.activity.map((a) => {
+                  const total = (c: (typeof a.byRole)["ANKER"]) => c.weeklysBestaetigt + c.beobachtungenErfasst + c.aktionenErfasstOderErledigt + c.vorschlaegeEntschieden + c.kontakteGepflegt;
+                  const chances = d.topOpportunities[a.accountId] ?? [];
+                  return (
+                    <tr key={a.accountId}>
+                      <td><Link href={`/kunden/${a.accountId}`}>{a.accountName}</Link></td>
+                      <td>{total(a.byRole.ANKER)}</td>
+                      <td>{total(a.byRole.BD)}</td>
+                      <td>{a.coefficient}</td>
+                      <td>{chances.length === 0 ? <span className="muted">keine aktive Chance</span> : chances.map((c) => `${c.title} (${maturityLabel[c.maturity]})`).join("; ")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          <p className="muted text-xs mt-2">Aktivität der letzten 7 Tage, gezählt aus dokumentierten Objekten (Weeklys, Beobachtungen, Aktionen, Vorschläge, Kontakte). Aktivitätskoeffizient: Menge × Anzahl beteiligter Rollen (Principal, BD, Anker) ÷ 3.</p>
+        </section>
+      )}
+
+      {d.view === "PRINCIPAL" && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Hinweise der KI: möglicherweise neue Chancen ({d.opportunityHints.length})</h2>
+          {d.opportunityHints.length === 0 ? (
+            <p className="muted text-sm">Keine offenen Beobachtungen, die auf eine neue Chance hindeuten.</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {d.opportunityHints.map((h, i) => (
+                <li key={i}>
+                  <Link href={h.href}>{h.text}</Link>
+                  <span className="muted"> · {h.accountName}</span>
+                  {h.detail && <div className="muted text-xs">{h.detail.slice(0, 160)}</div>}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="muted text-xs mt-2">Unentschiedene, von der KI abgeleitete Beobachtungen (Kategorie „Neue Information“) aus Weekly-Notizen und Dokumenten – ein Hinweis, keine Vorhersage; ob daraus eine Chance wird, entscheidest du im Setup.</p>
+        </section>
+      )}
+
       <p className="muted text-xs">{d.note}</p>
     </div>
   );

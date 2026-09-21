@@ -7,6 +7,8 @@ import { canViewAccount, canViewSetup, isResponsibleBd, loadSetupContext, type S
 import { analyzeSetup, type SetupAnalysis, type Stage, STAGES } from "@/modules/strategy/analysis";
 import { listVisibleAccounts } from "@/modules/accounts/service";
 import { listGoals } from "@/modules/leadership/service";
+import { buildActivityOverview, type AccountActivity } from "@/modules/activity/service";
+import { buildChanceOverview, MATURITY, type ChanceRow } from "@/modules/strategy/chancen";
 
 /**
  * Dashboard je Rolle (Etappe 9, E-043). Eine „Sicht“ ist eine Brille, keine Rechteerweiterung: Wählbar sind nur
@@ -79,6 +81,12 @@ export type Dashboard = {
   accounts: AccountCard[];
   ideas: { text: string; detail: string; href: string; setupName: string }[];
   goals: { title: string; status: string; href: string }[];
+  /** Nur für die Principal-Sicht befüllt: Zusammenarbeit der letzten Woche je Kunde (Etappe 12). */
+  activity: AccountActivity[];
+  /** Nur für die Principal-Sicht befüllt: aussichtsreichste Chancen je Kunde (accountId → Top 3). */
+  topOpportunities: Record<string, ChanceRow[]>;
+  /** Nur für die Principal-Sicht befüllt: offene, unentschiedene Beobachtungen, die auf eine mögliche neue Chance hindeuten. */
+  opportunityHints: { text: string; detail: string; href: string; accountName: string }[];
   note: string;
   empty: string | null;
 };
@@ -230,6 +238,40 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
 
   const empty = ctxs.length === 0 ? (view === "BD" ? "Noch keine Kunden oder Setups, für die du als BD zuständig bist. Lege einen Kunden an oder lass dich einem Setup zuordnen." : view === "ANKER" ? "Du bist in keinem Setup als Anker eingetragen." : view === "PRINCIPAL" ? "Dir ist noch kein Kunde als Principal zugeordnet." : "Keine sichtbaren Kunden.") : null;
 
+  // Principal-Start (Etappe 14): Zusammenarbeit der letzten Woche, Top-Chancen je Kunde, offene Hinweise auf mögliche neue Chancen.
+  let activity: Dashboard["activity"] = [];
+  let topOpportunities: Dashboard["topOpportunities"] = {};
+  let opportunityHints: Dashboard["opportunityHints"] = [];
+  if (view === "PRINCIPAL") {
+    try {
+      activity = await buildActivityOverview(actor, { days: 7 });
+    } catch {
+      activity = [];
+    }
+    try {
+      const { rows } = await buildChanceOverview(actor);
+      const byAccount = new Map<string, ChanceRow[]>();
+      for (const r of rows) byAccount.set(r.accountId, [...(byAccount.get(r.accountId) ?? []), r]);
+      for (const [accountId, list] of byAccount) {
+        list.sort((a, b) => MATURITY.indexOf(b.maturity) - MATURITY.indexOf(a.maturity) || b.headcount - a.headcount);
+        topOpportunities[accountId] = list.slice(0, 3);
+      }
+    } catch {
+      topOpportunities = {};
+    }
+    if (ctxs.length) {
+      const setupIds = ctxs.map((c) => c.setup.id);
+      const accountOf = new Map(ctxs.map((c) => [c.setup.id, c.account.name]));
+      // Unentschiedene, von der KI abgeleitete Beobachtungen (Kategorie „Neue Information“) – ein Hinweis, keine Vorhersage.
+      const hints = await db.query.suggestions.findMany({
+        where: and(inArray(schema.suggestions.setupId, setupIds), eq(schema.suggestions.type, "BEOBACHTUNG"), eq(schema.suggestions.priorityCategory, "NEUE_INFORMATION"), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT"])),
+        orderBy: (s, { desc }) => desc(s.computedAt),
+        limit: 8,
+      });
+      opportunityHints = hints.map((h) => ({ text: h.title, detail: h.hypothesis || h.observation || "", href: `/setups/${h.setupId}`, accountName: accountOf.get(h.setupId) ?? "" }));
+    }
+  }
+
   return {
     view,
     available,
@@ -237,6 +279,9 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
     accounts: cards,
     ideas,
     goals,
+    activity,
+    topOpportunities,
+    opportunityHints,
     note: "Alle Angaben sind Zählungen und Regeln über dokumentierte Objekte; keine Umsatz-, Forecast- oder Wahrscheinlichkeitswerte. Die Sicht ändert keine Rechte.",
     empty,
   };

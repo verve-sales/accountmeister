@@ -263,3 +263,61 @@ describe("Etappe 11: Accountziel-Karte des Assistenten (KI-geführte Anlage durc
     await expect(decideCard(david, { threadId: dView.thread.id, messageId: dr.message.id, cardId: dCard!.id, decision: "UEBERNEHMEN" })).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
+
+describe("Etappe 14: Einsortierung eingefügter E-Mail-Texte einem bekannten Kunden zuordnen", () => {
+  function einsortierungProvider(accountName: string, setupName: string, evidenceQuote: string): AIProvider {
+    return {
+      ...new TestProvider(),
+      info: () => ({ id: "test", enabled: true, model: "test", description: "Einsortierung-Fake" }),
+      assistantReply: async (_i: AssistantInput, _o?: unknown, onDelta?: (c: string) => void) => {
+        const prose = "Das sieht nach einem bekannten Kunden aus, ich schlage die Einsortierung vor.";
+        const json = JSON.stringify({ items: [{ type: "EINSORTIERUNG", accountName, setupName, reasoning: "Kundenname im Text erkannt.", evidenceQuote }], missing: [] });
+        onDelta?.(prose);
+        return `${prose}\n${ASSISTANT_CARDS_MARKER}\n${json}`;
+      },
+    } as unknown as AIProvider;
+  }
+
+  it("bindet das (allgemeine) Gespräch an den erkannten Kunden – ohne erkennbares Setup an den Kunden, sonst direkt an das Setup", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const seed = await ensureSeed();
+    const petra = await actorFor("petra");
+    const account = await db.query.accounts.findFirst({ where: eq(schema.accounts.id, seed.accountId) });
+    const text = `Kopie einer E-Mail von ${account!.name}: Wir würden uns über ein Update freuen.`;
+
+    // Ohne erkennbares Setup: Zuordnung landet auf Kundenebene
+    const view = await getThreadView(petra, { type: "GLOBAL", id: "" });
+    const r = await sendMessage(petra, { threadId: view.thread.id, text }, { provider: einsortierungProvider(account!.name, "", text) });
+    const card = r.cards.find((c) => c.item.type === "EINSORTIERUNG");
+    expect(card).toBeTruthy();
+    const applied = await decideCard(petra, { threadId: view.thread.id, messageId: r.message.id, cardId: card!.id, decision: "UEBERNEHMEN" });
+    expect(applied.card.resultType).toBe("ACCOUNT");
+    expect(applied.card.resultId).toBe(seed.accountId);
+    expect(applied.thread.contextType).toBe("ACCOUNT");
+    expect(applied.thread.contextId).toBe(seed.accountId);
+
+    // Mit erkennbarem, bestehendem Setup: Zuordnung landet direkt auf dem Setup
+    const view2 = await getThreadView(petra, { type: "GLOBAL", id: "" });
+    const r2 = await sendMessage(petra, { threadId: view2.thread.id, text }, { provider: einsortierungProvider(account!.name, "Plattformteam", text) });
+    const card2 = r2.cards.find((c) => c.item.type === "EINSORTIERUNG");
+    expect(card2).toBeTruthy();
+    const applied2 = await decideCard(petra, { threadId: view2.thread.id, messageId: r2.message.id, cardId: card2!.id, decision: "UEBERNEHMEN" });
+    expect(applied2.card.resultType).toBe("SETUP");
+    expect(applied2.card.resultId).toBe(seed.setupId);
+    expect(applied2.thread.contextType).toBe("SETUP");
+    expect(applied2.thread.contextId).toBe(seed.setupId);
+  });
+
+  it("erfundene oder unsichtbare Kundennamen werden nicht übernommen", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const petra = await actorFor("petra");
+    const text = "Kopie einer E-Mail von einer Organisation, die im System nicht existiert.";
+    const view = await getThreadView(petra, { type: "GLOBAL", id: "" });
+    const r = await sendMessage(petra, { threadId: view.thread.id, text }, { provider: einsortierungProvider("Nicht existierende Organisation GmbH", "", text) });
+    const card = r.cards.find((c) => c.item.type === "EINSORTIERUNG");
+    expect(card).toBeTruthy();
+    await expect(decideCard(petra, { threadId: view.thread.id, messageId: r.message.id, cardId: card!.id, decision: "UEBERNEHMEN" })).rejects.toBeInstanceOf(ValidationError);
+  });
+});

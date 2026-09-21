@@ -9,6 +9,8 @@ import { getStrategy, proposeStrategy, saveStrategy, formToStrategyInput } from 
 import { suggestFormFields } from "@/modules/strategy/formsuggest";
 import { requireSetupContext, createSetup } from "@/modules/setups/service";
 import { createOpportunity } from "@/modules/opportunities/service";
+import { createAccount } from "@/modules/accounts/service";
+import { captureObservation } from "@/modules/signals/service";
 import { actorFor, ensureSeed } from "./helpers";
 
 describe("Etappe 9A: Dashboard je Rolle mit Sichtwechsler", () => {
@@ -55,6 +57,58 @@ describe("Etappe 9A: Dashboard je Rolle mit Sichtwechsler", () => {
     const c = (await buildDashboard(clemens, "CEO"))!;
     expect(c.ideas).toEqual([]);
     expect(c.accounts.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Etappe 14: Principal-Start – Zusammenarbeit der letzten Woche, Top-Chancen, KI-Hinweise", () => {
+  it("zeigt Aktivität und Top-Chancen je Kunde sowie offene Beobachtungen, die auf eine mögliche neue Chance hindeuten – nur in der Principal-Sicht", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    await ensureSeed();
+    const david = await actorFor("david");
+    const nina = await actorFor("nina");
+    const petra = await actorFor("petra");
+    const account = await createAccount(david, { name: `Principal-Start-Test ${Date.now().toString(36)} (fiktiv)`, responsibleBdUserId: david.userId });
+    const setup = await createSetup(david, { accountId: account.id, name: "Principal-Start-Setup", contextNote: "Kontext", bdUserId: david.userId });
+    await db.insert(schema.setupMemberships).values({ setupId: setup.id, userId: nina.userId, contribution: "ANKER_KONTEXT", canEdit: true });
+
+    // Zusammenarbeit der letzten Woche: Anker erfasst eine Beobachtung
+    await captureObservation(nina, { setupId: setup.id, observation: "Principal-Start-Test: Beobachtung von Nina." });
+
+    // Top-Chance: eine aktive, dokumentierte Chance
+    await createOpportunity(david, { setupId: setup.id, title: "Principal-Start-Test: Chance", needDescription: "Kunde sucht Unterstützung.", roleFamily: "TEST_QS", headcount: 1, anticipated: false });
+
+    // KI-Hinweis auf eine mögliche neue Chance: offene, unentschiedene Beobachtung der Kategorie „Neue Information“
+    await db.insert(schema.suggestions).values({
+      workspaceId: account.workspaceId,
+      type: "BEOBACHTUNG",
+      title: "Principal-Start-Test: möglicher neuer Bedarf",
+      targetRole: "BD",
+      setupId: setup.id,
+      trigger: "Principal-Start-Test",
+      evidenceQuote: "Principal-Start-Test",
+      observation: "Principal-Start-Test: möglicher neuer Bedarf",
+      priorityCategory: "NEUE_INFORMATION",
+      dedupeKey: `principal-start-test-${Date.now()}`,
+      provider: "test",
+      model: "test",
+      promptVersion: "test",
+      status: "NEU",
+    });
+
+    const d = (await buildDashboard(petra, "PRINCIPAL"))!;
+    expect(d.view).toBe("PRINCIPAL");
+    const activityRow = d.activity.find((a) => a.accountId === account.id);
+    expect(activityRow).toBeTruthy();
+    expect(activityRow!.byRole.ANKER.beobachtungenErfasst).toBe(1);
+    const chances = d.topOpportunities[account.id] ?? [];
+    expect(chances.some((c) => c.title === "Principal-Start-Test: Chance")).toBe(true);
+    expect(d.opportunityHints.some((h) => h.text === "Principal-Start-Test: möglicher neuer Bedarf" && h.accountName === account.name)).toBe(true);
+
+    // In anderen Sichten bleiben diese neuen Felder leer – kein Überraschungseffekt außerhalb der Principal-Sicht
+    const bd = (await buildDashboard(david, "BD"))!;
+    expect(bd.activity).toEqual([]);
+    expect(bd.opportunityHints).toEqual([]);
   });
 });
 
