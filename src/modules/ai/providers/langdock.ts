@@ -248,7 +248,10 @@ export class LangdockProvider implements AIProvider {
       `\n=== LAGE (Daten) ===\n${clip(input.analysisText) || "–"}\n=== ENDE ===`,
       `\n=== BEKANNTER KONTEXT (Daten) ===\n${clip(input.contextText) || "–"}\n=== ENDE ===`,
     ].join("\n");
-    return this.completeJson(FORM_SUGGEST_SYSTEM, user, { maxOutputTokens: 800, ...opts });
+    // 800 reichte für VORHABEN/SETUP/CHANCE (wenige, kurze Felder), aber MEDDPICC hat acht Felder – bei
+    // ausführlicheren Modellantworten wurde die Antwort dort mitten im JSON abgeschnitten und als ungültig
+    // verworfen. Höheres Limit für alle Formulararten, damit die Antwort nie an der Grenze abbricht.
+    return this.completeJson(FORM_SUGGEST_SYSTEM, user, { maxOutputTokens: 1600, ...opts });
   }
 
   async analyzeDocument(input: AnalyzeDocumentInput, opts?: TaskOptions): Promise<unknown> {
