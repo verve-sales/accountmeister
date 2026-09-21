@@ -107,6 +107,150 @@ export async function eraseSourceContent(actor: Actor, sourceId: string, raw: un
 }
 
 // ---------------------------------------------------------------------------
+// Etappe 18: Löschung von Ansprechpartnern und Fristenprüfung (docs/pilotfreigabe-vorschlag.md Abschnitt 6/7)
+// ---------------------------------------------------------------------------
+
+/** 3 Jahre – Ansprechpartner ohne aktive Beziehung, Quellen, Weeklys/Aktionen/Übergaben/Accountpläne, Audit-Protokolle. */
+const RETENTION_YEARS_STANDARD = 3;
+/** 1 Jahr – KI-Auftragsprotokolle (nur Hash/Länge, kein Text). */
+const RETENTION_YEARS_AI_JOBS = 1;
+/** 10 Jahre – Bedarfe/Angebote/Aufträge mit Belegcharakter (handels-/steuerrechtlich); unter diesem Alter ist eine
+ *  kürzere Löschung nur nach fachlicher Prüfung möglich (ob Belegcharakter vorliegt), darüber ist sie in jeder
+ *  Lesart der Frist fällig. */
+const RETENTION_YEARS_BELEGE = 10;
+
+function yearsAgo(years: number): Date {
+  const d = new Date();
+  d.setUTCFullYear(d.getUTCFullYear() - years);
+  return d;
+}
+
+const activeRelationshipStates = schema.relationshipStateEnum.enumValues.filter((s) => s !== "NICHT_AKTIV");
+
+/**
+ * Ansprechpartner ohne aktive Beziehung (alle Beziehungen „nicht aktiv“ oder gar keine), deren letzte
+ * dokumentierte Interaktion (jüngste Beziehungsänderung, sonst Anlage der Person) mind. 3 Jahre zurückliegt.
+ */
+async function overdueContacts(workspaceId: string, cutoff: Date) {
+  const persons = await db.query.persons.findMany({ where: eq(schema.persons.workspaceId, workspaceId) });
+  const candidates = persons.filter((p) => p.displayName !== "[gelöscht]");
+  if (candidates.length === 0) return [];
+  const ids = candidates.map((p) => p.id);
+  const rels = await db.query.relationships.findMany({ where: inArray(schema.relationships.personId, ids) });
+  const out: { personId: string; displayName: string; lastInteraction: Date }[] = [];
+  for (const p of candidates) {
+    const myRels = rels.filter((r) => r.personId === p.id);
+    const hasActive = myRels.some((r) => (activeRelationshipStates as string[]).includes(r.state));
+    if (hasActive) continue;
+    const last = myRels.length ? new Date(Math.max(...myRels.map((r) => r.updatedAt.getTime()))) : p.updatedAt;
+    if (last <= cutoff) out.push({ personId: p.id, displayName: p.displayName, lastInteraction: last });
+  }
+  return out.sort((a, b) => a.lastInteraction.getTime() - b.lastInteraction.getTime());
+}
+
+/**
+ * Fristenprüfung für die Verwaltung: zeigt je Datenklasse, was laut Löschkonzept (`docs/pilotfreigabe-vorschlag.md`
+ * Abschnitt 6) zur Löschung/Pseudonymisierung fällig ist. Nur Klassen, deren Frist sich aus einem einzigen
+ * Zeitstempel ohne fachliche Einzelfallprüfung ableiten lässt, werden automatisch ermittelt; alles mit
+ * Ermessensspielraum (Quellen bei laufendem Auftrag, Bedarfe/Angebote/Aufträge ohne Belegcharakter, vertrauliche
+ * Führungsnotizen nach Austritt) bleibt eine Sichtprüfung durch die Betriebsverwaltung – hier nur als Hinweis.
+ * Nichts wird durch diese Funktion verändert, sie zählt und listet nur.
+ */
+export async function retentionReview(actor: Actor) {
+  assertAdmin(actor);
+  const standardCutoff = yearsAgo(RETENTION_YEARS_STANDARD);
+  const aiJobsCutoff = yearsAgo(RETENTION_YEARS_AI_JOBS);
+  const belegeCutoff = yearsAgo(RETENTION_YEARS_BELEGE);
+
+  const contacts = await overdueContacts(actor.workspaceId, standardCutoff);
+
+  const overdueSourcesRows = await db.query.sources.findMany({
+    where: and(eq(schema.sources.workspaceId, actor.workspaceId), eq(schema.sources.isLocked, false)),
+  });
+  const overdueSources = overdueSourcesRows.filter((s) => (s.sourceTime ?? s.importedAt) <= standardCutoff && !(s.body === null && s.title === "[Inhalt gelöscht]"));
+
+  const overdueAudit = await db.execute(sql`select count(*)::int as n from audit_events where workspace_id = ${actor.workspaceId} and at <= ${standardCutoff.toISOString()}`);
+  const overdueAiJobs = await db.execute(sql`select count(*)::int as n from ai_jobs where workspace_id = ${actor.workspaceId} and started_at <= ${aiJobsCutoff.toISOString()}`);
+  const overdueOrders = await db.execute(sql`select count(*)::int as n from orders where workspace_id = ${actor.workspaceId} and created_at <= ${belegeCutoff.toISOString()}`);
+  const overdueOffers = await db.execute(sql`select count(*)::int as n from offers where workspace_id = ${actor.workspaceId} and created_at <= ${belegeCutoff.toISOString()}`);
+
+  return {
+    standardCutoff,
+    aiJobsCutoff,
+    belegeCutoff,
+    contacts: { items: contacts.slice(0, 50), total: contacts.length },
+    sources: { items: overdueSources.slice(0, 50).map((s) => ({ id: s.id, title: s.title, time: s.sourceTime ?? s.importedAt })), total: overdueSources.length },
+    auditEvents: { total: (overdueAudit.rows[0] as { n: number }).n },
+    aiJobs: { total: (overdueAiJobs.rows[0] as { n: number }).n },
+    belege: { orders: (overdueOrders.rows[0] as { n: number }).n, offers: (overdueOffers.rows[0] as { n: number }).n },
+  };
+}
+
+export const pseudonymizePersonInput = z.object({ personId: z.string().min(1), reason: z.string().trim().min(5, "Bitte den Anlass angeben (z. B. Löschverlangen, Fristenprüfung).").max(1000) });
+
+/**
+ * Ansprechpartner löschen (docs/pilotfreigabe-vorschlag.md Abschnitt 7): Beziehungen auf „nicht aktiv“ setzen,
+ * Stammdaten pseudonymisieren. Nur möglich, wenn keine Beziehung mehr aktiv ist – eine aktiv gepflegte Beziehung
+ * spricht dagegen, dass die Interaktion beendet ist. Metadaten (ID, Kunde, Zeitpunkte) bleiben für die
+ * Nachvollziehbarkeit; Protokoll ohne Inhalt.
+ */
+export async function pseudonymizePerson(actor: Actor, raw: unknown) {
+  assertAdmin(actor);
+  const parsed = pseudonymizePersonInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
+  const person = await db.query.persons.findFirst({ where: and(eq(schema.persons.id, parsed.data.personId), eq(schema.persons.workspaceId, actor.workspaceId)) });
+  if (!person) throw new NotFoundError("Person");
+  if (person.displayName === "[gelöscht]") throw new TransitionError("Diese Person wurde bereits gelöscht.");
+  const rels = await db.query.relationships.findMany({ where: eq(schema.relationships.personId, person.id) });
+  const active = rels.filter((r) => (activeRelationshipStates as string[]).includes(r.state));
+  if (active.length > 0) throw new TransitionError("Diese Person hat noch eine aktive Beziehung. Beziehungsstand zuerst auf „nicht aktiv“ setzen.");
+  return db.transaction(async (tx) => {
+    await tx.update(schema.persons).set({ displayName: "[gelöscht]", email: null, phone: null, updatedAt: new Date() }).where(eq(schema.persons.id, person.id));
+    await tx.update(schema.personFunctions).set({ knownResponsibility: null }).where(eq(schema.personFunctions.personId, person.id));
+    const rels2 = await tx
+      .update(schema.relationships)
+      .set({ contextNote: "[Inhalt gelöscht]" })
+      .where(eq(schema.relationships.personId, person.id))
+      .returning({ id: schema.relationships.id });
+    await recordAudit(tx, actor, "person.pseudonymized", "PERSON", person.id, { reason: parsed.data.reason.slice(0, 200), relationships: rels2.length });
+    return { personId: person.id, relationships: rels2.length };
+  });
+}
+
+/** Alte Protokoll-/KI-Auftragseinträge löschen (docs/pilotfreigabe-vorschlag.md Abschnitt 6). Nur Zeilen, die
+ *  bei Aufruf die jeweilige Frist überschritten haben; die Löschung selbst erzeugt einen einzigen zusammen-
+ *  fassenden Protokolleintrag (nicht je gelöschter Zeile, sonst würde das Protokoll durch seine eigene Pflege wachsen). */
+export async function purgeExpiredLogs(actor: Actor) {
+  assertAdmin(actor);
+  const standardCutoff = yearsAgo(RETENTION_YEARS_STANDARD);
+  const aiJobsCutoff = yearsAgo(RETENTION_YEARS_AI_JOBS);
+  return db.transaction(async (tx) => {
+    const auditDeleted = await tx
+      .delete(schema.auditEvents)
+      .where(and(eq(schema.auditEvents.workspaceId, actor.workspaceId), sql`${schema.auditEvents.at} <= ${standardCutoff.toISOString()}`))
+      .returning({ id: schema.auditEvents.id });
+    // ai_jobs wird von mehreren Tabellen referenziert (das Ergebnis eines Auftrags lebt oft länger als 1 Jahr).
+    // Diese Verweise gehören nicht dem Auftragsprotokoll (16.4: die Fassung/der Vorschlag bleibt bestehen, nur
+    // der Verweis „welcher Auftrag hat das erzeugt“ entfällt) – erst lösen, sonst verletzt das Löschen den Fremdschlüssel.
+    const dueJobs = await tx.query.aiJobs.findMany({ where: and(eq(schema.aiJobs.workspaceId, actor.workspaceId), sql`${schema.aiJobs.startedAt} <= ${aiJobsCutoff.toISOString()}`), columns: { id: true } });
+    const jobIds = dueJobs.map((j) => j.id);
+    if (jobIds.length > 0) {
+      await tx.update(schema.intakeProposals).set({ aiJobId: null }).where(inArray(schema.intakeProposals.aiJobId, jobIds));
+      await tx.update(schema.interviewTurns).set({ aiJobId: null }).where(inArray(schema.interviewTurns.aiJobId, jobIds));
+      await tx.update(schema.suggestions).set({ aiJobId: null }).where(inArray(schema.suggestions.aiJobId, jobIds));
+      await tx.update(schema.importJobs).set({ aiJobId: null }).where(inArray(schema.importJobs.aiJobId, jobIds));
+      await tx.update(schema.assistantMessages).set({ aiJobId: null }).where(inArray(schema.assistantMessages.aiJobId, jobIds));
+      await tx.update(schema.strategyThreads).set({ aiJobId: null }).where(inArray(schema.strategyThreads.aiJobId, jobIds));
+      await tx.update(schema.opportunityAdvice).set({ aiJobId: null }).where(inArray(schema.opportunityAdvice.aiJobId, jobIds));
+      await tx.update(schema.buyingCenterAdvice).set({ aiJobId: null }).where(inArray(schema.buyingCenterAdvice.aiJobId, jobIds));
+    }
+    const aiJobsDeleted = jobIds.length ? await tx.delete(schema.aiJobs).where(inArray(schema.aiJobs.id, jobIds)).returning({ id: schema.aiJobs.id }) : [];
+    await recordAudit(tx, actor, "retention.logs_purged", "WORKSPACE", actor.workspaceId, { auditEvents: auditDeleted.length, aiJobs: aiJobsDeleted.length, standardCutoff: standardCutoff.toISOString().slice(0, 10), aiJobsCutoff: aiJobsCutoff.toISOString().slice(0, 10) });
+    return { auditEvents: auditDeleted.length, aiJobs: aiJobsDeleted.length };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Verwaltung (ADMIN): Rollen und Audit ohne Inhalte
 // ---------------------------------------------------------------------------
 

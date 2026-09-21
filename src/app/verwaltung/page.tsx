@@ -32,7 +32,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Verwaltung (Betriebsverwaltung)</h1>
-      <p className="muted text-sm">Rollen, Zugänge, Protokoll und Bestandszahlen. Kein Zugriff auf Setup-Inhalte, Quellen, Notizen oder Vorschläge (Briefing 16.2). KI-Anbieter und Modelle je Aufgabe: <Link href="/verwaltung/ki">Verwaltung → KI</Link>. Standardrollenkatalog für Chancen: <Link href="/verwaltung/rollen">Verwaltung → Rollen</Link>.</p>
+      <p className="muted text-sm">Rollen, Zugänge, Protokoll und Bestandszahlen. Kein Zugriff auf Setup-Inhalte, Quellen, Notizen oder Vorschläge (Briefing 16.2). KI-Anbieter und Modelle je Aufgabe: <Link href="/verwaltung/ki">Verwaltung → KI</Link>. Standardrollenkatalog für Chancen: <Link href="/verwaltung/rollen">Verwaltung → Rollen</Link>. Was laut Löschkonzept fällig ist: <Link href="/verwaltung/fristen">Verwaltung → Fristenprüfung</Link>.</p>
       <Feedback params={sp} />
 
       <section className="card">
@@ -60,7 +60,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
             <tr><td>Protokoll</td><td>{inventory.audit} Ereignisse</td></tr>
           </tbody>
         </table>
-        <p className="muted text-xs mt-1">Aufbewahrungsfristen je Datenklasse sind eine offene Entscheidung (Entscheidungsprotokoll); die Anwendung erfindet keine Pauschalfristen.</p>
+        <p className="muted text-xs mt-1">Aufbewahrungsfristen je Datenklasse: `docs/pilotfreigabe-vorschlag.md` Abschnitt 6. Was davon automatisch ermittelt werden kann, zeigt <Link href="/verwaltung/fristen">Verwaltung → Fristenprüfung</Link>.</p>
       </section>
 
       <section className="card">

@@ -19,7 +19,7 @@ import { formToStrategyInput, saveStrategy } from "@/modules/strategy/service";
 import { formToOpportunityAdviceInput, saveOpportunityAdvice } from "@/modules/opportunities/advisor";
 import { formToBuyingCenterAdviceInput, saveBuyingCenterAdvice } from "@/modules/opportunities/buyingCenterAdvisor";
 import { addRole, setRoleActive } from "@/modules/roles/catalog";
-import { createPerson, setPersonFunction, setRelationship } from "@/modules/people/service";
+import { createPerson, setPersonFunction, setPersonLinkedIn, setRelationship } from "@/modules/people/service";
 import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/modules/accesspaths/service";
 import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
 import { changePriority, createPriority, saveAccountPlanSnapshot } from "@/modules/accountplan/service";
@@ -28,7 +28,7 @@ import { acceptSuggestion, giveFeedback, smartDump, structureReviewNote, structu
 import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
 import { refreshCompanyResearch } from "@/modules/research/service";
 import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
-import { assignRole, createUserAccess, eraseSourceContent, lockSource, revokeRole, setUserStatus } from "@/modules/governance/service";
+import { assignRole, createUserAccess, eraseSourceContent, lockSource, purgeExpiredLogs, pseudonymizePerson, revokeRole, setUserStatus } from "@/modules/governance/service";
 import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, changeOpportunityStatus, confirmOpportunity, confirmOrder, createOffer, createOpportunity, createOrder, createProfileReference, markOrderEvidenceIncomplete, markReady, markStarted, presentOffer, removeParticipation, saveMeddpicc, setRequirementStatus, updateOpportunity } from "@/modules/opportunities/service";
 import { uploadDocument } from "@/modules/documents/service";
 import { applyIntake, discardIntake, formToApplyInput, startIntake } from "@/modules/intake/service";
@@ -294,6 +294,13 @@ export async function createPersonAction(fd: FormData) {
   return run(data.back ?? `/kunden/${data.accountId}`, async (actor) => {
     await createPerson(actor, data);
   }, "Person angelegt.");
+}
+
+export async function setPersonLinkedInAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/kunden", async (actor) => {
+    await setPersonLinkedIn(actor, data);
+  }, "LinkedIn-Profil aktualisiert.");
 }
 
 export async function setPersonFunctionAction(fd: FormData) {
@@ -762,6 +769,20 @@ export async function eraseSourceAction(fd: FormData) {
   return run(data.back ?? `/quellen/${data.sourceId}`, async (actor) => {
     await eraseSourceContent(actor, data.sourceId ?? "", data);
   }, "Inhalt der Quelle entfernt; Metadaten und Protokoll bleiben.");
+}
+
+export async function pseudonymizePersonAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/verwaltung/fristen", async (actor) => {
+    await pseudonymizePerson(actor, data);
+  }, "Ansprechpartner gelöscht (Stammdaten pseudonymisiert).");
+}
+
+export async function purgeExpiredLogsAction() {
+  return run("/verwaltung/fristen", async (actor) => {
+    const r = await purgeExpiredLogs(actor);
+    throw new PendingInfo(`Gelöscht: ${r.auditEvents} Protokolleinträge, ${r.aiJobs} KI-Auftragsprotokolle.`);
+  }, "Abgelaufene Protokolleinträge gelöscht.");
 }
 
 export async function assignRoleAction(fd: FormData) {
