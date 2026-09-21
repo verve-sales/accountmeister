@@ -310,22 +310,37 @@ export type FormSuggestion = z.infer<typeof formSuggestionSchema>;
 // Etappe 17: Buying-Center-Berater (Rollen je Chance durchgehen, Hinweise zu Lücken)
 // ---------------------------------------------------------------------------
 
-/** Hinweis zu genau einer der sechs Entscheidungsrollen – nur für Rollen, zu denen die KI etwas Belastbares sagt. */
-export const buyingCenterRoleHintSchema = z.object({
-  role: z.enum(decisionRoleValues),
-  /** Handlungsempfehlung, wie die Lücke zu dieser Rolle geschlossen werden kann (Methodik, keine erfundene Aussage) */
-  hint: z.string().trim().min(3).max(600),
-  /** Name einer bereits bekannten Person, falls im Kontext erkennbar für diese Rolle – sonst leer, nie erfunden */
-  proposedPersonName: z.string().trim().max(200).optional().default(""),
-  /** Wörtliche Textstelle, falls sich proposedPersonName oder hint auf eine konkrete Angabe stützt – sonst leer */
-  evidenceQuote: z.string().trim().max(400).optional().default(""),
-});
+/**
+ * Wie bei formSuggestionSchema (siehe Kommentar dort): eine reale Modellantwort hält sich nicht immer exakt an
+ * die vorgegebene Form (fehlendes Feld, Rollenname nicht exakt aus der Liste, leere Textstelle). Ein einzelner
+ * unbrauchbarer Rolleneintrag verwirft deshalb nur diesen Eintrag, nie die ganze Antwort.
+ */
+function asRoleHint(v: unknown): BuyingCenterRoleHint | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  const roleRaw = asText(o.role, 60).toUpperCase();
+  const role = (decisionRoleValues as readonly string[]).find((r) => r === roleRaw);
+  if (!role) return null;
+  const hint = asText(o.hint, 600);
+  if (hint.length < 3) return null; // ohne belastbaren Hinweis lohnt sich der Eintrag nicht
+  return {
+    role: role as (typeof decisionRoleValues)[number],
+    hint,
+    proposedPersonName: asText(o.proposedPersonName, 200),
+    evidenceQuote: asText(o.evidenceQuote, 400),
+  };
+}
 
-export const buyingCenterProposalSchema = z.object({
-  /** Lage des Buyingcenters dieser Chance in 2–4 Sätzen */
-  summary: z.string().trim().min(10).max(1200),
-  roles: z.array(buyingCenterRoleHintSchema).max(6).default([]),
-  openQuestions: z.array(z.string().trim().min(3).max(300)).max(5).default([]),
+export const buyingCenterProposalSchema = z.unknown().optional().transform((raw) => {
+  const o = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const rolesRaw = Array.isArray(o.roles) ? o.roles : [];
+  const openQuestionsRaw = Array.isArray(o.openQuestions) ? o.openQuestions : [];
+  return {
+    /** Lage des Buyingcenters dieser Chance in 2–4 Sätzen; darf leer bleiben, das Formular verlangt es beim Speichern */
+    summary: asText(o.summary, 1200),
+    roles: rolesRaw.map(asRoleHint).filter((r): r is BuyingCenterRoleHint => r !== null).slice(0, 6),
+    openQuestions: openQuestionsRaw.map((x) => asText(x, 300)).filter((s) => s.length >= 3).slice(0, 5),
+  };
 });
-export type BuyingCenterRoleHint = z.infer<typeof buyingCenterRoleHintSchema>;
+export type BuyingCenterRoleHint = { role: (typeof decisionRoleValues)[number]; hint: string; proposedPersonName: string; evidenceQuote: string };
 export type BuyingCenterProposal = z.infer<typeof buyingCenterProposalSchema>;

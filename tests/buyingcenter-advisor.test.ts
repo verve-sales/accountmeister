@@ -16,6 +16,17 @@ const looseProvider: AIProvider = {
   info: () => ({ id: "production", model: "stub", enabled: true, description: "Attrappe für Schema-Robustheit" }),
   structureNote: async () => ({ items: [], noSuggestionReason: "" }),
   suggestForm: async () => ({ fields: { identifyPain: "Vertragsstrafe im Dezember angedroht", economicBuyer: null, champion: 42, competition: { value: "kein Wettbewerber bekannt" } }, rationale: "", evidenceQuote: "", missing: ["?", "Wer entscheidet über das Budget?"] }),
+  // Rollenname in Kleinschreibung statt exakt aus der Liste, ein Eintrag ohne role-Feld (wird verworfen statt
+  // die ganze Antwort zu verwerfen), Zahl statt String bei summary, evidenceQuote-Schlüssel fehlt ganz.
+  adviseBuyingCenter: async () => ({
+    summary: 12345,
+    roles: [
+      { role: "budgetverantwortung", hint: "Gezielt nach dem Budgetinhaber fragen." },
+      { role: null, hint: "Dieser Eintrag hat gar keine Rolle und muss verschwinden." },
+      { role: "BEDARFSTRAEGER", hint: "" }, // leerer Hinweis – auch verwerfen
+    ],
+    openQuestions: ["Wer entscheidet am Ende?"],
+  }),
 };
 
 /**
@@ -134,5 +145,26 @@ describe("Etappe 17: Buying-Center-Berater und MEDDPICC-Vorbefüllung", () => {
     const brokenProvider: AIProvider = { ...looseProvider, suggestForm: async () => "Entschuldigung, ich kann das nicht ausfüllen." };
     const f2 = await suggestFormFields(david, { kind: "MEDDPICC", opportunityId: opp.id, fields }, { provider: brokenProvider });
     expect(f2.suggestion).toBeNull();
+  });
+
+  it("Buying-Center-Vorschlag: eine Modellantwort, die nicht exakt dem Schema folgt (Rolle in Kleinschreibung, fehlendes role-Feld, leerer Hinweis, Zahl statt String), wird bereinigt statt komplett verworfen", async () => {
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const setup = await createSetup(david, { accountId: s.accountId, name: `BC-Schema-Robustheit ${Date.now().toString(36)}`, contextNote: "Kontext", bdUserId: david.userId });
+    const opp = await createOpportunity(david, { setupId: setup.id, title: "Testkoordination", needDescription: "Der Kunde braucht kurzfristig Unterstützung in der Testkoordination." });
+
+    // Wirft nicht "Die KI-Antwort entsprach nicht dem Schema." – der Eintrag ohne role und der mit leerem Hinweis
+    // werden übersprungen, "budgetverantwortung" wird trotz Kleinschreibung erkannt, die Zahl bei summary zu Text.
+    const p = await proposeBuyingCenterAdvice(david, opp.id, { provider: looseProvider });
+    expect(p.proposal.summary).toBe("12345");
+    expect(p.proposal.roles).toHaveLength(1);
+    expect(p.proposal.roles[0]?.role).toBe("BUDGETVERANTWORTUNG");
+    expect(p.proposal.openQuestions).toEqual(["Wer entscheidet am Ende?"]);
+
+    // Selbst eine völlig unbrauchbare Antwortform (Array statt Objekt) führt nicht zum Schema-Fehler
+    const brokenProvider: AIProvider = { ...looseProvider, adviseBuyingCenter: async () => ["nicht", "das", "erwartete", "objekt"] };
+    const p2 = await proposeBuyingCenterAdvice(david, opp.id, { provider: brokenProvider });
+    expect(p2.proposal.roles).toEqual([]);
+    expect(p2.proposal.summary).toBe("");
   });
 });
