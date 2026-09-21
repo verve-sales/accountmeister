@@ -24,6 +24,7 @@ Die Anwendung besteht aus zwei Prozessen: dem Next.js-Server (Node.js 22) und ei
 | `SESSION_MAX_AGE_SECONDS`, `SESSION_IDLE_SECONDS` | nein | Sitzungsdauer (Standard 12 h) und Inaktivitätsgrenze (Standard 2 h) |
 | `RATE_LIMIT_LOGIN_PER_15MIN`, `RATE_LIMIT_WRITES_PER_MIN` | nein | Nutzungsgrenzen (Standard 20 bzw. 120) |
 | `RUN_MIGRATIONS` | nein | `true` (Standard): Migrationen beim Start anwenden |
+| `BACKUP_ENCRYPTION_PASSPHRASE` | ja (für Sicherungen) | Passphrase, mit der `scripts/backup-cron.sh`/`scripts/backup.sh` jede Sicherung symmetrisch verschlüsselt (GPG, AES-256); vom Installationsskript erzeugt und in `.env.production` abgelegt, nie im Klartext protokolliert |
 
 Geheimnisse liegen ausschließlich in `.env.production` auf dem Server (nicht im Git) oder im Secret-Store der Plattform. Beispiel: `.env.production.example`.
 
@@ -43,18 +44,18 @@ Die Nutzungsgrenzen (Rate-Limits) werden im Prozessspeicher geführt und gelten 
 
 Migrationen sind versionierte SQL-Dateien in `src/db/migrations` (Journal in `meta/_journal.json`). Ablauf bei einem Update:
 
-1. Sicherung ziehen: `DATABASE_URL=… sh scripts/backup.sh /pfad/backups`.
+1. Sicherung ziehen: `DATABASE_URL=… BACKUP_ENCRYPTION_PASSPHRASE=… sh scripts/backup.sh /pfad/backups` (verschlüsselt, `.dump.gpg`).
 2. Neues Abbild bauen und starten; `scripts/start.sh` wendet ausstehende Migrationen in einer Transaktion je Datei an.
 3. Prüfen: `/health`, Anmeldung, Stichprobe im Setup.
-4. Rückfall: altes Abbild starten mit `RUN_MIGRATIONS=false`. Enthält die neue Migration nur additive Änderungen (neue Tabellen/Spalten – der Regelfall in diesem Projekt), läuft der alte Stand weiter. Bei destruktiven Änderungen die Sicherung in eine leere Datenbank zurückspielen (`scripts/restore.sh`) und die Verbindung umstellen.
+4. Rückfall: altes Abbild starten mit `RUN_MIGRATIONS=false`. Enthält die neue Migration nur additive Änderungen (neue Tabellen/Spalten – der Regelfall in diesem Projekt), läuft der alte Stand weiter. Bei destruktiven Änderungen die Sicherung in eine leere Datenbank zurückspielen (`TARGET_DATABASE_URL=… BACKUP_ENCRYPTION_PASSPHRASE=… sh scripts/restore.sh /pfad/….dump.gpg`) und die Verbindung umstellen.
 
 ## 5. Sicherung und Wiederherstellung
 
-Die Sicherung umfasst zwei Teile: die Datenbank (`pg_dump`, Custom-Format) und das Dokumentenvolume (`tar` von `/data/uploads`). Der vom Installationsskript eingerichtete Cron-Job (03:15 Uhr) sichert beides nach `/var/backups/verve-sales` und behält 14 Tage; `scripts/update-server.sh` sichert zusätzlich vor jedem Update. `scripts/backup.sh` erzeugt einen `pg_dump` im Custom-Format mit Prüfsumme. `scripts/restore.sh` spielt ihn in eine leere Zieldatenbank zurück und prüft die Prüfsumme. Das Dokumentenarchiv wird mit `docker compose exec -T app tar -C /data -xzf - < verve-sales-uploads-<Datum>.tar.gz` zurückgespielt; Datenbank und Dokumente müssen vom selben Tag stammen, sonst fehlen Dateien zu Quellen (die Anwendung zeigt dann „Datei entfernt“). `scripts/restore-check.sql` zählt danach Objekte, gesperrte und gelöschte Quellen sowie Protokolleinträge; diese Zahlen müssen dem Sicherungsstand entsprechen (S12: Lösch- und Sperrentscheidungen bleiben nach Wiederherstellung konsistent, weil sie in der Datenbank selbst liegen).
+Die Sicherung umfasst zwei Teile: die Datenbank (`pg_dump`, Custom-Format) und das Dokumentenvolume (`tar` von `/data/uploads`). Beide werden unmittelbar nach der Erstellung symmetrisch mit GPG (AES-256) verschlüsselt (`BACKUP_ENCRYPTION_PASSPHRASE`) – das unverschlüsselte Dump existiert nie auf der Platte, nur kurzlebig im Datenstrom zwischen `pg_dump`/`tar` und `gpg`. Der vom Installationsskript eingerichtete Cron-Job (03:15 Uhr, `scripts/backup-cron.sh`) sichert beides nach `/var/backups/verve-sales` und behält 14 Tage; `scripts/update-server.sh` ruft dasselbe Skript zusätzlich vor jedem Update auf. `scripts/backup.sh` (für den manuellen Wiederherstellungstest, S12) erzeugt ebenso ein verschlüsseltes `.dump.gpg` mit Prüfsumme. `scripts/restore.sh` entschlüsselt es und spielt es in eine leere Zieldatenbank zurück (ein älteres, unverschlüsseltes `.dump` aus der Zeit vor dieser Umstellung wird weiterhin ohne Entschlüsselung akzeptiert). Das Dokumentenarchiv wird entschlüsselt und zurückgespielt mit `gpg --batch --passphrase-file <Datei mit BACKUP_ENCRYPTION_PASSPHRASE> --decrypt verve-sales-uploads-<Datum>.tar.gz.gpg | docker compose exec -T app tar -C /data -xzf -`; Datenbank und Dokumente müssen vom selben Tag stammen, sonst fehlen Dateien zu Quellen (die Anwendung zeigt dann „Datei entfernt“). `scripts/restore-check.sql` zählt danach Objekte, gesperrte und gelöschte Quellen sowie Protokolleinträge; diese Zahlen müssen dem Sicherungsstand entsprechen (S12: Lösch- und Sperrentscheidungen bleiben nach Wiederherstellung konsistent, weil sie in der Datenbank selbst liegen).
 
-Der Wiederherstellungstest wurde am 19.09.2026 mit dem Entwicklungsdatenbestand durchgeführt (Sicherung → leere Datenbank → identische Zählungen). Er ist vor Echtdatenbetrieb mit dem Produktionsabbild zu wiederholen und dann regelmäßig einzuplanen.
+Der Wiederherstellungstest wurde am 19.09.2026 mit dem Entwicklungsdatenbestand durchgeführt (Sicherung → leere Datenbank → identische Zählungen), damals noch unverschlüsselt. Er ist vor Echtdatenbetrieb mit dem Produktionsabbild und der verschlüsselten Sicherung zu wiederholen und dann regelmäßig einzuplanen.
 
-Sicherungen enthalten personenbezogene Daten: verschlüsselt ablegen, Zugriff begrenzen. Die Aufbewahrungsdauer der Sicherungen und der Umgang mit Löschverlangen gegenüber Sicherungen (Ablauf statt Einzellöschung, Löschmarkierungen beim Wiederherstellen erneut anwenden) sind Teil des offenen Löschkonzepts.
+Sicherungen enthalten personenbezogene Daten und liegen jetzt verschlüsselt ab; Zugriff auf `BACKUP_ENCRYPTION_PASSPHRASE` (in `.env.production`, nur root lesbar) begrenzen – wer die Passphrase hat, kann jede Sicherung entschlüsseln, sie ist also selbst ein schützenswertes Geheimnis. Die Aufbewahrungsdauer der Sicherungen und der Umgang mit Löschverlangen gegenüber Sicherungen (Ablauf statt Einzellöschung, Löschmarkierungen beim Wiederherstellen erneut anwenden) sind Teil des Löschkonzepts (`docs/pilotfreigabe-vorschlag.md` Abschnitt 6).
 
 ## 6. Sperren und Löschen von Quellen (16.4)
 

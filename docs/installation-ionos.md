@@ -73,7 +73,7 @@ Ersetze `DEIN-GITHUB-NAME` durch deinen GitHub-Benutzernamen und `DEIN-TOKEN` du
 3. Quellcode holen. Hier fragt git nach „Username“ (GitHub-Name) und „Password“ – dort das **Token** einfügen (Rechtsklick fügt im Terminal ein).
 4. Konfiguration: Das Skript fragt nacheinander nach Domain (`accountmeister.verveconsulting.ai`), E-Mail der Betriebsverwaltung (deine Adresse), Verzeichnis-ID, Anwendungs-ID und Geheimen Clientschlüssel (Schritt 4). Passwörter für Datenbank und Sitzung erzeugt es selbst. Alles landet in `/opt/verve-sales/.env.production`, nur für root lesbar.
 5. Bauen und Starten (5–8 Minuten beim ersten Mal). Am Ende steht „Anwendung läuft.“
-6. Tägliche Sicherung um 03:15 Uhr nach `/var/backups/verve-sales`, 14 Tage Aufbewahrung.
+6. Tägliche Sicherung um 03:15 Uhr nach `/var/backups/verve-sales`, 14 Tage Aufbewahrung, verschlüsselt (das Skript legt dafür automatisch eine Passphrase in `.env.production` an).
 
 Falls das Skript mit einer Fehlermeldung abbricht: die letzte Meldung kopieren und mir schicken; das Skript kann danach einfach erneut gestartet werden (`bash install-server.sh`), es überspringt Erledigtes.
 

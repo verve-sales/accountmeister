@@ -8,12 +8,10 @@ BACKUP_DIR="${BACKUP_DIR:-/var/backups/verve-sales}"
 cd "$APP_DIR"
 [ -f "$ENV_FILE" ] || { echo "Fehlt: $ENV_FILE"; exit 1; }
 
-echo "== 1/4 Sicherung vor dem Update"
+echo "== 1/4 Sicherung vor dem Update (verschlüsselt)"
 mkdir -p "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
-STAMP=$(date +%Y%m%d-%H%M%S)
-docker compose --env-file "$ENV_FILE" exec -T db pg_dump -U verve -Fc verve_sales > "$BACKUP_DIR/verve-sales-vor-update-$STAMP.dump"
-docker compose --env-file "$ENV_FILE" exec -T app sh -c 'test -d /data/uploads && tar -C /data -czf - uploads' > "$BACKUP_DIR/verve-sales-uploads-vor-update-$STAMP.tar.gz" 2>/dev/null || true
-echo "   → $BACKUP_DIR/verve-sales-vor-update-$STAMP.dump"
+chmod +x "$APP_DIR/scripts/backup-cron.sh"
+"$APP_DIR/scripts/backup-cron.sh" "$APP_DIR" "$ENV_FILE" "$BACKUP_DIR" 14 verve-sales-vor-update
 
 echo "== 2/4 Neuen Stand holen"
 git pull --ff-only

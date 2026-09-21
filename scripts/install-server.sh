@@ -17,7 +17,7 @@ ask() { local var="$1" prompt="$2" default="${3:-}" val; if [ -n "$default" ]; t
 say "1/6 Systempakete und Docker"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
-apt-get install -y -qq ca-certificates curl git ufw openssl >/dev/null
+apt-get install -y -qq ca-certificates curl git ufw openssl gnupg >/dev/null
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
@@ -73,9 +73,16 @@ SESSION_MAX_AGE_SECONDS=43200
 SESSION_IDLE_SECONDS=7200
 RATE_LIMIT_LOGIN_PER_15MIN=20
 RATE_LIMIT_WRITES_PER_MIN=120
+BACKUP_ENCRYPTION_PASSPHRASE=$(openssl rand -hex 32)
 ENV
   chmod 600 "$ENV_FILE"
   echo "Konfiguration geschrieben: $ENV_FILE (nur root lesbar)"
+fi
+# Bestehende Installationen (Konfigurationsdatei existierte schon) bekommen die Sicherungs-Passphrase nachgetragen,
+# falls sie aus einer Zeit vor der verschlüsselten Sicherung stammt.
+if ! grep -q '^BACKUP_ENCRYPTION_PASSPHRASE=' "$ENV_FILE"; then
+  echo "BACKUP_ENCRYPTION_PASSPHRASE=$(openssl rand -hex 32)" >> "$ENV_FILE"
+  echo "Sicherungs-Passphrase ergänzt – Sicherungen werden ab jetzt verschlüsselt abgelegt."
 fi
 
 say "5/6 Anwendung bauen und starten (dauert beim ersten Mal einige Minuten)"
@@ -87,12 +94,13 @@ for i in $(seq 1 60); do
   [ "$i" -eq 60 ] && { echo "Anwendung meldet sich nicht. Logs: docker compose --env-file $ENV_FILE logs app"; exit 1; }
 done
 
-say "6/6 Tägliche Sicherung (03:15 Uhr) und Aufbewahrung 14 Tage"
+say "6/6 Tägliche Sicherung (03:15 Uhr, verschlüsselt) und Aufbewahrung 14 Tage"
 mkdir -p "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
+chmod +x "$APP_DIR/scripts/backup-cron.sh"
 cat > /etc/cron.d/verve-sales-backup <<CRON
-15 3 * * * root cd $APP_DIR && docker compose --env-file $ENV_FILE exec -T db pg_dump -U verve -Fc verve_sales > $BACKUP_DIR/verve-sales-\$(date +\%Y\%m\%d).dump && docker compose --env-file $ENV_FILE exec -T app tar -C /data -czf - uploads > $BACKUP_DIR/verve-sales-uploads-\$(date +\%Y\%m\%d).tar.gz && find $BACKUP_DIR \( -name '*.dump' -o -name '*.tar.gz' \) -mtime +14 -delete
+15 3 * * * root $APP_DIR/scripts/backup-cron.sh $APP_DIR $ENV_FILE $BACKUP_DIR 14 >> /var/log/verve-sales-backup.log 2>&1
 CRON
-chmod 644 /etc/cron.d/verve-sales-backup
+chmod 600 /etc/cron.d/verve-sales-backup
 
 DOMAIN_SHOW=$(grep '^DOMAIN=' "$ENV_FILE" | cut -d= -f2)
 say "Fertig."
