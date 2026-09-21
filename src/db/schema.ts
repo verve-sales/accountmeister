@@ -88,6 +88,9 @@ export const actionStatusEnum = pgEnum("action_status", [
   "VERWORFEN",
 ]);
 
+/** Kanal einer Aktion (Etappe 18) – LINKEDIN ohne Anbindung, nur zur Einordnung und für den Profillink. */
+export const actionChannelEnum = pgEnum("action_channel", ["GESPRAECH", "TELEFON", "EMAIL", "LINKEDIN", "SONSTIGE"]);
+
 export const handoverStatusEnum = pgEnum("handover_status", ["ENTWURF", "ANGEFRAGT", "ANGENOMMEN", "ZURUECKGEGEBEN", "ABGESCHLOSSEN"]);
 export const handoverSubjectEnum = pgEnum("handover_subject", ["SIGNAL", "SETUP", "AKTION"]);
 
@@ -217,6 +220,8 @@ export const persons = pgTable("persons", {
   displayName: text("display_name").notNull(),
   email: text("email"),
   phone: text("phone"),
+  /** Manuell gepflegter Link zum bekannten LinkedIn-Profil (Etappe 18) – keine Anbindung, nur Referenz/Deep-Link. */
+  linkedinUrl: text("linkedin_url"),
   accessClass: accessClassEnum("access_class").notNull().default("ACCOUNT_TEAM"),
   retentionNote: text("retention_note"), // Aufbewahrungsentscheidung (offen bis Datenschutzfreigabe)
   createdBy: text("created_by").notNull().references(() => users.id),
@@ -351,6 +356,9 @@ export const actions = pgTable(
     status: actionStatusEnum("status").notNull().default("VORGESCHLAGEN"),
     dueDate: date("due_date"),
     result: text("result"),
+    /** Kanal der Aktion (Etappe 18); null = nicht angegeben. Bei LINKEDIN kann ein Profillink hinterlegt werden. */
+    channel: actionChannelEnum("channel"),
+    linkedinUrl: text("linkedin_url"),
     createdBy: text("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -1465,6 +1473,7 @@ export type Role = (typeof roleEnum.enumValues)[number];
 export type AccessClass = (typeof accessClassEnum.enumValues)[number];
 export type SignalStatus = (typeof signalStatusEnum.enumValues)[number];
 export type ActionStatus = (typeof actionStatusEnum.enumValues)[number];
+export type ActionChannel = (typeof actionChannelEnum.enumValues)[number];
 export type HandoverStatus = (typeof handoverStatusEnum.enumValues)[number];
 export type SetupStatus = (typeof setupStatusEnum.enumValues)[number];
 export type MembershipContribution = (typeof membershipContributionEnum.enumValues)[number];

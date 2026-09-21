@@ -19,6 +19,7 @@ import { SuggestButton } from "@/components/SuggestButton";
 import { SetupTabs } from "@/components/SetupTabs";
 import {
   accessClassLabel,
+  actionChannelLabel,
   actionStatusLabel,
   contributionLabel,
   fmtDate,
@@ -244,7 +245,12 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
             <tbody>
               {openActions.map((a) => (
                 <tr key={a.id}>
-                  <td>{a.title}{a.agreement && <div className="muted text-sm">{a.agreement}</div>}{a.result && <div className="muted text-sm">Stand: {a.result}</div>}</td>
+                  <td>
+                    {a.title}
+                    {a.channel && <span className="muted text-sm"> · {actionChannelLabel[a.channel] ?? a.channel}{a.linkedinUrl && <> · <a href={a.linkedinUrl} target="_blank" rel="noopener noreferrer">Profil öffnen</a></>}</span>}
+                    {a.agreement && <div className="muted text-sm">{a.agreement}</div>}
+                    {a.result && <div className="muted text-sm">Stand: {a.result}</div>}
+                  </td>
                   <td>{name(a.ownerUserId)}</td>
                   <td><Status label={actionStatusLabel[a.status] ?? a.status} /></td>
                   <td>{fmtDate(a.dueDate)}</td>
@@ -301,6 +307,14 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                   {openSignals.map((s) => <option key={s.id} value={s.id}>{s.observation.slice(0, 80)}</option>)}
                 </select>
               </div>
+              <div>
+                <label className="label" htmlFor="actChannel">Kanal (optional)</label>
+                <select id="actChannel" name="channel" className="select" defaultValue="">
+                  <option value="">– nicht angegeben –</option>
+                  {schema.actionChannelEnum.enumValues.map((v) => <option key={v} value={v}>{actionChannelLabel[v]}</option>)}
+                </select>
+              </div>
+              <div><label className="label" htmlFor="actLinkedin">LinkedIn-Profillink (nur bei Kanal LinkedIn)</label><input id="actLinkedin" name="linkedinUrl" type="url" className="input" placeholder="https://www.linkedin.com/in/…" /></div>
               <div className="flex items-end gap-2">
                 <label className="text-sm flex items-center gap-2"><input type="checkbox" name="agreedInConversation" value="true" /> Im Gespräch gemeinsam vereinbart (sonst: Vorschlag)</label>
               </div>

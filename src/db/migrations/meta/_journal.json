@@ -134,6 +134,13 @@
       "when": 1790013014998,
       "tag": "0018_buying_center_advice",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790021910318,
+      "tag": "0019_linkedin_referenzen",
+      "breakpoints": true
     }
   ]
 }

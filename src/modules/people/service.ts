@@ -12,11 +12,21 @@ import { getAccount } from "@/modules/accounts/service";
  * Personen (Briefing 8.1): nur berufliche Angaben. Keine Felder für private Lebensumstände,
  * Gesundheit, politische Ansichten, Charakter- oder psychologische Profile – bewusst nicht vorgesehen.
  */
+/** LinkedIn ist reine Referenz (Etappe 18): keine Anbindung, nur ein von Hand gepflegter Link zum Profil. */
+export const linkedinUrlField = z
+  .string()
+  .trim()
+  .max(500)
+  .optional()
+  .or(z.literal(""))
+  .refine((v) => !v || /^https:\/\/([a-z0-9-]+\.)*linkedin\.com\//i.test(v), "Bitte einen linkedin.com-Profillink angeben.");
+
 export const createPersonInput = z.object({
   accountId: z.string().min(1),
   displayName: z.string().trim().min(2, "Name fehlt").max(200),
   email: z.string().trim().email("E-Mail ungültig").max(200).optional().or(z.literal("")),
   phone: z.string().trim().max(50).optional().or(z.literal("")),
+  linkedinUrl: linkedinUrlField,
   functionTitle: z.string().trim().max(200).optional().or(z.literal("")),
   orgUnitId: z.string().optional().or(z.literal("")),
   knownResponsibility: z.string().trim().max(500).optional().or(z.literal("")),
@@ -44,6 +54,7 @@ export async function createPerson(actor: Actor, raw: unknown) {
         displayName: input.displayName,
         email: input.email || null,
         phone: input.phone || null,
+        linkedinUrl: input.linkedinUrl || null,
         accessClass: input.accessClass,
         createdBy: actor.userId,
       })
@@ -101,6 +112,17 @@ export async function setPersonFunction(actor: Actor, raw: unknown) {
     });
     await recordAudit(tx, actor, "person.function_set", "PERSON", person.id);
   });
+}
+
+export const setPersonLinkedInInput = z.object({ personId: z.string().min(1), linkedinUrl: linkedinUrlField });
+
+/** LinkedIn-Profillink hinterlegen oder ändern (Etappe 18) – keine Anbindung, nur Referenz für einen Deep-Link. Leer = entfernen. */
+export async function setPersonLinkedIn(actor: Actor, raw: unknown) {
+  const parsed = setPersonLinkedInInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
+  const person = await requirePerson(actor, parsed.data.personId, "write");
+  await db.update(schema.persons).set({ linkedinUrl: parsed.data.linkedinUrl || null, updatedAt: new Date() }).where(eq(schema.persons.id, person.id));
+  await recordAudit(db, actor, "person.linkedin_set", "PERSON", person.id, { set: !!parsed.data.linkedinUrl });
 }
 
 /**

@@ -14,6 +14,7 @@ import { SuggestButton } from "@/components/SuggestButton";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { groupByFamily } from "@/modules/roles/catalog";
 import { decisionRoleLabel, engagementStatusLabel, epistemicLabel, fmtDate, fmtDateTime, offerStatusLabel, opportunityStatusLabel, orderStatusLabel, requirementStatusLabel, sourceTypeLabel } from "@/lib/labels";
+import { linkedinSearchUrl } from "@/lib/linkedin";
 import {
   addParticipationAction, addStartRequirementAction, cancelOrderAction, changeOfferStatusAction, changeOpportunityStatusAction, confirmOpportunityAction, confirmOrderAction, createOfferAction,
   createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction,
@@ -294,17 +295,19 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         <p className="muted text-sm mb-2">Geht die sechs Entscheidungsrollen dieser Chance durch und gibt bei Lücken einen Hinweis, wie sie zu schließen sind. Beruht auf dem oben erfassten Buyingcenter – kein zweiter Datenbestand.</p>
         {bcProposalError && <p className="error text-sm" role="alert">{bcProposalError}</p>}
         <table className="list text-sm">
-          <thead><tr><th>Rolle</th><th>Status</th><th>Person(en)</th></tr></thead>
+          <thead><tr><th>Rolle</th><th>Status</th><th>Person(en)</th><th></th></tr></thead>
           <tbody>
             {bc.roleStatus.map((r) => (
               <tr key={r.role}>
                 <td>{r.label}</td>
                 <td><Status label={r.state === "OFFEN" ? "offen" : r.state === "BESTAETIGT" ? "bestätigt" : "Hypothese"} /></td>
                 <td>{r.participants.length ? r.participants.map((p) => p.name).join(", ") : <span className="muted">–</span>}</td>
+                <td>{r.state === "OFFEN" && <a href={linkedinSearchUrl(ctx.account.name, r.label)} target="_blank" rel="noopener noreferrer" className="text-sm">Auf LinkedIn suchen</a>}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        <p className="muted text-xs mt-1">„Auf LinkedIn suchen“ öffnet die normale LinkedIn-Personensuche mit Kunde und Rolle als Stichwort (auch in Sales Navigator weiterverfolgbar) – keine Anbindung, nur ein Deep-Link im eigenen Browser.</p>
 
         {bc.latest && (
           <div className="mt-4 border rounded-md p-3" style={{ borderColor: "var(--border)" }}>

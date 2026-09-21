@@ -25,6 +25,16 @@ export const createActionInput = z.object({
   reviewId: z.string().optional().or(z.literal("")), // im Weekly vereinbart
   /** Wofür (Etappe 10): Chance, auf die die Aktion einzahlt */
   opportunityId: z.string().optional().or(z.literal("")),
+  /** Kanal (Etappe 18); leer = nicht angegeben. */
+  channel: z.enum(schema.actionChannelEnum.enumValues).optional().or(z.literal("")),
+  /** Nur bei channel=LINKEDIN sinnvoll; keine Anbindung, nur ein Deep-Link zum Nachfassen. */
+  linkedinUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .or(z.literal(""))
+    .refine((v) => !v || /^https:\/\/([a-z0-9-]+\.)*linkedin\.com\//i.test(v), "Bitte einen linkedin.com-Link angeben."),
 });
 
 export async function createAction(actor: Actor, raw: unknown) {
@@ -52,6 +62,8 @@ export async function createAction(actor: Actor, raw: unknown) {
         ownerUserId: input.ownerUserId,
         status,
         dueDate: input.dueDate || null,
+        channel: input.channel || null,
+        linkedinUrl: input.linkedinUrl || null,
         createdBy: actor.userId,
       })
       .returning();

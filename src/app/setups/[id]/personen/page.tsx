@@ -12,7 +12,7 @@ import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { SetupTabs } from "@/components/SetupTabs";
 import { accessClassLabel, accessPlanStatusLabel, fmtDate, readinessLabel, relationshipStateLabel, stepKindLabel } from "@/lib/labels";
-import { addAccessPlanStepAction, changeAccessPlanStatusAction, createAccessPlanAction, createPersonAction, saveAssessmentAction, setPersonFunctionAction, setRelationshipAction } from "../../../actions";
+import { addAccessPlanStepAction, changeAccessPlanStatusAction, createAccessPlanAction, createPersonAction, saveAssessmentAction, setPersonFunctionAction, setPersonLinkedInAction, setRelationshipAction } from "../../../actions";
 import { getBuyingCenter } from "@/modules/people/assessments";
 import { decisionRoleLabel, epistemicLabel, influenceLabel, stanceLabel } from "@/lib/labels";
 
@@ -64,7 +64,11 @@ export default async function PersonenPage({ params, searchParams }: { params: P
             <tbody>
               {people.map(({ person, currentFunction, relationships }) => (
                 <tr key={person.id}>
-                  <td>{person.displayName}{person.email && <div className="muted text-sm">{person.email}</div>}</td>
+                  <td>
+                    {person.displayName}
+                    {person.email && <div className="muted text-sm">{person.email}</div>}
+                    {person.linkedinUrl && <div className="text-sm"><a href={person.linkedinUrl} target="_blank" rel="noopener noreferrer">LinkedIn-Profil öffnen</a></div>}
+                  </td>
                   <td>{currentFunction ? <>{currentFunction.functionTitle}{currentFunction.orgUnitName && <div className="muted text-sm">{currentFunction.orgUnitName}</div>}</> : <span className="muted">unbekannt</span>}</td>
                   <td className="text-sm">{currentFunction?.knownResponsibility ?? <span className="muted">–</span>}</td>
                   <td className="text-sm">
@@ -98,6 +102,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                 </div>
                 <div><label className="label" htmlFor="pResp">Bekannte Zuständigkeit</label><input id="pResp" name="knownResponsibility" className="input" /></div>
                 <div><label className="label" htmlFor="pMail">Berufliche E-Mail (optional)</label><input id="pMail" name="email" type="email" className="input" /></div>
+                <div><label className="label" htmlFor="pLinkedin">LinkedIn-Profillink (optional)</label><input id="pLinkedin" name="linkedinUrl" type="url" className="input" placeholder="https://www.linkedin.com/in/…" /></div>
                 <div>
                   <label className="label" htmlFor="pAccess">Wer darf die Person sehen?</label>
                   <select id="pAccess" name="accessClass" className="select" defaultValue="ACCOUNT_TEAM">{schema.accessClassEnum.enumValues.filter((v) => v !== "PERSOENLICH").map((v) => <option key={v} value={v}>{accessClassLabel[v]}</option>)}</select>
@@ -146,6 +151,18 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                 </div>
                 <div><label className="label" htmlFor="fResp">Bekannte Zuständigkeit</label><input id="fResp" name="knownResponsibility" className="input" /></div>
                 <div className="sm:col-span-2"><button className="btn btn-secondary" type="submit">Funktion setzen</button></div>
+              </form>
+            </details>
+            <details>
+              <summary>LinkedIn-Profil hinterlegen oder ändern</summary>
+              <form action={setPersonLinkedInAction} className="mt-2 grid sm:grid-cols-2 gap-3">
+                <input type="hidden" name="back" value={back} />
+                <div>
+                  <label className="label" htmlFor="lPerson">Person</label>
+                  <select id="lPerson" name="personId" className="select" required defaultValue=""><option value="" disabled>Bitte wählen …</option>{people.map((p) => <option key={p.person.id} value={p.person.id}>{p.person.displayName}</option>)}</select>
+                </div>
+                <div><label className="label" htmlFor="lUrl">Profillink (leer lassen zum Entfernen)</label><input id="lUrl" name="linkedinUrl" type="url" className="input" placeholder="https://www.linkedin.com/in/…" /></div>
+                <div className="sm:col-span-2"><button className="btn btn-secondary" type="submit">Speichern</button></div>
               </form>
             </details>
           </div>

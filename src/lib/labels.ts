@@ -74,6 +74,13 @@ export const relationshipStateLabel: Record<string, string> = {
   KONKRETE_ZUSAMMENARBEIT: "Konkrete Zusammenarbeit",
   NICHT_AKTIV: "Derzeit nicht aktiv",
 };
+export const actionChannelLabel: Record<string, string> = {
+  GESPRAECH: "Gespräch",
+  TELEFON: "Telefon",
+  EMAIL: "E-Mail",
+  LINKEDIN: "LinkedIn",
+  SONSTIGE: "Sonstige",
+};
 export const accessPlanStatusLabel: Record<string, string> = {
   ENTWURF: "Entwurf",
   IN_ABSTIMMUNG: "In Abstimmung",
