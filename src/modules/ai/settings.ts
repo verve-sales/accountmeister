@@ -20,6 +20,7 @@ export const AI_TASKS = [
   { key: "INTERVIEW_NEXT", label: "Interview: nächste Frage", description: "Im geführten Interview die jeweils nächste Frage stellen, abgeleitet aus dem, was noch fehlt. Kleines, schnelles Modell genügt." },
   { key: "ASSISTANT", label: "Assistent (Dialog mit Vorschlagskarten)", description: "Laufender Dialog im Seitenpanel: antwortet, schlägt Karten vor (Personen, Signale, Chancen, Aktionen, Kontaktaufnahmen, Fragen) und benennt fehlende Informationen. Ein schnelles Modell mit guter Instruktionstreue empfohlen." },
   { key: "STRATEGY", label: "Strategiefaden (Lage, nächster Schritt, Züge)", description: "Aus der regelbasierten Lageanalyse und dem bekannten Kontext einen Strategiefaden je Setup vorschlagen – Züge und Risiken nur mit Textstelle; der BD prüft und speichert eine Fassung." },
+  { key: "OPPORTUNITY_ADVICE", label: "Chancen-Berater (nächste Schritte je Bedarf)", description: "Persönlicher KI-Berater je Chance: aus der Lageanalyse der einen Chance und dem bekannten Kontext die nächsten Schritte zur Konvertierung vorschlagen – Züge und Risiken nur mit Textstelle; der BD prüft und speichert eine Fassung." },
   { key: "FORM_SUGGEST", label: "Formularvorschläge (Vorhaben, Setup, Chance)", description: "Formularfelder aus dem bekannten Kundenkontext vorbelegen („Vorschlagen lassen“). Kleines, schnelles Modell genügt." },
 ] as const;
 

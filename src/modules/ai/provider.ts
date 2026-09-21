@@ -50,6 +50,12 @@ export type StrategyInput = {
   previous: { summary: string; nextStep: string; createdAt: string } | null;
 };
 
+/**
+ * Chancen-Berater (Etappe 15): identische Form wie der Strategiefaden, aber je Bedarf statt je Setup – die
+ * Lageanalyse bezieht sich auf genau eine Chance (Status, Buyingcenter, Angebot/Auftrag), nicht auf das ganze Setup.
+ */
+export type OpportunityAdviceInput = StrategyInput;
+
 /** Formularvorschlag (Etappe 9): welches Formular, welche Felder mit Bedeutung, bekannter Kontext. */
 export type FormSuggestInput = {
   kind: "VORHABEN" | "SETUP" | "CHANCE";
@@ -89,6 +95,8 @@ export interface AIProvider {
   assistantCards?(input: AssistantInput & { prose: string }, opts?: TaskOptions): Promise<unknown>;
   /** Strategiefaden-Vorschlag (Etappe 9) – optional. */
   strategize?(input: StrategyInput, opts?: TaskOptions): Promise<unknown>;
+  /** Chancen-Berater-Vorschlag (Etappe 15): nächste Schritte zur Konvertierung genau einer Chance – optional. */
+  adviseOpportunity?(input: OpportunityAdviceInput, opts?: TaskOptions): Promise<unknown>;
   /** Formularfelder vorbelegen (Etappe 9) – optional. */
   suggestForm?(input: FormSuggestInput, opts?: TaskOptions): Promise<unknown>;
   /** Verbrauch des letzten Aufrufs (Kostenspur), falls der Anbieter ihn liefert. */

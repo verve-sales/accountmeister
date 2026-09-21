@@ -9,6 +9,7 @@ import { getStrategy, proposeStrategy, saveStrategy, formToStrategyInput } from 
 import { suggestFormFields } from "@/modules/strategy/formsuggest";
 import { requireSetupContext, createSetup } from "@/modules/setups/service";
 import { createOpportunity } from "@/modules/opportunities/service";
+import { getOpportunityAdvice, proposeOpportunityAdvice, saveOpportunityAdvice, formToOpportunityAdviceInput } from "@/modules/opportunities/advisor";
 import { createAccount } from "@/modules/accounts/service";
 import { captureObservation } from "@/modules/signals/service";
 import { actorFor, ensureSeed } from "./helpers";
@@ -193,5 +194,90 @@ describe("Etappe 9C: Formularvorschläge", () => {
     const off = await suggestFormFields(david, { kind: "CHANCE", setupId: seed.setupId, fields: [{ name: "title", label: "Titel" }] });
     expect(off.suggestion).toBeNull();
     expect(off.note).toMatch(/deaktiviert/);
+  });
+});
+
+describe("Etappe 15: Persönlicher KI-Berater je Chance", () => {
+  it("schlägt Züge mit Textstelle vor, wird versioniert gespeichert; nur Bearbeitende dürfen", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const seed = await ensureSeed();
+    const david = await actorFor("david");
+    // Eigenes Setup ohne Nina als Mitglied – wie beim Strategiefaden-Test, um "kein Zugriff" zu prüfen.
+    const s = await createSetup(david, { accountId: seed.accountId, name: "Chancen-Berater-Test-Setup", visibility: "MITGLIEDER", creatorContribution: "BD_ZUSTAENDIG" });
+    const opp = await createOpportunity(david, { setupId: s.id, title: "Chancen-Berater-Test", needDescription: "Der Kunde sucht Unterstützung im Testmanagement." });
+
+    const a = await getOpportunityAdvice(david, opp.id);
+    expect(a.analysis.status).toBe("IN_KLAERUNG");
+    expect(a.analysis.nextStep).toMatch(/bestätigen/);
+    expect(a.canEdit).toBe(true);
+    expect(a.latest).toBeNull();
+
+    // Vorschlag (Testanbieter) hat Züge mit Textstelle aus der Lageanalyse dieser einen Chance
+    const p = await proposeOpportunityAdvice(david, opp.id);
+    expect(p.proposal.nextStep.length).toBeGreaterThan(5);
+    expect(p.rejected).toBe(0);
+    expect(p.aiJobId).toBeTruthy();
+
+    // Speichern → Version 1, erneut → Version 2; immer eine neue Fassung, nie überschrieben
+    const v1 = await saveOpportunityAdvice(david, { ...p.proposal, opportunityId: opp.id, aiJobId: p.aiJobId, note: "Erste Fassung" });
+    expect(v1.versionNo).toBe(1);
+    expect(v1.status).toBe("IN_KLAERUNG");
+    const v2 = await saveOpportunityAdvice(
+      david,
+      formToOpportunityAdviceInput({
+        opportunityId: opp.id,
+        summary: "Belegt: Chance in Klärung. Vermutlich: Budget noch offen.",
+        nextStep: "Mit dem Bedarfsträger sprechen und die Chance bestätigen.",
+        "moves.0.title": "Gesprächstermin vereinbaren",
+        "moves.0.why": "Bestätigung fehlt",
+        "moves.0.ownerRole": "BD",
+        "moves.0.evidenceQuote": "",
+        "risks.0.text": "Stillstand",
+        "risks.0.evidenceQuote": "",
+        "openQuestions.0.text": "Wer entscheidet?",
+        note: "",
+      }),
+    );
+    expect(v2.versionNo).toBe(2);
+    const g = await getOpportunityAdvice(david, opp.id);
+    expect(g.latest?.versionNo).toBe(2);
+    expect(g.versions).toHaveLength(2);
+
+    // Rechte: Nina ist an diesem Setup kein Mitglied; CEO sieht lesend; fremder BD sieht gar nichts
+    const nina = await actorFor("nina");
+    await expect(getOpportunityAdvice(nina, opp.id)).rejects.toBeInstanceOf(NotFoundError);
+    const clemens = await actorFor("clemens");
+    const clemensView = await getOpportunityAdvice(clemens, opp.id);
+    expect(clemensView.canEdit).toBe(false);
+    await expect(saveOpportunityAdvice(clemens, { ...p.proposal, opportunityId: opp.id })).rejects.toBeInstanceOf(ForbiddenError);
+    const lars = await actorFor("lars");
+    await expect(getOpportunityAdvice(lars, opp.id)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(saveOpportunityAdvice(david, { opportunityId: opp.id, summary: "kurz", nextStep: "x" })).rejects.toBeInstanceOf(ValidationError);
+
+    // Prüfprotokoll
+    const audit = await db.query.auditEvents.findMany({ where: eq(schema.auditEvents.action, "opportunity_advice.version_saved") });
+    expect(audit.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("Etappe 15: BD-Start – eigene Performance nur in der BD-Sicht", () => {
+  it("bdPerformance ist nur für die BD-Sicht befüllt, für andere Sichten leer", async () => {
+    await ensureSeed();
+    const david = await actorFor("david");
+    const nina = await actorFor("nina");
+    const petra = await actorFor("petra");
+
+    const bd = (await buildDashboard(david, "BD"))!;
+    expect(bd.view).toBe("BD");
+    expect(bd.bdPerformance).not.toBeNull();
+    expect(bd.bdPerformance!.userId).toBe(david.userId);
+
+    // Andere Sichten desselben oder anderer Akteure bleiben unberührt – kein Überraschungseffekt außerhalb der BD-Sicht
+    const anker = (await buildDashboard(nina, "ANKER"))!;
+    expect(anker.view).toBe("ANKER");
+    expect(anker.bdPerformance).toBeNull();
+    const principal = (await buildDashboard(petra, "PRINCIPAL"))!;
+    expect(principal.bdPerformance).toBeNull();
   });
 });

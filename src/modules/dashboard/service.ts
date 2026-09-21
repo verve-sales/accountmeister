@@ -7,7 +7,7 @@ import { canViewAccount, canViewSetup, isResponsibleBd, loadSetupContext, type S
 import { analyzeSetup, type SetupAnalysis, type Stage, STAGES } from "@/modules/strategy/analysis";
 import { listVisibleAccounts } from "@/modules/accounts/service";
 import { listGoals } from "@/modules/leadership/service";
-import { buildActivityOverview, type AccountActivity } from "@/modules/activity/service";
+import { buildActivityOverview, buildBdPerformance, type AccountActivity, type BdPerformance } from "@/modules/activity/service";
 import { buildChanceOverview, MATURITY, type ChanceRow } from "@/modules/strategy/chancen";
 
 /**
@@ -87,6 +87,8 @@ export type Dashboard = {
   topOpportunities: Record<string, ChanceRow[]>;
   /** Nur für die Principal-Sicht befüllt: offene, unentschiedene Beobachtungen, die auf eine mögliche neue Chance hindeuten. */
   opportunityHints: { text: string; detail: string; href: string; accountName: string }[];
+  /** Nur für die BD-Sicht befüllt: eigene Performance (Aktivität, eigene Chancen) – Etappe 15. */
+  bdPerformance: BdPerformance | null;
   note: string;
   empty: string | null;
 };
@@ -272,6 +274,16 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
     }
   }
 
+  // BD-Start (Etappe 15): eigene Performance – Aktivität, eigene Chancen.
+  let bdPerformance: Dashboard["bdPerformance"] = null;
+  if (view === "BD") {
+    try {
+      bdPerformance = await buildBdPerformance(actor, { days: 7 });
+    } catch {
+      bdPerformance = null;
+    }
+  }
+
   return {
     view,
     available,
@@ -282,6 +294,7 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
     activity,
     topOpportunities,
     opportunityHints,
+    bdPerformance,
     note: "Alle Angaben sind Zählungen und Regeln über dokumentierte Objekte; keine Umsatz-, Forecast- oder Wahrscheinlichkeitswerte. Die Sicht ändert keine Rechte.",
     empty,
   };

@@ -3,11 +3,12 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildDashboard, viewDescription, viewLabel, type DashboardView } from "@/modules/dashboard/service";
-import { maturityLabel } from "@/modules/strategy/chancen";
+import { MATURITY, maturityLabel } from "@/modules/strategy/chancen";
+import { BarChart, CHART_COLORS } from "@/components/charts/BarChart";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { goalStatusLabel } from "@/lib/labels";
-import { setDashboardViewAction } from "../actions";
+import { createOpportunityAction, setDashboardViewAction } from "../actions";
 
 const DASHBOARD_VIEW_COOKIE = "am_sicht";
 /** So viele Kunden mit dem größten Aufmerksamkeitsbedarf werden ausführlich gezeigt. */
@@ -170,6 +171,11 @@ export default async function StartPage({ searchParams }: { searchParams: Search
           {d.activity.length === 0 ? (
             <p className="muted text-sm">Keine sichtbaren Kunden mit Aktivität.</p>
           ) : (
+            <>
+            <BarChart
+              title="Aktivitätskoeffizient je Kunde"
+              bars={d.activity.map((a) => ({ label: a.accountName, value: a.coefficient, detail: "Aktivitätskoeffizient" }))}
+            />
             <table className="list text-sm">
               <thead>
                 <tr>
@@ -196,6 +202,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                 })}
               </tbody>
             </table>
+            </>
           )}
           <p className="muted text-xs mt-2">Aktivität der letzten 7 Tage, gezählt aus dokumentierten Objekten (Weeklys, Beobachtungen, Aktionen, Vorschläge, Kontakte). Aktivitätskoeffizient: Menge × Anzahl beteiligter Rollen (Principal, BD, Anker) ÷ 3.</p>
         </section>
@@ -218,6 +225,72 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             </ul>
           )}
           <p className="muted text-xs mt-2">Unentschiedene, von der KI abgeleitete Beobachtungen (Kategorie „Neue Information“) aus Weekly-Notizen und Dokumenten – ein Hinweis, keine Vorhersage; ob daraus eine Chance wird, entscheidest du im Setup.</p>
+        </section>
+      )}
+
+      {d.view === "BD" && d.bdPerformance && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Meine Performance</h2>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div>
+              <div className="font-medium mb-1">Eigene Aktivität (letzte {d.bdPerformance.sinceDays} Tage): {d.bdPerformance.totalMyActivities}</div>
+              <ul className="space-y-1">
+                <li>Beobachtungen erfasst: {d.bdPerformance.myActivities.beobachtungenErfasst}</li>
+                <li>Aktionen erfasst/erledigt: {d.bdPerformance.myActivities.aktionenErfasstOderErledigt}</li>
+                <li>Vorschläge entschieden: {d.bdPerformance.myActivities.vorschlaegeEntschieden}</li>
+                <li>Weeklys bestätigt: {d.bdPerformance.myActivities.weeklysBestaetigt}</li>
+                <li>Kontakte gepflegt: {d.bdPerformance.myActivities.kontakteGepflegt}</li>
+              </ul>
+            </div>
+            <div>
+              <div className="font-medium mb-1">Eigene Chancen: {d.bdPerformance.opportunities.active} aktiv, davon {d.bdPerformance.opportunities.converted} beauftragt · {d.bdPerformance.opportunities.createdRecently} neu diese Woche</div>
+              <BarChart
+                title="Eigene Chancen nach Reifegrad"
+                bars={MATURITY.map((m, i) => ({ label: maturityLabel[m], value: d.bdPerformance!.opportunities.byMaturity[m], color: CHART_COLORS.sequential[i], detail: "eigene Chancen" }))}
+              />
+            </div>
+          </div>
+          {d.bdPerformance.accounts.length > 0 && (
+            <table className="list text-sm mt-3">
+              <thead><tr><th>Kunde</th><th>Eigene Aktivität</th><th>Aktive Chancen</th><th>Beauftragt</th></tr></thead>
+              <tbody>
+                {d.bdPerformance.accounts.map((a) => (
+                  <tr key={a.accountId}>
+                    <td><Link href={`/kunden/${a.accountId}`}>{a.accountName}</Link></td>
+                    <td>{a.totalMyActivities}</td>
+                    <td>{a.activeOpportunities}</td>
+                    <td>{a.convertedOpportunities}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="muted text-xs mt-2">{d.bdPerformance.note} Personenbezogen (nicht rollengebündelt): nur eigene dokumentierte Ereignisse und eigene Chancen (Verantwortlich = ich).</p>
+        </section>
+      )}
+
+      {d.view === "BD" && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Neue Idee zu einer Opportunity eintragen</h2>
+          <p className="muted text-sm mb-2">Wird als antizipierte Chance angelegt – vom Kunden noch nicht ausgesprochen; im Setup dann bestätigen, sobald der Kunde den Bedarf ausspricht.</p>
+          {d.accounts.every((c) => c.setups.length === 0) ? (
+            <p className="muted text-sm">Noch kein Setup, dem eine Idee zugeordnet werden könnte.</p>
+          ) : (
+            <form action={createOpportunityAction} className="grid sm:grid-cols-2 gap-3 text-sm">
+              <input type="hidden" name="anticipated" value="true" />
+              <input type="hidden" name="back" value="/start" />
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="ideaSetup">Setup</label>
+                <select id="ideaSetup" name="setupId" className="select" required defaultValue="">
+                  <option value="">– wählen –</option>
+                  {d.accounts.map((c) => c.setups.map((s) => <option key={s.setupId} value={s.setupId}>{c.accountName} · {s.setupName}</option>))}
+                </select>
+              </div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="ideaTitle">Titel</label><input id="ideaTitle" name="title" className="input" required minLength={3} maxLength={200} /></div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="ideaNeed">Beschreibung in Kundensprache</label><textarea id="ideaNeed" name="needDescription" className="textarea" required minLength={10} rows={3} /></div>
+              <div className="sm:col-span-2"><button className="btn" type="submit">Idee als Chance anlegen</button></div>
+            </form>
+          )}
         </section>
       )}
 

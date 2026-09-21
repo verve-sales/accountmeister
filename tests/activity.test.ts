@@ -6,7 +6,8 @@ import { createAction, changeActionStatus } from "@/modules/actions/service";
 import { createPerson } from "@/modules/people/service";
 import { createAccount } from "@/modules/accounts/service";
 import { createSetup } from "@/modules/setups/service";
-import { buildAccountActivity, buildActivityOverview } from "@/modules/activity/service";
+import { buildAccountActivity, buildActivityOverview, buildBdPerformance } from "@/modules/activity/service";
+import { createOpportunity } from "@/modules/opportunities/service";
 import { actorFor, ensureSeed } from "./helpers";
 
 /** Eigener Kunde je Test: buildAccountActivity zählt über den ganzen Kunden (alle Setups), nicht nur ein Setup. */
@@ -125,5 +126,42 @@ describe("Etappe 12: Aktivitäts-Tracking und Zusammenarbeits-Score", () => {
       expect(overview[i - 1]!.coefficient).toBeGreaterThanOrEqual(overview[i]!.coefficient);
     }
     expect(overview.some((a) => a.accountId === account.id)).toBe(true);
+  });
+});
+
+describe("Etappe 15: Meine Performance (BD) – personenbezogen, nicht rollengebündelt", () => {
+  it("zählt nur eigene dokumentierte Aktivität und eigene Chancen, getrennt je Kunde", async () => {
+    const { david, nina, account, setup } = await freshAccount("Performance-Test");
+
+    // David (BD) und Nina (Anker) erfassen je eine eigene Beobachtung – nur Davids eigene soll für ihn zählen
+    await captureObservation(david, { setupId: setup.id, observation: "Performance-Test: Davids eigene Beobachtung." });
+    await captureObservation(nina, { setupId: setup.id, observation: "Performance-Test: Ninas Beobachtung." });
+
+    // David legt zwei eigene Chancen an: eine antizipiert (Idee), eine in Klärung
+    const idea = await createOpportunity(david, { setupId: setup.id, title: "Performance-Test: Idee 1", needDescription: "Der Kunde könnte künftig Unterstützung im Testmanagement brauchen.", anticipated: "true" });
+    const opp2 = await createOpportunity(david, { setupId: setup.id, title: "Performance-Test: Idee 2", needDescription: "Zusätzlicher Bedarf im Bereich Architektur." });
+    expect(idea.status).toBe("ANTIZIPIERT");
+    expect(opp2.status).toBe("IN_KLAERUNG");
+
+    const bd = await buildBdPerformance(david, { days: 7 });
+    // David sieht (u. a. aus früheren Tests im selben Lauf) noch weitere eigene Kunden/Chancen – die Übersicht
+    // ist daher global nur "mindestens", exakt zählbar bleibt nur die je Kunde ausgewiesene Zeile dieses frischen Kontos.
+    expect(bd.totalMyActivities).toBeGreaterThanOrEqual(1);
+    expect(bd.opportunities.active).toBeGreaterThanOrEqual(2);
+    expect(bd.opportunities.byMaturity.ANTIZIPIERT).toBeGreaterThanOrEqual(1);
+    expect(bd.opportunities.byMaturity.IN_KLAERUNG).toBeGreaterThanOrEqual(1);
+    const row = bd.accounts.find((a) => a.accountId === account.id);
+    expect(row).toBeTruthy();
+    // Personenbezogen: nur Davids eigene Beobachtung bei diesem Kunden, nicht Ninas
+    expect(row!.myActivities.beobachtungenErfasst).toBe(1);
+    expect(row!.totalMyActivities).toBeGreaterThanOrEqual(1);
+    expect(row!.activeOpportunities).toBe(2);
+    expect(row!.convertedOpportunities).toBe(0);
+
+    // Nina hat bei diesem Kunden keine eigenen Chancen – ihre Performance ist unabhängig von Davids
+    const ninaPerf = await buildBdPerformance(nina, { days: 7 });
+    const ninaRow = ninaPerf.accounts.find((a) => a.accountId === account.id);
+    expect(ninaRow?.activeOpportunities ?? 0).toBe(0);
+    expect(ninaRow?.myActivities.beobachtungenErfasst ?? 0).toBe(1);
   });
 });

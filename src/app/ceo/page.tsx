@@ -4,6 +4,7 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { hasRole } from "@/modules/identity/actor";
 import { buildCeoDashboard } from "@/modules/ceo/service";
 import { maturityLabel } from "@/modules/strategy/chancen";
+import { BarChart, GroupedBarChart } from "@/components/charts/BarChart";
 import { Status } from "@/components/Status";
 import { fmtDate, goalStatusLabel } from "@/lib/labels";
 
@@ -23,6 +24,24 @@ export default async function CeoDashboardPage() {
       {d.accounts.length === 0 ? (
         <p className="card text-sm">Keine sichtbaren Kunden.</p>
       ) : (
+        <div className="grid lg:grid-cols-2 gap-6">
+          <section className="card">
+            <h2 className="font-semibold mb-2">Aktivitätskoeffizient je Kunde</h2>
+            <BarChart title="Aktivitätskoeffizient je Kunde" bars={d.accounts.map((a) => ({ label: a.accountName, value: a.activity.coefficient, detail: "Aktivitätskoeffizient" }))} />
+          </section>
+          {(() => {
+            const goalBars = d.accounts.flatMap((a) => a.goals.filter((g) => g.targetHeadcount != null).map((g) => ({ label: g.roleFamilyLabel ? `${a.accountName} · ${g.roleFamilyLabel}` : a.accountName, values: [g.currentHeadcount ?? 0, g.targetHeadcount as number] as [number, number], detail: g.title })));
+            return goalBars.length > 0 ? (
+              <section className="card">
+                <h2 className="font-semibold mb-2">Ist- vs. Zielbild (Positionen)</h2>
+                <GroupedBarChart title="Ist- vs. Zielbild" legend={["Ist", "Ziel"]} bars={goalBars} />
+              </section>
+            ) : null;
+          })()}
+        </div>
+      )}
+
+      {d.accounts.length === 0 ? null : (
         <div className="space-y-4">
           {d.accounts.map((a) => (
             <article key={a.accountId} className="card">

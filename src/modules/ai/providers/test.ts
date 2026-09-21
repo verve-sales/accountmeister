@@ -340,6 +340,31 @@ export class TestProvider implements AIProvider {
     return out;
   }
 
+  /** Chancen-Berater aus der Lageanalyse genau einer Chance: gleiche Textform wie der Strategiefaden, andere Zeilenpräfixe. */
+  async adviseOpportunity(input: StrategyInput): Promise<StrategyProposal> {
+    const lines = input.analysisText.split("\n").map((l) => l.trim()).filter(Boolean);
+    const pick = (prefix: string) => lines.find((l) => l.startsWith(prefix))?.slice(prefix.length).trim() ?? "";
+    const chanceLine = pick("Chance:");
+    const nextStep = pick("Nächster Schritt:") || "Nächsten Schritt zu dieser Chance festlegen.";
+    const split = (v: string) => (v ? v.split(" | ").map((x) => x.trim()).filter(Boolean) : []);
+    const blockers = split(pick("Blocker:"));
+    const missing = split(pick("Fehlt:"));
+    const moves = split(pick("Naheliegende Züge:"));
+    const quoteFor = (frag: string) => (lines.find((l) => l.includes(frag)) ?? frag).slice(0, 380);
+    const out: StrategyProposal = {
+      summary: `Belegt: ${chanceLine || "Chance"}. ${blockers.length ? `${blockers.length} dokumentierte(r) Blocker.` : "Keine dokumentierten Blocker."} ${missing.length ? `Es fehlen ${missing.length} Grundlagen.` : "Grundlagen vollständig."}`,
+      nextStep,
+      moves: [
+        ...moves.slice(0, 2).map((m) => ({ title: m.replace(/\.$/, ""), why: "Bereits im Tool vorbereitet – geringster Aufwand.", ownerRole: "BD" as const, evidenceQuote: quoteFor(m) })),
+        ...blockers.slice(0, 2).map((b) => ({ title: `Blocker lösen: ${b.split(" – ")[0]!.replace(/\.$/, "").slice(0, 120)}`, why: "Blockiert die Konvertierung dieser Chance.", ownerRole: "BD" as const, evidenceQuote: quoteFor(b) })),
+        ...missing.slice(0, 1).map((m) => ({ title: `Lücke schließen: ${m.replace(/\.$/, "").slice(0, 120)}`, why: "Ohne diese Grundlage bleibt der nächste Schritt Hypothese.", ownerRole: (/Anker|Kontext/i.test(m) ? "ANKER" : "BD") as "ANKER" | "BD", evidenceQuote: quoteFor(m) })),
+      ].slice(0, 5),
+      risks: blockers.filter((b) => /Tagen|überfällig|unvollständig/i.test(b)).slice(0, 2).map((b) => ({ text: `Vermutlich: Stillstand – ${b.replace(/\.$/, "")}.`, evidenceQuote: quoteFor(b) })),
+      openQuestions: missing.filter((m) => m.endsWith("?")).slice(0, 3),
+    };
+    return out;
+  }
+
   /** Formularvorschlag: nimmt Titel/Kontext aus Kontextzeilen, wählt Optionen regelbasiert. */
   async suggestForm(input: FormSuggestInput): Promise<FormSuggestion> {
     const ctx = input.contextText;

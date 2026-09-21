@@ -3,14 +3,17 @@ import { notFound, redirect } from "next/navigation";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getOpportunityDetail, MEDDPICC_KEYS } from "@/modules/opportunities/service";
-import { Feedback, type SearchParams } from "@/components/Feedback";
+import { getOpportunityAdvice, proposeOpportunityAdvice, ruleBasedOpportunityAdvice, type OpportunityAdviceRow } from "@/modules/opportunities/advisor";
+import type { StrategyMove } from "@/modules/strategy/service";
+import type { StrategyProposal } from "@/modules/ai/schemas";
+import { Feedback } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { groupByFamily } from "@/modules/roles/catalog";
 import { decisionRoleLabel, engagementStatusLabel, epistemicLabel, fmtDate, fmtDateTime, offerStatusLabel, opportunityStatusLabel, orderStatusLabel, requirementStatusLabel, sourceTypeLabel } from "@/lib/labels";
 import {
   addParticipationAction, addStartRequirementAction, cancelOrderAction, changeOfferStatusAction, changeOpportunityStatusAction, confirmOpportunityAction, confirmOrderAction, createOfferAction,
-  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, removeParticipationAction, saveMeddpiccAction, setRequirementStatusAction, updateOpportunityAction,
+  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, removeParticipationAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction,
 } from "../../actions";
 
 const VERLAUF = ["IN_KLAERUNG", "BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG", "BEAUFTRAGT"] as const;
@@ -30,7 +33,7 @@ function EvidenceFields({ prefix, sources, label = "Beleg" }: { prefix: string; 
   );
 }
 
-export default async function BedarfPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
+export default async function BedarfPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; berater?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const actor = await getCurrentActor();
@@ -44,6 +47,34 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   }
   const { opp, ctx, canEdit } = d;
   const name = (uid: string | null | undefined) => (uid ? d.userNames.get(uid) ?? "?" : "–");
+
+  // Persönlicher KI-Berater für diese Chance (Etappe 15): Vorbelegung mit KI-Vorschlag (auf Wunsch),
+  // sonst letzte Fassung, sonst regelbasiert – gespeichert wird erst mit „Fassung speichern“.
+  const advice = await getOpportunityAdvice(actor, id);
+  let adviceDraft: StrategyProposal;
+  let adviceDraftNote = "";
+  let adviceAiJobId: string | null = null;
+  let adviceProposalError: string | null = null;
+  if (sp.berater && advice.canEdit) {
+    try {
+      const p = await proposeOpportunityAdvice(actor, id);
+      adviceDraft = p.proposal;
+      adviceDraftNote = p.note || "KI-Vorschlag – jede Zeile prüfen, ändern oder entfernen; gespeichert wird erst mit „Fassung speichern“.";
+      adviceAiJobId = p.aiJobId;
+    } catch (e) {
+      adviceProposalError = e instanceof DomainError ? e.message : "Der KI-Vorschlag ist gerade nicht möglich.";
+      adviceDraft = advice.latest ? adviceFromRow(advice.latest) : ruleBasedOpportunityAdvice(advice.analysis);
+    }
+  } else if (advice.latest) {
+    adviceDraft = adviceFromRow(advice.latest);
+    adviceDraftNote = `Vorbelegt mit Fassung ${advice.latest.versionNo} vom ${fmtDate(advice.latest.createdAt)}.`;
+  } else {
+    adviceDraft = ruleBasedOpportunityAdvice(advice.analysis);
+    adviceDraftNote = "Noch keine Fassung – regelbasierter Entwurf aus der Lageanalyse dieser Chance.";
+  }
+  const adviceMoves = [...adviceDraft.moves, ...Array.from({ length: Math.max(0, 5 - adviceDraft.moves.length) }, () => ({ title: "", why: "", ownerRole: "BD" as const, evidenceQuote: "" }))].slice(0, 8);
+  const adviceRisks = [...adviceDraft.risks, ...Array.from({ length: Math.max(0, 3 - adviceDraft.risks.length) }, () => ({ text: "", evidenceQuote: "" }))].slice(0, 6);
+  const adviceQuestions = [...adviceDraft.openQuestions, ...Array.from({ length: Math.max(0, 3 - adviceDraft.openQuestions.length) }, () => "")].slice(0, 6);
   const closed = opp.status === "BEENDET";
   const verlaufIdx = VERLAUF.indexOf(opp.status as (typeof VERLAUF)[number]);
   const md = opp.meddpicc ?? {};
@@ -449,6 +480,116 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         <h2 className="font-semibold mb-2">Passende Artefakte</h2>
         <p className="text-sm">Klärung der Chance, Profilvorstellung und Auftrags-/Startunterlagen entstehen als Textentwürfe im Setup: <Link href={`/setups/${ctx.setup.id}/artefakte`}>Artefakte des Setups →</Link> (A7 Bedarfsbriefing, A8 Risiko-/Qualifizierungsnotiz, A9 Profilangebot, A10 Auswahl-/Entscheidungsstand, A11 Auftrags-/Startübergabe, A12 Verlängerung/Entwicklung). Kundentexte enthalten keine internen Einordnungen.</p>
       </section>
+
+      {/* Persönlicher KI-Berater für diese Chance (Etappe 15, BD-Wunsch: „nächste Schritte zur Konvertierung“) */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Persönlicher KI-Berater für diese Chance</h2>
+        {adviceProposalError && <p className="error text-sm" role="alert">{adviceProposalError}</p>}
+        <p className="text-sm"><span className="muted">Nächster Schritt zur Konvertierung: </span>{advice.analysis.nextStep}</p>
+        <div className="grid sm:grid-cols-3 gap-4 mt-3 text-sm">
+          <div><div className="font-medium mb-1">Blockiert</div>{advice.analysis.blockers.length === 0 ? <p className="muted">Nichts Dokumentiertes.</p> : <ul className="space-y-1">{advice.analysis.blockers.map((b, i) => <li key={i} style={{ color: "#a12b1e" }}>{b}</li>)}</ul>}</div>
+          <div><div className="font-medium mb-1">Was fehlt</div>{advice.analysis.missing.length === 0 ? <p className="muted">Grundlagen vollständig.</p> : <ul className="space-y-1">{advice.analysis.missing.map((m, i) => <li key={i}>{m}</li>)}</ul>}</div>
+          <div><div className="font-medium mb-1">Naheliegende Züge</div>{advice.analysis.moves.length === 0 ? <p className="muted">Nichts vorbereitet.</p> : <ul className="space-y-1">{advice.analysis.moves.map((m, i) => <li key={i}>{m}</li>)}</ul>}</div>
+        </div>
+
+        {advice.latest && (
+          <div className="mt-4 border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
+            <div className="flex flex-wrap items-baseline gap-3">
+              <div className="font-medium">Aktuelle Fassung {advice.latest.versionNo}</div>
+              <span className="muted text-sm">vom {fmtDate(advice.latest.createdAt)}{advice.latest.aiJobId ? " · mit KI-Vorschlag" : ""}</span>
+            </div>
+            <p className="text-sm mt-2" style={{ whiteSpace: "pre-wrap" }}>{advice.latest.summary}</p>
+            <p className="text-sm mt-2"><span className="muted">Nächster Schritt: </span>{advice.latest.nextStep}</p>
+            {(advice.latest.moves as StrategyMove[]).length > 0 && (
+              <ol className="text-sm mt-2 space-y-1 list-decimal ml-5">
+                {(advice.latest.moves as StrategyMove[]).map((m, i) => (
+                  <li key={i}><strong>{m.title}</strong> <span className="status">{m.ownerRole}</span>{m.why && <span className="muted"> – {m.why}</span>}</li>
+                ))}
+              </ol>
+            )}
+            {advice.latest.note && <p className="muted text-xs mt-2">Notiz: {advice.latest.note}</p>}
+          </div>
+        )}
+
+        {advice.canEdit && (
+          <div className="mt-4">
+            <div className="flex flex-wrap items-baseline gap-3 mb-2">
+              <span className="muted text-sm">{adviceDraftNote}</span>
+              {!sp.berater && <Link href={`/bedarfe/${id}?berater=1`} className="btn btn-secondary btn-small ml-auto">Vorschlag der KI einholen</Link>}
+            </div>
+            <details>
+              <summary>Neue Fassung erfassen</summary>
+              <form action={saveOpportunityAdviceAction} className="mt-2 grid gap-4 text-sm">
+                <input type="hidden" name="opportunityId" value={id} />
+                {adviceAiJobId && <input type="hidden" name="aiJobId" value={adviceAiJobId} />}
+                <div>
+                  <label className="label" htmlFor="adSummary">Lage dieser Chance (belegt / vermutlich trennen)</label>
+                  <textarea id="adSummary" name="summary" className="textarea" required minLength={10} defaultValue={adviceDraft.summary} rows={4} />
+                </div>
+                <div>
+                  <label className="label" htmlFor="adNextStep">Nächster Schritt zur Konvertierung</label>
+                  <input id="adNextStep" name="nextStep" className="input" required minLength={5} defaultValue={adviceDraft.nextStep} />
+                </div>
+                <div>
+                  <div className="label">Züge (leer lassen = weglassen)</div>
+                  <div className="space-y-2">
+                    {adviceMoves.map((m, k) => (
+                      <div key={k} className="grid sm:grid-cols-12 gap-2 items-start">
+                        <input name={`moves.${k}.title`} className="input sm:col-span-5" placeholder={`Zug ${k + 1}`} defaultValue={m.title} maxLength={200} />
+                        <input name={`moves.${k}.why`} className="input sm:col-span-4" placeholder="Warum jetzt" defaultValue={m.why} maxLength={600} />
+                        <select name={`moves.${k}.ownerRole`} className="select sm:col-span-2" defaultValue={m.ownerRole}>
+                          <option value="BD">BD</option><option value="ANKER">Anker</option><option value="PRINCIPAL">Principal</option>
+                        </select>
+                        <input type="hidden" name={`moves.${k}.evidenceQuote`} value={m.evidenceQuote} />
+                        {m.evidenceQuote && <div className="muted text-xs sm:col-span-12">Textstelle: „{m.evidenceQuote.slice(0, 140)}“</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="label">Risiken (belegt)</div>
+                  <div className="space-y-2">
+                    {adviceRisks.map((r, k) => (
+                      <div key={k}>
+                        <input name={`risks.${k}.text`} className="input" placeholder={`Risiko ${k + 1}`} defaultValue={r.text} maxLength={400} />
+                        <input type="hidden" name={`risks.${k}.evidenceQuote`} value={r.evidenceQuote} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="label">Offene Fragen</div>
+                  <div className="space-y-2">{adviceQuestions.map((q, k) => <input key={k} name={`openQuestions.${k}.text`} className="input" placeholder={`Frage ${k + 1}`} defaultValue={q} maxLength={300} />)}</div>
+                </div>
+                <div>
+                  <label className="label" htmlFor="adNote">Notiz zur Fassung (optional)</label>
+                  <input id="adNote" name="note" className="input" maxLength={600} />
+                </div>
+                <div><button className="btn" type="submit">Fassung speichern</button> <span className="muted text-xs ml-2">Es entsteht immer eine neue Version; frühere bleiben nachlesbar.</span></div>
+              </form>
+            </details>
+          </div>
+        )}
+
+        {advice.versions.length > 1 && (
+          <details className="mt-3">
+            <summary>Frühere Fassungen ({advice.versions.length - 1})</summary>
+            <ul className="mt-2 space-y-3 text-sm">
+              {advice.versions.slice(1).map((v) => (
+                <li key={v.id}>
+                  <div className="font-medium">Fassung {v.versionNo} · {fmtDate(v.createdAt)}</div>
+                  <p style={{ whiteSpace: "pre-wrap" }}>{v.summary}</p>
+                  <p className="muted">Nächster Schritt damals: {v.nextStep}</p>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </section>
     </div>
   );
+}
+
+function adviceFromRow(r: OpportunityAdviceRow): StrategyProposal {
+  return { summary: r.summary, nextStep: r.nextStep, moves: (r.moves as StrategyMove[]).map((m) => ({ title: m.title, why: m.why ?? "", ownerRole: m.ownerRole ?? "BD", evidenceQuote: m.evidenceQuote ?? "" })), risks: (r.risks as { text: string; evidenceQuote: string }[]) ?? [], openQuestions: (r.openQuestions as string[]) ?? [] };
 }

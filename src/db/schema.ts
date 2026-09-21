@@ -1377,6 +1377,36 @@ export const strategyThreads = pgTable(
   (t) => [uniqueIndex("strategy_threads_version_uq").on(t.setupId, t.versionNo), index("strategy_threads_setup_idx").on(t.setupId)],
 );
 
+/**
+ * Persönlicher KI-Berater je Chance (Etappe 15): analog zum Strategiefaden (Etappe 9), aber je Bedarf statt je
+ * Setup – der nächste Schritt, um genau diese Chance zur Konvertierung zu bewegen. Versioniert, nie überschrieben.
+ */
+export const opportunityAdvice = pgTable(
+  "opportunity_advice",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
+    versionNo: integer("version_no").notNull(),
+    summary: text("summary").notNull(),
+    nextStep: text("next_step").notNull(),
+    /** Züge: {title, why, ownerRole, evidenceQuote, done?} */
+    moves: jsonb("moves").notNull().default([]),
+    /** Risiken: {text, evidenceQuote} */
+    risks: jsonb("risks").notNull().default([]),
+    openQuestions: jsonb("open_questions").notNull().default([]),
+    /** Textfassung der Chancen-Lage zum Zeitpunkt der Fassung (Nachvollziehbarkeit) */
+    basis: text("basis").notNull(),
+    /** Status der Chance zum Zeitpunkt der Fassung */
+    status: text("status").notNull(),
+    note: text("note"),
+    aiJobId: text("ai_job_id").references(() => aiJobs.id),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("opportunity_advice_version_uq").on(t.opportunityId, t.versionNo), index("opportunity_advice_opportunity_idx").on(t.opportunityId)],
+);
+
 export type Role = (typeof roleEnum.enumValues)[number];
 export type AccessClass = (typeof accessClassEnum.enumValues)[number];
 export type SignalStatus = (typeof signalStatusEnum.enumValues)[number];

@@ -4,6 +4,7 @@ import { NotFoundError } from "@/lib/errors";
 import type { Actor } from "@/modules/identity/actor";
 import { canViewSetup, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { getAccount, listVisibleAccounts } from "@/modules/accounts/service";
+import { MATURITY, maturityOf, type Maturity } from "@/modules/strategy/chancen";
 
 /**
  * Aktivitäts-Tracking und Zusammenarbeits-Score (Etappe 12): Grundlage für die Dashboards von CEO, Principal
@@ -166,4 +167,90 @@ export async function buildActivityOverview(actor: Actor, opts: { days?: number 
     }
   }
   return result.sort((a, b) => b.coefficient - a.coefficient);
+}
+
+/** Dieselben Kategorien wie oben, aber personenbezogen: nur Ereignisse genau dieses Nutzers, nicht rollengebündelt. */
+async function personalActivityCounts(userId: string, setupIds: string[], since: Date): Promise<ActivityCounts> {
+  if (setupIds.length === 0) return emptyCounts();
+  const [signals, actions, suggestions, reviewRows, reviewVersions, relationships, assessments] = await Promise.all([
+    db.query.signals.findMany({ where: and(inArray(schema.signals.setupId, setupIds), gte(schema.signals.createdAt, since), eq(schema.signals.createdBy, userId)) }),
+    db.query.actions.findMany({ where: and(inArray(schema.actions.setupId, setupIds), gte(schema.actions.updatedAt, since)) }),
+    db.query.suggestions.findMany({ where: and(inArray(schema.suggestions.setupId, setupIds), gte(schema.suggestions.decidedAt, since), eq(schema.suggestions.decidedBy, userId)) }),
+    db.query.reviews.findMany({ where: inArray(schema.reviews.setupId, setupIds) }),
+    db.query.reviewVersions.findMany({ where: and(gte(schema.reviewVersions.confirmedAt, since), eq(schema.reviewVersions.confirmedBy, userId)) }),
+    db.query.relationships.findMany({ where: and(inArray(schema.relationships.setupId, setupIds), gte(schema.relationships.createdAt, since), eq(schema.relationships.createdBy, userId)) }),
+    db.query.personAssessments.findMany({ where: and(inArray(schema.personAssessments.setupId, setupIds), gte(schema.personAssessments.updatedAt, since), eq(schema.personAssessments.createdBy, userId)) }),
+  ]);
+  const reviewIds = new Set(reviewRows.map((r) => r.id));
+  const confirmedInPeriod = reviewVersions.filter((v) => reviewIds.has(v.reviewId));
+  const actionEvents = actions.filter((a) => (a.ownerUserId === userId || a.createdBy === userId) && (a.createdAt >= since || a.status === "ERLEDIGT"));
+  return {
+    weeklysBestaetigt: confirmedInPeriod.length,
+    beobachtungenErfasst: signals.length,
+    aktionenErfasstOderErledigt: actionEvents.length,
+    vorschlaegeEntschieden: suggestions.length,
+    kontakteGepflegt: relationships.length + assessments.length,
+  };
+}
+
+export type BdAccountPerformance = { accountId: string; accountName: string; myActivities: ActivityCounts; totalMyActivities: number; activeOpportunities: number; convertedOpportunities: number };
+
+export type BdPerformance = {
+  userId: string;
+  sinceDays: number;
+  since: string;
+  myActivities: ActivityCounts;
+  totalMyActivities: number;
+  opportunities: { active: number; converted: number; createdRecently: number; byMaturity: Record<Maturity, number> };
+  accounts: BdAccountPerformance[];
+  note: string;
+};
+
+/**
+ * Meine Performance (Etappe 15, BD-Wunsch: „ein Dashboard bei Start, mit dem ich meine Performance sehen kann“):
+ * eigene dokumentierte Aktivität (personenbezogen, nicht rollengebündelt) über alle sichtbaren Kunden, plus die
+ * eigenen Chancen (Verantwortlich = dieser BD) – aktiv, beauftragt, neu angelegt im Zeitraum.
+ */
+export async function buildBdPerformance(actor: Actor, opts: { days?: number } = {}): Promise<BdPerformance> {
+  const days = opts.days ?? 7;
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const accounts = (await listVisibleAccounts(actor)).filter((a) => a.status !== "ARCHIVED");
+  const myOpps = await db.query.opportunities.findMany({ where: eq(schema.opportunities.ownerUserId, actor.userId) });
+  const active = myOpps.filter((o) => o.status !== "ZURUECKGESTELLT" && o.status !== "BEENDET").length;
+  const converted = myOpps.filter((o) => o.status === "BEAUFTRAGT").length;
+  const createdRecently = myOpps.filter((o) => o.createdAt >= since).length;
+  const byMaturity = Object.fromEntries(MATURITY.map((m) => [m, 0])) as Record<Maturity, number>;
+  for (const o of myOpps) {
+    const m = maturityOf(o.status);
+    if (m) byMaturity[m]++;
+  }
+
+  const total = emptyCounts();
+  const accountRows: BdAccountPerformance[] = [];
+  for (const a of accounts) {
+    const setupRows = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, a.id) });
+    const ctxs: SetupContext[] = [];
+    for (const s of setupRows) {
+      const ctx = await loadSetupContext(actor, s.id);
+      if (ctx && canViewSetup(actor, ctx)) ctxs.push(ctx);
+    }
+    const setupIds = ctxs.map((c) => c.setup.id);
+    const myCounts = await personalActivityCounts(actor.userId, setupIds, since);
+    const myTotal = totalOf(myCounts);
+    const activeOpportunities = myOpps.filter((o) => o.accountId === a.id && o.status !== "ZURUECKGESTELLT" && o.status !== "BEENDET").length;
+    const convertedOpportunities = myOpps.filter((o) => o.accountId === a.id && o.status === "BEAUFTRAGT").length;
+    if (myTotal > 0 || activeOpportunities > 0) {
+      accountRows.push({ accountId: a.id, accountName: a.name, myActivities: myCounts, totalMyActivities: myTotal, activeOpportunities, convertedOpportunities });
+      for (const k of Object.keys(total) as (keyof ActivityCounts)[]) total[k] += myCounts[k];
+    }
+  }
+  accountRows.sort((a, b) => b.totalMyActivities - a.totalMyActivities || b.activeOpportunities - a.activeOpportunities);
+  const totalMyActivities = totalOf(total);
+  const note =
+    totalMyActivities === 0 && active === 0
+      ? `Keine eigene dokumentierte Aktivität und keine aktiven Chancen in den letzten ${days} Tagen.`
+      : `${totalMyActivities} eigene dokumentierte Aktivität(en) in den letzten ${days} Tagen; ${active} aktive Chance(n), davon ${converted} beauftragt.`;
+
+  return { userId: actor.userId, sinceDays: days, since: since.toISOString(), myActivities: total, totalMyActivities, opportunities: { active, converted, createdRecently, byMaturity }, accounts: accountRows, note };
 }

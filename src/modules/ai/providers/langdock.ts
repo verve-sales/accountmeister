@@ -1,6 +1,6 @@
 import { DomainError } from "@/lib/errors";
-import type { AIProvider, AnalyzeDocumentInput, AssistantInput, FormSuggestInput, InterviewNextInput, ModelInfo, ProviderInfo, StrategyInput, StructureNoteInput, TaskOptions, Usage } from "../provider";
-import { ANALYZE_DOCUMENT_SYSTEM, ASSISTANT_CARDS_SYSTEM, ASSISTANT_SYSTEM, FORM_SUGGEST_SYSTEM, INTERVIEW_NEXT_SYSTEM, STRATEGY_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
+import type { AIProvider, AnalyzeDocumentInput, AssistantInput, FormSuggestInput, InterviewNextInput, ModelInfo, OpportunityAdviceInput, ProviderInfo, StrategyInput, StructureNoteInput, TaskOptions, Usage } from "../provider";
+import { ANALYZE_DOCUMENT_SYSTEM, ASSISTANT_CARDS_SYSTEM, ASSISTANT_SYSTEM, FORM_SUGGEST_SYSTEM, INTERVIEW_NEXT_SYSTEM, OPPORTUNITY_ADVICE_SYSTEM, STRATEGY_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
 
 /**
  * Produktivanbieter über Langdock (EU-Hosting, Auftragsverarbeitung im Langdock-Vertrag von Verve).
@@ -221,6 +221,15 @@ export class LangdockProvider implements AIProvider {
       input.previous ? `\n=== LETZTE FASSUNG DES STRATEGIEFADENS (${input.previous.createdAt}) ===\n${input.previous.summary}\nNächster Schritt damals: ${input.previous.nextStep}\n=== ENDE ===` : "\nNoch keine frühere Fassung.",
     ].join("\n");
     return this.completeJson(STRATEGY_SYSTEM, user, { maxOutputTokens: 2500, ...opts });
+  }
+
+  async adviseOpportunity(input: OpportunityAdviceInput, opts?: TaskOptions): Promise<unknown> {
+    const user = [
+      `\n=== LAGEANALYSE DIESER CHANCE (Daten) ===\n${clip(input.analysisText)}\n=== ENDE ===`,
+      `\n=== BEKANNTER KONTEXT (Daten) ===\n${clip(input.contextText) || "–"}\n=== ENDE ===`,
+      input.previous ? `\n=== LETZTE FASSUNG DES BERATER-FADENS (${input.previous.createdAt}) ===\n${input.previous.summary}\nNächster Schritt damals: ${input.previous.nextStep}\n=== ENDE ===` : "\nNoch keine frühere Fassung.",
+    ].join("\n");
+    return this.completeJson(OPPORTUNITY_ADVICE_SYSTEM, user, { maxOutputTokens: 2500, ...opts });
   }
 
   async suggestForm(input: FormSuggestInput, opts?: TaskOptions): Promise<unknown> {

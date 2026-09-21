@@ -16,6 +16,7 @@ import { changeActionStatus, createAction } from "@/modules/actions/service";
 import { createAccount } from "@/modules/accounts/service";
 import { archiveAccount, deleteAccountPermanently, restoreAccount } from "@/modules/accounts/deletion";
 import { formToStrategyInput, saveStrategy } from "@/modules/strategy/service";
+import { formToOpportunityAdviceInput, saveOpportunityAdvice } from "@/modules/opportunities/advisor";
 import { addRole, setRoleActive } from "@/modules/roles/catalog";
 import { createPerson, setPersonFunction, setRelationship } from "@/modules/people/service";
 import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/modules/accesspaths/service";
@@ -127,6 +128,16 @@ export async function saveStrategyAction(fd: FormData) {
   const id = data.setupId ?? "";
   return run(`/setups/${id}/strategie`, async (actor) => {
     await saveStrategy(actor, formToStrategyInput(data));
+  }, "Fassung gespeichert.");
+}
+
+// --- Chancen-Berater (Etappe 15) -------------------------------------------
+
+export async function saveOpportunityAdviceAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.opportunityId ?? "";
+  return run(`/bedarfe/${id}`, async (actor) => {
+    await saveOpportunityAdvice(actor, formToOpportunityAdviceInput(data));
   }, "Fassung gespeichert.");
 }
 

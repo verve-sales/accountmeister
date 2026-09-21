@@ -113,6 +113,13 @@
       "when": 1789998242673,
       "tag": "0015_accountziele",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790007161998,
+      "tag": "0016_opportunity_advice",
+      "breakpoints": true
     }
   ]
 }
