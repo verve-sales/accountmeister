@@ -262,15 +262,33 @@ export type StrategyProposal = z.infer<typeof strategyProposalSchema>;
 export const formKinds = ["VORHABEN", "SETUP", "CHANCE", "MEDDPICC"] as const;
 export type FormKind = (typeof formKinds)[number];
 
+/**
+ * Feldwerte robust gegen reale Modellabweichungen einlesen: manche Modelle liefern für ein Feld ohne Grundlage
+ * null statt es wegzulassen, oder eine Zahl/bool statt eines Strings. Solche Werte werden übersetzt oder
+ * weggelassen, statt die gesamte Antwort zu verwerfen – die eigentliche Filterung (erlaubte Feldnamen, erlaubte
+ * Optionen, Textstellenprüfung) passiert ohnehin danach in suggestFormFields.
+ */
+const looseFieldValues = z.record(
+  z.string(),
+  z.union([z.string(), z.number(), z.boolean(), z.null()]),
+).transform((obj) => {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === null) continue;
+    out[k] = String(v).slice(0, 2000);
+  }
+  return out;
+});
+
 export const formSuggestionSchema = z.object({
   /** Feldname → Wert; nur Felder, für die es im Kontext eine Grundlage gibt */
-  fields: z.record(z.string(), z.string().max(2000)),
+  fields: looseFieldValues,
   /** Warum so – ein bis zwei Sätze, werden angezeigt */
-  rationale: z.string().trim().max(600).default(""),
-  /** Wörtliche Textstelle aus dem Kontext, auf die sich der Vorschlag stützt */
-  evidenceQuote: z.string().trim().min(3).max(400),
+  rationale: z.string().trim().max(600).optional().default(""),
+  /** Wörtliche Textstelle aus dem Kontext, auf die sich der Vorschlag stützt – fehlt sie, gilt der Vorschlag als unbelegt (siehe evidenceFound) statt die Antwort zu verwerfen */
+  evidenceQuote: z.string().trim().max(400).optional().default(""),
   /** Was fehlt, um besser vorschlagen zu können */
-  missing: z.array(z.string().trim().min(3).max(300)).max(4).default([]),
+  missing: z.array(z.union([z.string(), z.number(), z.boolean()]).transform((v) => String(v).trim())).max(6).default([]).transform((a) => a.filter((s) => s.length >= 3).slice(0, 4)),
 });
 export type FormSuggestion = z.infer<typeof formSuggestionSchema>;
 

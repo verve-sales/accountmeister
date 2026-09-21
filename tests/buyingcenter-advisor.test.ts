@@ -3,12 +3,20 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { NotFoundError, ValidationError } from "@/lib/errors";
 import { resetConfigCacheForTests } from "@/lib/config";
+import type { AIProvider } from "@/modules/ai/provider";
 import { addParticipation, createOpportunity } from "@/modules/opportunities/service";
 import { getBuyingCenterAdvice, proposeBuyingCenterAdvice, saveBuyingCenterAdvice } from "@/modules/opportunities/buyingCenterAdvisor";
 import { suggestFormFields } from "@/modules/strategy/formsuggest";
 import { createPerson } from "@/modules/people/service";
 import { createSetup } from "@/modules/setups/service";
 import { actorFor, ensureSeed } from "./helpers";
+
+/** Attrappe eines realen Anbieters, der sich nicht immer exakt ans Schema hält (null-Werte, Zahl statt String, kurze/leere Textstelle). */
+const looseProvider: AIProvider = {
+  info: () => ({ id: "production", model: "stub", enabled: true, description: "Attrappe für Schema-Robustheit" }),
+  structureNote: async () => ({ items: [], noSuggestionReason: "" }),
+  suggestForm: async () => ({ fields: { identifyPain: "Vertragsstrafe im Dezember angedroht", economicBuyer: null, champion: 42 }, rationale: "", evidenceQuote: "", missing: ["?", "Wer entscheidet über das Budget?"] }),
+};
 
 /**
  * Etappe 17: Buying-Center-Berater (geht die sechs Entscheidungsrollen einer Chance durch, gibt Hinweise zu
@@ -108,5 +116,18 @@ describe("Etappe 17: Buying-Center-Berater und MEDDPICC-Vorbefüllung", () => {
 
     // Ohne opportunityId lehnt der Dienst ab, statt zu raten
     await expect(suggestFormFields(david, { kind: "MEDDPICC", fields })).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("Formularvorschlag: eine Modellantwort, die nicht exakt dem Schema folgt (null-Wert, Zahl statt String, kurze/leere Textstelle), wird bereinigt statt komplett verworfen", async () => {
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const setup = await createSetup(david, { accountId: s.accountId, name: `Schema-Robustheit ${Date.now().toString(36)}`, contextNote: "Kontext", bdUserId: david.userId });
+    const opp = await createOpportunity(david, { setupId: setup.id, title: "Testkoordination", needDescription: "Der Kunde braucht kurzfristig Unterstützung in der Testkoordination." });
+    const fields = [{ name: "identifyPain", label: "Identify Pain" }, { name: "economicBuyer", label: "Economic Buyer" }, { name: "champion", label: "Champion" }];
+    // Wirft nicht "Die KI-Antwort entsprach nicht dem Schema." – der null-Wert wird übersprungen, die Zahl zu Text,
+    // und ohne belegbare Textstelle gilt der Vorschlag als unbelegt statt die Antwort ungültig zu machen.
+    const f = await suggestFormFields(david, { kind: "MEDDPICC", opportunityId: opp.id, fields }, { provider: looseProvider });
+    expect(f.suggestion).toBeNull();
+    expect(f.note).toMatch(/keine belegbare Textstelle/);
   });
 });
