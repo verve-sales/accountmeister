@@ -11,11 +11,11 @@ import { createPerson } from "@/modules/people/service";
 import { createSetup } from "@/modules/setups/service";
 import { actorFor, ensureSeed } from "./helpers";
 
-/** Attrappe eines realen Anbieters, der sich nicht immer exakt ans Schema hält (null-Werte, Zahl statt String, kurze/leere Textstelle). */
+/** Attrappe eines realen Anbieters, der sich nicht immer exakt ans Schema hält (null-Werte, Zahl statt String, verschachteltes Objekt statt String, kurze/leere Textstelle). */
 const looseProvider: AIProvider = {
   info: () => ({ id: "production", model: "stub", enabled: true, description: "Attrappe für Schema-Robustheit" }),
   structureNote: async () => ({ items: [], noSuggestionReason: "" }),
-  suggestForm: async () => ({ fields: { identifyPain: "Vertragsstrafe im Dezember angedroht", economicBuyer: null, champion: 42 }, rationale: "", evidenceQuote: "", missing: ["?", "Wer entscheidet über das Budget?"] }),
+  suggestForm: async () => ({ fields: { identifyPain: "Vertragsstrafe im Dezember angedroht", economicBuyer: null, champion: 42, competition: { value: "kein Wettbewerber bekannt" } }, rationale: "", evidenceQuote: "", missing: ["?", "Wer entscheidet über das Budget?"] }),
 };
 
 /**
@@ -129,5 +129,10 @@ describe("Etappe 17: Buying-Center-Berater und MEDDPICC-Vorbefüllung", () => {
     const f = await suggestFormFields(david, { kind: "MEDDPICC", opportunityId: opp.id, fields }, { provider: looseProvider });
     expect(f.suggestion).toBeNull();
     expect(f.note).toMatch(/keine belegbare Textstelle/);
+
+    // Selbst eine völlig unbrauchbare Antwortform (Text statt Objekt) führt nicht zum Schema-Fehler
+    const brokenProvider: AIProvider = { ...looseProvider, suggestForm: async () => "Entschuldigung, ich kann das nicht ausfüllen." };
+    const f2 = await suggestFormFields(david, { kind: "MEDDPICC", opportunityId: opp.id, fields }, { provider: brokenProvider });
+    expect(f2.suggestion).toBeNull();
   });
 });

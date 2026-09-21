@@ -88,7 +88,10 @@ export async function suggestFormFields(actor: Actor, raw: unknown, deps: { prov
   const allowedNames = new Set(req.fields.map((f) => f.name));
   const run = await runAiJob(actor, { task: "FORM_SUGGEST", setupId, promptVersion: FORM_SUGGEST_PROMPT_VERSION, inputText: JSON.stringify(input), dedupeKey: `form:${req.kind}:${setupId ?? req.accountId}:${Date.now()}`, provider }, async (p, opts) => {
     const raw = await p.suggestForm!(input, opts);
-    const out = formSuggestionSchema.safeParse(raw);
+    // Nur ein einigermaßen JSON-artiges Objekt geht überhaupt ins Schema – alles andere (Text, Array, leer)
+    // wird zu {} und liefert unten „kein Vorschlag möglich“ statt eines harten Schema-Fehlers.
+    const rawObj = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const out = formSuggestionSchema.safeParse(rawObj);
     if (!out.success) throw new ValidationError("Die KI-Antwort entsprach nicht dem Schema.");
     // Nur bekannte Felder, Optionen nur aus der Liste
     const fields: Record<string, string> = {};

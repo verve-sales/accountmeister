@@ -263,19 +263,33 @@ export const formKinds = ["VORHABEN", "SETUP", "CHANCE", "MEDDPICC"] as const;
 export type FormKind = (typeof formKinds)[number];
 
 /**
- * Feldwerte robust gegen reale Modellabweichungen einlesen: manche Modelle liefern für ein Feld ohne Grundlage
- * null statt es wegzulassen, oder eine Zahl/bool statt eines Strings. Solche Werte werden übersetzt oder
- * weggelassen, statt die gesamte Antwort zu verwerfen – die eigentliche Filterung (erlaubte Feldnamen, erlaubte
- * Optionen, Textstellenprüfung) passiert ohnehin danach in suggestFormFields.
+ * Formularvorschlag robust gegen reale Modellabweichungen einlesen. Ein Modell hält sich nicht immer exakt an
+ * die vorgegebene JSON-Form: ein Feld ohne Grundlage kommt als null statt weggelassen, ein Wert als Zahl/bool
+ * oder als verschachteltes Objekt statt als String, ein falscher Feldname für „fields“ selbst, eine fehlende
+ * Textstelle. Statt die gesamte Antwort deshalb zu verwerfen („entsprach nicht dem Schema“), wird hier so viel
+ * wie möglich herausgelesen – die eigentliche fachliche Prüfung (erlaubte Feldnamen/Optionen, Textstellenbeleg)
+ * passiert ohnehin danach in suggestFormFields, und ohne Textstelle gilt ein Vorschlag dort als unbelegt.
  */
-const looseFieldValues = z.record(
-  z.string(),
-  z.union([z.string(), z.number(), z.boolean(), z.null()]),
-).transform((obj) => {
+function asText(v: unknown, max: number): string {
+  if (typeof v === "string") return v.trim().slice(0, max);
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) return v.map((x) => asText(x, max)).filter(Boolean).join(", ").slice(0, max);
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const cand = o.value ?? o.text ?? o.answer ?? o.wert;
+    if (typeof cand === "string" || typeof cand === "number" || typeof cand === "boolean") return asText(cand, max);
+  }
+  return "";
+}
+
+// Wichtig: z.unknown() allein verlangt in zod 4 innerhalb eines object()-Shapes trotzdem, dass der Schlüssel
+// vorhanden ist (sonst „expected nonoptional, received undefined“) – daher überall zusätzlich .optional().
+const looseFieldValues = z.unknown().optional().transform((raw) => {
   const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v === null) continue;
-    out[k] = String(v).slice(0, 2000);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const t = asText(v, 2000);
+    if (t) out[k] = t;
   }
   return out;
 });
@@ -284,11 +298,11 @@ export const formSuggestionSchema = z.object({
   /** Feldname → Wert; nur Felder, für die es im Kontext eine Grundlage gibt */
   fields: looseFieldValues,
   /** Warum so – ein bis zwei Sätze, werden angezeigt */
-  rationale: z.string().trim().max(600).optional().default(""),
+  rationale: z.unknown().optional().transform((v) => asText(v, 600)),
   /** Wörtliche Textstelle aus dem Kontext, auf die sich der Vorschlag stützt – fehlt sie, gilt der Vorschlag als unbelegt (siehe evidenceFound) statt die Antwort zu verwerfen */
-  evidenceQuote: z.string().trim().max(400).optional().default(""),
+  evidenceQuote: z.unknown().optional().transform((v) => asText(v, 400)),
   /** Was fehlt, um besser vorschlagen zu können */
-  missing: z.array(z.union([z.string(), z.number(), z.boolean()]).transform((v) => String(v).trim())).max(6).default([]).transform((a) => a.filter((s) => s.length >= 3).slice(0, 4)),
+  missing: z.unknown().optional().transform((v) => (Array.isArray(v) ? v : []).map((x) => asText(x, 300)).filter((s) => s.length >= 3).slice(0, 4)),
 });
 export type FormSuggestion = z.infer<typeof formSuggestionSchema>;
 
