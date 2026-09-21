@@ -977,6 +977,8 @@ export const supportRequests = pgTable(
 );
 
 export const goalStatusEnum = pgEnum("goal_status", ["ENTWURF", "ZUR_ABSTIMMUNG", "VEREINBART", "GEAENDERT", "BEENDET"]);
+/** Rollenfamilien des Verve-Standardrollenkatalogs (hier schon deklariert, weil goal_versions optional darauf zeigt). */
+export const roleFamilyEnum = pgEnum("role_family", ["DELIVERY_MANAGEMENT", "AGILE_LEADERSHIP", "BUSINESS_ANALYSE", "SOLUTION_ARCHITEKTUR", "TEST_QS"]);
 
 /** Ziel (11.3) – Kopf; Inhalte liegen versioniert in goal_versions */
 export const goals = pgTable(
@@ -1013,6 +1015,11 @@ export const goalVersions = pgTable(
     baseline: text("baseline"), // Ausgangslage – „unbekannt bleibt unbekannt“
     baselineSourceId: text("baseline_source_id").references(() => sources.id),
     targetValue: text("target_value"), // nur, falls tatsächlich vereinbart; sonst null
+    /** Accountziel (Etappe 11): optionales Rollenziel, wenn das Ziel eine Rollenfamilie/Anzahl bei einem Kunden ist.
+     *  horizon ist Freitext wie bei Chancen (z. B. „Q4 2027“) – periodFrom/periodTo bleiben echte Kalenderdaten. */
+    roleFamily: roleFamilyEnum("role_family"),
+    targetHeadcount: integer("target_headcount"),
+    horizon: text("horizon"),
     supportNeeded: text("support_needed"),
     prerequisites: text("prerequisites"), // Zeit, Budget, Zugang, Fähigkeiten, Freigaben
     changeNote: text("change_note"), // Grund der Änderung ab Version 2
@@ -1074,8 +1081,6 @@ export const opportunityStatusEnum = pgEnum("opportunity_status", [
 ]);
 /** Art einer Chance (Etappe 10, E-045): worauf die Arbeit beim Kunden hinausläuft. */
 export const chanceKindEnum = pgEnum("chance_kind", ["VERVE_EXPERTE", "FREELANCER_EXPERTE", "AUSSCHREIBUNG"]);
-/** Rollenfamilien des Verve-Standardrollenkatalogs. */
-export const roleFamilyEnum = pgEnum("role_family", ["DELIVERY_MANAGEMENT", "AGILE_LEADERSHIP", "BUSINESS_ANALYSE", "SOLUTION_ARCHITEKTUR", "TEST_QS"]);
 
 /** Standardrollen-Katalog je Arbeitsraum (Verwaltung → Rollen); Seed aus dem Verve-Katalog. */
 export const standardRoles = pgTable(

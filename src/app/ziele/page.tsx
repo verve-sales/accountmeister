@@ -128,18 +128,22 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
         <h2 className="font-semibold mb-2">Ziele ({goals.length})</h2>
         {goals.length === 0 ? <p className="muted text-sm">Noch keine Ziele. Ziele vereinbaren CEO und Principal im Zielgespräch.</p> : (
           <table className="list">
-            <thead><tr><th>Ziel</th><th>Verantwortlich</th><th>Zeitraum</th><th>Status</th><th>Zielwert</th><th>Beiträge</th></tr></thead>
+            <thead><tr><th>Ziel</th><th>Kunde</th><th>Verantwortlich</th><th>Zeitraum</th><th>Status</th><th>Zielwert</th><th>Beiträge</th></tr></thead>
             <tbody>
-              {goals.map((g) => (
-                <tr key={g.id}>
-                  <td><Link href={`/ziele/${g.id}`}>{g.title}</Link><div className="muted text-sm">{g.current?.desiredOutcome}</div></td>
-                  <td className="text-sm">{g.ownerName}</td>
-                  <td className="text-sm">{g.current?.periodFrom ? fmtDate(g.current.periodFrom) : "–"} – {g.current?.periodTo ? fmtDate(g.current.periodTo) : "–"}</td>
-                  <td><Status label={goalStatusLabel[g.status] ?? g.status} />{g.agreedByNames.length > 0 && g.status !== "VEREINBART" && <div className="muted text-sm">Zustimmung: {g.agreedByNames.join(", ")}</div>}</td>
-                  <td className="text-sm">{g.current?.targetValue ?? <span className="muted">kein Zielwert vereinbart</span>}</td>
-                  <td className="text-sm">{g.contributions.length}</td>
-                </tr>
-              ))}
+              {goals.map((g) => {
+                const account = g.accountId ? accounts.find((a) => a.id === g.accountId) : null;
+                return (
+                  <tr key={g.id}>
+                    <td><Link href={`/ziele/${g.id}`}>{g.title}</Link><div className="muted text-sm">{g.current?.desiredOutcome}</div></td>
+                    <td className="text-sm">{account ? <Link href={`/kunden/${account.id}`}>{account.name}</Link> : <span className="muted">Führungsziel</span>}{g.current?.scope && <div className="muted text-sm">{g.current.scope}</div>}</td>
+                    <td className="text-sm">{g.ownerName}</td>
+                    <td className="text-sm">{g.current?.periodFrom ? fmtDate(g.current.periodFrom) : "–"} – {g.current?.periodTo ? fmtDate(g.current.periodTo) : "–"}</td>
+                    <td><Status label={goalStatusLabel[g.status] ?? g.status} />{g.agreedByNames.length > 0 && g.status !== "VEREINBART" && <div className="muted text-sm">Zustimmung: {g.agreedByNames.join(", ")}</div>}</td>
+                    <td className="text-sm">{g.current?.targetValue ?? <span className="muted">kein Zielwert vereinbart</span>}</td>
+                    <td className="text-sm">{g.contributions.length}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

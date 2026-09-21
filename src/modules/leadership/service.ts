@@ -1,13 +1,15 @@
 import { and, desc, eq, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
-import type { GoalStatus, SupportRequestStatus } from "@/db/schema";
+import type { GoalStatus, RoleFamily, SupportRequestStatus } from "@/db/schema";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { canEditSetup, canViewAccount, canViewSetup, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
-import { listVisibleAccounts } from "@/modules/accounts/service";
+import { getAccount, listVisibleAccounts } from "@/modules/accounts/service";
 import { buildAccountPlan, type AccountPlanView } from "@/modules/accountplan/service";
+import { sumActiveHeadcount } from "@/modules/strategy/chancen";
+import { roleFamilyLabel } from "@/modules/roles/catalog";
 
 /**
  * Führungsebenen (Briefing 3, 10.2, 11.2–11.4, 4.3):
@@ -372,6 +374,11 @@ export const goalInput = z.object({
   baseline: z.string().trim().max(1000).optional().or(z.literal("")),
   baselineSourceId: z.string().optional().or(z.literal("")),
   targetValue: z.string().trim().max(200).optional().or(z.literal("")),
+  /** Accountziel (Etappe 11): optionales Rollenziel, wenn das Ziel eine Rollenfamilie/Anzahl bei einem Kunden ist.
+   *  horizon ist Freitext wie bei Chancen (z. B. „Q4 2027“), unabhängig von periodFrom/periodTo. */
+  roleFamily: z.enum(schema.roleFamilyEnum.enumValues).optional().or(z.literal("")),
+  targetHeadcount: z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().int().min(1).max(999).optional()),
+  horizon: z.string().trim().max(60).optional().or(z.literal("")),
   supportNeeded: z.string().trim().max(1000).optional().or(z.literal("")),
   prerequisites: z.string().trim().max(1000).optional().or(z.literal("")),
   changeNote: z.string().trim().max(1000).optional().or(z.literal("")),
@@ -398,6 +405,52 @@ export async function createGoal(actor: Actor, raw: unknown) {
   });
 }
 
+/**
+ * Accountziel (Etappe 11, KI-geführte Anlage durch den Principal): ein Ziel mit Kundenbezug, optional mit
+ * Rollenfamilie und Zielanzahl. Die Ausgangslage wird aus den dokumentierten Chancen gezählt, nie geschätzt (F12) –
+ * die Person erfindet sie nicht, und der Assistent auch nicht. Ist ein Zielwert gesetzt, ist die Ausgangslage
+ * also immer da; „vereinbart“ braucht wie jedes Ziel die Zustimmung von CEO und Principal.
+ */
+export const accountGoalInput = z.object({
+  accountId: z.string().min(1, "Kunde fehlt"),
+  title: z.string().trim().min(3, "Titel fehlt").max(200),
+  desiredOutcome: z.string().trim().min(5, "Gewünschtes Ergebnis fehlt").max(2000),
+  roleFamily: z.enum(schema.roleFamilyEnum.enumValues).optional().or(z.literal("")),
+  targetHeadcount: z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().int().min(1).max(999).optional()),
+  horizon: z.string().trim().max(60).optional().or(z.literal("")),
+  successCriterion: z.string().trim().max(1000).optional().or(z.literal("")),
+});
+
+export async function createAccountGoal(actor: Actor, raw: unknown) {
+  assertLeader(actor);
+  const parsed = accountGoalInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
+  const input = parsed.data;
+  const account = await getAccount(actor, input.accountId); // wirft NotFoundError, wenn nicht sichtbar
+  const family = (input.roleFamily || null) as RoleFamily | null;
+  let baseline: string | undefined;
+  let targetValue: string | undefined;
+  if (input.targetHeadcount) {
+    const current = await sumActiveHeadcount(actor, account.id, family);
+    baseline = current > 0 ? `Aktuell ${current} dokumentierte Position${current === 1 ? "" : "en"}${family ? ` in ${roleFamilyLabel[family]}` : ""} (aus Chancen).` : `Aktuell keine dokumentierte Position${family ? ` in ${roleFamilyLabel[family]}` : ""} (aus Chancen).`;
+    targetValue = String(input.targetHeadcount);
+  }
+  const successCriterion = input.successCriterion || (input.targetHeadcount ? `${input.targetHeadcount} besetzte Position${input.targetHeadcount === 1 ? "" : "en"}${family ? ` in ${roleFamilyLabel[family]}` : ""}${input.horizon ? ` bis ${input.horizon}` : ""}.` : "");
+  return createGoal(actor, {
+    title: input.title,
+    ownerUserId: actor.userId,
+    accountId: account.id,
+    desiredOutcome: input.desiredOutcome,
+    scope: family ? roleFamilyLabel[family] : "",
+    horizon: input.horizon,
+    successCriterion,
+    baseline,
+    targetValue,
+    roleFamily: input.roleFamily || "",
+    targetHeadcount: input.targetHeadcount,
+  });
+}
+
 function validateTarget(input: z.infer<typeof goalInput>) {
   if (input.targetValue && !input.baseline) throw new ValidationError("Ein Zielwert braucht eine dokumentierte Ausgangslage (oder ausdrücklich „unbekannt“).");
   if (input.targetValue && !input.successCriterion) throw new ValidationError("Ein Zielwert braucht ein beobachtbares Erfolgskriterium.");
@@ -413,6 +466,9 @@ function versionFields(input: z.infer<typeof goalInput>) {
     baseline: input.baseline || null,
     baselineSourceId: input.baselineSourceId || null,
     targetValue: input.targetValue || null,
+    roleFamily: input.roleFamily || null,
+    targetHeadcount: input.targetHeadcount ?? null,
+    horizon: input.horizon || null,
     supportNeeded: input.supportNeeded || null,
     prerequisites: input.prerequisites || null,
     changeNote: input.changeNote || null,

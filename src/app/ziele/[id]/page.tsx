@@ -81,7 +81,7 @@ export default async function ZielPage({ params, searchParams }: { params: Promi
             <div><dt className="muted">Zeitraum</dt><dd>{cur.periodFrom || cur.periodTo ? `${fmtDate(cur.periodFrom)} – ${fmtDate(cur.periodTo)}` : "–"}</dd></div>
             <div className="sm:col-span-2"><dt className="muted">Beobachtbares Erfolgskriterium</dt><dd>{cur.successCriterion ?? "–"}</dd></div>
             <div><dt className="muted">Ausgangslage</dt><dd>{cur.baseline ?? "–"}{cur.baselineSourceId && <> · <Link href={`/quellen/${cur.baselineSourceId}`}>Quelle</Link></>}</dd></div>
-            <div><dt className="muted">Zielwert</dt><dd>{cur.targetValue ?? <span className="muted">kein Zielwert vereinbart</span>}</dd></div>
+            <div><dt className="muted">Zielwert</dt><dd>{cur.targetValue ?? <span className="muted">kein Zielwert vereinbart</span>}{cur.horizon && ` bis ${cur.horizon}`}</dd></div>
             <div><dt className="muted">Benötigte Unterstützung</dt><dd>{cur.supportNeeded ?? "–"}</dd></div>
             <div><dt className="muted">Voraussetzungen</dt><dd>{cur.prerequisites ?? "–"}</dd></div>
           </dl>
@@ -129,6 +129,9 @@ export default async function ZielPage({ params, searchParams }: { params: Promi
             <div className="sm:col-span-2"><label className="label" htmlFor="uCrit">Beobachtbares Erfolgskriterium</label><input id="uCrit" name="successCriterion" className="input" defaultValue={cur.successCriterion ?? ""} /></div>
             <div><label className="label" htmlFor="uBase">Ausgangslage</label><input id="uBase" name="baseline" className="input" defaultValue={cur.baseline ?? ""} /></div>
             <div><label className="label" htmlFor="uTarget">Zielwert (nur falls vereinbart)</label><input id="uTarget" name="targetValue" className="input" defaultValue={cur.targetValue ?? ""} /></div>
+            <input type="hidden" name="roleFamily" value={cur.roleFamily ?? ""} />
+            <input type="hidden" name="targetHeadcount" value={cur.targetHeadcount ?? ""} />
+            <input type="hidden" name="horizon" value={cur.horizon ?? ""} />
             <div><label className="label" htmlFor="uSupport">Benötigte Unterstützung</label><input id="uSupport" name="supportNeeded" className="input" defaultValue={cur.supportNeeded ?? ""} /></div>
             <div><label className="label" htmlFor="uPre">Voraussetzungen</label><input id="uPre" name="prerequisites" className="input" defaultValue={cur.prerequisites ?? ""} /></div>
             <div className="sm:col-span-2"><label className="label" htmlFor="uNote">Grund der Änderung{goal.status !== "ENTWURF" && " (erforderlich)"}</label><input id="uNote" name="changeNote" className="input" required={goal.status !== "ENTWURF"} /></div>

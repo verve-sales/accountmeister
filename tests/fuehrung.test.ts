@@ -3,11 +3,12 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import {
-  addConfidentialNote, addGoalContribution, buildPortfolio, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest,
+  addConfidentialNote, addGoalContribution, buildPortfolio, changeGoalStatus, confirmLeadershipReview, createAccountGoal, createGoal, createLeadershipReview, createSupportRequest,
   getGoal, listGoals, listSupportRequestsForSetup, prepareLeadershipReview, respondToSupportRequest, saveLeadershipDraft, updateGoal,
 } from "@/modules/leadership/service";
 import { getSetupDetail } from "@/modules/setups/service";
 import { buildAccountPlan } from "@/modules/accountplan/service";
+import { createOpportunity } from "@/modules/opportunities/service";
 import { structureText } from "@/modules/suggestions/service";
 import { loadSetupContext } from "@/modules/identity/authz";
 import { resetConfigCacheForTests } from "@/lib/config";
@@ -143,5 +144,37 @@ describe("Etappe 4: Führungsebenen (Briefing 10.2, 11.2–11.4, F12, F13, S04)"
     expect((await listGoals(lars)).some((x) => x.id === g.id)).toBe(false);
     // Kein Ziel erzeugt automatische individuelle Quoten: keine Aktion/kein Wert am BD
     expect((await db.query.actions.findMany({ where: eq(schema.actions.ownerUserId, david.userId) })).some((a) => a.title.includes("Zugang im Migrationsteam"))).toBe(false);
+  });
+});
+
+describe("Etappe 11: Accountziele (KI-geführte Anlage durch den Principal)", () => {
+  it("Nur Principal/CEO legen Accountziele an; die Ausgangslage wird aus den Chancen gezählt, nie erfunden", async () => {
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const petra = await actorFor("petra");
+    // BD legt kein Accountziel an
+    await expect(createAccountGoal(david, { accountId: s.accountId, title: "Ausbau Testmanagement", desiredOutcome: "Drei besetzte Testmanagement-Rollen." })).rejects.toBeInstanceOf(ForbiddenError);
+    // Ohne Zielwert braucht es keine Ausgangslage (wie bei generischen Zielen)
+    const g1 = await createAccountGoal(petra, { accountId: s.accountId, title: "Beziehung zum Einkauf vertiefen", desiredOutcome: "Regelmäßiger Kontakt zum Einkauf des Kunden." });
+    expect(g1.accountId).toBe(s.accountId);
+    const got1 = await getGoal(petra, g1.id);
+    expect(got1.current?.baseline).toBeNull();
+    // Mit Zielwert und Rollenfamilie: Ausgangslage wird automatisch aus den aktiven Chancen gezählt (noch keine → 0)
+    const g2 = await createAccountGoal(petra, { accountId: s.accountId, title: "Ausbau Solution-Architektur", desiredOutcome: "Mehr Architektur-Kapazität beim Kunden aufbauen.", roleFamily: "SOLUTION_ARCHITEKTUR", targetHeadcount: 3, horizon: "Q4 2027" });
+    const got2 = await getGoal(petra, g2.id);
+    expect(got2.current?.targetValue).toBe("3");
+    expect(got2.current?.roleFamily).toBe("SOLUTION_ARCHITEKTUR");
+    expect(got2.current?.baseline).toMatch(/keine dokumentierte Position/);
+    expect(got2.current?.successCriterion).toMatch(/3 besetzte Position/);
+    // Eine bestätigte Chance in derselben Rollenfamilie erhöht die gezählte Ausgangslage beim nächsten Accountziel
+    await createOpportunity(david, { setupId: s.setupId, title: "Architektur-Unterstützung Plattformteam", needDescription: "Kunde sucht Unterstützung in der Zielarchitektur.", roleFamily: "SOLUTION_ARCHITEKTUR", headcount: 2, anticipated: false });
+    const g3 = await createAccountGoal(petra, { accountId: s.accountId, title: "Ausbau Solution-Architektur (Folgeziel)", desiredOutcome: "Weiteren Ausbau der Architektur-Kapazität dokumentieren.", roleFamily: "SOLUTION_ARCHITEKTUR", targetHeadcount: 3 });
+    const got3 = await getGoal(petra, g3.id);
+    expect(got3.current?.baseline).toMatch(/Aktuell 2 dokumentierte Positionen/);
+    // Zielwert ohne Rollenfamilie zählt kundenweit über alle Rollenfamilien
+    const g4 = await createAccountGoal(petra, { accountId: s.accountId, title: "Gesamtausbau", desiredOutcome: "Gesamtkapazität beim Kunden im Blick behalten.", targetHeadcount: 5 });
+    const got4 = await getGoal(petra, g4.id);
+    expect(got4.current?.baseline).toMatch(/Aktuell 2 dokumentierte Positionen/);
+    expect(got4.current?.roleFamily).toBeNull();
   });
 });

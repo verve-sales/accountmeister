@@ -16,7 +16,7 @@ export const MATURITY = ["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT", "IM_ANGEBOT
 export type Maturity = (typeof MATURITY)[number];
 export const maturityLabel: Record<Maturity, string> = { ANTIZIPIERT: "antizipiert", IN_KLAERUNG: "in Klärung", BESTAETIGT: "bestätigt", IM_ANGEBOT: "im Angebot / Auswahl", BEAUFTRAGT: "beauftragt" };
 
-function maturityOf(status: string): Maturity | null {
+export function maturityOf(status: string): Maturity | null {
   if (status === "ANTIZIPIERT") return "ANTIZIPIERT";
   if (status === "IN_KLAERUNG") return "IN_KLAERUNG";
   if (status === "BESTAETIGT") return "BESTAETIGT";
@@ -57,4 +57,22 @@ export async function buildChanceOverview(actor: Actor) {
   }).filter((r) => r.total > 0);
   const byKind = (["VERVE_EXPERTE", "FREELANCER_EXPERTE", "AUSSCHREIBUNG"] as ChanceKind[]).map((k) => ({ kind: k, label: chanceKindLabel[k], positions: rows.filter((r) => r.kind === k).reduce((n, r) => n + r.headcount, 0), chances: rows.filter((r) => r.kind === k).length }));
   return { rows, matrix, byKind, note: "Positionen = Summe der Anzahl je Chance (ohne Angabe: 1). Zurückgestellte und beendete Chancen zählen nicht. Keine Beträge, keine Wahrscheinlichkeiten." };
+}
+
+/**
+ * Aktuell dokumentierte Positionen eines Kunden, optional auf eine Rollenfamilie eingeschränkt (Etappe 11:
+ * Ausgangslage für Accountziele – gezählt aus Chancen, nie geschätzt). Aktive Reifegrade wie im Zielbild.
+ */
+export async function sumActiveHeadcount(actor: Actor, accountId: string, roleFamily: RoleFamily | null): Promise<number> {
+  const opps = await db.query.opportunities.findMany({ where: and(eq(schema.opportunities.accountId, accountId), eq(schema.opportunities.workspaceId, actor.workspaceId)) });
+  const roles = await listRoles(actor.workspaceId, { includeInactive: true });
+  return opps
+    .filter((o) => maturityOf(o.status))
+    .filter((o) => {
+      if (!roleFamily) return true;
+      const role = o.roleId ? roles.find((r) => r.id === o.roleId) ?? null : null;
+      const family = (role?.family ?? o.roleFamily ?? null) as RoleFamily | null;
+      return family === roleFamily;
+    })
+    .reduce((n, o) => n + (o.headcount ?? 1), 0);
 }

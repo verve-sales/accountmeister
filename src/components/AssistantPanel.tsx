@@ -24,7 +24,8 @@ type View = {
   ai: { enabled: boolean; description: string };
 };
 
-const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage" };
+const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage" };
+const ROLE_FAMILY_LABEL: Record<string, string> = { DELIVERY_MANAGEMENT: "Delivery Management", AGILE_LEADERSHIP: "Agile Leadership", BUSINESS_ANALYSE: "Business Analyse & Beratung", SOLUTION_ARCHITEKTUR: "Solution & Architektur", TEST_QS: "Test & Qualitätssicherung" };
 
 function contextFromPath(pathname: string): { type: string; id: string } {
   const setup = /^\/setups\/([^/]+)/.exec(pathname);
@@ -46,6 +47,8 @@ function cardTitle(item: Item): string {
     case "SIGNAL":
       return s("observation");
     case "CHANCE":
+      return s("title");
+    case "ACCOUNTZIEL":
       return s("title");
     case "AKTION":
       return `${s("title")}${s("ownerRole") ? ` (${s("ownerRole")})` : ""}${s("dueHint") ? ` · ${s("dueHint")}` : ""}`;
@@ -71,6 +74,10 @@ function cardDetail(item: Item): string {
       const kind: Record<string, string> = { VERVE_EXPERTE: "Verve-Experte", FREELANCER_EXPERTE: "Freelancer-Experte", AUSSCHREIBUNG: "Ausschreibung" };
       const meta = [kind[s("kind")] ?? s("kind"), s("roleName"), s("headcount") && s("headcount") !== "null" ? `${s("headcount")}×` : "", s("horizon"), item.anticipated === false ? "vom Kunden ausgesprochen" : "antizipiert"].filter(Boolean).join(" · ");
       return `${meta}\n${s("needDescription")}`;
+    }
+    case "ACCOUNTZIEL": {
+      const meta = [s("roleFamily") && s("roleFamily") !== "null" ? ROLE_FAMILY_LABEL[s("roleFamily")] ?? s("roleFamily") : "", s("targetHeadcount") && s("targetHeadcount") !== "null" ? `${s("targetHeadcount")}×` : "", s("horizon")].filter(Boolean).join(" · ");
+      return `${meta}\n${s("desiredOutcome")}${s("successCriterion") ? `\nErfolgskriterium: ${s("successCriterion")}` : ""}`;
     }
     case "AKTION":
       return s("description");

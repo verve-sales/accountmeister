@@ -179,6 +179,9 @@ const w = { purpose: z.string().max(200).optional().default("") };
 export const chanceKindValues = ["VERVE_EXPERTE", "FREELANCER_EXPERTE", "AUSSCHREIBUNG"] as const;
 export const chanceKindLabel: Record<(typeof chanceKindValues)[number], string> = { VERVE_EXPERTE: "Verve-Experte", FREELANCER_EXPERTE: "Freelancer-Experte", AUSSCHREIBUNG: "Ausschreibung" };
 
+/** Rollenfamilien des Verve-Standardrollenkatalogs (Kartenschema; Werte identisch zum DB-Enum role_family). */
+export const roleFamilyCardValues = ["DELIVERY_MANAGEMENT", "AGILE_LEADERSHIP", "BUSINESS_ANALYSE", "SOLUTION_ARCHITEKTUR", "TEST_QS"] as const;
+
 export const assistantItemSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("KUNDE"), name: z.string().min(2).max(200), orgType: z.enum(orgTypeValues).optional().default("SONSTIGE"), setupName: z.string().min(3).max(200), contextNote: z.string().max(2000).optional().default(""), ...q }),
   z.object({ type: z.literal("SETUP"), name: z.string().min(3).max(200), contextNote: z.string().max(2000).optional().default(""), ...q }),
@@ -195,6 +198,17 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
     horizon: z.string().max(60).optional().default(""),
     /** antizipiert = aus Beobachtungen vermutet, noch nicht vom Kunden ausgesprochen */
     anticipated: z.boolean().optional().default(true),
+    ...q,
+  }),
+  z.object({
+    type: z.literal("ACCOUNTZIEL"),
+    title: z.string().min(3).max(200),
+    desiredOutcome: z.string().min(10).max(2000),
+    /** Rollenfamilie aus dem Verve-Standardrollenkatalog, wenn das Ziel eine Rolle/Anzahl ist – sonst leer. */
+    roleFamily: z.enum(roleFamilyCardValues).nullable().optional().default(null),
+    targetHeadcount: z.number().int().min(1).max(999).nullable().optional().default(null),
+    horizon: z.string().max(60).optional().default(""),
+    successCriterion: z.string().max(500).optional().default(""),
     ...q,
   }),
   z.object({ type: z.literal("AKTION"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), ownerRole: z.enum(["BD", "ANKER", "PRINCIPAL"]).default("BD"), dueHint: z.string().max(100).optional().default(""), ...q, ...w }),

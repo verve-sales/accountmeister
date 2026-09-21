@@ -17,6 +17,7 @@ import { getAccount, createAccount } from "@/modules/accounts/service";
 import { createSetup } from "@/modules/setups/service";
 import { createPerson } from "@/modules/people/service";
 import { createOpportunity } from "@/modules/opportunities/service";
+import { createAccountGoal } from "@/modules/leadership/service";
 import { upsertAssessment, getBuyingCenter } from "@/modules/people/assessments";
 import { insertSuggestionCard } from "./suggestions";
 
@@ -474,6 +475,12 @@ async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$i
       note += " Einschätzung als Hypothese gespeichert.";
     }
     return { type: "PERSON", id: person.id, note };
+  }
+  if (item.type === "ACCOUNTZIEL") {
+    if (!res.account) throw new ValidationError("Für ein Accountziel fehlt der Kunde – öffne den Assistenten auf der Kundenseite.");
+    if (!hasRole(actor, "PRINCIPAL") && !hasRole(actor, "CEO")) throw new ForbiddenError("Accountziele legen Principal oder CEO an.");
+    const goal = await createAccountGoal(actor, { accountId: res.account.id, title: item.title, desiredOutcome: item.desiredOutcome, roleFamily: item.roleFamily ?? "", targetHeadcount: item.targetHeadcount ?? undefined, horizon: item.horizon, successCriterion: item.successCriterion });
+    return { type: "GOAL", id: goal.id, note: `Accountziel „${goal.title}“ als Entwurf angelegt – zur Abstimmung mit dem CEO bereit (Ziele → „${goal.title}“).` };
   }
   // Alles Weitere braucht ein Setup mit Bearbeitungsrecht
   if (!res.ctx) throw new ValidationError("Dafür braucht es ein Setup. Lege zuerst Kunde und Setup an (Karten „Kunde“/„Setup“) oder öffne den Assistenten in einem Setup.");

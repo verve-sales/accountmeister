@@ -197,7 +197,7 @@ describe("Robuste Kartenauswertung (Produktionsmodelle halten das Format nicht i
     const view = await getThreadView(david, { type: "SETUP", id: seed.setupId });
     const text = "Frau Keller sagte: Budget ist freigegeben. Herr Berger schickt bis 30.09. das Konzept.";
     // Anbieter, der im Dialog das Format nicht einhält, im JSON-Modus aber liefert
-    const flaky: AIProvider = {
+    const flaky = {
       ...new TestProvider(),
       info: () => ({ id: "test", enabled: true, model: "test", description: "Flaky" }),
       assistantReply: async (_i: AssistantInput, _o?: unknown, onDelta?: (c: string) => void) => {
@@ -206,19 +206,60 @@ describe("Robuste Kartenauswertung (Produktionsmodelle halten das Format nicht i
         return reply;
       },
       assistantCards: async () => ({ items: [{ type: "SIGNAL", observation: "Budget ist freigegeben", relevanceHypothesis: "", purpose: "", evidenceQuote: "Budget ist freigegeben" }, { type: "AKTION", title: "Konzept von Herrn Berger nachhalten", description: "", ownerRole: "BD", dueHint: "30.09.", purpose: "", evidenceQuote: "schickt bis 30.09. das Konzept" }], missing: [] }),
-    } as AIProvider;
+    } as unknown as AIProvider;
     const r = await sendMessage(david, { threadId: view.thread.id, text }, { provider: flaky });
     expect(r.cards).toHaveLength(2);
     expect(r.message.text).toMatch(/zweiten Schritt/);
     // Gar keine Karten möglich + Behauptung „angelegt“ → ehrlicher Hinweis
-    const liar: AIProvider = {
+    const liar = {
       ...new TestProvider(),
       info: () => ({ id: "test", enabled: true, model: "test", description: "Liar" }),
       assistantReply: async () => "Ich habe den Kunden jetzt angelegt.",
       assistantCards: async () => ({ items: [], missing: [] }),
-    } as AIProvider;
+    } as unknown as AIProvider;
     const r2 = await sendMessage(david, { threadId: view.thread.id, text: "Und?" }, { provider: liar });
     expect(r2.cards).toHaveLength(0);
     expect(r2.message.text).toMatch(/lege nichts selbst an/);
+  });
+});
+
+describe("Etappe 11: Accountziel-Karte des Assistenten (KI-geführte Anlage durch den Principal)", () => {
+  it("Nur Principal/CEO im Kundenkontext übernehmen eine Accountziel-Karte; die Ausgangslage kommt von der Anwendung, nicht vom Modell", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const seed = await ensureSeed();
+    const petra = await actorFor("petra");
+    const david = await actorFor("david");
+    const text = "Wir wollen bis Q4 2027 drei Solution-Architektur-Rollen bei diesem Kunden aufbauen.";
+    const provider = {
+      ...new TestProvider(),
+      info: () => ({ id: "test", enabled: true, model: "test", description: "Accountziel-Fake" }),
+      assistantReply: async (_i: AssistantInput, _o?: unknown, onDelta?: (c: string) => void) => {
+        const prose = "Verstanden, ich schlage ein Accountziel vor.";
+        const json = JSON.stringify({ items: [{ type: "ACCOUNTZIEL", title: "Ausbau Solution-Architektur", desiredOutcome: text, roleFamily: "SOLUTION_ARCHITEKTUR", targetHeadcount: 3, horizon: "Q4 2027", successCriterion: "", evidenceQuote: text }], missing: [] });
+        onDelta?.(prose);
+        return `${prose}\n${ASSISTANT_CARDS_MARKER}\n${json}`;
+      },
+    } as unknown as AIProvider;
+
+    // Principal im Kundenkontext: Karte erscheint und lässt sich übernehmen
+    const view = await getThreadView(petra, { type: "ACCOUNT", id: seed.accountId });
+    const r = await sendMessage(petra, { threadId: view.thread.id, text }, { provider });
+    const card = r.cards.find((c) => c.item.type === "ACCOUNTZIEL");
+    expect(card).toBeTruthy();
+    const applied = await decideCard(petra, { threadId: view.thread.id, messageId: r.message.id, cardId: card!.id, decision: "UEBERNEHMEN" });
+    expect(applied.card.resultType).toBe("GOAL");
+    const goal = await db.query.goals.findFirst({ where: eq(schema.goals.id, applied.card.resultId!) });
+    expect(goal?.accountId).toBe(seed.accountId);
+    const version = await db.query.goalVersions.findFirst({ where: eq(schema.goalVersions.id, goal!.currentVersionId!) });
+    expect(version?.targetValue).toBe("3");
+    expect(version?.baseline).toMatch(/dokumentierte Position/); // von der Anwendung berechnet, nicht vom (Fake-)Modell geliefert
+
+    // BD bekommt zwar die Karte angezeigt (der Fake-Anbieter prüft keine Rollen), darf sie aber nicht übernehmen
+    const dView = await getThreadView(david, { type: "ACCOUNT", id: seed.accountId });
+    const dr = await sendMessage(david, { threadId: dView.thread.id, text }, { provider });
+    const dCard = dr.cards.find((c) => c.item.type === "ACCOUNTZIEL");
+    expect(dCard).toBeTruthy();
+    await expect(decideCard(david, { threadId: dView.thread.id, messageId: dr.message.id, cardId: dCard!.id, decision: "UEBERNEHMEN" })).rejects.toBeInstanceOf(ForbiddenError);
   });
 });
