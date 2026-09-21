@@ -1,0 +1,121 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getCurrentActor } from "@/modules/identity/session";
+import { hasRole } from "@/modules/identity/actor";
+import { buildCeoDashboard } from "@/modules/ceo/service";
+import { maturityLabel } from "@/modules/strategy/chancen";
+import { Status } from "@/components/Status";
+import { fmtDate, goalStatusLabel } from "@/lib/labels";
+
+export default async function CeoDashboardPage() {
+  const actor = await getCurrentActor();
+  if (!actor) redirect("/anmelden");
+  if (!hasRole(actor, "CEO")) redirect("/start");
+  const d = await buildCeoDashboard(actor);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h1 className="text-2xl font-semibold">CEO-Dashboard</h1>
+        <span className="muted text-sm">Aktivität der letzten {d.sinceDays} Tage (seit {fmtDate(d.since)}) · <Link href="/ziele">Zu Ziele &amp; Portfolio</Link></span>
+      </div>
+
+      {d.accounts.length === 0 ? (
+        <p className="card text-sm">Keine sichtbaren Kunden.</p>
+      ) : (
+        <div className="space-y-4">
+          {d.accounts.map((a) => (
+            <article key={a.accountId} className="card">
+              <div className="flex flex-wrap items-baseline gap-3">
+                <h2 className="font-semibold text-lg">
+                  <Link href={`/kunden/${a.accountId}`}>{a.accountName}</Link>
+                </h2>
+                <span className="muted text-sm">{a.responsibleBd ? `BD ${a.responsibleBd}` : "BD offen"}{a.lastConfirmedWeekly ? ` · letztes Weekly ${fmtDate(a.lastConfirmedWeekly)}` : " · noch kein bestätigtes Weekly"}</span>
+                <span className="ml-auto text-sm">
+                  Aktivitätskoeffizient <strong>{a.activity.coefficient}</strong>
+                </span>
+              </div>
+
+              <div className="grid lg:grid-cols-3 gap-4 mt-3 text-sm">
+                {/* Accountziele vs. dokumentierte Positionen */}
+                <div>
+                  <div className="font-medium mb-1">Ziele vs. Ist-Stand</div>
+                  {a.goals.length === 0 ? (
+                    <p className="muted">Keine laufenden Accountziele.</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {a.goals.map((g) => (
+                        <li key={g.id}>
+                          {g.title} <Status label={goalStatusLabel[g.status] ?? g.status} />
+                          {g.targetHeadcount != null && (
+                            <div className="muted text-xs">
+                              {g.currentHeadcount ?? 0} von {g.targetHeadcount} Position(en){g.roleFamilyLabel ? ` (${g.roleFamilyLabel})` : ""}{g.horizon ? ` · bis ${g.horizon}` : ""}
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Top-Chancen */}
+                <div>
+                  <div className="font-medium mb-1">Top-Chancen</div>
+                  {a.topOpportunities.length === 0 ? (
+                    <p className="muted">Keine aktiven Chancen dokumentiert.</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {a.topOpportunities.map((o) => (
+                        <li key={o.id}>
+                          {o.title} <span className="muted">· {maturityLabel[o.maturity]}{o.headcount > 1 ? ` · ${o.headcount} Positionen` : ""}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Zusammenarbeit der letzten Woche */}
+                <div>
+                  <div className="font-medium mb-1">Zusammenarbeit diese Woche</div>
+                  <ul className="space-y-1">
+                    {(["PRINCIPAL", "BD", "ANKER"] as const).map((role) => {
+                      const c = a.activity.byRole[role];
+                      const total = c.weeklysBestaetigt + c.beobachtungenErfasst + c.aktionenErfasstOderErledigt + c.vorschlaegeEntschieden + c.kontakteGepflegt;
+                      return (
+                        <li key={role}>
+                          {role === "BD" ? "BD Manager" : role === "ANKER" ? "Anker" : "Principal"}: {total ? <strong>{total}</strong> : <span className="muted">0</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="muted text-xs mt-1">{a.activity.note}</p>
+                </div>
+              </div>
+
+              {(a.openChanges != null || a.blockedActions != null || a.openSupport != null) && (
+                <p className="muted text-xs mt-3">
+                  Aus dem Accountplan: {a.openChanges ?? 0} offene Veränderung(en) · {a.blockedActions ?? 0} blockierte Aktion(en) · {a.openSupport ?? 0} offene Unterstützungsanfrage(n).
+                </p>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
+
+      {d.leadershipGoals.length > 0 && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Führungsziele ohne Kundenzuordnung ({d.leadershipGoals.length})</h2>
+          <ul className="space-y-1 text-sm">
+            {d.leadershipGoals.map((g) => (
+              <li key={g.id}>
+                <Link href={`/ziele/${g.id}`}>{g.title}</Link> <Status label={goalStatusLabel[g.status] ?? g.status} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <p className="muted text-xs">{d.note}</p>
+    </div>
+  );
+}
