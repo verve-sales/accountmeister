@@ -39,8 +39,8 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
           {!conn.state.connected ? (
             <>
               <form action={connectMailboxAction}><input type="hidden" name="mode" value="fixture" /><button className="btn" type="submit">Verbinden (Fixture-Modus)</button></form>
-              <form action={connectMailboxAction}><input type="hidden" name="mode" value="echt" /><button className="btn btn-secondary" type="submit">Echtes Postfach verbinden</button></form>
-              <p className="muted text-sm">Der echte Verbindungsaufbau ist bis zur App-Registrierung im Verve-Tenant und zur Datenschutzfreigabe gesperrt und wird ehrlich abgewiesen.</p>
+              <a className="btn btn-secondary" href="/api/integrations/microsoft/authorize">Echtes Postfach verbinden</a>
+              <p className="muted text-sm">Führt zur Anmeldung bei Microsoft. Setzt voraus, dass die App-Registrierung die Berechtigungen aus <code>docs/installation-ionos.md</code> Schritt 4b hat – sonst wird ehrlich abgewiesen.</p>
             </>
           ) : (
             <form action={revokeMailboxAction}><button className="btn btn-secondary" type="submit">Verbindung widerrufen</button></form>
@@ -55,7 +55,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
             <tr><td>Prompt-/Schemaversion</td><td>{ai.promptVersion}</td></tr>
             <tr><td>Nutzungsgrenze</td><td>{ai.dailyLimit} KI-Aufträge je Arbeitsraum und Tag</td></tr>
             <tr><td>Anmeldung</td><td>{cfg.AUTH_MODE === "development" ? "Entwicklungsanmeldung (nur lokal)" : "Unternehmensanmeldung (OIDC)"}</td></tr>
-            <tr><td>Mail-/Kalenderanbieter</td><td>Microsoft 365 / Outlook über Microsoft Graph (Entscheidung E-018). Adapter vorhanden; echter Abruf nach App-Registrierung und Datenschutzfreigabe.</td></tr>
+            <tr><td>Mail-/Kalenderanbieter</td><td>Microsoft 365 / Outlook über Microsoft Graph (Entscheidung E-018). Echter Abruf möglich, sobald die Berechtigungen in Entra ID gesetzt sind (<code>docs/installation-ionos.md</code> Schritt 4b) – jede Person verbindet ihr eigenes Postfach selbst, oben.</td></tr>
           </tbody>
         </table>
         <p className="muted text-sm mt-2">Änderungen erfolgen über die Serverkonfiguration (.env), nicht über diese Seite.</p>

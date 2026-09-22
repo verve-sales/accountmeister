@@ -10,7 +10,7 @@ import { listMySetups } from "@/modules/setups/service";
 import { structureText } from "@/modules/suggestions/service";
 import { sanitizeToText } from "@/modules/integrations/graph/adapter";
 import { getMailCalendarAdapter } from "@/modules/integrations";
-import { adapterErrorToDomain } from "@/modules/integrations/service";
+import { adapterErrorToDomain, resolveMailboxCallToken } from "@/modules/integrations/service";
 import type { FetchedSource, SelectableKind } from "@/modules/integrations/adapter";
 
 /**
@@ -159,7 +159,8 @@ export async function importMailboxItem(actor: Actor, raw: unknown) {
   const ctx = await requireEditableCtx(actor, input.setupId);
   let fetched: FetchedSource;
   try {
-    fetched = await getMailCalendarAdapter().fetch({ tokenRef: conn.tokenRef, fixture: conn.fixtureMode, kind: input.kind as SelectableKind, externalId: input.externalId });
+    const callToken = await resolveMailboxCallToken(conn);
+    fetched = await getMailCalendarAdapter().fetch({ tokenRef: callToken, fixture: conn.fixtureMode, kind: input.kind as SelectableKind, externalId: input.externalId });
   } catch (e) {
     throw adapterErrorToDomain(e);
   }

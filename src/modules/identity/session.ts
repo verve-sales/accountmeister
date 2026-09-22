@@ -4,8 +4,9 @@ import { getConfig } from "@/lib/config";
 import { loadActor, type Actor } from "./actor";
 
 import type { PendingLogin } from "./oidc";
+import type { PendingMailConnect } from "@/modules/integrations/graph/oauth";
 
-export type SessionData = { userId?: string; mode?: "development" | "oidc"; issuedAt?: number; lastSeenAt?: number; pendingLogin?: PendingLogin };
+export type SessionData = { userId?: string; mode?: "development" | "oidc"; issuedAt?: number; lastSeenAt?: number; pendingLogin?: PendingLogin; pendingMailConnect?: PendingMailConnect };
 
 /** Sitzungsdauer (17.4): absolute Höchstdauer und Inaktivitätsgrenze; beide in Sekunden, über Umgebung anpassbar. */
 export const SESSION_MAX_AGE_SECONDS = Number(process.env.SESSION_MAX_AGE_SECONDS ?? 12 * 60 * 60);
