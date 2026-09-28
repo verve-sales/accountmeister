@@ -28,9 +28,8 @@ function roundedBarPath(width: number, height: number, radius: number): string {
 export type Bar = { label: string; value: number; color?: string; detail?: string };
 
 /** Ein Balken pro Kategorie, eine Farbe je Balken (Standard: eine Sequenz von hell zu dunkel für geordnete Stufen). */
-export function BarChart({ title, bars, unit = "", maxValue }: { title: string; bars: Bar[]; unit?: string; maxValue?: number }) {
+export function BarChart({ title, bars, unit = "", maxValue, labelWidth = 160 }: { title: string; bars: Bar[]; unit?: string; maxValue?: number; labelWidth?: number }) {
   const max = Math.max(maxValue ?? 0, ...bars.map((b) => b.value), 1);
-  const labelWidth = 160;
   const trackWidth = 260;
   const width = labelWidth + trackWidth + 60;
   const height = bars.length * (BAR_HEIGHT + ROW_GAP);

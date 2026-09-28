@@ -59,6 +59,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
           <h2 className="font-semibold mb-2">Wo stehen wir insgesamt? (Portfolio nach Prozessstufe)</h2>
           <BarChart
             title="Kunden je Prozessstufe"
+            labelWidth={220}
             bars={STAGES.map((s, i) => ({
               label: stageLabel[s],
               value: d.accounts.filter((c) => c.stage === s).length,
