@@ -13,6 +13,7 @@ import { getConfig } from "@/lib/config";
 import { SESSION_IDLE_SECONDS, SESSION_MAX_AGE_SECONDS } from "@/modules/identity/session";
 import { LIMITS } from "@/lib/ratelimit";
 import { assignRoleAction, createUserAccessAction, revokeRoleAction, setUserStatusAction } from "../actions";
+import { RoleAssignFields } from "@/components/RoleAssignFields";
 
 export default async function VerwaltungPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;
@@ -103,9 +104,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
         <details className="mt-3">
           <summary>Rolle zuweisen</summary>
           <form action={assignRoleAction} className="mt-2 grid sm:grid-cols-4 gap-3">
-            <div><label className="label" htmlFor="rUser">Person</label><select id="rUser" name="userId" className="select">{users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}</select></div>
-            <div><label className="label" htmlFor="rRole">Rolle</label><select id="rRole" name="role" className="select">{Object.entries(roleLabel).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-            <div><label className="label" htmlFor="rAccount">Kunde (nur BD/Principal kundenbezogen)</label><select id="rAccount" name="accountId" className="select" defaultValue=""><option value="">– arbeitsraumweit –</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+            <RoleAssignFields users={users} roleLabelEntries={Object.entries(roleLabel)} accounts={accounts} />
             <div className="self-end"><button className="btn" type="submit">Zuweisen</button></div>
           </form>
         </details>

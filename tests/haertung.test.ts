@@ -129,6 +129,12 @@ describe("Etappe 5 Teil B: Härtung (Briefing 16.2, 16.4, 17.4; S07, S08, S09)",
     const r = await assignRole(admin, { userId: nina.id, role: "BD", accountId: s.otherAccountId });
     expect(r?.scope).toBe("ACCOUNT");
     await revokeRole(admin, r!.id);
+    // BD immer kundenbezogen: „arbeitsraumweit“ würde sonst alle Kunden sichtbar machen (hasRole ignoriert accountId bei Workspace-Scope)
+    await expect(assignRole(admin, { userId: nina.id, role: "BD" })).rejects.toBeInstanceOf(ValidationError);
+    // Principal darf dagegen weiterhin arbeitsraumweit vergeben werden (bewusst, z. B. übergreifende Führungsrolle)
+    const rp = await assignRole(admin, { userId: nina.id, role: "PRINCIPAL" });
+    expect(rp?.scope).toBe("WORKSPACE");
+    await revokeRole(admin, rp!.id);
     const own = users.find((u) => u.id === admin.userId)!.roles.find((x) => x.role === "ADMIN")!;
     await expect(revokeRole(admin, own.id)).rejects.toBeInstanceOf(ValidationError);
   });

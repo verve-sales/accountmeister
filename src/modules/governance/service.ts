@@ -288,6 +288,10 @@ export async function assignRole(actor: Actor, raw: unknown) {
   if (!user) throw new NotFoundError("Person");
   const scope = input.accountId ? "ACCOUNT" : "WORKSPACE";
   if (scope === "ACCOUNT" && input.role !== "BD" && input.role !== "PRINCIPAL") throw new ValidationError("Kundenbezogen werden nur BD und Principal vergeben.");
+  // BD sieht über canViewAccount/canViewSetup automatisch alles, was der zugeordnete Kunde umfasst (hasRole ignoriert
+  // den accountId-Parameter bei Workspace-Scope) – eine arbeitsraumweite BD-Rolle würde also versehentlich alle
+  // Kunden sichtbar machen. Anders als Principal/CEO ist das für BD nie beabsichtigt, deshalb hart erzwungen.
+  if (scope === "WORKSPACE" && input.role === "BD") throw new ValidationError("BD wird immer kundenbezogen vergeben – bitte einen Kunden wählen. „Arbeitsraumweit“ ist für BD nicht vorgesehen (sonst wären alle Kunden sichtbar).");
   const existing = await db.query.roleAssignments.findMany({ where: and(eq(schema.roleAssignments.userId, user.id), eq(schema.roleAssignments.role, input.role)) });
   if (existing.some((r) => (r.accountId ?? null) === (input.accountId || null))) throw new ValidationError("Diese Rolle ist bereits zugewiesen.");
   const [r] = await db.insert(schema.roleAssignments).values({ workspaceId: actor.workspaceId, userId: user.id, role: input.role, scope, accountId: input.accountId || null }).returning();
