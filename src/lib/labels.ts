@@ -98,7 +98,7 @@ export const reviewStatusLabel: Record<string, string> = {
   BESTAETIGUNG_OFFEN: "Bestätigung offen",
   BESTAETIGT: "Bestätigt",
 };
-export const priorityKindLabel: Record<string, string> = { VERLAENGERN: "Verlängern", AUSWEITEN: "Ausweiten", VERTIEFEN: "Vertiefen", UEBERTRAGEN: "Auf andere Bereiche übertragen" };
+export const priorityKindLabel: Record<string, string> = { VERLAENGERN: "Verlängern", AUSWEITEN: "Ausweiten", VERTIEFEN: "Vertiefen", UEBERTRAGEN: "Auf andere Bereiche übertragen", REAKTIVIEREN: "Reaktivieren" };
 export const priorityStatusLabel: Record<string, string> = { VORGESCHLAGEN: "Vorgeschlagen", VEREINBART: "Vereinbart", ZURUECKGESTELLT: "Bewusst zurückgestellt", ERREICHT: "Erreicht", VERWORFEN: "Verworfen" };
 export const artifactStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", GEPRUEFT: "Geprüft", FREIGEGEBEN: "Freigegeben", UEBERHOLT: "Überholt" };
 export const artifactVariantLabel: Record<string, string> = { INTERN: "Interne Notiz", EXTERN: "Kundentext" };
@@ -119,3 +119,8 @@ export const offerStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", GE
 export const orderStatusLabel: Record<string, string> = { IN_VORBEREITUNG: "In Vorbereitung", NACHWEISE_UNVOLLSTAENDIG: "Nachweise unvollständig", BEAUFTRAGUNG_BESTAETIGT: "Beauftragung bestätigt", BEENDET_STORNIERT: "Beendet / storniert" };
 export const engagementStatusLabel: Record<string, string> = { GEPLANT: "Einsatz geplant", STARTBEREIT: "Startbereit", GESTARTET: "Gestartet", BEENDET: "Beendet" };
 export const requirementStatusLabel: Record<string, string> = { OFFEN: "Offen", NACHWEIS_VORGELEGT: "Nachweis vorgelegt", BESTAETIGT: "Bestätigt", NICHT_ANWENDBAR: "Nicht anwendbar (begründet)" };
+
+// Vorgehensmuster (Etappe 20)
+export const playbookScopeLabel: Record<string, string> = { ACCOUNT: "Kunde", SETUP: "Setup", OPPORTUNITY: "Chance" };
+export const playbookRunStatusLabel: Record<string, string> = { AKTIV: "läuft", ABGESCHLOSSEN: "abgeschlossen", ZURUECKGESTELLT: "zurückgestellt" };
+export const playbookStepStatusLabel: Record<string, string> = { WARTET: "wartet", OFFEN: "aktuell", ERLEDIGT: "erledigt", UEBERSPRUNGEN: "übersprungen" };

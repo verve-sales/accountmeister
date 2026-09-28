@@ -528,7 +528,7 @@ export const decisions = pgTable(
 // Accountplan (Briefing 7 / A1 / A13): Prioritäten und gespeicherte Stände – kein zweiter Datenbestand
 // ---------------------------------------------------------------------------
 
-export const priorityKindEnum = pgEnum("priority_kind", ["VERLAENGERN", "AUSWEITEN", "VERTIEFEN", "UEBERTRAGEN"]);
+export const priorityKindEnum = pgEnum("priority_kind", ["VERLAENGERN", "AUSWEITEN", "VERTIEFEN", "UEBERTRAGEN", "REAKTIVIEREN"]);
 export const priorityStatusEnum = pgEnum("priority_status", ["VORGESCHLAGEN", "VEREINBART", "ZURUECKGESTELLT", "ERREICHT", "VERWORFEN"]);
 
 export const accountPriorities = pgTable(
@@ -1469,7 +1469,100 @@ export const companyResearch = pgTable(
   (t) => [uniqueIndex("company_research_account_uq").on(t.accountId)],
 );
 
+// ---------------------------------------------------------------------------
+// Vorgehensmuster / Playbooks (Etappe 20): Standard-Vorgehen als Gerüst, nie als Pflichtschleuse.
+// Ein Muster besteht aus Schritten; ein Lauf wendet es auf einen Kunden (über ein Setup) oder eine Chance an.
+// Laufschritte sind eine Momentaufnahme der Musterschritte – spätere Änderungen am Muster verändern
+// laufende Vorgehen nicht. Jeder aktive Schritt ist eine normale Aktion (Meine Arbeit, Weekly).
+// ---------------------------------------------------------------------------
+
+export const playbookScopeEnum = pgEnum("playbook_scope", ["ACCOUNT", "SETUP", "OPPORTUNITY"]);
+export const playbookRunStatusEnum = pgEnum("playbook_run_status", ["AKTIV", "ABGESCHLOSSEN", "ZURUECKGESTELLT"]);
+export const playbookStepStatusEnum = pgEnum("playbook_step_status", ["WARTET", "OFFEN", "ERLEDIGT", "UEBERSPRUNGEN"]);
+
+export const playbooks = pgTable(
+  "playbooks",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    code: text("code").notNull(), // stabil, z. B. ALTKUNDEN_REAKTIVIERUNG; eigene Muster: EIGEN_<id>
+    name: text("name").notNull(),
+    description: text("description"),
+    scope: playbookScopeEnum("scope").notNull(),
+    active: boolean("active").notNull().default(true),
+    createdBy: text("created_by").references(() => users.id), // null = Standardmuster
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [uniqueIndex("playbooks_code_uq").on(t.workspaceId, t.code)],
+);
+
+export const playbookSteps = pgTable(
+  "playbook_steps",
+  {
+    id: id(),
+    playbookId: text("playbook_id").notNull().references(() => playbooks.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    title: text("title").notNull(),
+    goal: text("goal"), // Wozu dient der Schritt?
+    meddpicc: text("meddpicc"), // Bezug, z. B. "Metrics, Champion"
+    suggestedAction: text("suggested_action"), // Was konkret tun?
+    doneCriterion: text("done_criterion"), // Woran erkennt man, dass der Schritt erledigt ist?
+    dueInDays: integer("due_in_days"), // Richtwert ab Aktivierung des Schritts
+    createdAt: createdAt(),
+  },
+  (t) => [index("playbook_steps_playbook_idx").on(t.playbookId)],
+);
+
+export const playbookRuns = pgTable(
+  "playbook_runs",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    playbookId: text("playbook_id").notNull().references(() => playbooks.id),
+    playbookName: text("playbook_name").notNull(), // Momentaufnahme
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    opportunityId: text("opportunity_id").references((): AnyPgColumn => opportunities.id),
+    ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+    status: playbookRunStatusEnum("status").notNull().default("AKTIV"),
+    closedReason: text("closed_reason"),
+    startedBy: text("started_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("playbook_runs_account_idx").on(t.accountId), index("playbook_runs_setup_idx").on(t.setupId)],
+);
+
+export const playbookRunSteps = pgTable(
+  "playbook_run_steps",
+  {
+    id: id(),
+    runId: text("run_id").notNull().references(() => playbookRuns.id, { onDelete: "cascade" }),
+    stepId: text("step_id"), // Herkunft (kein FK: Musterschritt darf später gelöscht werden)
+    position: integer("position").notNull(),
+    title: text("title").notNull(),
+    goal: text("goal"),
+    meddpicc: text("meddpicc"),
+    suggestedAction: text("suggested_action"),
+    doneCriterion: text("done_criterion"),
+    dueInDays: integer("due_in_days"),
+    status: playbookStepStatusEnum("status").notNull().default("WARTET"),
+    actionId: text("action_id").references(() => actions.id),
+    result: text("result"),
+    skipReason: text("skip_reason"),
+    completedBy: text("completed_by").references(() => users.id),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [index("playbook_run_steps_run_idx").on(t.runId), index("playbook_run_steps_action_idx").on(t.actionId)],
+);
+
 export type Role = (typeof roleEnum.enumValues)[number];
+export type PlaybookScope = (typeof playbookScopeEnum.enumValues)[number];
+export type PlaybookRunStatus = (typeof playbookRunStatusEnum.enumValues)[number];
+export type PlaybookStepStatus = (typeof playbookStepStatusEnum.enumValues)[number];
 export type AccessClass = (typeof accessClassEnum.enumValues)[number];
 export type SignalStatus = (typeof signalStatusEnum.enumValues)[number];
 export type ActionStatus = (typeof actionStatusEnum.enumValues)[number];

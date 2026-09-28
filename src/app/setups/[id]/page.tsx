@@ -11,6 +11,8 @@ import { listOpportunitiesForSetup } from "@/modules/opportunities/service";
 import { canReassignResponsibility, loadSetupContext } from "@/modules/identity/authz";
 import { analyzeSetup, STAGES, stageLabel } from "@/modules/strategy/analysis";
 import { ProcessStepper } from "@/components/ProcessStepper";
+import { PlaybookRuns } from "@/components/PlaybookRuns";
+import { listPlaybooks, listRuns } from "@/modules/playbooks/service";
 import { groupByFamily, listRoles } from "@/modules/roles/catalog";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { inArray, or } from "drizzle-orm";
@@ -91,6 +93,9 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const setupCtx = await loadSetupContext(actor, id);
   const analysis = setupCtx ? await analyzeSetup(actor, setupCtx) : null;
   const mayReassign = canReassignResponsibility(actor, d.account);
+  const [runs, setupPlaybooks] = await Promise.all([listRuns(actor, { setupId: id }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true })]);
+  // Kunden-Vorgehen dieses Setups werden hier ebenfalls gezeigt; Chancen-Vorgehen auf der jeweiligen Chance.
+  const setupRuns = runs.filter((r) => !r.opportunityId);
 
   return (
     <div className="space-y-6">
@@ -112,6 +117,15 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         </section>
       )}
       <Feedback params={sp} />
+
+      {(setupRuns.length > 0 || d.canEdit || mayReassign) && (
+        <PlaybookRuns
+          runs={setupRuns}
+          back={back}
+          users={allUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
+          start={(d.canEdit || mayReassign) && d.setup.status !== "ARCHIVIERT" ? { playbooks: setupPlaybooks, hidden: { setupId: d.setup.id }, defaultOwnerId: d.setup.bdUserId } : null}
+        />
+      )}
 
       {/* 1. Was läuft hier? */}
       <section className="card">

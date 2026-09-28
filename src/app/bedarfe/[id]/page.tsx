@@ -4,6 +4,8 @@ import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getOpportunityDetail, MEDDPICC_KEYS } from "@/modules/opportunities/service";
 import { canReassignResponsibility } from "@/modules/identity/authz";
+import { listPlaybooks, listRuns } from "@/modules/playbooks/service";
+import { PlaybookRuns } from "@/components/PlaybookRuns";
 import { getOpportunityAdvice, proposeOpportunityAdvice, ruleBasedOpportunityAdvice, type OpportunityAdviceRow } from "@/modules/opportunities/advisor";
 import { getBuyingCenterAdvice, proposeBuyingCenterAdvice, ruleBasedBuyingCenterAdvice, type BuyingCenterAdviceRow } from "@/modules/opportunities/buyingCenterAdvisor";
 import type { StrategyMove } from "@/modules/strategy/service";
@@ -113,6 +115,8 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   /** Seitenzweig (zurückgestellt/beendet): welche Stufe zuletzt erreicht war, wird hier nicht rekonstruiert (keine erfundenen Werte) – die Kette bleibt neutral, der Zustand steht als eigenes Element daneben. */
   const isSideBranch = opp.status === "ZURUECKGESTELLT" || opp.status === "BEENDET";
   const mayReassign = canReassignResponsibility(actor, ctx.account);
+  const [runs, oppPlaybooks] = await Promise.all([listRuns(actor, { opportunityId: id }), listPlaybooks(actor, { scope: "OPPORTUNITY", activeOnly: true })]);
+  const activeUsers = d.users.filter((u) => u.status === "ACTIVE").map((u) => ({ id: u.id, displayName: u.displayName }));
 
   return (
     <div className="space-y-6">
@@ -151,6 +155,15 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         />
         <p className="muted text-xs mt-2">Orientierung, keine Pflichtschleuse: Zugangsentwicklung läuft parallel weiter; Angebot, Auftrag und Einsatz haben eigene Zustände.</p>
       </section>
+
+      {(runs.length > 0 || ((canEdit || mayReassign) && !closed)) && (
+        <PlaybookRuns
+          runs={runs}
+          back={`/bedarfe/${opp.id}`}
+          users={activeUsers}
+          start={(canEdit || mayReassign) && !closed ? { playbooks: oppPlaybooks, hidden: { opportunityId: opp.id }, defaultOwnerId: opp.ownerUserId } : null}
+        />
+      )}
 
       {/* Wofür-Verknüpfungen (E-045): was schon auf diese Chance einzahlt */}
       {(d.linked.signals.length + d.linked.actions.length + d.linked.questions.length + d.linked.suggestions.length > 0) && (

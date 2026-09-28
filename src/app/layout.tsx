@@ -22,6 +22,7 @@ const NAV = [
 const MORE = [
   { href: "/meine-arbeit", label: "Meine Arbeit" },
   { href: "/eingang", label: "Eingang" },
+  { href: "/vorgehen", label: "Vorgehen" },
   { href: "/artefakte", label: "Artefakte" },
   { href: "/einstellungen", label: "Einstellungen" },
 ];

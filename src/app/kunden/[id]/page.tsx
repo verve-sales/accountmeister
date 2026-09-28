@@ -20,10 +20,12 @@ import { AccountPlanView } from "@/components/AccountPlanView";
 import { chanceKindLabel } from "@/modules/ai/schemas";
 import { listRoles } from "@/modules/roles/catalog";
 import { SuggestButton } from "@/components/SuggestButton";
-import { changePriorityAction, createPriorityAction, reassignAccountBdAction, refreshCompanyResearchAction, saveAccountPlanSnapshotAction } from "../../actions";
+import { changePriorityAction, createPriorityAction, reassignAccountBdAction, refreshCompanyResearchAction, saveAccountPlanSnapshotAction, setAccountDormantAction } from "../../actions";
 import { db, schema } from "@/db/client";
 import { eq } from "drizzle-orm";
 import { getCompanyResearch, type CompanyFact } from "@/modules/research/service";
+import { listPlaybooks, listRuns } from "@/modules/playbooks/service";
+import { PlaybookRuns } from "@/components/PlaybookRuns";
 
 export default async function KundePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
@@ -60,6 +62,12 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   );
   const analysisBySetup = new Map(analyses.filter((a): a is NonNullable<typeof a> => !!a).map((a) => [a.setupId, a.analysis]));
   const furthestStage = [...analysisBySetup.values()].sort((a, b) => STAGES.indexOf(b.stage) - STAGES.indexOf(a.stage))[0] ?? null;
+  const [runs, accountPlaybooks, activeUsers] = await Promise.all([
+    listRuns(actor, { accountId: id }),
+    listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true }),
+    db.query.users.findMany({ where: eq(schema.users.status, "ACTIVE"), orderBy: (u, { asc }) => [asc(u.displayName)] }),
+  ]);
+  const mayStartPlaybook = mayReassign || mayCreate;
   const currentBdName = account.responsibleBdUserId
     ? (bdUsers.find((u) => u.id === account.responsibleBdUserId)?.displayName ?? (await db.query.users.findFirst({ where: eq(schema.users.id, account.responsibleBdUserId) }))?.displayName ?? "?")
     : null;
@@ -99,8 +107,25 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             <button className="btn btn-secondary" type="submit">Umstellen</button>
           </form>
           <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD können Sie die Kundenzuständigkeit jederzeit umstellen – unabhängig von der ursprünglichen Zuordnung.</p>
+          {account.status !== "ARCHIVED" && (
+            <form action={setAccountDormantAction} className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              <input type="hidden" name="accountId" value={account.id} />
+              <input type="hidden" name="dormant" value={account.status === "DORMANT" ? "false" : "true"} />
+              <span className="muted">Status: {accountStatusLabel[account.status] ?? account.status}.</span>
+              <button className="btn btn-secondary btn-small" type="submit">{account.status === "DORMANT" ? "Wieder als aktiv führen" : "Als ruhend markieren"}</button>
+            </form>
+          )}
         </section>
       )}
+
+      {account.status === "DORMANT" && <p className="text-sm" style={{ background: "var(--warn-soft)", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ruht. Mit dem Vorgehen „Altkunden-Reaktivierung“ (unten) wird er wieder aktiv angegangen.</p>}
+
+      <PlaybookRuns
+        runs={runs}
+        back={back}
+        users={activeUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
+        start={mayStartPlaybook && account.status !== "ARCHIVED" ? { playbooks: accountPlaybooks, hidden: { accountId: account.id }, setups: setups.filter((x) => x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })), defaultNewSetupName: `Reaktivierung ${new Date().getFullYear()}`, defaultOwnerId: account.responsibleBdUserId } : null}
+      />
 
       {/* Öffentliche Unternehmensrecherche (Etappe 16): eng begrenzte Ausnahme – nur öffentliche Firmendaten, nie Personennamen */}
       <section className="card">

@@ -11,6 +11,8 @@ import { listMyIntakes } from "@/modules/intake/service";
 import { accountStatusLabel, orgTypeLabel } from "@/lib/labels";
 import { db, schema } from "@/db/client";
 import { eq } from "drizzle-orm";
+import { DORMANT_AFTER_DAYS, listDormantAccounts } from "@/modules/playbooks/service";
+import { fmtDate } from "@/lib/labels";
 
 export default async function KundenPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -26,6 +28,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
   const drafts = canCreateAccount(actor) ? (await listMyIntakes(actor)).filter((p) => p.status === "ENTWURF") : [];
   const active = accounts.filter((a) => a.status !== "ARCHIVED");
   const archived = accounts.filter((a) => a.status === "ARCHIVED");
+  const dormant = await listDormantAccounts(actor);
 
   return (
     <div className="space-y-6">
@@ -50,6 +53,21 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
           </table>
         )}
       </section>
+      {dormant.length > 0 && (
+        <section className="card">
+          <h2 className="font-semibold mb-1">Reaktivierung prüfen ({dormant.length} ruhend)</h2>
+          <p className="muted text-sm mb-2">Als ruhend markiert oder seit mehr als {DORMANT_AFTER_DAYS} Tagen ohne Aktivität. Mit dem Vorgehen „Altkunden-Reaktivierung“ Schritt für Schritt wieder ins Gespräch kommen.</p>
+          <ul className="text-sm space-y-1">
+            {dormant.slice(0, 8).map((x) => (
+              <li key={x.account.id}>
+                <Link href={`/kunden/${x.account.id}#vorgehen`}>{x.account.name}</Link>
+                <span className="muted"> · letzte Aktivität {fmtDate(x.lastActivity)}{x.hasActiveRun ? " · Reaktivierung läuft" : ""}</span>
+              </li>
+            ))}
+          </ul>
+          {dormant.length > 8 && <p className="text-sm mt-1"><Link href="/vorgehen">Alle {dormant.length} ansehen</Link></p>}
+        </section>
+      )}
       {archived.length > 0 && (
         <details className="card">
           <summary>Archivierte Kunden ({archived.length})</summary>

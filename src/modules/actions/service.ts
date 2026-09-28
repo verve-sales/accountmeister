@@ -7,6 +7,7 @@ import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
 import { canEditAction, canViewAction, loadSetupContext } from "@/modules/identity/authz";
 import { requireEditableSetup } from "@/modules/setups/service";
+import { syncRunStepFromAction } from "@/modules/playbooks/service";
 
 /**
  * Aktion (Briefing 6.2 „Aktionen“, 9.2): Verantwortlicher, Vereinbarung, Termin, Ergebnis.
@@ -118,6 +119,8 @@ export async function changeActionStatus(actor: Actor, actionId: string, raw: un
       .returning();
     if (!updated) throw new ConflictError();
     await recordAudit(tx, actor, "action.status_changed", "ACTION", actionId, { von: action.status, nach: input.status });
+    // Gehört die Aktion zu einem Vorgehensmuster, rückt das Vorgehen zum nächsten Schritt vor (Etappe 20).
+    await syncRunStepFromAction(tx, actor, updated);
     return updated;
   });
 }

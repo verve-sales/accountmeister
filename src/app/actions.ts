@@ -14,6 +14,7 @@ import { captureObservation, changeSignalStatus, takeOverSignal } from "@/module
 import { createHandover, respondToHandover } from "@/modules/handovers/service";
 import { changeActionStatus, createAction } from "@/modules/actions/service";
 import { createAccount, reassignAccountBd } from "@/modules/accounts/service";
+import { addPlaybookStep, completeRunStep, createPlaybook, movePlaybookStep, pauseRun, reassignRunOwner, removePlaybookStep, resumeRun, setAccountDormant, skipRunStep, startPlaybookRun, updatePlaybook, updatePlaybookStep } from "@/modules/playbooks/service";
 import { archiveAccount, deleteAccountPermanently, restoreAccount } from "@/modules/accounts/deletion";
 import { formToStrategyInput, saveStrategy } from "@/modules/strategy/service";
 import { formToOpportunityAdviceInput, saveOpportunityAdvice } from "@/modules/opportunities/advisor";
@@ -963,4 +964,110 @@ export async function saveAssessmentAction(fd: FormData) {
   return run(data.back ?? `/setups/${data.setupId ?? ""}/personen`, async (actor) => {
     await upsertAssessment(actor, data);
   }, "Einschätzung gespeichert.");
+}
+
+// --- Vorgehensmuster (Etappe 20) ---------------------------------------------
+
+/** Rücksprung: explizit übergebenes „back“, sonst die Musterübersicht. Nur interne Pfade. */
+function backOf(data: Record<string, string | undefined>, fallback: string): string {
+  const b = data.back ?? "";
+  return b.startsWith("/") && !b.startsWith("//") ? b : fallback;
+}
+
+export async function startPlaybookRunAction(fd: FormData) {
+  const data = formToObject(fd);
+  const back = backOf(data, "/vorgehen");
+  return run(back, async (actor) => {
+    const r = await startPlaybookRun(actor, data);
+    // Bei neuem Setup direkt dorthin, wo das Vorgehen läuft
+    return data.newSetupName && !data.setupId ? `/setups/${r.setupId}` : back;
+  }, "Vorgehen gestartet. Der erste Schritt liegt als Aktion bei der verantwortlichen Person.");
+}
+
+export async function completeRunStepAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/vorgehen"), async (actor) => {
+    await completeRunStep(actor, data.runStepId ?? "", data);
+  }, "Schritt erledigt – der nächste Schritt ist angelegt.");
+}
+
+export async function skipRunStepAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/vorgehen"), async (actor) => {
+    await skipRunStep(actor, data.runStepId ?? "", data);
+  }, "Schritt übersprungen (Begründung ist dokumentiert).");
+}
+
+export async function pauseRunAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/vorgehen"), async (actor) => {
+    await pauseRun(actor, data.runId ?? "", data);
+  }, "Vorgehen zurückgestellt.");
+}
+
+export async function resumeRunAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/vorgehen"), async (actor) => {
+    await resumeRun(actor, data.runId ?? "", { version: data.version ?? "0" });
+  }, "Vorgehen wieder aufgenommen.");
+}
+
+export async function reassignRunOwnerAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/vorgehen"), async (actor) => {
+    await reassignRunOwner(actor, data.runId ?? "", data);
+  }, "Verantwortung für das Vorgehen umgestellt.");
+}
+
+export async function setAccountDormantAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.accountId ?? "";
+  return run(backOf(data, `/kunden/${id}`), async (actor) => {
+    await setAccountDormant(actor, id, data.dormant === "true");
+  }, data.dormant === "true" ? "Kunde als ruhend markiert." : "Kunde wieder als aktiv geführt.");
+}
+
+export async function createPlaybookAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/vorgehen", async (actor) => {
+    const p = await createPlaybook(actor, data);
+    return `/vorgehen/${p.id}`;
+  }, "Vorgehensmuster angelegt – jetzt Schritte ergänzen.");
+}
+
+export async function updatePlaybookAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.playbookId ?? "";
+  return run(`/vorgehen/${id}`, async (actor) => {
+    await updatePlaybook(actor, id, data);
+  }, "Vorgehensmuster gespeichert.");
+}
+
+export async function addPlaybookStepAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.playbookId ?? "";
+  return run(`/vorgehen/${id}`, async (actor) => {
+    await addPlaybookStep(actor, id, data);
+  }, "Schritt ergänzt.");
+}
+
+export async function updatePlaybookStepAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/vorgehen/${data.playbookId ?? ""}`, async (actor) => {
+    await updatePlaybookStep(actor, data.stepId ?? "", data);
+  }, "Schritt gespeichert.");
+}
+
+export async function removePlaybookStepAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/vorgehen/${data.playbookId ?? ""}`, async (actor) => {
+    await removePlaybookStep(actor, data.stepId ?? "");
+  }, "Schritt entfernt.");
+}
+
+export async function movePlaybookStepAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/vorgehen/${data.playbookId ?? ""}`, async (actor) => {
+    await movePlaybookStep(actor, data.stepId ?? "", data.direction === "up" ? "up" : "down");
+  }, "Reihenfolge geändert.");
 }
