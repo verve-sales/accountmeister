@@ -85,6 +85,10 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         <section className="card">
           <h2 className="font-semibold mb-2">Wo stehen wir?</h2>
           <ProcessStepper steps={STAGES.map((s) => ({ key: s, label: stageLabel[s] }))} currentKey={furthestStage.stage} note={furthestStage.nextStep} />
+          {runs.filter((r) => r.status === "AKTIV").map((r) => {
+            const cur = r.steps.find((x) => x.status === "OFFEN");
+            return cur ? <p key={r.id} className="text-sm mt-2">Laufendes Vorgehen <a href="#vorgehen">{r.playbookName}</a> ({r.setupName}): Schritt {cur.position}/{r.steps.length} – {cur.title}</p> : null;
+          })}
           {setups.length > 1 && <p className="muted text-xs mt-2">Zeigt das am weitesten fortgeschrittene Setup ({furthestStage.setupName}); jedes Setup hat seine eigene Stufe – siehe Tabelle unten.</p>}
         </section>
       )}

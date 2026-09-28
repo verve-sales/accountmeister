@@ -3,7 +3,9 @@ import { ProcessStepper } from "@/components/ProcessStepper";
 import { Status } from "@/components/Status";
 import { actionStatusLabel, fmtDate, playbookRunStatusLabel } from "@/lib/labels";
 import type { RunView } from "@/modules/playbooks/service";
-import { completeRunStepAction, pauseRunAction, reassignRunOwnerAction, resumeRunAction, skipRunStepAction, startPlaybookRunAction } from "@/app/actions";
+import { CopyButton } from "@/components/CopyButton";
+import { draftKindLabel, type StepDrafts } from "@/modules/playbooks/drafts";
+import { completeRunStepAction, draftRunStepAction, pauseRunAction, reassignRunOwnerAction, resumeRunAction, skipRunStepAction, startPlaybookRunAction } from "@/app/actions";
 
 type User = { id: string; displayName: string };
 type PlaybookOption = { id: string; name: string; description: string | null; steps: { id: string }[] };
@@ -28,6 +30,9 @@ export function PlaybookRuns({
     setups?: { id: string; name: string }[];
     defaultNewSetupName?: string;
     defaultOwnerId?: string | null;
+    /** Vorausgewähltes Muster samt kurzer Begründung (z. B. Reaktivierungs-Setup → Altkunden-Reaktivierung) */
+    recommendedId?: string | null;
+    recommendation?: string | null;
   } | null;
 }) {
   const active = runs.filter((r) => r.status === "AKTIV");
@@ -51,12 +56,13 @@ export function PlaybookRuns({
       {start && start.playbooks.length > 0 && (
         <details className="mt-4" open={runs.length === 0}>
           <summary>Vorgehen starten</summary>
+          {start.recommendation && <p className="text-sm mt-2" style={{ background: "var(--warn-soft)", borderRadius: 8, padding: ".5rem .8rem" }}>{start.recommendation}</p>}
           <form action={startPlaybookRunAction} className="mt-2 grid sm:grid-cols-2 gap-3">
             <input type="hidden" name="back" value={back} />
             {Object.entries(start.hidden).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
             <div className="sm:col-span-2">
               <label className="label" htmlFor="pbSelect">Vorgehensmuster</label>
-              <select id="pbSelect" name="playbookId" className="select" required defaultValue={start.playbooks[0]!.id}>
+              <select id="pbSelect" name="playbookId" className="select" required defaultValue={start.recommendedId ?? start.playbooks[0]!.id}>
                 {start.playbooks.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.steps.length} Schritte)</option>)}
               </select>
               <ul className="muted text-xs mt-1 space-y-0.5">{start.playbooks.map((p) => <li key={p.id}><strong>{p.name}:</strong> {p.description}</li>)}</ul>
@@ -122,6 +128,7 @@ function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }
               {current.action.status === "VORGESCHLAGEN" && " – wartet auf Annahme (in „Meine Arbeit“)"}
             </p>
           )}
+          {r.canWork && <StepDraftsView stepId={current.id} drafts={current.drafts as StepDrafts | null} note={current.draftsNote} at={current.draftsAt} back={back} />}
           {r.canWork && (
             <div className="grid lg:grid-cols-2 gap-3 mt-2">
               <form action={completeRunStepAction} className="flex flex-wrap gap-2 items-end">
@@ -189,6 +196,43 @@ function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Schritt-Assistent: Entwürfe erstellen/erneuern und anzeigen (kopierbar, nie automatisch versendet). */
+function StepDraftsView({ stepId, drafts, note, at, back }: { stepId: string; drafts: StepDrafts | null; note: string | null; at: Date | null; back: string }) {
+  return (
+    <div className="mt-3 p-3" style={{ background: "var(--accent-soft)", borderRadius: 8 }}>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="font-medium">Schritt-Assistent</span>
+        <span className="muted text-xs">Entwürfe für Mail, Gesprächsleitfaden, Metriken, Fragen oder Pitch – aus Schritt und bekannten Kundendaten; Platzhalter in [Klammern] ergänzen.</span>
+        <form action={draftRunStepAction} className="ml-auto">
+          <input type="hidden" name="runStepId" value={stepId} />
+          <input type="hidden" name="back" value={back} />
+          <button className="btn btn-small" type="submit">{drafts ? "Entwürfe neu erstellen" : "Entwürfe erstellen"}</button>
+        </form>
+      </div>
+      {drafts && (
+        <div className="mt-3 space-y-3">
+          {drafts.summary && <p className="text-sm">{drafts.summary}</p>}
+          {drafts.drafts.map((d, i) => (
+            <div key={i} className="card" style={{ padding: ".8rem 1rem" }}>
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <Status label={draftKindLabel[d.kind] ?? d.kind} />
+                <strong className="text-sm">{d.title}</strong>
+                <span className="ml-auto"><CopyButton text={d.text} /></span>
+              </div>
+              <pre className="text-sm whitespace-pre-wrap" style={{ fontFamily: "inherit", margin: 0 }}>{d.text}</pre>
+              {d.basedOn.length > 0 && <p className="muted text-xs mt-1">Beruht auf: {d.basedOn.map((q) => `„${q.slice(0, 140)}“`).join(" · ")}</p>}
+            </div>
+          ))}
+          {drafts.openQuestions.length > 0 && (
+            <div className="text-sm"><span className="muted">Offene Fragen: </span>{drafts.openQuestions.join(" · ")}</div>
+          )}
+          <p className="muted text-xs">{note}{at ? ` · erstellt ${fmtDate(at)}` : ""}</p>
+        </div>
+      )}
     </div>
   );
 }

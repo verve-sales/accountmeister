@@ -22,6 +22,7 @@ export const AI_TASKS = [
   { key: "STRATEGY", label: "Strategiefaden (Lage, nächster Schritt, Züge)", description: "Aus der regelbasierten Lageanalyse und dem bekannten Kontext einen Strategiefaden je Setup vorschlagen – Züge und Risiken nur mit Textstelle; der BD prüft und speichert eine Fassung." },
   { key: "OPPORTUNITY_ADVICE", label: "Chancen-Berater (nächste Schritte je Bedarf)", description: "Persönlicher KI-Berater je Chance: aus der Lageanalyse der einen Chance und dem bekannten Kontext die nächsten Schritte zur Konvertierung vorschlagen – Züge und Risiken nur mit Textstelle; der BD prüft und speichert eine Fassung." },
   { key: "BUYING_CENTER_ADVICE", label: "Buying-Center-Berater (Rollen je Chance)", description: "Geht die sechs Entscheidungsrollen einer Chance durch und gibt je Lücke einen Hinweis zum Füllen – nur mit Textstelle, wo eine konkrete Angabe gemeint ist; der BD prüft und speichert eine Fassung." },
+  { key: "PLAYBOOK_STEP", label: "Schritt-Assistent (Vorgehensmuster)", description: "Entwirft für den aktuellen Schritt eines Vorgehens (z. B. Altkunden-Reaktivierung) Mail, Gesprächsleitfaden, Metriken, Fragen oder Pitch-Text – Tatsachen nur aus den Daten, Lücken als Platzhalter; nichts wird versendet." },
   { key: "FORM_SUGGEST", label: "Formularvorschläge (Vorhaben, Setup, Chance, MEDDPICC)", description: "Formularfelder aus dem bekannten Kundenkontext vorbelegen („Vorschlagen lassen“), inklusive der MEDDPICC-Qualifizierungshilfe je Chance. Kleines, schnelles Modell genügt." },
 ] as const;
 

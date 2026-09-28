@@ -1,6 +1,8 @@
 import { decisionRoleLabel } from "@/lib/labels";
 import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdviceInput, FormSuggestInput, InterviewNextInput, ProviderInfo, StrategyInput, StructureNoteInput } from "../provider";
 import type { AssistantItem, BuyingCenterProposal, FormSuggestion, IntakeProposal, InterviewNext, StrategyProposal, StructuredItem, StructureNoteOutput } from "../schemas";
+import { ruleBasedStepDrafts, type StepDrafts } from "@/modules/playbooks/drafts";
+import type { PlaybookStepDraftInput } from "../provider";
 import { ASSISTANT_CARDS_MARKER, decisionRoleValues, interviewTopicValues } from "../schemas";
 
 /**
@@ -403,6 +405,11 @@ export class TestProvider implements AIProvider {
   }
 
   /** Formularvorschlag: nimmt Titel/Kontext aus Kontextzeilen, wählt Optionen regelbasiert. */
+  /** Schritt-Assistent: derselbe regelbasierte Entwurf wie ohne KI – deterministisch, erfindet nichts. */
+  async draftPlaybookStep(input: PlaybookStepDraftInput): Promise<StepDrafts> {
+    return ruleBasedStepDrafts(input.structured);
+  }
+
   async suggestForm(input: FormSuggestInput): Promise<FormSuggestion> {
     const ctx = input.contextText;
     const line = (prefix: string) => ctx.split("\n").find((l) => l.startsWith(prefix))?.slice(prefix.length).trim() ?? "";

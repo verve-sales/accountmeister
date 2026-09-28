@@ -13,6 +13,7 @@ import { analyzeSetup, STAGES, stageLabel } from "@/modules/strategy/analysis";
 import { ProcessStepper } from "@/components/ProcessStepper";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
 import { listPlaybooks, listRuns } from "@/modules/playbooks/service";
+import { ALTKUNDEN_CODE } from "@/modules/playbooks/defaults";
 import { groupByFamily, listRoles } from "@/modules/roles/catalog";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { inArray, or } from "drizzle-orm";
@@ -93,7 +94,11 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const setupCtx = await loadSetupContext(actor, id);
   const analysis = setupCtx ? await analyzeSetup(actor, setupCtx) : null;
   const mayReassign = canReassignResponsibility(actor, d.account);
-  const [runs, setupPlaybooks] = await Promise.all([listRuns(actor, { setupId: id }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true })]);
+  const [runs, setupScoped, accountScoped] = await Promise.all([listRuns(actor, { setupId: id }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true }), listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true })]);
+  // Kunden-Muster (z. B. Altkunden-Reaktivierung) lassen sich auch direkt auf ein bestehendes Setup anwenden.
+  const setupPlaybooks = [...accountScoped, ...setupScoped];
+  const looksLikeReactivation = /reaktiv|re-?entry|wiedereinstieg|altkunde|bestandskunde|historisch/i.test(`${d.setup.name} ${d.setup.contextNote ?? ""}`);
+  const reactivation = accountScoped.find((p) => p.code === ALTKUNDEN_CODE);
   // Kunden-Vorgehen dieses Setups werden hier ebenfalls gezeigt; Chancen-Vorgehen auf der jeweiligen Chance.
   const setupRuns = runs.filter((r) => !r.opportunityId);
 
@@ -114,6 +119,10 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         <section className="card">
           <h2 className="font-semibold mb-2">Wo stehen wir?</h2>
           <ProcessStepper steps={STAGES.map((s) => ({ key: s, label: stageLabel[s] }))} currentKey={analysis.stage} note={analysis.nextStep} />
+          {setupRuns.filter((r) => r.status === "AKTIV").map((r) => {
+            const cur = r.steps.find((x) => x.status === "OFFEN");
+            return cur ? <p key={r.id} className="text-sm mt-2">Laufendes Vorgehen <a href="#vorgehen">{r.playbookName}</a>: Schritt {cur.position}/{r.steps.length} – {cur.title}</p> : null;
+          })}
         </section>
       )}
       <Feedback params={sp} />
@@ -123,7 +132,13 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           runs={setupRuns}
           back={back}
           users={allUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
-          start={(d.canEdit || mayReassign) && d.setup.status !== "ARCHIVIERT" ? { playbooks: setupPlaybooks, hidden: { setupId: d.setup.id }, defaultOwnerId: d.setup.bdUserId } : null}
+          start={(d.canEdit || mayReassign) && d.setup.status !== "ARCHIVIERT" ? {
+            playbooks: setupPlaybooks,
+            hidden: { setupId: d.setup.id, accountId: d.account.id },
+            defaultOwnerId: d.setup.bdUserId,
+            recommendedId: looksLikeReactivation && reactivation ? reactivation.id : null,
+            recommendation: looksLikeReactivation && reactivation && !setupRuns.some((r) => r.status === "AKTIV") ? "Dieses Setup sieht nach einer Reaktivierung aus – „Altkunden-Reaktivierung“ führt Schritt für Schritt durch und erstellt je Schritt Entwürfe (Mail, Metriken, Pitch)." : null,
+          } : null}
         />
       )}
 

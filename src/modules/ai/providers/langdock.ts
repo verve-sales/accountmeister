@@ -1,6 +1,6 @@
 import { DomainError } from "@/lib/errors";
-import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdviceInput, FormSuggestInput, InterviewNextInput, ModelInfo, OpportunityAdviceInput, ProviderInfo, StrategyInput, StructureNoteInput, TaskOptions, Usage } from "../provider";
-import { ANALYZE_DOCUMENT_SYSTEM, ASSISTANT_CARDS_SYSTEM, ASSISTANT_SYSTEM, BUYING_CENTER_ADVICE_SYSTEM, FORM_SUGGEST_SYSTEM, INTERVIEW_NEXT_SYSTEM, OPPORTUNITY_ADVICE_SYSTEM, STRATEGY_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
+import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdviceInput, FormSuggestInput, InterviewNextInput, ModelInfo, OpportunityAdviceInput, PlaybookStepDraftInput, ProviderInfo, StrategyInput, StructureNoteInput, TaskOptions, Usage } from "../provider";
+import { ANALYZE_DOCUMENT_SYSTEM, ASSISTANT_CARDS_SYSTEM, ASSISTANT_SYSTEM, BUYING_CENTER_ADVICE_SYSTEM, FORM_SUGGEST_SYSTEM, INTERVIEW_NEXT_SYSTEM, PLAYBOOK_STEP_SYSTEM, OPPORTUNITY_ADVICE_SYSTEM, STRATEGY_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
 
 /**
  * Produktivanbieter über Langdock (EU-Hosting, Auftragsverarbeitung im Langdock-Vertrag von Verve).
@@ -239,6 +239,14 @@ export class LangdockProvider implements AIProvider {
       input.previous ? `\n=== LETZTE FASSUNG DES BUYING-CENTER-BERATERS (${input.previous.createdAt}) ===\n${input.previous.summary}\n=== ENDE ===` : "\nNoch keine frühere Fassung.",
     ].join("\n");
     return this.completeJson(BUYING_CENTER_ADVICE_SYSTEM, user, { maxOutputTokens: 1800, ...opts });
+  }
+
+  async draftPlaybookStep(input: PlaybookStepDraftInput, opts?: TaskOptions): Promise<unknown> {
+    const user = [
+      `\n=== SCHRITT UND BISHERIGER VERLAUF (Daten) ===\n${clip(input.stepText)}\n=== ENDE ===`,
+      `\n=== BEKANNTER KONTEXT (Daten) ===\n${clip(input.contextText) || "–"}\n=== ENDE ===`,
+    ].join("\n");
+    return this.completeJson(PLAYBOOK_STEP_SYSTEM, user, { maxOutputTokens: 2500, temperature: 0.4, ...opts });
   }
 
   async suggestForm(input: FormSuggestInput, opts?: TaskOptions): Promise<unknown> {

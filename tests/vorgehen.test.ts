@@ -23,6 +23,10 @@ import {
 } from "@/modules/playbooks/service";
 import { ALTKUNDEN_CODE } from "@/modules/playbooks/defaults";
 import { actorFor, ensureSeed } from "./helpers";
+import { proposeStepDrafts } from "@/modules/playbooks/assistant";
+import { ruleBasedStepDrafts } from "@/modules/playbooks/drafts";
+import { TestProvider } from "@/modules/ai/providers/test";
+import { DisabledProvider } from "@/modules/ai/providers/disabled";
 
 async function runSteps(runId: string) {
   return db.query.playbookRunSteps.findMany({ where: eq(schema.playbookRunSteps.runId, runId), orderBy: [asc(schema.playbookRunSteps.position)] });
@@ -149,5 +153,50 @@ describe("Etappe 20: Vorgehensmuster (Altkunden-Reaktivierung u. a.)", () => {
     await removePlaybookStep(petra, s2.id);
     mine = (await listPlaybooks(petra)).find((x) => x.id === p.id)!;
     expect(mine.steps.map((x) => [x.position, x.id])).toEqual([[1, s1.id]]);
+  });
+
+  it("Kunden-Muster auf bestehendes Setup; Schritt-Assistent erstellt Entwürfe (mit und ohne KI)", async () => {
+    const s = await ensureSeed();
+    const petra = await actorFor("petra");
+    const alt = (await listPlaybooks(petra)).find((p) => p.code === ALTKUNDEN_CODE)!;
+    // Bestehendes Setup (z. B. vom Assistenten angelegtes „Strategic Re-Entry“) direkt verwenden
+    const run = await startPlaybookRun(petra, { playbookId: alt.id, accountId: s.accountId, setupId: s.setupId });
+    expect(run.setupId).toBe(s.setupId);
+    let steps = await runSteps(run.id);
+
+    // Schritt 1 ohne KI: regelbasierte Checkliste
+    const r1 = await proposeStepDrafts(petra, steps[0]!.id, { provider: new DisabledProvider() });
+    expect(r1.note).toMatch(/KI deaktiviert/);
+    expect(r1.drafts.drafts[0]!.kind).toBe("CHECKLISTE");
+    const stored = await db.query.playbookRunSteps.findFirst({ where: eq(schema.playbookRunSteps.id, steps[0]!.id) });
+    expect((stored?.drafts as { drafts: unknown[] }).drafts.length).toBeGreaterThan(0);
+
+    // Schritt 2 mit (Test-)KI: Mail zur Referenzbitte, adressiert an den Kunden, nur belegte Textstellen
+    await completeRunStep(petra, steps[0]!.id, { result: "Frau Keller weiterhin zuständig; neuer Anlass: Plattform-Umbau." });
+    steps = await runSteps(run.id);
+    const r2 = await proposeStepDrafts(petra, steps[1]!.id, { provider: new TestProvider() });
+    const mail = r2.drafts.drafts.find((d) => d.kind === "EMAIL")!;
+    expect(mail.text).toContain("Beispielkonzern");
+    expect(mail.text).toMatch(/Referenz/);
+    // Ein nicht mehr aktueller Schritt bekommt keine Entwürfe
+    await expect(proposeStepDrafts(petra, steps[0]!.id, { provider: new TestProvider() })).rejects.toThrow();
+  });
+
+  it("regelbasierte Entwürfe erfinden keine Zahlen: Metriken bleiben Platzhalter", () => {
+    const d = ruleBasedStepDrafts({
+      playbookName: "Altkunden-Reaktivierung",
+      step: { position: 3, total: 6, title: "Gespräch mit passenden Metriken", goal: "", meddpicc: "Metrics", suggestedAction: "Kennzahlen mitbringen", doneCriterion: "" },
+      accountName: "Musterkunde",
+      setupName: "Reaktivierung",
+      people: [],
+      opportunities: [],
+      observations: [],
+      previousResults: [],
+      contextText: "",
+    });
+    const metrics = d.drafts.find((x) => x.kind === "METRIKEN")!;
+    expect(metrics.text).toMatch(/\[Kennzahl/);
+    expect(metrics.text).not.toMatch(/\d+\s*%/);
+    expect(d.drafts.some((x) => x.kind === "GESPRAECHSLEITFADEN")).toBe(true);
   });
 });

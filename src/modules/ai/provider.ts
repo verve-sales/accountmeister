@@ -1,3 +1,4 @@
+import type { PlaybookStepInput } from "@/modules/playbooks/drafts";
 import type { IntakeProposal, StructureNoteOutput } from "./schemas";
 
 export const STRUCTURE_NOTE_PROMPT_VERSION = "structure-note.v1";
@@ -74,6 +75,9 @@ export type FormSuggestInput = {
   analysisText: string;
 };
 
+/** Schritt-Assistent (Etappe 20b): Entwürfe für den aktuellen Schritt eines Vorgehensmusters. */
+export type PlaybookStepDraftInput = { stepText: string; contextText: string; structured: PlaybookStepInput };
+
 /** Aufgabenbezogene Modellwahl (Verwaltung → KI). Anbieter ohne Modellwahl ignorieren sie. */
 export type TaskOptions = { model?: string; temperature?: number; maxOutputTokens?: number };
 
@@ -109,6 +113,8 @@ export interface AIProvider {
   adviseOpportunity?(input: OpportunityAdviceInput, opts?: TaskOptions): Promise<unknown>;
   /** Buying-Center-Berater (Etappe 17): geht die sechs Entscheidungsrollen einer Chance durch – optional. */
   adviseBuyingCenter?(input: BuyingCenterAdviceInput, opts?: TaskOptions): Promise<unknown>;
+  /** Schritt-Assistent (Etappe 20b): Mail, Leitfaden, Metriken, Fragen … für einen Vorgehensschritt – optional. */
+  draftPlaybookStep?(input: PlaybookStepDraftInput, opts?: TaskOptions): Promise<unknown>;
   /** Formularfelder vorbelegen (Etappe 9) – optional. */
   suggestForm?(input: FormSuggestInput, opts?: TaskOptions): Promise<unknown>;
   /** Verbrauch des letzten Aufrufs (Kostenspur), falls der Anbieter ihn liefert. */

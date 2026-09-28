@@ -14,6 +14,7 @@ import { captureObservation, changeSignalStatus, takeOverSignal } from "@/module
 import { createHandover, respondToHandover } from "@/modules/handovers/service";
 import { changeActionStatus, createAction } from "@/modules/actions/service";
 import { createAccount, reassignAccountBd } from "@/modules/accounts/service";
+import { proposeStepDrafts } from "@/modules/playbooks/assistant";
 import { addPlaybookStep, completeRunStep, createPlaybook, movePlaybookStep, pauseRun, reassignRunOwner, removePlaybookStep, resumeRun, setAccountDormant, skipRunStep, startPlaybookRun, updatePlaybook, updatePlaybookStep } from "@/modules/playbooks/service";
 import { archiveAccount, deleteAccountPermanently, restoreAccount } from "@/modules/accounts/deletion";
 import { formToStrategyInput, saveStrategy } from "@/modules/strategy/service";
@@ -58,7 +59,7 @@ async function requireActor(): Promise<Actor> {
 function withFeedback(target: string, kind: "fehler" | "ok", message: string): never {
   const url = new URL(target, "http://local");
   url.searchParams.set(kind, message);
-  redirect(url.pathname + url.search);
+  redirect(url.pathname + url.search + url.hash);
 }
 
 /** Kein Fehler, sondern ein Beobachtung, der die Erfolgsmeldung ersetzt (z. B. „Zustimmung gespeichert, noch nicht vereinbart“). */
@@ -1070,4 +1071,13 @@ export async function movePlaybookStepAction(fd: FormData) {
   return run(`/vorgehen/${data.playbookId ?? ""}`, async (actor) => {
     await movePlaybookStep(actor, data.stepId ?? "", data.direction === "up" ? "up" : "down");
   }, "Reihenfolge geändert.");
+}
+
+export async function draftRunStepAction(fd: FormData) {
+  const data = formToObject(fd);
+  const back = backOf(data, "/vorgehen");
+  return run(back, async (actor) => {
+    await proposeStepDrafts(actor, data.runStepId ?? "");
+    return `${back.split("#")[0]}#vorgehen`;
+  }, "Entwürfe erstellt – bitte prüfen und Platzhalter ergänzen.");
 }

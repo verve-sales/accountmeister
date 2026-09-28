@@ -1555,6 +1555,11 @@ export const playbookRunSteps = pgTable(
     skipReason: text("skip_reason"),
     completedBy: text("completed_by").references(() => users.id),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    /** Schritt-Assistent: Entwürfe (Mail, Gesprächsleitfaden, Metriken, Fragen …) – Vorschläge, nie versendet */
+    drafts: jsonb("drafts"),
+    draftsNote: text("drafts_note"),
+    draftsAiJobId: text("drafts_ai_job_id"),
+    draftsAt: timestamp("drafts_at", { withTimezone: true }),
   },
   (t) => [index("playbook_run_steps_run_idx").on(t.runId), index("playbook_run_steps_action_idx").on(t.actionId)],
 );

@@ -148,6 +148,13 @@
       "when": 1790595031409,
       "tag": "0020_vorgehensmuster",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790598402160,
+      "tag": "0021_schritt_assistent",
+      "breakpoints": true
     }
   ]
 }
