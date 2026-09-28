@@ -6,7 +6,7 @@ import type { DecisionRole, EngagementStatus, OfferStatus, OpportunityStatus, Or
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
-import { canEditSetup, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
+import { canEditSetup, canReassignResponsibility, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { listVisibleAccounts } from "@/modules/accounts/service";
 import { listRoles, matchRole } from "@/modules/roles/catalog";
 
@@ -164,6 +164,36 @@ export async function updateOpportunity(actor: Actor, id: string, raw: unknown) 
     .returning();
   if (!u) throw new ConflictError();
   await recordAudit(db, actor, "opportunity.updated", "OPPORTUNITY", id);
+  return u;
+}
+
+export const reassignOpportunityOwnerInput = z.object({
+  version: z.coerce.number().int().positive(),
+  ownerUserId: z.string().min(1, "Bitte eine verantwortliche Person wählen."),
+});
+
+/**
+ * Delegation (Briefing-Nachtrag, Etappe 19): Umstellung, wer für eine Chance verantwortlich ist – getrennt von
+ * updateOpportunity, damit Principal/CEO dadurch keine pauschalen Bearbeitungsrechte auf Titel, Beschreibung
+ * oder Rolle der Chance erhalten, sondern ausschließlich die Zuständigkeit umstellen können.
+ */
+export async function reassignOpportunityOwner(actor: Actor, id: string, raw: unknown) {
+  const parsed = reassignOpportunityOwnerInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
+  const input = parsed.data;
+  const { opp, ctx } = await requireOpportunity(actor, id);
+  if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Sie dürfen die Verantwortlichkeit dieser Chance nicht umstellen.");
+  if (opp.status === "BEENDET") throw new TransitionError("Eine beendete Chance wird nicht mehr geändert.");
+  if (opp.ownerUserId === input.ownerUserId) throw new ValidationError("Diese Person ist bereits verantwortlich.");
+  const newOwner = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.ownerUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
+  if (!newOwner) throw new ValidationError("Person nicht gefunden oder inaktiv.");
+  const [u] = await db
+    .update(schema.opportunities)
+    .set({ ownerUserId: input.ownerUserId, version: input.version + 1, updatedAt: new Date() })
+    .where(and(eq(schema.opportunities.id, id), eq(schema.opportunities.version, input.version)))
+    .returning();
+  if (!u) throw new ConflictError();
+  await recordAudit(db, actor, "opportunity.owner_reassigned", "OPPORTUNITY", id, { von: opp.ownerUserId, nach: input.ownerUserId });
   return u;
 }
 

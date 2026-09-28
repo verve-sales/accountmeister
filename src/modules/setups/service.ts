@@ -4,7 +4,7 @@ import { db, schema } from "@/db/client";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
-import { canCreateSetup, canEditSetup, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
+import { canCreateSetup, canEditSetup, canReassignResponsibility, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { getAccount } from "@/modules/accounts/service";
 import { getSinceForSetup, listReviewsForSetup } from "@/modules/reviews/service";
 
@@ -211,10 +211,18 @@ export const addMemberInput = z.object({
   contributionNote: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
+/** Bearbeitende Mitglieder dürfen die Beteiligung ändern; zusätzlich darf der Principal/CEO/zuständige BD des
+ *  Kunden Mitglieder umstellen (Delegation, Etappe 19), auch ohne selbst bearbeitendes Mitglied zu sein. */
+async function requireCanChangeMembers(actor: Actor, setupId: string): Promise<SetupContext> {
+  const ctx = await requireSetupContext(actor, setupId);
+  if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Sie dürfen die Beteiligten dieses Setups nicht ändern.");
+  return ctx;
+}
+
 export async function addMember(actor: Actor, setupId: string, raw: unknown) {
   const parsed = addMemberInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
-  await requireEditableSetup(actor, setupId);
+  await requireCanChangeMembers(actor, setupId);
   const input = parsed.data;
   return db.transaction(async (tx) => {
     await tx
@@ -225,5 +233,44 @@ export async function addMember(actor: Actor, setupId: string, raw: unknown) {
         set: { contribution: input.contribution, contributionNote: input.contributionNote || null },
       });
     await recordAudit(tx, actor, "setup.member_set", "SETUP", setupId, { userId: input.userId, contribution: input.contribution });
+  });
+}
+
+/** Beteiligung entfernen (z. B. bisherigen Anker ablösen, wenn eine andere Person übernimmt). */
+export async function removeMember(actor: Actor, setupId: string, memberUserId: string) {
+  const ctx = await requireCanChangeMembers(actor, setupId);
+  if (memberUserId === ctx.setup.bdUserId) throw new ValidationError("Der zuständige BD wird über die BD-Zuordnung gewechselt, nicht als Beteiligung entfernt.");
+  await db.delete(schema.setupMemberships).where(and(eq(schema.setupMemberships.setupId, setupId), eq(schema.setupMemberships.userId, memberUserId)));
+  await recordAudit(db, actor, "setup.member_removed", "SETUP", setupId, { userId: memberUserId });
+}
+
+export const reassignSetupBdInput = z.object({
+  version: z.coerce.number().int().positive(),
+  bdUserId: z.string().min(1, "Bitte einen zuständigen BD wählen."),
+});
+
+/** Delegation (Etappe 19): Principal/CEO/aktueller BD stellen die Setup-Zuständigkeit jederzeit um – bisher
+ *  war bdUserId nur bei Anlage bzw. über Übergabe-Annahme setzbar. */
+export async function reassignSetupBd(actor: Actor, setupId: string, raw: unknown) {
+  const parsed = reassignSetupBdInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
+  const input = parsed.data;
+  const ctx = await requireSetupContext(actor, setupId);
+  if (!canReassignResponsibility(actor, ctx.account) && ctx.setup.bdUserId !== actor.userId) throw new ForbiddenError("Sie dürfen die Setup-Zuständigkeit hier nicht umstellen.");
+  const newBd = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.bdUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
+  if (!newBd) throw new ValidationError("Person nicht gefunden oder inaktiv.");
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(schema.projectSetups)
+      .set({ bdUserId: input.bdUserId, version: input.version + 1, updatedAt: new Date() })
+      .where(and(eq(schema.projectSetups.id, setupId), eq(schema.projectSetups.version, input.version)))
+      .returning();
+    if (!updated) throw new ConflictError();
+    await tx
+      .insert(schema.setupMemberships)
+      .values({ setupId, userId: input.bdUserId, contribution: "BD_ZUSTAENDIG", canEdit: true })
+      .onConflictDoUpdate({ target: [schema.setupMemberships.setupId, schema.setupMemberships.userId], set: { contribution: "BD_ZUSTAENDIG", canEdit: true } });
+    await recordAudit(tx, actor, "setup.bd_reassigned", "SETUP", setupId, { von: ctx.setup.bdUserId, nach: input.bdUserId });
+    return updated;
   });
 }

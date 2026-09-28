@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getOpportunityDetail, MEDDPICC_KEYS } from "@/modules/opportunities/service";
+import { canReassignResponsibility } from "@/modules/identity/authz";
 import { getOpportunityAdvice, proposeOpportunityAdvice, ruleBasedOpportunityAdvice, type OpportunityAdviceRow } from "@/modules/opportunities/advisor";
 import { getBuyingCenterAdvice, proposeBuyingCenterAdvice, ruleBasedBuyingCenterAdvice, type BuyingCenterAdviceRow } from "@/modules/opportunities/buyingCenterAdvisor";
 import type { StrategyMove } from "@/modules/strategy/service";
@@ -18,7 +19,7 @@ import { decisionRoleLabel, engagementStatusLabel, epistemicLabel, fmtDate, fmtD
 import { linkedinSearchUrl } from "@/lib/linkedin";
 import {
   addParticipationAction, addStartRequirementAction, cancelOrderAction, changeOfferStatusAction, changeOpportunityStatusAction, confirmOpportunityAction, confirmOrderAction, createOfferAction,
-  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction,
+  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, reassignOpportunityOwnerAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction,
 } from "../../actions";
 
 /** Reifegradkette dieser Chance – Orientierung, keine Pflichtschleuse (Angebot/Auftrag/Einsatz haben eigene Zustände). */
@@ -111,6 +112,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   const md = opp.meddpicc ?? {};
   /** Seitenzweig (zurückgestellt/beendet): welche Stufe zuletzt erreicht war, wird hier nicht rekonstruiert (keine erfundenen Werte) – die Kette bleibt neutral, der Zustand steht als eigenes Element daneben. */
   const isSideBranch = opp.status === "ZURUECKGESTELLT" || opp.status === "BEENDET";
+  const mayReassign = canReassignResponsibility(actor, ctx.account);
 
   return (
     <div className="space-y-6">
@@ -124,6 +126,20 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         <span className="muted text-sm">Verantwortlich: {name(opp.ownerUserId)} · angelegt {fmtDateTime(opp.createdAt)}{opp.requestedAt && <> · Anfrage eingegangen {fmtDateTime(opp.requestedAt)}</>}</span>
         {!canEdit && <span className="muted text-sm">(nur lesend)</span>}
       </div>
+      {mayReassign && !closed && (
+        <form action={reassignOpportunityOwnerAction} className="flex flex-wrap items-end gap-2 text-sm">
+          <input type="hidden" name="opportunityId" value={opp.id} />
+          <input type="hidden" name="version" value={opp.version} />
+          <div>
+            <label className="label" htmlFor="reassignOwner">Verantwortlichkeit umstellen</label>
+            <select id="reassignOwner" name="ownerUserId" className="select" required defaultValue="">
+              <option value="" disabled>Bitte wählen …</option>
+              {d.users.filter((u) => u.id !== opp.ownerUserId).map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+            </select>
+          </div>
+          <button className="btn btn-secondary btn-small" type="submit">Umstellen</button>
+        </form>
+      )}
       <Feedback params={sp} />
 
       {/* Kompakter Gesamtverlauf (9.1) – Zustände bleiben je Objekt getrennt */}

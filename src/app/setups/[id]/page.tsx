@@ -8,7 +8,7 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { getSetupDetail } from "@/modules/setups/service";
 import { listSupportRequestsForSetup } from "@/modules/leadership/service";
 import { listOpportunitiesForSetup } from "@/modules/opportunities/service";
-import { loadSetupContext } from "@/modules/identity/authz";
+import { canReassignResponsibility, loadSetupContext } from "@/modules/identity/authz";
 import { analyzeSetup, STAGES, stageLabel } from "@/modules/strategy/analysis";
 import { ProcessStepper } from "@/components/ProcessStepper";
 import { groupByFamily, listRoles } from "@/modules/roles/catalog";
@@ -44,6 +44,8 @@ import {
   createHandoverAction,
   createOpportunityAction,
   createSupportRequestAction,
+  reassignSetupBdAction,
+  removeMemberAction,
   respondHandoverAction,
   respondSupportRequestAction,
   takeOverSignalAction,
@@ -88,6 +90,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const recentDone = doneActions.filter((a) => a.updatedAt >= d.recentSince);
   const setupCtx = await loadSetupContext(actor, id);
   const analysis = setupCtx ? await analyzeSetup(actor, setupCtx) : null;
+  const mayReassign = canReassignResponsibility(actor, d.account);
 
   return (
     <div className="space-y-6">
@@ -114,15 +117,57 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       <section className="card">
         <h2 className="font-semibold mb-1">1. Was läuft hier?</h2>
         {d.setup.contextNote ? <p>{d.setup.contextNote}</p> : <p className="muted">Noch kein Kontextsatz – bewusster Entwurf. Ergänzen, wenn passend.</p>}
-        <p className="text-sm mt-2 muted">
-          Beteiligte:{" "}
+        <div className="text-sm mt-2 muted flex flex-wrap gap-3 items-center">
+          <span>Beteiligte:</span>
           {d.members.map((m) => (
-            <span key={m.userId} className="mr-3">
+            <span key={m.userId} className="inline-flex items-center gap-1">
               {m.displayName} – {contributionLabel[m.contribution] ?? m.contribution}
               {m.contributionNote ? ` (${m.contributionNote})` : ""}
+              {mayReassign && m.userId !== d.setup.bdUserId && (
+                <form action={removeMemberAction} className="inline">
+                  <input type="hidden" name="setupId" value={d.setup.id} />
+                  <input type="hidden" name="userId" value={m.userId} />
+                  <button className="btn btn-secondary btn-small" type="submit" title="Beteiligung entfernen">entfernen</button>
+                </form>
+              )}
             </span>
           ))}
-        </p>
+        </div>
+        {mayReassign && (
+          <details className="mt-3" open={!d.canEdit}>
+            <summary className="text-sm">Zuständigkeit umstellen (BD, Anker)</summary>
+            <form action={reassignSetupBdAction} className="mt-2 flex flex-wrap items-end gap-2">
+              <input type="hidden" name="setupId" value={d.setup.id} />
+              <input type="hidden" name="version" value={d.setup.version} />
+              <div>
+                <label className="label" htmlFor="reassignSetupBd">Zuständigen BD umstellen</label>
+                <select id="reassignSetupBd" name="bdUserId" className="select" required defaultValue="">
+                  <option value="" disabled>Bitte wählen …</option>
+                  {allUsers.filter((u) => u.id !== d.setup.bdUserId).map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+                </select>
+              </div>
+              <button className="btn btn-secondary" type="submit">Umstellen</button>
+            </form>
+            <form action={addMemberAction} className="mt-3 grid sm:grid-cols-3 gap-3">
+              <input type="hidden" name="setupId" value={d.setup.id} />
+              <div>
+                <label className="label" htmlFor="reassignAnkerUser">Anker (oder andere Beteiligung) umstellen</label>
+                <select id="reassignAnkerUser" name="userId" className="select" required defaultValue="">
+                  <option value="" disabled>Bitte wählen …</option>
+                  {allUsers.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="reassignAnkerContribution">Beitrag</label>
+                <select id="reassignAnkerContribution" name="contribution" className="select" defaultValue="ANKER_KONTEXT">
+                  {schema.membershipContributionEnum.enumValues.map((v) => <option key={v} value={v}>{contributionLabel[v]}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end"><button className="btn btn-secondary" type="submit">Übernehmen</button></div>
+            </form>
+            <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD können Sie BD-Zuordnung und Beteiligungen (z. B. Anker) jederzeit umstellen – unabhängig davon, wer sie ursprünglich zugewiesen hat.</p>
+          </details>
+        )}
         {d.canEdit && (
           <details className="mt-3">
             <summary className="text-sm">Kontext oder Status bearbeiten</summary>

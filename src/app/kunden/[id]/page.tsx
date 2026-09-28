@@ -4,7 +4,7 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { getAccount } from "@/modules/accounts/service";
 import { listSetupsForAccount } from "@/modules/setups/service";
 import { listOpportunitiesForAccount } from "@/modules/opportunities/service";
-import { canCreateSetup, loadSetupContext } from "@/modules/identity/authz";
+import { canCreateSetup, canReassignResponsibility, loadSetupContext } from "@/modules/identity/authz";
 import { analyzeSetup, STAGES, stageLabel } from "@/modules/strategy/analysis";
 import { ProcessStepper } from "@/components/ProcessStepper";
 import { canDeleteAccount } from "@/modules/accounts/deletion";
@@ -20,7 +20,7 @@ import { AccountPlanView } from "@/components/AccountPlanView";
 import { chanceKindLabel } from "@/modules/ai/schemas";
 import { listRoles } from "@/modules/roles/catalog";
 import { SuggestButton } from "@/components/SuggestButton";
-import { changePriorityAction, createPriorityAction, refreshCompanyResearchAction, saveAccountPlanSnapshotAction } from "../../actions";
+import { changePriorityAction, createPriorityAction, reassignAccountBdAction, refreshCompanyResearchAction, saveAccountPlanSnapshotAction } from "../../actions";
 import { db, schema } from "@/db/client";
 import { eq } from "drizzle-orm";
 import { getCompanyResearch, type CompanyFact } from "@/modules/research/service";
@@ -46,7 +46,8 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const back = `/kunden/${id}`;
   const mayCreate = canCreateSetup(actor, account);
   const mayDelete = canDeleteAccount(actor, account);
-  const bdUsers = mayCreate
+  const mayReassign = canReassignResponsibility(actor, account);
+  const bdUsers = mayCreate || mayReassign
     ? [...new Map((await db.select({ id: schema.users.id, displayName: schema.users.displayName }).from(schema.users).innerJoin(schema.roleAssignments, eq(schema.roleAssignments.userId, schema.users.id)).where(eq(schema.roleAssignments.role, "BD"))).map((u) => [u.id, u])).values()]
     : [];
 
@@ -59,6 +60,9 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   );
   const analysisBySetup = new Map(analyses.filter((a): a is NonNullable<typeof a> => !!a).map((a) => [a.setupId, a.analysis]));
   const furthestStage = [...analysisBySetup.values()].sort((a, b) => STAGES.indexOf(b.stage) - STAGES.indexOf(a.stage))[0] ?? null;
+  const currentBdName = account.responsibleBdUserId
+    ? (bdUsers.find((u) => u.id === account.responsibleBdUserId)?.displayName ?? (await db.query.users.findFirst({ where: eq(schema.users.id, account.responsibleBdUserId) }))?.displayName ?? "?")
+    : null;
 
   return (
     <div className="space-y-6">
@@ -77,6 +81,26 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         </section>
       )}
       <Feedback params={sp} />
+
+      {mayReassign && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Zuständigkeit</h2>
+          <p className="text-sm mb-2">Zuständiger BD: {currentBdName ?? <span className="muted">Zuordnung offen</span>}</p>
+          <form action={reassignAccountBdAction} className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="accountId" value={account.id} />
+            <input type="hidden" name="version" value={account.version} />
+            <div>
+              <label className="label" htmlFor="reassignBd">Zuständigen BD umstellen</label>
+              <select id="reassignBd" name="responsibleBdUserId" className="select" required defaultValue="">
+                <option value="" disabled>Bitte wählen …</option>
+                {bdUsers.filter((u) => u.id !== account.responsibleBdUserId).map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+              </select>
+            </div>
+            <button className="btn btn-secondary" type="submit">Umstellen</button>
+          </form>
+          <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD können Sie die Kundenzuständigkeit jederzeit umstellen – unabhängig von der ursprünglichen Zuordnung.</p>
+        </section>
+      )}
 
       {/* Öffentliche Unternehmensrecherche (Etappe 16): eng begrenzte Ausnahme – nur öffentliche Firmendaten, nie Personennamen */}
       <section className="card">

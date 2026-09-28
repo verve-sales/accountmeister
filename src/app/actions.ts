@@ -9,11 +9,11 @@ import { headers } from "next/headers";
 import { checkRateLimit, LIMITS } from "@/lib/ratelimit";
 import { resolveDevLoginUser } from "@/modules/identity/dev-login";
 import type { Actor } from "@/modules/identity/actor";
-import { createSetup, updateSetup, addMember } from "@/modules/setups/service";
+import { createSetup, updateSetup, addMember, removeMember, reassignSetupBd } from "@/modules/setups/service";
 import { captureObservation, changeSignalStatus, takeOverSignal } from "@/modules/signals/service";
 import { createHandover, respondToHandover } from "@/modules/handovers/service";
 import { changeActionStatus, createAction } from "@/modules/actions/service";
-import { createAccount } from "@/modules/accounts/service";
+import { createAccount, reassignAccountBd } from "@/modules/accounts/service";
 import { archiveAccount, deleteAccountPermanently, restoreAccount } from "@/modules/accounts/deletion";
 import { formToStrategyInput, saveStrategy } from "@/modules/strategy/service";
 import { formToOpportunityAdviceInput, saveOpportunityAdvice } from "@/modules/opportunities/advisor";
@@ -29,7 +29,7 @@ import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
 import { refreshCompanyResearch } from "@/modules/research/service";
 import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
 import { assignRole, createUserAccess, eraseSourceContent, lockSource, purgeExpiredLogs, pseudonymizePerson, revokeRole, setUserStatus } from "@/modules/governance/service";
-import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, changeOpportunityStatus, confirmOpportunity, confirmOrder, createOffer, createOpportunity, createOrder, createProfileReference, markOrderEvidenceIncomplete, markReady, markStarted, presentOffer, removeParticipation, saveMeddpicc, setRequirementStatus, updateOpportunity } from "@/modules/opportunities/service";
+import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, changeOpportunityStatus, confirmOpportunity, confirmOrder, createOffer, createOpportunity, createOrder, createProfileReference, markOrderEvidenceIncomplete, markReady, markStarted, presentOffer, reassignOpportunityOwner, removeParticipation, saveMeddpicc, setRequirementStatus, updateOpportunity } from "@/modules/opportunities/service";
 import { uploadDocument } from "@/modules/documents/service";
 import { applyIntake, discardIntake, formToApplyInput, startIntake } from "@/modules/intake/service";
 import { saveTaskSetting, testConnection } from "@/modules/ai/settings";
@@ -121,6 +121,14 @@ export async function createAccountAction(fd: FormData) {
     const a = await createAccount(actor, { ...data, responsibleBdUserId: data.responsibleBdUserId || null });
     return `/kunden/${a.id}`;
   }, "Kunde angelegt.");
+}
+
+export async function reassignAccountBdAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.accountId ?? "";
+  return run(`/kunden/${id}`, async (actor) => {
+    await reassignAccountBd(actor, id, data);
+  }, "Kundenzuständigkeit umgestellt.");
 }
 
 // --- Strategiefaden ------------------------------------------------------------
@@ -229,6 +237,22 @@ export async function addMemberAction(fd: FormData) {
   return run(`/setups/${id}`, async (actor) => {
     await addMember(actor, id, data);
   }, "Beteiligung gespeichert.");
+}
+
+export async function removeMemberAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.setupId ?? "";
+  return run(`/setups/${id}`, async (actor) => {
+    await removeMember(actor, id, data.userId ?? "");
+  }, "Beteiligung entfernt.");
+}
+
+export async function reassignSetupBdAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.setupId ?? "";
+  return run(`/setups/${id}`, async (actor) => {
+    await reassignSetupBd(actor, id, data);
+  }, "Setup-Zuständigkeit umgestellt.");
 }
 
 // --- Beobachtungen ---------------------------------------------------------------
@@ -631,6 +655,13 @@ export async function updateOpportunityAction(fd: FormData) {
   return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
     await updateOpportunity(actor, data.opportunityId ?? "", data);
   }, "Chance aktualisiert.");
+}
+
+export async function reassignOpportunityOwnerAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+    await reassignOpportunityOwner(actor, data.opportunityId ?? "", data);
+  }, "Verantwortlichkeit umgestellt.");
 }
 
 export async function saveMeddpiccAction(fd: FormData) {

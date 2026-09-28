@@ -1,10 +1,10 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
-import { NotFoundError, ForbiddenError, ValidationError } from "@/lib/errors";
+import { ConflictError, NotFoundError, ForbiddenError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
-import { canCreateAccount, canViewAccount } from "@/modules/identity/authz";
+import { canCreateAccount, canReassignResponsibility, canViewAccount } from "@/modules/identity/authz";
 
 export const createAccountInput = z.object({
   name: z.string().trim().min(2, "Kundenname ist zu kurz").max(200),
@@ -77,6 +77,45 @@ export async function getAccount(actor: Actor, accountId: string) {
     if (member.length === 0) throw new NotFoundError("Kunde");
   }
   return account;
+}
+
+export const reassignAccountBdInput = z.object({
+  version: z.coerce.number().int().positive(),
+  responsibleBdUserId: z.string().min(1, "Bitte einen zuständigen BD wählen."),
+});
+
+/**
+ * Delegation (Briefing-Nachtrag, Etappe 19): der zugeordnete Principal (oder CEO oder der bisher zuständige BD)
+ * kann die Kundenzuständigkeit jederzeit umstellen – bisher war responsibleBdUserId nur bei Anlage setzbar,
+ * was BD-Zuordnungen faktisch dauerhaft festlegte.
+ */
+export async function reassignAccountBd(actor: Actor, accountId: string, raw: unknown) {
+  const parsed = reassignAccountBdInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
+  const input = parsed.data;
+  const account = await db.query.accounts.findFirst({ where: and(eq(schema.accounts.id, accountId), eq(schema.accounts.workspaceId, actor.workspaceId)) });
+  if (!account) throw new NotFoundError("Kunde");
+  if (!canReassignResponsibility(actor, account)) throw new ForbiddenError("Sie dürfen die Kundenzuständigkeit hier nicht umstellen.");
+  if (account.responsibleBdUserId === input.responsibleBdUserId) throw new ValidationError("Diese Person ist bereits zuständig.");
+  const newBd = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.responsibleBdUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
+  if (!newBd) throw new ValidationError("Person nicht gefunden oder inaktiv.");
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(schema.accounts)
+      .set({ responsibleBdUserId: input.responsibleBdUserId, version: input.version + 1, updatedAt: new Date() })
+      .where(and(eq(schema.accounts.id, accountId), eq(schema.accounts.version, input.version)))
+      .returning();
+    if (!updated) throw new ConflictError();
+    // Neuer BD erhält automatisch die kundenbezogene Rolle, falls noch nicht vorhanden (wie bei Anlage).
+    const hasBdRole = await tx.query.roleAssignments.findFirst({
+      where: and(eq(schema.roleAssignments.userId, input.responsibleBdUserId), eq(schema.roleAssignments.role, "BD"), eq(schema.roleAssignments.accountId, accountId)),
+    });
+    if (!hasBdRole) {
+      await tx.insert(schema.roleAssignments).values({ workspaceId: actor.workspaceId, userId: input.responsibleBdUserId, role: "BD", scope: "ACCOUNT", accountId });
+    }
+    await recordAudit(tx, actor, "account.bd_reassigned", "ACCOUNT", accountId, { von: account.responsibleBdUserId, nach: input.responsibleBdUserId });
+    return updated;
+  });
 }
 
 export async function getUsersByIds(userIds: string[]) {

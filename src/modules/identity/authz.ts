@@ -57,6 +57,19 @@ export function canCreateAccount(actor: Actor): boolean {
   return hasRole(actor, "BD") || hasRole(actor, "PRINCIPAL");
 }
 
+/**
+ * Delegation (Briefing-Nachtrag, Etappe 19): wer darf die operative Zuständigkeit (BD, Anker, Verantwortlich
+ * je Chance) für einen Kunden jederzeit umstellen? Bewusst schmaler als canEditSetup – Principal/CEO erhalten
+ * dadurch nur das Recht, Zuständigkeiten neu zuzuweisen, keine pauschalen Bearbeitungsrechte auf Inhalte.
+ */
+export function canReassignResponsibility(actor: Actor, account: AccountRow): boolean {
+  if (account.workspaceId !== actor.workspaceId) return false;
+  if (isResponsibleBd(actor, account)) return true;
+  if (hasRole(actor, "PRINCIPAL", account.id)) return true;
+  if (hasRole(actor, "CEO")) return true;
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
