@@ -4,7 +4,9 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { getAccount } from "@/modules/accounts/service";
 import { listSetupsForAccount } from "@/modules/setups/service";
 import { listOpportunitiesForAccount } from "@/modules/opportunities/service";
-import { canCreateSetup } from "@/modules/identity/authz";
+import { canCreateSetup, loadSetupContext } from "@/modules/identity/authz";
+import { analyzeSetup, STAGES, stageLabel } from "@/modules/strategy/analysis";
+import { ProcessStepper } from "@/components/ProcessStepper";
 import { canDeleteAccount } from "@/modules/accounts/deletion";
 import { DomainError } from "@/lib/errors";
 import { Feedback, type SearchParams } from "@/components/Feedback";
@@ -48,6 +50,16 @@ export default async function KundePage({ params, searchParams }: { params: Prom
     ? [...new Map((await db.select({ id: schema.users.id, displayName: schema.users.displayName }).from(schema.users).innerJoin(schema.roleAssignments, eq(schema.roleAssignments.userId, schema.users.id)).where(eq(schema.roleAssignments.role, "BD"))).map((u) => [u.id, u])).values()]
     : [];
 
+  // Prozessstufe je Setup (Etappe „Wo stehen wir?“) – aus vorhandenen Zuständen abgeleitet, nichts Neues erfasst.
+  const analyses = await Promise.all(
+    setups.map(async (s) => {
+      const ctx = await loadSetupContext(actor, s.id);
+      return ctx ? { setupId: s.id, analysis: await analyzeSetup(actor, ctx) } : null;
+    }),
+  );
+  const analysisBySetup = new Map(analyses.filter((a): a is NonNullable<typeof a> => !!a).map((a) => [a.setupId, a.analysis]));
+  const furthestStage = [...analysisBySetup.values()].sort((a, b) => STAGES.indexOf(b.stage) - STAGES.indexOf(a.stage))[0] ?? null;
+
   return (
     <div className="space-y-6">
       <p className="text-sm"><Link href="/kunden">Kunden</Link> › {account.name}</p>
@@ -57,6 +69,13 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         {mayDelete && <Link href={`/kunden/${account.id}/loeschen`} className="muted text-sm ml-auto">Kunde archivieren oder löschen</Link>}
       </div>
       {account.status === "ARCHIVED" && <p className="text-sm" style={{ background: "#fdf6ec", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ist archiviert. Alles bleibt erhalten; <Link href={`/kunden/${account.id}/loeschen`}>wiederherstellen oder endgültig löschen</Link>.</p>}
+      {furthestStage && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Wo stehen wir?</h2>
+          <ProcessStepper steps={STAGES.map((s) => ({ key: s, label: stageLabel[s] }))} currentKey={furthestStage.stage} note={furthestStage.nextStep} />
+          {setups.length > 1 && <p className="muted text-xs mt-2">Zeigt das am weitesten fortgeschrittene Setup ({furthestStage.setupName}); jedes Setup hat seine eigene Stufe – siehe Tabelle unten.</p>}
+        </section>
+      )}
       <Feedback params={sp} />
 
       {/* Öffentliche Unternehmensrecherche (Etappe 16): eng begrenzte Ausnahme – nur öffentliche Firmendaten, nie Personennamen */}
@@ -194,12 +213,19 @@ export default async function KundePage({ params, searchParams }: { params: Prom
           <p className="muted text-sm">Noch kein Setup. Ein Setup braucht nur Kunde, Namen und einen Kontextsatz – oder bleibt bewusst Entwurf.</p>
         ) : (
           <table className="list">
-            <thead><tr><th>Setup</th><th>Status</th><th>Sichtbarkeit</th><th>BD</th><th>Geändert</th></tr></thead>
+            <thead><tr><th>Setup</th><th>Status</th><th>Prozessstufe</th><th>Sichtbarkeit</th><th>BD</th><th>Geändert</th></tr></thead>
             <tbody>
               {setups.map((s) => (
                 <tr key={s.id}>
                   <td><Link href={`/setups/${s.id}`}>{s.name}</Link>{s.contextNote && <div className="muted text-sm">{s.contextNote}</div>}</td>
                   <td><Status label={setupStatusLabel[s.status] ?? s.status} /></td>
+                  <td>
+                    {analysisBySetup.get(s.id) ? (
+                      <ProcessStepper steps={STAGES.map((st) => ({ key: st, label: stageLabel[st] }))} currentKey={analysisBySetup.get(s.id)!.stage} variant="compact" />
+                    ) : (
+                      <span className="muted text-sm">–</span>
+                    )}
+                  </td>
                   <td>{visibilityLabel[s.visibility]}</td>
                   <td>{s.bdUserId ? "zugeordnet" : <Status label="Zuordnung offen" />}</td>
                   <td>{fmtDate(s.updatedAt)}</td>

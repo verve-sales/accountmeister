@@ -11,6 +11,7 @@ import { decisionRoleValues } from "@/modules/ai/schemas";
 import { Feedback } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { SuggestButton } from "@/components/SuggestButton";
+import { ProcessStepper } from "@/components/ProcessStepper";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { groupByFamily } from "@/modules/roles/catalog";
 import { decisionRoleLabel, engagementStatusLabel, epistemicLabel, fmtDate, fmtDateTime, offerStatusLabel, opportunityStatusLabel, orderStatusLabel, requirementStatusLabel, sourceTypeLabel } from "@/lib/labels";
@@ -20,7 +21,8 @@ import {
   createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction,
 } from "../../actions";
 
-const VERLAUF = ["IN_KLAERUNG", "BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG", "BEAUFTRAGT"] as const;
+/** Reifegradkette dieser Chance – Orientierung, keine Pflichtschleuse (Angebot/Auftrag/Einsatz haben eigene Zustände). */
+const VERLAUF = ["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG", "BEAUFTRAGT"] as const;
 
 function EvidenceFields({ prefix, sources, label = "Beleg" }: { prefix: string; sources: { id: string; title: string; type: string }[]; label?: string }) {
   return (
@@ -106,8 +108,9 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   const bcHintByRole = new Map(bcDraft.roles.map((r) => [r.role, r]));
   const bcQuestions = [...bcDraft.openQuestions, ...Array.from({ length: Math.max(0, 3 - bcDraft.openQuestions.length) }, () => "")].slice(0, 6);
   const closed = opp.status === "BEENDET";
-  const verlaufIdx = VERLAUF.indexOf(opp.status as (typeof VERLAUF)[number]);
   const md = opp.meddpicc ?? {};
+  /** Seitenzweig (zurückgestellt/beendet): welche Stufe zuletzt erreicht war, wird hier nicht rekonstruiert (keine erfundenen Werte) – die Kette bleibt neutral, der Zustand steht als eigenes Element daneben. */
+  const isSideBranch = opp.status === "ZURUECKGESTELLT" || opp.status === "BEENDET";
 
   return (
     <div className="space-y-6">
@@ -125,16 +128,12 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
 
       {/* Kompakter Gesamtverlauf (9.1) – Zustände bleiben je Objekt getrennt */}
       <section className="card">
-        <ol className="flex flex-wrap gap-2 text-sm">
-          {VERLAUF.map((s, i) => (
-            <li key={s} className="flex items-center gap-2">
-              <span className={i <= verlaufIdx ? "font-semibold" : "muted"}>{opportunityStatusLabel[s]}</span>
-              {i < VERLAUF.length - 1 && <span className="muted">→</span>}
-            </li>
-          ))}
-          {(opp.status === "ZURUECKGESTELLT" || opp.status === "BEENDET") && <li className="muted">· {opportunityStatusLabel[opp.status]}{opp.statusReason && `: ${opp.statusReason}`}</li>}
-        </ol>
-        <p className="muted text-xs mt-1">Orientierung, keine Pflichtschleuse: Zugangsentwicklung läuft parallel weiter; Angebot, Auftrag und Einsatz haben eigene Zustände.</p>
+        <ProcessStepper
+          steps={VERLAUF.map((s) => ({ key: s, label: opportunityStatusLabel[s] ?? s }))}
+          currentKey={isSideBranch ? "" : opp.status}
+          endState={isSideBranch ? { label: opportunityStatusLabel[opp.status] ?? opp.status, reason: opp.statusReason, tone: opp.status === "ZURUECKGESTELLT" ? "warn" : "muted" } : null}
+        />
+        <p className="muted text-xs mt-2">Orientierung, keine Pflichtschleuse: Zugangsentwicklung läuft parallel weiter; Angebot, Auftrag und Einsatz haben eigene Zustände.</p>
       </section>
 
       {/* Wofür-Verknüpfungen (E-045): was schon auf diese Chance einzahlt */}

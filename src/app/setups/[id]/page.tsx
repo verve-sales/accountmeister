@@ -8,6 +8,9 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { getSetupDetail } from "@/modules/setups/service";
 import { listSupportRequestsForSetup } from "@/modules/leadership/service";
 import { listOpportunitiesForSetup } from "@/modules/opportunities/service";
+import { loadSetupContext } from "@/modules/identity/authz";
+import { analyzeSetup, STAGES, stageLabel } from "@/modules/strategy/analysis";
+import { ProcessStepper } from "@/components/ProcessStepper";
 import { groupByFamily, listRoles } from "@/modules/roles/catalog";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { inArray, or } from "drizzle-orm";
@@ -83,6 +86,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const openHandovers = d.handovers.filter((h) => h.status === "ANGEFRAGT" || h.status === "ANGENOMMEN");
   const recentSignals = d.signals.filter((s) => s.createdAt >= d.recentSince);
   const recentDone = doneActions.filter((a) => a.updatedAt >= d.recentSince);
+  const setupCtx = await loadSetupContext(actor, id);
+  const analysis = setupCtx ? await analyzeSetup(actor, setupCtx) : null;
 
   return (
     <div className="space-y-6">
@@ -97,6 +102,12 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         {!d.canEdit && <span className="muted text-sm">(nur lesend)</span>}
       </div>
       <SetupTabs setupId={id} active="ueberblick" />
+      {analysis && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Wo stehen wir?</h2>
+          <ProcessStepper steps={STAGES.map((s) => ({ key: s, label: stageLabel[s] }))} currentKey={analysis.stage} note={analysis.nextStep} />
+        </section>
+      )}
       <Feedback params={sp} />
 
       {/* 1. Was läuft hier? */}
