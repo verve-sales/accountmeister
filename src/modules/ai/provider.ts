@@ -5,7 +5,7 @@ import type { IntakeProposal, StructureNoteOutput } from "./schemas";
 export const STRUCTURE_NOTE_PROMPT_VERSION = "structure-note.v1";
 export const ANALYZE_DOCUMENT_PROMPT_VERSION = "analyze-document.v2";
 export const INTERVIEW_NEXT_PROMPT_VERSION = "interview-next.v1";
-export const ASSISTANT_PROMPT_VERSION = "assistant.v1";
+export const ASSISTANT_PROMPT_VERSION = "assistant.v2";
 
 /** Berechtigter Kontext, den der Anbieter erhalten darf – keine Rohquellen außer dem zu strukturierenden Text. */
 export type StructureNoteInput = {
@@ -43,6 +43,8 @@ export type AssistantInput = {
   interviewMode: boolean;
   /** Vom System ermittelte offene Punkte und fehlende Informationen (Text) */
   openPoints: string;
+  /** Hilfe zum Tool (Etappe 25): Inhaltsverzeichnis, passende Handbuch-Abschnitte, eigene Rollen/Einstellungen */
+  helpText?: string;
 };
 
 /** Strategiefaden (Etappe 9): Lageanalyse (regelbasiert) + Kontext als Text, letzte Fassung des Fadens. */

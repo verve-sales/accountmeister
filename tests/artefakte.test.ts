@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
-import { ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
+import { NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { changeArtifactStatus, createDraft, listArtifactsForSetup, listTemplates, listVersions, requireArtifact, saveNewVersion } from "@/modules/artifacts/service";
 import { ARTIFACT_TEMPLATES } from "@/modules/artifacts/templates";
 import { actorFor, ensureSeed } from "./helpers";

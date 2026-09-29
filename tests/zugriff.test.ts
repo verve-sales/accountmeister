@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NotFoundError, ForbiddenError } from "@/lib/errors";
+import { NotFoundError } from "@/lib/errors";
 import { getSetupDetail, createSetup } from "@/modules/setups/service";
 import { getSource } from "@/modules/knowledge/service";
 import { getAccount, listVisibleAccounts } from "@/modules/accounts/service";

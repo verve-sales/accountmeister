@@ -8,6 +8,8 @@ import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { canCreateAccount, canCreateSetup, canEditSetup, canViewSetup, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { getAIProvider } from "@/modules/ai";
+import { buildHelpText } from "@/modules/help/service";
+import { looksLikeHowTo, type HelpSection } from "@/modules/help/knowledge";
 import { ASSISTANT_PROMPT_VERSION, type AIProvider, type AssistantInput, type TaskOptions } from "@/modules/ai/provider";
 import { ASSISTANT_CARDS_MARKER, assistantItemSchema, interviewTopicLabel, interviewTopicValues, type AssistantCard, type AssistantItem } from "@/modules/ai/schemas";
 import { resolveTaskOptions } from "@/modules/ai/settings";
@@ -233,7 +235,10 @@ export async function sendMessage(actor: Actor, raw: unknown, deps: { provider?:
   const prior = await db.query.assistantMessages.findMany({ where: eq(schema.assistantMessages.threadId, threadId), orderBy: asc(schema.assistantMessages.seq) });
   await db.insert(schema.assistantMessages).values({ threadId, seq: prior.length + 1, role: "NUTZER", text });
   const history = [...prior.map((m) => ({ role: (m.role === "NUTZER" ? "NUTZER" : "ASSISTENT") as "NUTZER" | "ASSISTENT", text: m.text })), { role: "NUTZER" as const, text }];
-  const [contextText, openPoints, missingNow] = await Promise.all([buildContextText(actor, res), computeOpenPoints(actor, res), computeMissing(actor, res)]);
+  // Hilfe-Wissen (Etappe 25): Suche über die letzte und die vorletzte Nutzernachricht (Rückfragen wie „und wer darf das?“)
+  const prevUser = [...prior].reverse().find((m) => m.role === "NUTZER")?.text ?? "";
+  const [contextText, openPoints, missingNow, help] = await Promise.all([buildContextText(actor, res), computeOpenPoints(actor, res), computeMissing(actor, res), buildHelpText(actor, text.split(/\s+/).length < 8 && prevUser ? `${text}\n${prevUser}` : text)]);
+  const howTo = looksLikeHowTo(text) && help.sections.length > 0;
   const openPointsText = [...openPoints.map((p) => `- ${p.text}`), ...missingNow.map((m) => `- Fehlt: ${m}`)].join("\n");
 
   const provider = deps.provider ?? getAIProvider();
@@ -251,7 +256,7 @@ export async function sendMessage(actor: Actor, raw: unknown, deps: { provider?:
     const [cnt] = await db.select({ n: count() }).from(schema.aiJobs).where(and(eq(schema.aiJobs.workspaceId, actor.workspaceId), gte(schema.aiJobs.startedAt, since)));
     if (Number(cnt?.n ?? 0) >= cfg.AI_DAILY_JOB_LIMIT) throw new UsageLimitError(cfg.AI_DAILY_JOB_LIMIT);
     const taskOpts: TaskOptions = await resolveTaskOptions(actor.workspaceId, "ASSISTANT", info.id);
-    const input: AssistantInput = { contextText, history, interviewMode: thread.interviewMode, openPoints: openPointsText };
+    const input: AssistantInput = { contextText, history, interviewMode: thread.interviewMode, openPoints: openPointsText, helpText: help.text };
     const inputText = JSON.stringify(input);
     const [job] = await db
       .insert(schema.aiJobs)
@@ -313,19 +318,27 @@ export async function sendMessage(actor: Actor, raw: unknown, deps: { provider?:
     } catch (e) {
       const msg = (e instanceof Error ? e.message : "Anbieterfehler").slice(0, 300);
       if (job) await db.update(schema.aiJobs).set({ status: "ABGELEHNT", error: msg, finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
-      replyText = fallbackReply(openPoints, missingNow, `Die KI ist gerade nicht erreichbar (${msg}).`);
+      replyText = howTo ? helpReply(help.sections, `Die KI ist gerade nicht erreichbar (${msg}); hier der passende Abschnitt aus der Hilfe.`) : fallbackReply(openPoints, missingNow, `Die KI ist gerade nicht erreichbar (${msg}).`);
       missing = missingNow;
       deps.onDelta?.(replyText);
     }
   } else {
-    replyText = fallbackReply(openPoints, missingNow, "Die KI ist deaktiviert; ich kann dir die offenen Punkte zeigen und sagen, was fehlt.");
-    missing = missingNow;
+    replyText = howTo ? helpReply(help.sections, "Die KI ist deaktiviert – hier der passende Abschnitt aus der Hilfe.") : fallbackReply(openPoints, missingNow, "Die KI ist deaktiviert; ich kann dir die offenen Punkte zeigen und sagen, was fehlt.");
+    missing = howTo ? [] : missingNow;
     deps.onDelta?.(replyText);
   }
   if (note) replyText = `${replyText}\n\n${note}`;
   const [saved] = await db.insert(schema.assistantMessages).values({ threadId, seq: prior.length + 2, role: "ASSISTENT", text: replyText, cards, missing, aiJobId }).returning();
   await db.update(schema.assistantThreads).set({ updatedAt: new Date() }).where(eq(schema.assistantThreads.id, threadId));
   return { message: saved!, cards, missing };
+}
+
+/** Ohne KI: Bedienfragen direkt mit dem passenden Hilfe-Abschnitt beantworten (wörtlich, nichts dazuerfunden). */
+function helpReply(sections: HelpSection[], head: string): string {
+  const [first, ...rest] = sections;
+  const parts = [head, `${first!.title} – Wo: ${first!.where}`, first!.body];
+  if (rest.length) parts.push(`Siehe auch: ${rest.map((r) => r.title).join(" · ")} (Seite „Hilfe“).`);
+  return parts.join("\n\n");
 }
 
 function fallbackReply(openPoints: OpenPoint[], missing: string[], head: string): string {

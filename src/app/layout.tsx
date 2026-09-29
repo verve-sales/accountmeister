@@ -25,6 +25,7 @@ const MORE = [
   { href: "/vorgehen", label: "Vorgehen" },
   { href: "/artefakte", label: "Artefakte" },
   { href: "/einstellungen", label: "Einstellungen" },
+  { href: "/hilfe", label: "Hilfe" },
 ];
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

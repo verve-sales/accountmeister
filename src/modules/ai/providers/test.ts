@@ -1,3 +1,4 @@
+import { looksLikeHowTo } from "@/modules/help/knowledge";
 import { decisionRoleLabel } from "@/lib/labels";
 import type { TaskOptions } from "../provider";
 import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdviceInput, FormSuggestInput, InterviewNextInput, ProviderInfo, StrategyInput, StructureNoteInput } from "../provider";
@@ -500,6 +501,15 @@ export class TestProvider implements AIProvider {
   async assistantReply(input: AssistantInput, _opts?: unknown, onDelta?: (chunk: string) => void): Promise<string> {
     void _opts;
     const lastUser = [...input.history].reverse().find((h) => h.role === "NUTZER")?.text ?? "";
+    // Bedienfrage (Etappe 25): deterministisch aus dem ersten passenden Hilfe-Abschnitt antworten, keine Karten
+    const helpBlock = input.helpText?.split("Passende Abschnitte zur Frage:")[1]?.split("\nDeine Einstellungen")[0] ?? "";
+    const firstSection = helpBlock.split(/\n(?=## )/).map((x) => x.trim()).find((x) => x.startsWith("## "));
+    if (firstSection && looksLikeHowTo(lastUser)) {
+      const [titleLine, whereLine, ...body] = firstSection.split("\n");
+      const out = `Laut Hilfe („${titleLine!.slice(3)}“) – ${whereLine}. ${body.join(" ").slice(0, 700)}\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items: [], missing: [] })}`;
+      onDelta?.(out);
+      return out;
+    }
     const allUser = input.history.filter((h) => h.role === "NUTZER").map((h) => h.text).join("\n");
     const p = await this.analyzeDocument({ documentText: lastUser || allUser, fileName: "Dialog", knownAccountNames: [] });
     const items: AssistantItem[] = [];

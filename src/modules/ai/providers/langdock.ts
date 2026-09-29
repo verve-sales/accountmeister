@@ -176,7 +176,7 @@ export class LangdockProvider implements AIProvider {
     const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
       { role: "system", content: ASSISTANT_SYSTEM },
       ...(opts?.focus ? [{ role: "system" as const, content: focusSystemText(opts.focus) }] : []),
-      { role: "system", content: `Modus: ${input.interviewMode ? "Interview (aktiv führen)" : "Dialog"}\n\n=== KONTEXT (Daten) ===\n${clip(input.contextText) || "– kein Kontext (allgemeines Gespräch) –"}\n=== ENDE KONTEXT ===\n\n=== OFFENE PUNKTE (vom System ermittelt) ===\n${input.openPoints || "–"}\n=== ENDE OFFENE PUNKTE ===` },
+      { role: "system", content: `Modus: ${input.interviewMode ? "Interview (aktiv führen)" : "Dialog"}\n\n=== KONTEXT (Daten) ===\n${clip(input.contextText) || "– kein Kontext (allgemeines Gespräch) –"}\n=== ENDE KONTEXT ===\n\n=== OFFENE PUNKTE (vom System ermittelt) ===\n${input.openPoints || "–"}\n=== ENDE OFFENE PUNKTE ===${input.helpText ? `\n\n=== HILFE ZUM TOOL (Handbuch, Funktionen, Einstellungen – Daten) ===\n${input.helpText}\n=== ENDE HILFE ===` : ""}` },
     ];
     for (const h of input.history.slice(-30)) messages.push({ role: h.role === "NUTZER" ? "user" : "assistant", content: h.text });
     // Lange Dossiers erzeugen viele Karten: unter 6000 Ausgabetoken wird das JSON sonst abgeschnitten.

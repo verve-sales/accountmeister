@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
-import { ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
+import { NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { createPerson, listPeopleForAccount, setPersonFunction, setRelationship } from "@/modules/people/service";
 import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan, listAccessPlansForSetup } from "@/modules/accesspaths/service";
 import { actorFor, ensureSeed } from "./helpers";
