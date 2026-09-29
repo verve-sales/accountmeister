@@ -4,12 +4,12 @@ import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildDashboard, viewDescription, viewLabel, type DashboardView } from "@/modules/dashboard/service";
 import { MATURITY, maturityLabel } from "@/modules/strategy/chancen";
-import { STAGES, stageLabel } from "@/modules/strategy/analysis";
+import { CHANCE_STEPS } from "@/lib/chanceStages";
+import { countChancesByStatus } from "@/modules/opportunities/service";
 import { BarChart, CHART_COLORS } from "@/components/charts/BarChart";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
-import { ProcessStepper } from "@/components/ProcessStepper";
-import { fmtDate, goalStatusLabel } from "@/lib/labels";
+import { fmtDate, goalStatusLabel, opportunityStatusLabel } from "@/lib/labels";
 import { ensureStandardTasksSafe, freelancerStats } from "@/modules/focus/standardTasks";
 import { getFocus } from "@/modules/focus/service";
 import { computeHealthFor } from "@/modules/health/service";
@@ -38,6 +38,8 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   // Unübersehbar: Kunden, bei denen Angaben fehlen – zuerst die mit den meisten Einsätzen
   const healthGaps = healthAll.filter((h) => h.questions.length > 0).sort((a, b) => b.engagements.length - a.engagements.length || a.coverage - b.coverage);
   const renewals = d ? await listRenewals(d.accounts.map((c) => c.accountId)) : [];
+  const healthBy = new Map(healthAll.map((h) => [h.accountId, h]));
+  const chanceCounts = d ? await countChancesByStatus(d.accounts.map((c) => c.accountId)) : {};
   if (!d) {
     return (
       <div className="space-y-6">
@@ -71,18 +73,18 @@ export default async function StartPage({ searchParams }: { searchParams: Search
 
       {d.accounts.length > 0 && (
         <section className="card">
-          <h2 className="font-semibold mb-2">Wo stehen wir insgesamt? (Portfolio nach Prozessstufe)</h2>
+          <h2 className="font-semibold mb-2">Wo stehen wir insgesamt? (Chancen je Stufe)</h2>
           <BarChart
-            title="Kunden je Prozessstufe"
+            title="Chancen je Stufe"
             labelWidth={220}
-            bars={STAGES.map((s, i) => ({
-              label: stageLabel[s],
-              value: d.accounts.filter((c) => c.stage === s).length,
-              color: CHART_COLORS.sequential[Math.min(Math.floor((i / STAGES.length) * CHART_COLORS.sequential.length), CHART_COLORS.sequential.length - 1)],
-              detail: "Kunde(n)",
+            bars={[...CHANCE_STEPS, "ZURUECKGESTELLT"].map((s, i) => ({
+              label: opportunityStatusLabel[s] ?? s,
+              value: chanceCounts[s] ?? 0,
+              color: s === "ZURUECKGESTELLT" ? CHART_COLORS.track : CHART_COLORS.sequential[Math.min(Math.floor((i / CHANCE_STEPS.length) * CHART_COLORS.sequential.length), CHART_COLORS.sequential.length - 1)],
+              detail: "Chance(n)",
             }))}
           />
-          <p className="muted text-xs mt-2">Je Kunde zählt die am weitesten fortgeschrittene Stufe seiner Setups. Sicht: {viewLabel[d.view]} – jede Rolle sieht nur ihren eigenen Zuordnungsbereich.</p>
+          <p className="muted text-xs mt-2">Jede Chance zählt mit ihrem eigenen Stand – ein Kunde mit drei Chancen erscheint dreimal. Sicht: {viewLabel[d.view]} – jede Rolle sieht nur ihren eigenen Zuordnungsbereich.</p>
         </section>
       )}
 
@@ -179,8 +181,8 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             <article key={c.accountId} className="card">
               <div className="flex flex-wrap items-baseline gap-3">
                 <h3 className="font-semibold text-lg"><Link href={`/kunden/${c.accountId}`}>{c.accountName}</Link></h3>
-                <ProcessStepper steps={STAGES.map((s) => ({ key: s, label: stageLabel[s] }))} currentKey={c.stage} variant="compact" />
-                <span className="muted text-sm">{c.setups.length} Setup(s){c.responsibleBdName ? ` · BD ${c.responsibleBdName}` : " · BD offen"} · letzte Änderung vor {c.daysSinceActivity} Tag(en)</span>
+                {healthBy.get(c.accountId) && <HealthBadge score={healthBy.get(c.accountId)!.score} level={healthBy.get(c.accountId)!.level} coverage={healthBy.get(c.accountId)!.coverage} />}
+                <span className="muted text-sm">{c.chanceCount} Chance(n) · {c.setups.length} Setup(s){c.responsibleBdName ? ` · BD ${c.responsibleBdName}` : " · BD offen"} · letzte Änderung vor {c.daysSinceActivity} Tag(en)</span>
               </div>
               <p className="text-sm mt-2"><span className="muted">Wofür: </span>{c.chanceCount ? <strong>{c.purpose}</strong> : <span style={{ color: "#8a6d1f" }}>{c.purpose}</span>}</p>
               <p className="text-sm mt-1"><span className="muted">Nächster großer Schritt: </span>{c.nextStep}</p>
@@ -203,8 +205,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                 <ul className="mt-2 space-y-1">
                   {c.setups.map((s) => (
                     <li key={s.setupId}>
-                      <Link href={`/setups/${s.setupId}`}>{s.setupName}</Link>{" "}
-                      <ProcessStepper steps={STAGES.map((st) => ({ key: st, label: stageLabel[st] }))} currentKey={s.stage} variant="compact" />
+                      <Link href={`/setups/${s.setupId}`}>{s.setupName}</Link>
                       <span className="muted"> · {s.counts.openActions} Aktion(en){s.counts.overdueActions ? `, ${s.counts.overdueActions} überfällig` : ""} · {s.counts.opportunities} Chance(e) · {s.counts.persons} Person(en){s.counts.openSuggestions ? ` · ${s.counts.openSuggestions} Vorschläge` : ""}</span>
                       <span className="ml-2"><Link href={`/setups/${s.setupId}/strategie`}>Strategiefaden</Link> · <Link href={`/setups/${s.setupId}?assistent=1`}>Assistent</Link></span>
                     </li>
@@ -217,12 +218,12 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             <details className="card">
               <summary>Weitere Kunden ({d.accounts.length - FOCUS}) – weniger Aufmerksamkeit nötig</summary>
               <table className="list mt-2 text-sm">
-                <thead><tr><th>Kunde</th><th>Stufe</th><th>Blockiert</th><th>Fehlt</th><th>Züge</th><th>Letzte Änderung</th></tr></thead>
+                <thead><tr><th>Kunde</th><th>Sattelfestigkeit</th><th>Blockiert</th><th>Fehlt</th><th>Züge</th><th>Letzte Änderung</th></tr></thead>
                 <tbody>
                   {d.accounts.slice(FOCUS).map((c) => (
                     <tr key={c.accountId}>
                       <td><Link href={`/kunden/${c.accountId}`}>{c.accountName}</Link></td>
-                      <td><ProcessStepper steps={STAGES.map((s) => ({ key: s, label: stageLabel[s] }))} currentKey={c.stage} variant="compact" /></td>
+                      <td>{healthBy.get(c.accountId) ? <HealthBadge score={healthBy.get(c.accountId)!.score} level={healthBy.get(c.accountId)!.level} coverage={healthBy.get(c.accountId)!.coverage} /> : "–"}</td>
                       <td>{c.blockers.length}</td>
                       <td>{c.missing.length}</td>
                       <td>{c.moves.length}</td>

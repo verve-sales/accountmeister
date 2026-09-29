@@ -4,10 +4,9 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { getAccount } from "@/modules/accounts/service";
 import { listSetupsForAccount } from "@/modules/setups/service";
 import { listOpportunitiesForAccount } from "@/modules/opportunities/service";
-import { canCreateSetup, canReassignResponsibility, loadSetupContext } from "@/modules/identity/authz";
+import { canCreateSetup, canReassignResponsibility } from "@/modules/identity/authz";
 import { isSalesOps } from "@/modules/identity/actor";
-import { analyzeSetup, STAGES, stageLabel } from "@/modules/strategy/analysis";
-import { ProcessStepper } from "@/components/ProcessStepper";
+import { ChancenUebersicht } from "@/components/ChancenUebersicht";
 import { canDeleteAccount } from "@/modules/accounts/deletion";
 import { DomainError } from "@/lib/errors";
 import { Feedback, type SearchParams } from "@/components/Feedback";
@@ -23,7 +22,7 @@ import { listRoles } from "@/modules/roles/catalog";
 import { SuggestButton } from "@/components/SuggestButton";
 import { changePriorityAction, createPriorityAction, reassignAccountBdAction, refreshCompanyResearchAction, saveAccountPlanSnapshotAction, setAccountDormantAction } from "../../actions";
 import { db, schema } from "@/db/client";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getCompanyResearch, type CompanyFact } from "@/modules/research/service";
 import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
@@ -56,15 +55,10 @@ export default async function KundePage({ params, searchParams }: { params: Prom
     ? [...new Map((await db.select({ id: schema.users.id, displayName: schema.users.displayName }).from(schema.users).innerJoin(schema.roleAssignments, eq(schema.roleAssignments.userId, schema.users.id)).where(eq(schema.roleAssignments.role, "BD"))).map((u) => [u.id, u])).values()]
     : [];
 
-  // Prozessstufe je Setup (Etappe „Wo stehen wir?“) – aus vorhandenen Zuständen abgeleitet, nichts Neues erfasst.
-  const analyses = await Promise.all(
-    setups.map(async (s) => {
-      const ctx = await loadSetupContext(actor, s.id);
-      return ctx ? { setupId: s.id, analysis: await analyzeSetup(actor, ctx) } : null;
-    }),
-  );
-  const analysisBySetup = new Map(analyses.filter((a): a is NonNullable<typeof a> => !!a).map((a) => [a.setupId, a.analysis]));
-  const furthestStage = [...analysisBySetup.values()].sort((a, b) => STAGES.indexOf(b.stage) - STAGES.indexOf(a.stage))[0] ?? null;
+  // „Wo stehen wir?“ je Chance (Etappe 24): der Status gehört zur Chance, nicht zu Setup oder Kunde
+  const ownerIds = [...new Set(opportunities.map((o) => o.ownerUserId))];
+  const ownerNames = new Map(ownerIds.length ? (await db.query.users.findMany({ where: inArray(schema.users.id, ownerIds) })).map((u) => [u.id, u.displayName]) : []);
+  const chanceRows = opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: ownerNames.get(o.ownerUserId) ?? "?", setupName: o.setupName }));
   const [runs, accountPlaybooks, salesOps, activeUsers] = await Promise.all([
     listRuns(actor, { accountId: id }),
     listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true }),
@@ -86,17 +80,15 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         {mayDelete && <Link href={`/kunden/${account.id}/loeschen`} className="muted text-sm ml-auto">Kunde archivieren oder löschen</Link>}
       </div>
       {account.status === "ARCHIVED" && <p className="text-sm" style={{ background: "#fdf6ec", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ist archiviert. Alles bleibt erhalten; <Link href={`/kunden/${account.id}/loeschen`}>wiederherstellen oder endgültig löschen</Link>.</p>}
-      {furthestStage && (
-        <section className="card">
-          <h2 className="font-semibold mb-2">Wo stehen wir?</h2>
-          <ProcessStepper steps={STAGES.map((s) => ({ key: s, label: stageLabel[s] }))} currentKey={furthestStage.stage} note={furthestStage.nextStep} />
-          {runs.filter((r) => r.status === "AKTIV").map((r) => {
-            const cur = r.steps.find((x) => x.status === "OFFEN");
-            return cur ? <p key={r.id} className="text-sm mt-2">Laufendes Vorgehen <a href="#vorgehen">{r.playbookName}</a> ({r.setupName}): Schritt {cur.position}/{r.steps.length} – {cur.title}</p> : null;
-          })}
-          {setups.length > 1 && <p className="muted text-xs mt-2">Zeigt das am weitesten fortgeschrittene Setup ({furthestStage.setupName}); jedes Setup hat seine eigene Stufe – siehe Tabelle unten.</p>}
-        </section>
-      )}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Wo stehen wir? – je Chance</h2>
+        <ChancenUebersicht chances={chanceRows} showSetup={setups.length > 1} emptyText="Noch keine Chance benannt. Worauf läuft es bei diesem Kunden hinaus? Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten." />
+        {runs.filter((r) => r.status === "AKTIV").map((r) => {
+          const cur = r.steps.find((x) => x.status === "OFFEN");
+          return cur ? <p key={r.id} className="text-sm mt-2">Laufendes Vorgehen <a href="#vorgehen">{r.playbookName}</a> ({r.setupName}): Schritt {cur.position}/{r.steps.length} – {cur.title}</p> : null;
+        })}
+        <p className="muted text-xs mt-2">Jede Chance hat ihren eigenen Stand. Wie sicher wir beim Kunden insgesamt stehen, zeigt der Health-Check.</p>
+      </section>
       <Feedback params={sp} />
 
       {health && (
@@ -285,19 +277,19 @@ export default async function KundePage({ params, searchParams }: { params: Prom
           <p className="muted text-sm">Noch kein Setup. Ein Setup braucht nur Kunde, Namen und einen Kontextsatz – oder bleibt bewusst Entwurf.</p>
         ) : (
           <table className="list">
-            <thead><tr><th>Setup</th><th>Status</th><th>Prozessstufe</th><th>Sichtbarkeit</th><th>BD</th><th>Geändert</th></tr></thead>
+            <thead><tr><th>Setup</th><th>Status</th><th>Chancen</th><th>Sichtbarkeit</th><th>BD</th><th>Geändert</th></tr></thead>
             <tbody>
               {setups.map((s) => (
                 <tr key={s.id}>
                   <td><Link href={`/setups/${s.id}`}>{s.name}</Link>{s.contextNote && <div className="muted text-sm">{s.contextNote}</div>}</td>
                   <td><Status label={setupStatusLabel[s.status] ?? s.status} /></td>
-                  <td>
-                    {analysisBySetup.get(s.id) ? (
-                      <ProcessStepper steps={STAGES.map((st) => ({ key: st, label: stageLabel[st] }))} currentKey={analysisBySetup.get(s.id)!.stage} variant="compact" />
-                    ) : (
-                      <span className="muted text-sm">–</span>
-                    )}
-                  </td>
+                  <td className="text-sm">{(() => {
+                    const mine = chanceRows.filter((c) => opportunities.find((o) => o.id === c.id)?.setupId === s.id && c.status !== "BEENDET");
+                    if (mine.length === 0) return <span className="muted">keine</span>;
+                    const byStatus = new Map<string, number>();
+                    for (const c of mine) byStatus.set(c.status, (byStatus.get(c.status) ?? 0) + 1);
+                    return `${mine.length}: ${[...byStatus].map(([st, n]) => `${n}× ${opportunityStatusLabel[st] ?? st}`).join(", ")}`;
+                  })()}</td>
                   <td>{visibilityLabel[s.visibility]}</td>
                   <td>{s.bdUserId ? "zugeordnet" : <Status label="Zuordnung offen" />}</td>
                   <td>{fmtDate(s.updatedAt)}</td>

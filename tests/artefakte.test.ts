@@ -80,10 +80,12 @@ describe("Artefakte (Briefing 12, F09)", () => {
     await expect(requireArtifact(nina, coaching.id)).rejects.toBeInstanceOf(NotFoundError);
     expect((await listArtifactsForSetup(nina, s.setupId)).some((a) => a.artifactKey === coaching.artifactKey)).toBe(false);
     expect((await requireArtifact(david, coaching.id)).version.id).toBe(coaching.id);
-    // Petra (Principal) darf ohne Mitgliedschaft nicht entwerfen, aber Kundenteam-Artefakte lesen
-    await expect(createDraft(petra, { templateCode: "A6", setupId: s.setupId })).rejects.toBeInstanceOf(ForbiddenError);
+    // Petra (Principal, Etappe 24) darf entwerfen und Kundenteam-Artefakte bearbeiten – persönliche Coaching-Notizen anderer bleiben privat
+    await expect(requireArtifact(petra, coaching.id)).rejects.toBeInstanceOf(NotFoundError);
+    const petraDraft = await createDraft(petra, { templateCode: "A6", setupId: s.setupId });
+    expect(petraDraft.id).toBeTruthy();
     const teamDraft = await createDraft(david, { templateCode: "A8", setupId: s.setupId, audience: "ACCOUNT_TEAM" });
-    expect((await requireArtifact(petra, teamDraft.id)).canEdit).toBe(false);
+    expect((await requireArtifact(petra, teamDraft.id)).canEdit).toBe(true);
     // Fremder BD: nichts
     await expect(requireArtifact(lars, teamDraft.id)).rejects.toBeInstanceOf(NotFoundError);
     await expect(listArtifactsForSetup(lars, s.setupId)).rejects.toBeInstanceOf(NotFoundError);

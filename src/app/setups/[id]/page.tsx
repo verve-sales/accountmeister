@@ -9,8 +9,8 @@ import { getSetupDetail } from "@/modules/setups/service";
 import { listSupportRequestsForSetup } from "@/modules/leadership/service";
 import { listOpportunitiesForSetup } from "@/modules/opportunities/service";
 import { canReassignResponsibility, loadSetupContext } from "@/modules/identity/authz";
-import { analyzeSetup, STAGES, stageLabel } from "@/modules/strategy/analysis";
-import { ProcessStepper } from "@/components/ProcessStepper";
+import { analyzeSetup } from "@/modules/strategy/analysis";
+import { ChancenUebersicht } from "@/components/ChancenUebersicht";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
 import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { ALTKUNDEN_CODE } from "@/modules/playbooks/defaults";
@@ -119,8 +119,9 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       <SetupTabs setupId={id} active="ueberblick" />
       {analysis && (
         <section className="card">
-          <h2 className="font-semibold mb-2">Wo stehen wir?</h2>
-          <ProcessStepper steps={STAGES.map((s) => ({ key: s, label: stageLabel[s] }))} currentKey={analysis.stage} note={analysis.nextStep} />
+          <h2 className="font-semibold mb-2">Wo stehen wir? – je Chance</h2>
+          <ChancenUebersicht chances={opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: name(o.ownerUserId) }))} emptyText="Noch keine Chance in diesem Setup – worauf läuft es hinaus?" />
+          <p className="text-sm mt-3"><span className="muted">Nächster großer Schritt im Setup: </span>{analysis.nextStep}</p>
           {setupRuns.filter((r) => r.status === "AKTIV").map((r) => {
             const cur = r.steps.find((x) => x.status === "OFFEN");
             return cur ? <p key={r.id} className="text-sm mt-2">Laufendes Vorgehen <a href="#vorgehen">{r.playbookName}</a>: Schritt {cur.position}/{r.steps.length} – {cur.title}</p> : null;

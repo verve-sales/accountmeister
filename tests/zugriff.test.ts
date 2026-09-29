@@ -58,12 +58,15 @@ describe("Zugriff (Briefing 16.2, S01/S02/S09)", () => {
     await expect(createSetup(nina, { accountId: s.otherAccountId, name: "Fremdkunde", bdUserId: "" })).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it("Principal darf Setups der Kunden sehen, aber ohne Mitgliedschaft nicht bearbeiten", async () => {
+  it("Etappe 24: Principal (arbeitsraumweit) darf Setups sehen und bearbeiten – ein fremder BD weiterhin nicht", async () => {
     const s = await ensureSeed();
     const petra = await actorFor("petra");
+    const lars = await actorFor("lars");
     const detail = await getSetupDetail(petra, s.setupId);
-    expect(detail.canEdit).toBe(false);
-    await expect(takeOverSignal(petra, s.signalId, 1)).rejects.toBeInstanceOf(ForbiddenError);
+    expect(detail.canEdit).toBe(true);
+    await expect(takeOverSignal(lars, s.signalId, 1)).rejects.toThrow();
+    const taken = await takeOverSignal(petra, s.signalId, 1);
+    expect(taken.ownerUserId).toBe(petra.userId);
   });
 
   it("S09: Produktion mit Entwicklungsanmeldung oder Test-KI wird verhindert", () => {

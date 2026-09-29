@@ -103,6 +103,7 @@ export function canEditSetup(actor: Actor, ctx: SetupContext): boolean {
   if (ctx.setup.status === "ARCHIVIERT") return false;
   if (ctx.membership?.canEdit) return true;
   if (ctx.ownsOpportunity) return true; // verantwortlich für eine Chance = bearbeitend beteiligt
+  if (hasRole(actor, "PRINCIPAL", ctx.account.id)) return true; // Principal (arbeitsraumweit oder für diesen Kunden): volle Rechte (Etappe 24)
   if (isSalesOps(actor)) return true; // vorbereiten und pflegen – Entscheidungen bleiben beim BD (assertDecisionRight)
   if (ctx.setup.createdBy === actor.userId) return true; // Ersteller bis zur angenommenen Übergabe (6.1)
   if (ctx.setup.bdUserId === actor.userId) return true;
@@ -131,7 +132,7 @@ export function canViewSource(actor: Actor, source: SourceRow, ctx: SetupContext
   if (isCeoOnly) return cls === "WORKSPACE";
   if (cls === "WORKSPACE") return hasAnyContentRole(actor);
   if (!ctx) return false;
-  if (cls === "SETUP") return ctx.membership !== null || ctx.ownsOpportunity || isSalesOps(actor) || ctx.setup.bdUserId === actor.userId;
+  if (cls === "SETUP") return ctx.membership !== null || ctx.ownsOpportunity || isSalesOps(actor) || hasRole(actor, "PRINCIPAL", ctx.account.id) || ctx.setup.bdUserId === actor.userId;
   if (cls === "ACCOUNT_TEAM") return ctx.membership !== null || ctx.ownsOpportunity || isSalesOps(actor) || isResponsibleBd(actor, ctx.account) || hasRole(actor, "PRINCIPAL", ctx.account.id) || ctx.setup.bdUserId === actor.userId;
   return false;
 }

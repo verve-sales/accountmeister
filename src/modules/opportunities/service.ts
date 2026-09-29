@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
 import type { Db, Tx } from "@/db/client";
@@ -753,3 +753,12 @@ export async function getOpportunityDetail(actor: Actor, id: string) {
 // Für Tests/Anzeige
 export const opportunityTransitions = oppTransitions;
 export type { OpportunityStatus, OfferStatus, OrderStatus, EngagementStatus, RequirementStatus, DecisionRole };
+
+/** Portfolio (Etappe 24): Anzahl nicht beendeter Chancen je Status für eine Menge Kunden. */
+export async function countChancesByStatus(accountIds: string[]): Promise<Record<string, number>> {
+  if (accountIds.length === 0) return {};
+  const rows = await db.query.opportunities.findMany({ where: and(inArray(schema.opportunities.accountId, accountIds), ne(schema.opportunities.status, "BEENDET")), columns: { status: true } });
+  const out: Record<string, number> = {};
+  for (const r of rows) out[r.status] = (out[r.status] ?? 0) + 1;
+  return out;
+}

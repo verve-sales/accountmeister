@@ -92,7 +92,7 @@ describe("Personen & Zugang (Briefing 8, F06)", () => {
     await expect(changeAccessPlanStatus(david, plan.id, { version: vorgestellt.version, status: "ENTWURF" })).rejects.toBeInstanceOf(TransitionError);
   });
 
-  it("Zugriff: fremder BD sieht Personen und Kontaktwege nicht; Principal liest, pflegt aber nicht", async () => {
+  it("Zugriff: fremder BD sieht Personen und Kontaktwege nicht; Principal liest und pflegt (Etappe 24)", async () => {
     const s = await ensureSeed();
     const lars = await actorFor("lars");
     const petra = await actorFor("petra");
@@ -100,6 +100,7 @@ describe("Personen & Zugang (Briefing 8, F06)", () => {
     await expect(listAccessPlansForSetup(lars, s.setupId)).rejects.toBeInstanceOf(NotFoundError);
     expect((await listPeopleForAccount(petra, s.accountId)).length).toBeGreaterThan(0);
     const keller = (await db.query.persons.findMany({ where: eq(schema.persons.accountId, s.accountId) })).find((p) => p.displayName.startsWith("Frau Keller"))!;
-    await expect(setRelationship(petra, { personId: keller.id, setupId: s.setupId, holderUserId: petra.userId, state: "VORSTELLUNG_ANGEFRAGT", contextNote: "Petra möchte vorgestellt werden." })).rejects.toBeInstanceOf(ForbiddenError);
+    const rel = await setRelationship(petra, { personId: keller.id, setupId: s.setupId, holderUserId: petra.userId, state: "VORSTELLUNG_ANGEFRAGT", contextNote: "Petra möchte vorgestellt werden." });
+    expect(rel).toBeTruthy();
   });
 });

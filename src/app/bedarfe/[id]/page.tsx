@@ -15,6 +15,7 @@ import { Feedback } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { SuggestButton } from "@/components/SuggestButton";
 import { ProcessStepper } from "@/components/ProcessStepper";
+import { NEXT_CHANCE_STEP } from "@/lib/chanceStages";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { groupByFamily } from "@/modules/roles/catalog";
 import { decisionRoleLabel, engagementStatusLabel, epistemicLabel, fmtDate, fmtDateTime, offerStatusLabel, opportunityStatusLabel, orderStatusLabel, requirementStatusLabel, sourceTypeLabel } from "@/lib/labels";
@@ -163,11 +164,17 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
           currentKey={isSideBranch ? "" : opp.status}
           endState={isSideBranch ? { label: opportunityStatusLabel[opp.status] ?? opp.status, reason: opp.statusReason, tone: opp.status === "ZURUECKGESTELLT" ? "warn" : "muted" } : null}
         />
+        {canEdit && NEXT_CHANCE_STEP[opp.status] && (
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="muted">Nächster Schritt:</span>
+            <a href={`#${NEXT_CHANCE_STEP[opp.status]!.anchor}`} className="btn btn-small">{NEXT_CHANCE_STEP[opp.status]!.label}</a>
+          </p>
+        )}
         <p className="muted text-xs mt-2">Orientierung, keine Pflichtschleuse: Zugangsentwicklung läuft parallel weiter; Angebot, Auftrag und Einsatz haben eigene Zustände.</p>
       </section>
 
       {/* Chance */}
-      <section className="card">
+      <section className="card" id="chance">
         <h2 className="font-semibold mb-2">Chance</h2>
         <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
           <div className="sm:col-span-2"><dt className="muted">Wofür</dt><dd><strong>{chanceKindLabel[opp.kind]}</strong>{opp.roleId ? ` · ${d.roles.find((r) => r.id === opp.roleId)?.name ?? "Rolle"}` : " · Standardrolle noch offen"}{opp.headcount ? ` · ${opp.headcount}×` : ""}{opp.horizon ? ` · ${opp.horizon}` : ""}{opp.status === "ANTIZIPIERT" && <span className="muted"> · antizipiert – vom Kunden noch nicht ausgesprochen</span>}</dd></div>
@@ -195,7 +202,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
               </form>
             )}
             {(opp.status === "ANTIZIPIERT" || opp.status === "IN_KLAERUNG" || opp.status === "ZURUECKGESTELLT") && (
-              <details>
+              <details open={opp.status === "IN_KLAERUNG"}>
                 <summary>Chance bestätigen (mit Beleg)</summary>
                 <form action={confirmOpportunityAction} className="mt-2 grid sm:grid-cols-2 gap-3">
                   <input type="hidden" name="opportunityId" value={opp.id} />
@@ -450,7 +457,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       </section>
 
       {/* Angebote (F09, F10) */}
-      <section className="card">
+      <section className="card" id="angebote">
         <h2 className="font-semibold mb-2">Angebote / Profilvorstellungen ({d.offers.length})</h2>
         <p className="muted text-sm mb-2">„Tatsächlich vorgestellt“ setzt ein manuell bestätigtes Vorstellungsereignis mit Beleg voraus – ein Entwurf genügt nicht. Ein akzeptiertes Angebot ist noch kein Auftrag.</p>
         {d.offers.length === 0 ? <p className="muted text-sm">Noch kein Angebot.</p> : (
@@ -525,7 +532,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       </section>
 
       {/* Aufträge und Startvoraussetzungen (9.3) */}
-      <section className="card">
+      <section className="card" id="auftrag">
         <h2 className="font-semibold mb-2">Auftrag und Einsatz ({d.orders.length})</h2>
         <p className="muted text-sm mb-2">„Beauftragung bestätigt“ braucht prüfbare Bestell-/Vertragsnachweise. „Startbereit“ braucht den bestätigten Stand aller Startvoraussetzungen – eine leere Liste gilt nicht. „Gestartet“ ist ein bestätigtes Ereignis. Ohne freigegebene Regelkonfiguration wird hier nur der dokumentierte Stand gezeigt, keine produktive Einsatzfreigabe behauptet.</p>
         {d.orders.length === 0 ? <p className="muted text-sm">Noch kein Auftrag.</p> : (

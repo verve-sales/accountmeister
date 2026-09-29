@@ -51,7 +51,7 @@ describe("Etappe 19: Delegation – Principal stellt BD/Anker/Verantwortlichkeit
 
     const before = await getSetupDetail(petra, s.setupId);
     expect(before.setup.bdUserId).toBe(s.users.david);
-    expect(before.canEdit).toBe(false); // Principal ist heute weiterhin nicht pauschal bearbeitend beteiligt
+    expect(before.canEdit).toBe(true); // Etappe 24: Principal hat volle Rechte
 
     const updatedSetup = await reassignSetupBd(petra, s.setupId, { version: before.setup.version, bdUserId: s.users.lars });
     expect(updatedSetup.bdUserId).toBe(s.users.lars);
@@ -88,9 +88,9 @@ describe("Etappe 19: Delegation – Principal stellt BD/Anker/Verantwortlichkeit
     const updated = await reassignOpportunityOwner(petra, opp.id, { version: opp.version, ownerUserId: (await actorFor("nina")).userId });
     expect(updated.ownerUserId).toBe((await actorFor("nina")).userId);
 
-    // Principal darf laut canEditSetup weiterhin nicht die übrigen Felder der Chance bearbeiten
+    // Etappe 24: Principal darf die Chance auch inhaltlich bearbeiten
     const detail = await getOpportunityDetail(petra, opp.id);
-    expect(detail.canEdit).toBe(false);
+    expect(detail.canEdit).toBe(true);
   });
 
   it("Ohne Principal/CEO/zuständige BD-Rolle bleibt eine Umstellung verboten (kein pauschales Umstellungsrecht)", async () => {
