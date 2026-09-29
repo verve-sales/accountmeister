@@ -19,7 +19,10 @@ export function PlaybookRuns({
   back,
   users,
   start,
+  startCollapsed = false,
 }: {
+  /** „Vorgehen starten“ immer zugeklappt zeigen (z. B. auf der Chance-Seite) */
+  startCollapsed?: boolean;
   runs: RunView[];
   back: string;
   users: User[];
@@ -56,7 +59,7 @@ export function PlaybookRuns({
         </details>
       )}
       {start && start.playbooks.length > 0 && (
-        <details className="mt-4" open={runs.length === 0}>
+        <details className="mt-4" open={!startCollapsed && runs.length === 0}>
           <summary>Vorgehen starten</summary>
           {start.recommendation && <p className="text-sm mt-2" style={{ background: "var(--warn-soft)", borderRadius: 8, padding: ".5rem .8rem" }}>{start.recommendation}</p>}
           <form action={startPlaybookRunAction} className="mt-2 grid sm:grid-cols-2 gap-3">

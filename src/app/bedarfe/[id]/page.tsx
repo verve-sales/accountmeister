@@ -166,28 +166,6 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         <p className="muted text-xs mt-2">Orientierung, keine Pflichtschleuse: Zugangsentwicklung läuft parallel weiter; Angebot, Auftrag und Einsatz haben eigene Zustände.</p>
       </section>
 
-      {(runs.length > 0 || ((canEdit || mayReassign) && !closed)) && (
-        <PlaybookRuns
-          runs={runs}
-          back={`/bedarfe/${opp.id}`}
-          users={activeUsers}
-          start={(canEdit || mayReassign) && !closed ? { playbooks: oppPlaybooks, hidden: { opportunityId: opp.id, setupId: ctx.setup.id }, defaultOwnerId: opp.ownerUserId, salesOps, recommendedId: recommended?.id ?? null, recommendation } : null}
-        />
-      )}
-
-      {/* Wofür-Verknüpfungen (E-045): was schon auf diese Chance einzahlt */}
-      {(d.linked.signals.length + d.linked.actions.length + d.linked.questions.length + d.linked.suggestions.length > 0) && (
-        <section className="card">
-          <h2 className="font-semibold mb-2">Was auf diese Chance einzahlt</h2>
-          <div className="grid sm:grid-cols-2 gap-4 text-sm">
-            {d.linked.actions.length > 0 && <div><div className="font-medium mb-1">Aktionen ({d.linked.actions.length})</div><ul className="space-y-1">{d.linked.actions.map((a) => <li key={a.id}>{a.title} <Status label={a.status} /></li>)}</ul></div>}
-            {d.linked.signals.length > 0 && <div><div className="font-medium mb-1">Beobachtungen ({d.linked.signals.length})</div><ul className="space-y-1">{d.linked.signals.map((x) => <li key={x.id}>{x.observation.slice(0, 160)}</li>)}</ul></div>}
-            {d.linked.questions.length > 0 && <div><div className="font-medium mb-1">Offene Fragen ({d.linked.questions.length})</div><ul className="space-y-1">{d.linked.questions.map((x) => <li key={x.id}>{x.question}</li>)}</ul></div>}
-            {d.linked.suggestions.length > 0 && <div><div className="font-medium mb-1">Offene Vorschläge ({d.linked.suggestions.length})</div><ul className="space-y-1">{d.linked.suggestions.map((x) => <li key={x.id}>{x.title}</li>)}</ul></div>}
-          </div>
-        </section>
-      )}
-
       {/* Chance */}
       <section className="card">
         <h2 className="font-semibold mb-2">Chance</h2>
@@ -270,6 +248,29 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
           </div>
         )}
       </section>
+
+      {/* Wofür-Verknüpfungen (E-045): was schon auf diese Chance einzahlt */}
+      {(d.linked.signals.length + d.linked.actions.length + d.linked.questions.length + d.linked.suggestions.length > 0) && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Was auf diese Chance einzahlt</h2>
+          <div className="grid sm:grid-cols-2 gap-4 text-sm">
+            {d.linked.actions.length > 0 && <div><div className="font-medium mb-1">Aktionen ({d.linked.actions.length})</div><ul className="space-y-1">{d.linked.actions.map((a) => <li key={a.id}>{a.title} <Status label={a.status} /></li>)}</ul></div>}
+            {d.linked.signals.length > 0 && <div><div className="font-medium mb-1">Beobachtungen ({d.linked.signals.length})</div><ul className="space-y-1">{d.linked.signals.map((x) => <li key={x.id}>{x.observation.slice(0, 160)}</li>)}</ul></div>}
+            {d.linked.questions.length > 0 && <div><div className="font-medium mb-1">Offene Fragen ({d.linked.questions.length})</div><ul className="space-y-1">{d.linked.questions.map((x) => <li key={x.id}>{x.question}</li>)}</ul></div>}
+            {d.linked.suggestions.length > 0 && <div><div className="font-medium mb-1">Offene Vorschläge ({d.linked.suggestions.length})</div><ul className="space-y-1">{d.linked.suggestions.map((x) => <li key={x.id}>{x.title}</li>)}</ul></div>}
+          </div>
+        </section>
+      )}
+
+      {(runs.length > 0 || ((canEdit || mayReassign) && !closed)) && (
+        <PlaybookRuns
+          runs={runs}
+          back={`/bedarfe/${opp.id}`}
+          users={activeUsers}
+          startCollapsed
+          start={(canEdit || mayReassign) && !closed ? { playbooks: oppPlaybooks, hidden: { opportunityId: opp.id, setupId: ctx.setup.id }, defaultOwnerId: opp.ownerUserId, salesOps, recommendedId: recommended?.id ?? null, recommendation } : null}
+        />
+      )}
 
       {/* Buyingcenter (8.3) */}
       <section className="card">
