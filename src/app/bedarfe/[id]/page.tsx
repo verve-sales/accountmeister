@@ -534,7 +534,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
               const confirmed = o.status === "BEAUFTRAGUNG_BESTAETIGT";
               return (
                 <li key={o.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
-                  <div className="flex flex-wrap gap-2 items-baseline"><strong>Auftrag {o.orderReference ?? "(Referenz offen)"}</strong><Status label={orderStatusLabel[o.status] ?? o.status} /><Status label={engagementStatusLabel[o.engagementStatus] ?? o.engagementStatus} /><span className="muted">geplant {fmtDate(o.plannedStart)} – {fmtDate(o.plannedEnd)}</span></div>
+                  <div className="flex flex-wrap gap-2 items-baseline"><strong>Auftrag {o.orderReference ?? "(Referenz offen)"}</strong><Status label={orderStatusLabel[o.status] ?? o.status} /><Status label={engagementStatusLabel[o.engagementStatus] ?? o.engagementStatus} /><span className="muted">geplant {fmtDate(o.plannedStart)} – {fmtDate(o.plannedEnd)}{o.renewalDeadline ? ` · Verlängerungsfrist ${fmtDate(o.renewalDeadline)}` : ""}</span></div>
                   {o.confirmedAt && <p className="mt-1">Beauftragung bestätigt am {fmtDateTime(o.confirmedAt)} durch {name(o.confirmedBy)}{o.evidenceSourceId && <> · <Link href={`/quellen/${o.evidenceSourceId}`}>Nachweis</Link></>}{o.evidenceNote && <> · {o.evidenceNote}</>}</p>}
                   {o.startedAt && <p className="mt-1">Gestartet am {fmtDateTime(o.startedAt)}{o.statusReason && <> · {o.statusReason}</>}</p>}
                   {!o.startedAt && o.statusReason && <p className="muted mt-1">{o.statusReason}</p>}
@@ -641,6 +641,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
               <div><label className="label" htmlFor="odRef">Bestell-/Vertragsreferenz (falls schon bekannt)</label><input id="odRef" name="orderReference" className="input" /></div>
               <div><label className="label" htmlFor="odStart">Geplanter Start</label><input id="odStart" name="plannedStart" type="date" className="input" /></div>
               <div><label className="label" htmlFor="odEnd">Geplantes Ende</label><input id="odEnd" name="plannedEnd" type="date" className="input" /></div>
+              <div><label className="label" htmlFor="odRenew">Frist für Verlängerungsentscheidung (optional, z. B. Kündigungsfrist)</label><input id="odRenew" name="renewalDeadline" type="date" className="input" /></div>
               <div className="sm:col-span-2"><button className="btn" type="submit">Auftrag anlegen</button></div>
             </form>
           </details>

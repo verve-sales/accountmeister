@@ -1228,6 +1228,8 @@ export const orders = pgTable(
     evidenceNote: text("evidence_note"),
     plannedStart: date("planned_start"),
     plannedEnd: date("planned_end"),
+    /** Frist für die Verlängerungsentscheidung (z. B. Kündigungsfrist) – Etappe 23; bestimmt den Verlängerungsauslöser */
+    renewalDeadline: date("renewal_deadline"),
     status: orderStatusEnum("status").notNull().default("IN_VORBEREITUNG"),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     confirmedBy: text("confirmed_by").references(() => users.id),
@@ -1599,6 +1601,36 @@ export const standardTasks = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("standard_tasks_key_uq").on(t.workspaceId, t.key), index("standard_tasks_owner_idx").on(t.ownerUserId)],
+);
+
+// ---------------------------------------------------------------------------
+// Kunden-Health-Check (Etappe 23): „Wie sicher sitzen wir im Sattel?“ – transparente Regeln statt KI-Score.
+// Antworten aus dem geführten Interview je Kunde; Verlauf als Momentaufnahmen für den Trend.
+// ---------------------------------------------------------------------------
+
+export const accountHealth = pgTable("account_health", {
+  accountId: text("account_id").primaryKey().references(() => accounts.id),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  /** { feedback?: {tone,date,note,at,by}, listing?: {...}, procurement?: {...}, risks?: {...} } */
+  answers: jsonb("answers").notNull().default({}),
+  updatedBy: text("updated_by").references(() => users.id),
+  updatedAt: updatedAt(),
+  version: version(),
+});
+
+export const accountHealthSnapshots = pgTable(
+  "account_health_snapshots",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    score: integer("score"), // null = zu wenig Daten
+    coverage: integer("coverage").notNull(), // Datenlage in %
+    breakdown: jsonb("breakdown").notNull(),
+    createdBy: text("created_by").references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("account_health_snapshots_account_idx").on(t.accountId)],
 );
 
 export type Role = (typeof roleEnum.enumValues)[number];

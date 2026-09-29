@@ -13,6 +13,8 @@ import { db, schema } from "@/db/client";
 import { eq } from "drizzle-orm";
 import { DORMANT_AFTER_DAYS, listDormantAccounts } from "@/modules/playbooks/service";
 import { fmtDate } from "@/lib/labels";
+import { computeHealthFor } from "@/modules/health/service";
+import { HealthBadge } from "@/components/HealthBadge";
 
 export default async function KundenPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -29,6 +31,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
   const active = accounts.filter((a) => a.status !== "ARCHIVED");
   const archived = accounts.filter((a) => a.status === "ARCHIVED");
   const dormant = await listDormantAccounts(actor);
+  const healthBy = new Map((await computeHealthFor(active.map((a) => ({ id: a.id, name: a.name })))).map((h) => [h.accountId, h]));
 
   return (
     <div className="space-y-6">
@@ -39,7 +42,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
           <p className="muted text-sm">Keine Kunden in Ihrem Berechtigungsbereich.</p>
         ) : (
           <table className="list">
-            <thead><tr><th>Kunde</th><th>Typ</th><th>Zuständiger BD</th><th>Status</th></tr></thead>
+            <thead><tr><th>Kunde</th><th>Typ</th><th>Zuständiger BD</th><th>Status</th><th>Sattelfestigkeit</th></tr></thead>
             <tbody>
               {active.map((a) => (
                 <tr key={a.id}>
@@ -47,6 +50,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
                   <td>{a.orgType}</td>
                   <td>{a.responsibleBdUserId ? bdNames.get(a.responsibleBdUserId) : <Status label="offen" />}</td>
                   <td><Status label={accountStatusLabel[a.status] ?? a.status} /></td>
+                  <td>{healthBy.get(a.id) ? <Link href={`/kunden/${a.id}/health`}><HealthBadge score={healthBy.get(a.id)!.score} level={healthBy.get(a.id)!.level} coverage={healthBy.get(a.id)!.coverage} /></Link> : null}</td>
                 </tr>
               ))}
             </tbody>

@@ -488,6 +488,7 @@ export const orderInput = z.object({
   orderReference: z.string().trim().max(200).optional().or(z.literal("")),
   plannedStart: z.string().optional().or(z.literal("")),
   plannedEnd: z.string().optional().or(z.literal("")),
+  renewalDeadline: z.string().optional().or(z.literal("")),
 });
 
 /** Auftrag in Vorbereitung anlegen; „Beauftragung bestätigt“ folgt nur mit Nachweis. */
@@ -503,7 +504,7 @@ export async function createOrder(actor: Actor, raw: unknown) {
   }
   const [o] = await db
     .insert(schema.orders)
-    .values({ workspaceId: actor.workspaceId, opportunityId: opp.id, offerId: input.offerId || null, orderReference: input.orderReference || null, plannedStart: input.plannedStart || null, plannedEnd: input.plannedEnd || null, createdBy: actor.userId })
+    .values({ workspaceId: actor.workspaceId, opportunityId: opp.id, offerId: input.offerId || null, orderReference: input.orderReference || null, plannedStart: input.plannedStart || null, plannedEnd: input.plannedEnd || null, renewalDeadline: input.renewalDeadline || null, createdBy: actor.userId })
     .returning();
   await recordAudit(db, actor, "order.created", "ORDER", o?.id ?? "", { opportunityId: opp.id });
   return o;

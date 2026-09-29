@@ -16,6 +16,7 @@ import { changeActionStatus, createAction } from "@/modules/actions/service";
 import { createAccount, reassignAccountBd } from "@/modules/accounts/service";
 import { proposeStepDrafts } from "@/modules/playbooks/assistant";
 import { updateFocus } from "@/modules/focus/service";
+import { recordExistingEngagement, saveHealthAnswer, updateOrderDates } from "@/modules/health/service";
 import { addPlaybookStep, completeRunStep, createPlaybook, movePlaybookStep, pauseRun, reassignRunOwner, removePlaybookStep, resumeRun, setAccountDormant, skipRunStep, startPlaybookRun, updatePlaybook, updatePlaybookStep } from "@/modules/playbooks/service";
 import { archiveAccount, deleteAccountPermanently, restoreAccount } from "@/modules/accounts/deletion";
 import { formToStrategyInput, saveStrategy } from "@/modules/strategy/service";
@@ -1091,4 +1092,30 @@ export async function updateFocusAction(fd: FormData) {
     await updateFocus(actor, data);
     return "/vorgehen#fokus";
   }, "Strategischer Fokus gespeichert – gilt ab sofort für alle KI-Agenten und Standardaufgaben.");
+}
+
+// --- Kunden-Health-Check (Etappe 23) -------------------------------------------
+
+export async function saveHealthAnswerAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.accountId ?? "";
+  const items = fd.getAll("items").filter((x): x is string => typeof x === "string");
+  return run(`/kunden/${id}/health`, async (actor) => {
+    await saveHealthAnswer(actor, id, { ...data, items });
+  }, "Antwort gespeichert – nächste Frage.");
+}
+
+export async function updateOrderDatesAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/kunden"), async (actor) => {
+    await updateOrderDates(actor, data.orderId ?? "", data);
+  }, "Einsatzdaten gespeichert – die Verlängerungsregel richtet sich danach.");
+}
+
+export async function recordExistingEngagementAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.accountId ?? "";
+  return run(`/kunden/${id}/health`, async (actor) => {
+    await recordExistingEngagement(actor, id, data);
+  }, "Laufender Einsatz nachgetragen.");
 }

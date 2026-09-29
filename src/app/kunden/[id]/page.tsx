@@ -27,6 +27,8 @@ import { eq } from "drizzle-orm";
 import { getCompanyResearch, type CompanyFact } from "@/modules/research/service";
 import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
+import { HealthBadge } from "@/components/HealthBadge";
+import { computeHealthFor } from "@/modules/health/service";
 
 export default async function KundePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
@@ -70,6 +72,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
     db.query.users.findMany({ where: eq(schema.users.status, "ACTIVE"), orderBy: (u, { asc }) => [asc(u.displayName)] }),
   ]);
   const mayStartPlaybook = mayReassign || mayCreate || isSalesOps(actor);
+  const [health] = await computeHealthFor([{ id: account.id, name: account.name }]);
   const currentBdName = account.responsibleBdUserId
     ? (bdUsers.find((u) => u.id === account.responsibleBdUserId)?.displayName ?? (await db.query.users.findFirst({ where: eq(schema.users.id, account.responsibleBdUserId) }))?.displayName ?? "?")
     : null;
@@ -95,6 +98,20 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         </section>
       )}
       <Feedback params={sp} />
+
+      {health && (
+        <section className="card">
+          <div className="flex flex-wrap items-baseline gap-3 mb-1">
+            <h2 className="font-semibold">Health-Check – wie sicher sitzen wir im Sattel?</h2>
+            <Link href={`/kunden/${account.id}/health`} className="btn btn-small ml-auto">{health.questions.length ? `Interview (${health.questions.length} offene Fragen)` : "Health-Check ansehen"}</Link>
+          </div>
+          <HealthBadge score={health.score} level={health.level} coverage={health.coverage} size="large" />
+          <p className="text-sm mt-2">
+            {health.engagements.length} Einsatz/Einsätze{health.engagements.filter((e) => e.plannedEnd).length ? ` · nächstes Ende ${fmtDate(health.engagements.find((e) => e.plannedEnd)!.plannedEnd)}` : ""}
+            {health.questions.length > 0 && <span className="muted"> · fehlt: {health.questions.slice(0, 2).map((q) => q.key === "ENGAGEMENT_END" ? "Einsatzende" : q.key === "FEEDBACK" ? "Kundenfeedback" : q.key === "LISTING" ? "Listung" : q.key === "RISKS" ? "Risiken" : q.key === "PEOPLE" ? "Ansprechpartner" : "Einsätze").join(", ")}{health.questions.length > 2 ? " …" : ""}</span>}
+          </p>
+        </section>
+      )}
 
       {mayReassign && (
         <section className="card">

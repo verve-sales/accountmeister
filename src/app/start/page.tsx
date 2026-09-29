@@ -9,9 +9,12 @@ import { BarChart, CHART_COLORS } from "@/components/charts/BarChart";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { ProcessStepper } from "@/components/ProcessStepper";
-import { goalStatusLabel } from "@/lib/labels";
+import { fmtDate, goalStatusLabel } from "@/lib/labels";
 import { ensureStandardTasksSafe, freelancerStats } from "@/modules/focus/standardTasks";
 import { getFocus } from "@/modules/focus/service";
+import { computeHealthFor } from "@/modules/health/service";
+import { ensureRenewalRunsSafe, listRenewals } from "@/modules/health/renewal";
+import { HealthBadge } from "@/components/HealthBadge";
 import { createOpportunityAction, setDashboardViewAction, smartDumpAction } from "../actions";
 
 const DASHBOARD_VIEW_COOKIE = "am_sicht";
@@ -26,9 +29,15 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const requested = store.get(DASHBOARD_VIEW_COOKIE)?.value ?? null;
   // Fällige Standardaufgaben (Fokus Freelancer) erzeugen, bevor „Diese Woche dran“ geladen wird
   await ensureStandardTasksSafe(actor);
+  // Verlängerungsregel: am Auslösetag das Vorgehen „Verlängerung“ anstoßen (Etappe 23)
+  await ensureRenewalRunsSafe(actor);
   const d = await buildDashboard(actor, requested);
   const focus = await getFocus(actor.workspaceId);
   const fl = d && focus.freelancerLever ? await freelancerStats(actor, d.accounts.map((c) => c.accountId)) : null;
+  const healthAll = d ? await computeHealthFor(d.accounts.map((c) => ({ id: c.accountId, name: c.accountName }))) : [];
+  // Unübersehbar: Kunden, bei denen Angaben fehlen – zuerst die mit den meisten Einsätzen
+  const healthGaps = healthAll.filter((h) => h.questions.length > 0).sort((a, b) => b.engagements.length - a.engagements.length || a.coverage - b.coverage);
+  const renewals = d ? await listRenewals(d.accounts.map((c) => c.accountId)) : [];
   if (!d) {
     return (
       <div className="space-y-6">
@@ -74,6 +83,47 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             }))}
           />
           <p className="muted text-xs mt-2">Je Kunde zählt die am weitesten fortgeschrittene Stufe seiner Setups. Sicht: {viewLabel[d.view]} – jede Rolle sieht nur ihren eigenen Zuordnungsbereich.</p>
+        </section>
+      )}
+
+      {healthGaps.length > 0 && (
+        <section className="card" style={{ borderColor: "var(--warn)", borderWidth: 2, background: "var(--warn-soft)" }} aria-label="Health-Check: fehlende Angaben">
+          <div className="flex flex-wrap items-baseline gap-3 mb-2">
+            <h2 className="font-semibold" style={{ color: "var(--warn)" }}>Health-Check: Accountmeister braucht Angaben zu {healthGaps.length} Kunde(n)</h2>
+            <span className="muted text-xs">Ohne diese Angaben ist die Sattelfestigkeit unklar – und Verlängerungen werden nicht rechtzeitig angestoßen.</span>
+          </div>
+          <ul className="space-y-2">
+            {healthGaps.slice(0, 3).map((h) => (
+              <li key={h.accountId} className="flex flex-wrap items-center gap-3 text-sm">
+                <strong>{h.accountName}</strong>
+                <HealthBadge score={h.score} level={h.level} coverage={h.coverage} />
+                <span className="grow">{h.questions.slice(0, 2).map((q) => q.text).join(" · ")}</span>
+                <Link href={`/kunden/${h.accountId}/health#interview`} className="btn btn-small">Interview starten</Link>
+              </li>
+            ))}
+          </ul>
+          {healthGaps.length > 3 && <p className="text-sm mt-2">… und {healthGaps.length - 3} weitere Kunden.</p>}
+        </section>
+      )}
+
+      {renewals.length > 0 && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Auslaufende Einsätze (nächste 12 Wochen)</h2>
+          <table className="list">
+            <thead><tr><th>Kunde · Einsatz</th><th>Ende</th><th>Verlängerung</th></tr></thead>
+            <tbody>
+              {renewals.map((r) => (
+                <tr key={r.orderId}>
+                  <td><Link href={`/bedarfe/${r.opportunityId}`}>{r.accountName} · {r.title}</Link></td>
+                  <td className="text-sm" style={{ fontVariantNumeric: "tabular-nums" }}>{fmtDate(r.plannedEnd)} (noch {r.daysToEnd} Tage)</td>
+                  <td className="text-sm">
+                    {r.escalate && <Status label="Eskalation: ohne Fortschritt" />} {r.runStatus === "LAEUFT" ? `läuft – ${r.currentStep ?? "Schritt offen"}` : r.runStatus === "ABGESCHLOSSEN" ? "Vorgehen abgeschlossen" : "noch nicht gestartet"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="muted text-xs mt-2">Eskalation: weniger als 4 Wochen bis zum Ende und im Verlängerungsvorgehen noch kein Schritt erledigt.</p>
         </section>
       )}
 

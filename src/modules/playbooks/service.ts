@@ -220,7 +220,7 @@ async function requireActiveUser(actor: Actor, userId: string, tx: Tx | Db = db)
   return u;
 }
 
-export async function startPlaybookRun(actor: Actor, raw: unknown) {
+export async function startPlaybookRun(actor: Actor, raw: unknown, opts: { proposalOnly?: boolean } = {}) {
   const parsed = startRunInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
@@ -326,14 +326,14 @@ export async function startPlaybookRun(actor: Actor, raw: unknown) {
       .insert(schema.playbookRunSteps)
       .values(steps.map((s) => ({ runId: run.id, stepId: s.id, position: s.position, title: s.title, goal: s.goal, meddpicc: s.meddpicc, suggestedAction: s.suggestedAction, doneCriterion: s.doneCriterion, dueInDays: s.dueInDays, assignee: s.assignee })))
       .returning();
-    await activateStep(tx, actor, run, runSteps.sort((a, b) => a.position - b.position)[0]!, runSteps.length);
+    await activateStep(tx, actor, run, runSteps.sort((a, b) => a.position - b.position)[0]!, runSteps.length, opts.proposalOnly === true);
     await recordAudit(tx, actor, "playbook.run_started", "PLAYBOOK_RUN", run.id, { playbook: playbook.code, owner: ownerUserId });
     return run;
   });
 }
 
 /** Schritt aktivieren: als normale Aktion für die verantwortliche Person anlegen. */
-async function activateStep(tx: Tx, actor: Actor, run: RunRow, step: RunStepRow, total: number) {
+async function activateStep(tx: Tx, actor: Actor, run: RunRow, step: RunStepRow, total: number, proposalOnly = false) {
   const agreement = [step.suggestedAction, step.doneCriterion ? `Erledigt, wenn: ${step.doneCriterion}` : null].filter(Boolean).join("\n");
   // Vorbereitungsschritte übernimmt Sales Operations, sofern dem Vorgehen jemand zugeordnet ist
   const owner = step.assignee === "SALES_OPS" && run.salesOpsUserId ? run.salesOpsUserId : run.ownerUserId;
@@ -346,7 +346,7 @@ async function activateStep(tx: Tx, actor: Actor, run: RunRow, step: RunStepRow,
       title: `${run.playbookName} · Schritt ${step.position}/${total}: ${step.title}`,
       agreement: agreement || null,
       ownerUserId: owner,
-      status: owner === actor.userId ? "ANGENOMMEN" : "VORGESCHLAGEN",
+      status: owner === actor.userId && !proposalOnly ? "ANGENOMMEN" : "VORGESCHLAGEN",
       dueDate: dueDateIn(step.dueInDays),
       createdBy: actor.userId,
     })

@@ -9,6 +9,8 @@ import { Status } from "@/components/Status";
 import { fmtDate, goalStatusLabel } from "@/lib/labels";
 import { getFocus } from "@/modules/focus/service";
 import { freelancerStatsByBd } from "@/modules/focus/standardTasks";
+import { computeHealthFor } from "@/modules/health/service";
+import { HealthBadge } from "@/components/HealthBadge";
 
 export default async function CeoDashboardPage() {
   const actor = await getCurrentActor();
@@ -17,6 +19,8 @@ export default async function CeoDashboardPage() {
   const d = await buildCeoDashboard(actor);
   const focus = await getFocus(actor.workspaceId);
   const flByBd = focus.freelancerLever ? await freelancerStatsByBd(actor.workspaceId) : [];
+  // Portfolio-Matrix: viele Einsätze und wacklige Position zuerst (Priorität = Einsätze × (100 − Score))
+  const health = (await computeHealthFor(d.accounts.map((a) => ({ id: a.accountId, name: a.accountName })))).sort((x, y) => y.engagements.length * (100 - (y.score ?? 50)) - x.engagements.length * (100 - (x.score ?? 50)));
 
   return (
     <div className="space-y-6">
@@ -43,6 +47,27 @@ export default async function CeoDashboardPage() {
             ) : null;
           })()}
         </div>
+      )}
+
+      {health.length > 0 && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Sattelfestigkeit je Kunde (Health-Check)</h2>
+          <table className="list">
+            <thead><tr><th>Kunde</th><th>Sattelfestigkeit</th><th style={{ textAlign: "right" }}>Einsätze</th><th>Nächstes Ende</th><th>Offene Fragen</th></tr></thead>
+            <tbody>
+              {health.map((h) => (
+                <tr key={h.accountId}>
+                  <td><Link href={`/kunden/${h.accountId}/health`}>{h.accountName}</Link></td>
+                  <td><HealthBadge score={h.score} level={h.level} coverage={h.coverage} /> <span className="muted text-xs">Datenlage {h.coverage} %</span></td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{h.engagements.length}</td>
+                  <td className="text-sm">{h.engagements.find((e) => e.plannedEnd)?.plannedEnd ? fmtDate(h.engagements.find((e) => e.plannedEnd)!.plannedEnd) : "–"}</td>
+                  <td style={{ fontVariantNumeric: "tabular-nums" }}>{h.questions.length}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="muted text-xs mt-2">Sortiert nach Handlungsbedarf: viele Einsätze bei niedriger Sattelfestigkeit zuerst. Transparente Regeln, Begründung je Kunde im Health-Check.</p>
+        </section>
       )}
 
       {flByBd.length > 0 && (
