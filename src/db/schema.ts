@@ -27,7 +27,7 @@ import { sql } from "drizzle-orm";
 // Enums (fachliche Zustände, Briefing Kap. 9.2 / 15.3 / 16.2)
 // ---------------------------------------------------------------------------
 
-export const roleEnum = pgEnum("role", ["ANKER", "BD", "PRINCIPAL", "CEO", "ADMIN"]);
+export const roleEnum = pgEnum("role", ["ANKER", "BD", "PRINCIPAL", "CEO", "ADMIN", "SALES_OPS"]);
 export const roleScopeEnum = pgEnum("role_scope", ["WORKSPACE", "ACCOUNT"]);
 export const userStatusEnum = pgEnum("user_status", ["ACTIVE", "INACTIVE"]);
 
@@ -1510,6 +1510,8 @@ export const playbookSteps = pgTable(
     suggestedAction: text("suggested_action"), // Was konkret tun?
     doneCriterion: text("done_criterion"), // Woran erkennt man, dass der Schritt erledigt ist?
     dueInDays: integer("due_in_days"), // Richtwert ab Aktivierung des Schritts
+    /** Wer übernimmt den Schritt: VERANTWORTLICH (i. d. R. BD) oder SALES_OPS (Vorbereitung) – Etappe 22 */
+    assignee: text("assignee").notNull().default("VERANTWORTLICH"),
     createdAt: createdAt(),
   },
   (t) => [index("playbook_steps_playbook_idx").on(t.playbookId)],
@@ -1526,6 +1528,8 @@ export const playbookRuns = pgTable(
     setupId: text("setup_id").notNull().references(() => projectSetups.id),
     opportunityId: text("opportunity_id").references((): AnyPgColumn => opportunities.id),
     ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+    /** Sales Operations für die Vorbereitungsschritte (optional) */
+    salesOpsUserId: text("sales_ops_user_id").references(() => users.id),
     status: playbookRunStatusEnum("status").notNull().default("AKTIV"),
     closedReason: text("closed_reason"),
     startedBy: text("started_by").notNull().references(() => users.id),
@@ -1549,6 +1553,7 @@ export const playbookRunSteps = pgTable(
     suggestedAction: text("suggested_action"),
     doneCriterion: text("done_criterion"),
     dueInDays: integer("due_in_days"),
+    assignee: text("assignee").notNull().default("VERANTWORTLICH"),
     status: playbookStepStatusEnum("status").notNull().default("WARTET"),
     actionId: text("action_id").references(() => actions.id),
     result: text("result"),

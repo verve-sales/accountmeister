@@ -33,6 +33,8 @@ export function PlaybookRuns({
     /** Vorausgewähltes Muster samt kurzer Begründung (z. B. Reaktivierungs-Setup → Altkunden-Reaktivierung) */
     recommendedId?: string | null;
     recommendation?: string | null;
+    /** Personen mit Rolle Sales Operations – übernehmen die Vorbereitungsschritte */
+    salesOps?: User[];
   } | null;
 }) {
   const active = runs.filter((r) => r.status === "AKTIV");
@@ -89,6 +91,15 @@ export function PlaybookRuns({
                 {users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
               </select>
             </div>
+            {start.salesOps && start.salesOps.length > 0 && (
+              <div>
+                <label className="label" htmlFor="pbOps">Sales Operations (Vorbereitungsschritte)</label>
+                <select id="pbOps" name="salesOpsUserId" className="select" defaultValue={start.salesOps.length === 1 ? start.salesOps[0]!.id : ""}>
+                  <option value="">– keine, alles bei der verantwortlichen Person –</option>
+                  {start.salesOps.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+                </select>
+              </div>
+            )}
             <div className="flex items-end"><button className="btn" type="submit">Vorgehen starten</button></div>
           </form>
         </details>
@@ -105,7 +116,7 @@ function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }
       <div className="flex flex-wrap items-baseline gap-2 mb-2">
         <strong>{r.playbookName}</strong>
         <Status label={playbookRunStatusLabel[r.status] ?? r.status} />
-        <span className="muted text-sm">verantwortlich: {r.ownerName} · Setup: <Link href={`/setups/${r.setupId}`}>{r.setupName}</Link>{r.opportunityId && r.opportunityTitle ? <> · Chance: <Link href={`/bedarfe/${r.opportunityId}`}>{r.opportunityTitle}</Link></> : null} · gestartet {fmtDate(r.createdAt)}</span>
+        <span className="muted text-sm">verantwortlich: {r.ownerName}{r.salesOpsName ? ` · Sales Operations: ${r.salesOpsName}` : ""} · Setup: <Link href={`/setups/${r.setupId}`}>{r.setupName}</Link>{r.opportunityId && r.opportunityTitle ? <> · Chance: <Link href={`/bedarfe/${r.opportunityId}`}>{r.opportunityTitle}</Link></> : null} · gestartet {fmtDate(r.createdAt)}</span>
       </div>
       <ProcessStepper
         steps={r.steps.map((s) => ({ key: s.id, label: s.title }))}
@@ -116,7 +127,7 @@ function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }
 
       {current && r.status === "AKTIV" && (
         <div className="mt-3 text-sm space-y-1">
-          <div className="font-medium">Aktueller Schritt {current.position}/{r.steps.length}: {current.title}</div>
+          <div className="font-medium">Aktueller Schritt {current.position}/{r.steps.length}: {current.title}{current.assignee === "SALES_OPS" && <span className="muted font-normal"> · Vorbereitung durch Sales Operations</span>}</div>
           {current.goal && <p><span className="muted">Wozu: </span>{current.goal}</p>}
           {current.meddpicc && <p><span className="muted">MEDDPICC: </span>{current.meddpicc}</p>}
           {current.suggestedAction && <p><span className="muted">Vorschlag: </span>{current.suggestedAction}</p>}

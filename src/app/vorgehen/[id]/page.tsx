@@ -6,7 +6,7 @@ import { Feedback, type SearchParams } from "@/components/Feedback";
 import { playbookScopeLabel } from "@/lib/labels";
 import { addPlaybookStepAction, movePlaybookStepAction, removePlaybookStepAction, updatePlaybookAction, updatePlaybookStepAction } from "../../actions";
 
-type StepDefaults = { title?: string; goal?: string | null; meddpicc?: string | null; suggestedAction?: string | null; doneCriterion?: string | null; dueInDays?: number | null };
+type StepDefaults = { title?: string; goal?: string | null; meddpicc?: string | null; suggestedAction?: string | null; doneCriterion?: string | null; dueInDays?: number | null; assignee?: string };
 
 function StepFields({ prefix, s }: { prefix: string; s: StepDefaults }) {
   return (
@@ -15,6 +15,13 @@ function StepFields({ prefix, s }: { prefix: string; s: StepDefaults }) {
       <div className="sm:col-span-2"><label className="label" htmlFor={`${prefix}-goal`}>Wozu dient der Schritt?</label><input id={`${prefix}-goal`} name="goal" className="input" maxLength={1000} defaultValue={s.goal ?? ""} /></div>
       <div><label className="label" htmlFor={`${prefix}-med`}>MEDDPICC-Bezug</label><input id={`${prefix}-med`} name="meddpicc" className="input" maxLength={200} defaultValue={s.meddpicc ?? ""} placeholder="z. B. Metrics, Champion" /></div>
       <div><label className="label" htmlFor={`${prefix}-due`}>Richtwert (Tage ab Aktivierung)</label><input id={`${prefix}-due`} name="dueInDays" type="number" min={0} max={365} className="input" defaultValue={s.dueInDays ?? ""} /></div>
+      <div className="sm:col-span-2">
+        <label className="label" htmlFor={`${prefix}-who`}>Wer übernimmt den Schritt?</label>
+        <select id={`${prefix}-who`} name="assignee" className="select" defaultValue={s.assignee ?? "VERANTWORTLICH"}>
+          <option value="VERANTWORTLICH">Verantwortliche Person des Vorgehens (i. d. R. BD)</option>
+          <option value="SALES_OPS">Sales Operations (Vorbereitung, Recherche, Unterlagen)</option>
+        </select>
+      </div>
       <div className="sm:col-span-2"><label className="label" htmlFor={`${prefix}-act`}>Vorschlag: was konkret tun?</label><textarea id={`${prefix}-act`} name="suggestedAction" className="textarea" rows={2} maxLength={2000} defaultValue={s.suggestedAction ?? ""} /></div>
       <div className="sm:col-span-2"><label className="label" htmlFor={`${prefix}-done`}>Erledigt, wenn …</label><input id={`${prefix}-done`} name="doneCriterion" className="input" maxLength={1000} defaultValue={s.doneCriterion ?? ""} /></div>
     </>

@@ -42,7 +42,7 @@ export async function createSupportRequest(actor: Actor, raw: unknown) {
   const addressee = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.addresseeUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
   if (!addressee) throw new ValidationError("Adressat nicht gefunden.");
   const roles = await db.query.roleAssignments.findMany({ where: eq(schema.roleAssignments.userId, addressee.id) });
-  if (!roles.some((r) => r.role === "PRINCIPAL" || r.role === "CEO")) throw new ValidationError("Unterstützungsaufträge richten sich an Principal oder CEO.");
+  if (!roles.some((r) => r.role === "PRINCIPAL" || r.role === "CEO" || r.role === "SALES_OPS")) throw new ValidationError("Unterstützungsaufträge richten sich an Principal, CEO oder Sales Operations.");
   let ctx: SetupContext | null = null;
   if (input.setupId) {
     ctx = await loadSetupContext(actor, input.setupId);

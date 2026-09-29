@@ -5,6 +5,7 @@ import { getAccount } from "@/modules/accounts/service";
 import { listSetupsForAccount } from "@/modules/setups/service";
 import { listOpportunitiesForAccount } from "@/modules/opportunities/service";
 import { canCreateSetup, canReassignResponsibility, loadSetupContext } from "@/modules/identity/authz";
+import { isSalesOps } from "@/modules/identity/actor";
 import { analyzeSetup, STAGES, stageLabel } from "@/modules/strategy/analysis";
 import { ProcessStepper } from "@/components/ProcessStepper";
 import { canDeleteAccount } from "@/modules/accounts/deletion";
@@ -24,7 +25,7 @@ import { changePriorityAction, createPriorityAction, reassignAccountBdAction, re
 import { db, schema } from "@/db/client";
 import { eq } from "drizzle-orm";
 import { getCompanyResearch, type CompanyFact } from "@/modules/research/service";
-import { listPlaybooks, listRuns } from "@/modules/playbooks/service";
+import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
 
 export default async function KundePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
@@ -62,12 +63,13 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   );
   const analysisBySetup = new Map(analyses.filter((a): a is NonNullable<typeof a> => !!a).map((a) => [a.setupId, a.analysis]));
   const furthestStage = [...analysisBySetup.values()].sort((a, b) => STAGES.indexOf(b.stage) - STAGES.indexOf(a.stage))[0] ?? null;
-  const [runs, accountPlaybooks, activeUsers] = await Promise.all([
+  const [runs, accountPlaybooks, salesOps, activeUsers] = await Promise.all([
     listRuns(actor, { accountId: id }),
     listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true }),
+    listSalesOpsUsers(actor.workspaceId),
     db.query.users.findMany({ where: eq(schema.users.status, "ACTIVE"), orderBy: (u, { asc }) => [asc(u.displayName)] }),
   ]);
-  const mayStartPlaybook = mayReassign || mayCreate;
+  const mayStartPlaybook = mayReassign || mayCreate || isSalesOps(actor);
   const currentBdName = account.responsibleBdUserId
     ? (bdUsers.find((u) => u.id === account.responsibleBdUserId)?.displayName ?? (await db.query.users.findFirst({ where: eq(schema.users.id, account.responsibleBdUserId) }))?.displayName ?? "?")
     : null;
@@ -128,7 +130,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         runs={runs}
         back={back}
         users={activeUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
-        start={mayStartPlaybook && account.status !== "ARCHIVED" ? { playbooks: accountPlaybooks, hidden: { accountId: account.id }, setups: setups.filter((x) => x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })), defaultNewSetupName: `Reaktivierung ${new Date().getFullYear()}`, defaultOwnerId: account.responsibleBdUserId } : null}
+        start={mayStartPlaybook && account.status !== "ARCHIVED" ? { playbooks: accountPlaybooks, hidden: { accountId: account.id }, setups: setups.filter((x) => x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })), defaultNewSetupName: `Reaktivierung ${new Date().getFullYear()}`, defaultOwnerId: account.responsibleBdUserId, salesOps } : null}
       />
 
       {/* Öffentliche Unternehmensrecherche (Etappe 16): eng begrenzte Ausnahme – nur öffentliche Firmendaten, nie Personennamen */}

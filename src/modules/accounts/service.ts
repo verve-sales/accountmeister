@@ -4,7 +4,7 @@ import { db, schema } from "@/db/client";
 import { ConflictError, NotFoundError, ForbiddenError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
-import { canCreateAccount, canReassignResponsibility, canViewAccount } from "@/modules/identity/authz";
+import { assertCanCarryResponsibility, canCreateAccount, canReassignResponsibility, canViewAccount } from "@/modules/identity/authz";
 
 export const createAccountInput = z.object({
   name: z.string().trim().min(2, "Kundenname ist zu kurz").max(200),
@@ -104,6 +104,7 @@ export async function reassignAccountBd(actor: Actor, accountId: string, raw: un
   if (account.responsibleBdUserId === input.responsibleBdUserId) throw new ValidationError("Diese Person ist bereits zuständig.");
   const newBd = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.responsibleBdUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
   if (!newBd) throw new ValidationError("Person nicht gefunden oder inaktiv.");
+  await assertCanCarryResponsibility(input.responsibleBdUserId);
   return db.transaction(async (tx) => {
     const [updated] = await tx
       .update(schema.accounts)

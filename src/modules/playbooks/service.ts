@@ -4,8 +4,8 @@ import { db, schema, type Db, type Tx } from "@/db/client";
 import type { PlaybookScope } from "@/db/schema";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
-import { hasRole, type Actor } from "@/modules/identity/actor";
-import { canCreateSetup, canEditSetup, canReassignResponsibility, canViewSetup, loadSetupContext } from "@/modules/identity/authz";
+import { hasRole, isSalesOps, type Actor } from "@/modules/identity/actor";
+import { assertCanCarryResponsibility, canCreateSetup, canEditSetup, canReassignResponsibility, canViewSetup, loadSetupContext } from "@/modules/identity/authz";
 import { listVisibleAccounts } from "@/modules/accounts/service";
 import { ALTKUNDEN_CODE, DEFAULT_PLAYBOOKS } from "./defaults";
 
@@ -120,10 +120,11 @@ export const stepInput = z.object({
   suggestedAction: optText(2000),
   doneCriterion: optText(1000),
   dueInDays: z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().int().min(0).max(365).optional()),
+  assignee: z.enum(["VERANTWORTLICH", "SALES_OPS"]).optional().default("VERANTWORTLICH"),
 });
 
 function stepValues(i: z.infer<typeof stepInput>) {
-  return { title: i.title, goal: i.goal || null, meddpicc: i.meddpicc || null, suggestedAction: i.suggestedAction || null, doneCriterion: i.doneCriterion || null, dueInDays: i.dueInDays ?? null };
+  return { title: i.title, goal: i.goal || null, meddpicc: i.meddpicc || null, suggestedAction: i.suggestedAction || null, doneCriterion: i.doneCriterion || null, dueInDays: i.dueInDays ?? null, assignee: i.assignee ?? "VERANTWORTLICH" };
 }
 
 export async function addPlaybookStep(actor: Actor, playbookId: string, raw: unknown) {
@@ -193,7 +194,19 @@ export const startRunInput = z.object({
   /** Nur bei Kunden-Mustern: neues Setup für das Vorgehen anlegen (Name), statt ein bestehendes zu nutzen */
   newSetupName: optText(200),
   ownerUserId: optText(100),
+  /** Sales Operations für die Vorbereitungsschritte (Etappe 22); leer = automatisch, falls eindeutig */
+  salesOpsUserId: optText(100),
 });
+
+/** Aktive Personen mit Rolle Sales Operations im Arbeitsraum. */
+export async function listSalesOpsUsers(workspaceId: string) {
+  const rows = await db
+    .selectDistinct({ id: schema.users.id, displayName: schema.users.displayName })
+    .from(schema.users)
+    .innerJoin(schema.roleAssignments, eq(schema.roleAssignments.userId, schema.users.id))
+    .where(and(eq(schema.users.workspaceId, workspaceId), eq(schema.users.status, "ACTIVE"), eq(schema.roleAssignments.role, "SALES_OPS")));
+  return rows.sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
 
 function dueDateIn(days: number | null): string | null {
   if (days === null || days === undefined) return null;
@@ -254,7 +267,7 @@ export async function startPlaybookRun(actor: Actor, raw: unknown) {
   } else {
     account = await db.query.accounts.findFirst({ where: and(eq(schema.accounts.id, input.accountId!), eq(schema.accounts.workspaceId, actor.workspaceId)) });
     if (!account) throw new NotFoundError("Kunde");
-    if (!canReassignResponsibility(actor, account) && !canCreateSetup(actor, account)) throw new ForbiddenError("Sie dürfen für diesen Kunden kein Vorgehen starten.");
+    if (!canReassignResponsibility(actor, account) && !canCreateSetup(actor, account) && !isSalesOps(actor)) throw new ForbiddenError("Sie dürfen für diesen Kunden kein Vorgehen starten.");
   }
   if (account.status === "ARCHIVED") throw new TransitionError("Der Kunde ist archiviert – bitte zuerst wiederherstellen.");
 
@@ -269,6 +282,18 @@ export async function startPlaybookRun(actor: Actor, raw: unknown) {
   const setupRow = setupId ? await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, setupId) }) : undefined;
   const ownerUserId = input.ownerUserId || setupRow?.bdUserId || account.responsibleBdUserId || actor.userId;
   await requireActiveUser(actor, ownerUserId);
+  await assertCanCarryResponsibility(ownerUserId);
+  // Sales Operations für die Vorbereitungsschritte: gewählt, sonst der Starter selbst (falls Sales Ops), sonst die einzige Person
+  let salesOpsUserId: string | null = null;
+  const opsUsers = await listSalesOpsUsers(actor.workspaceId);
+  if (input.salesOpsUserId) {
+    if (!opsUsers.some((u) => u.id === input.salesOpsUserId)) throw new ValidationError("Die gewählte Person hat nicht die Rolle Sales Operations.");
+    salesOpsUserId = input.salesOpsUserId;
+  } else if (opsUsers.some((u) => u.id === actor.userId)) {
+    salesOpsUserId = actor.userId;
+  } else if (opsUsers.length === 1) {
+    salesOpsUserId = opsUsers[0]!.id;
+  }
   const acc = account;
 
   return db.transaction(async (tx) => {
@@ -294,12 +319,12 @@ export async function startPlaybookRun(actor: Actor, raw: unknown) {
     }
     const [run] = await tx
       .insert(schema.playbookRuns)
-      .values({ workspaceId: actor.workspaceId, playbookId: playbook.id, playbookName: playbook.name, accountId: acc.id, setupId: targetSetupId!, opportunityId, ownerUserId, startedBy: actor.userId })
+      .values({ workspaceId: actor.workspaceId, playbookId: playbook.id, playbookName: playbook.name, accountId: acc.id, setupId: targetSetupId!, opportunityId, ownerUserId, salesOpsUserId, startedBy: actor.userId })
       .returning();
     if (!run) throw new Error("Vorgehen konnte nicht gestartet werden");
     const runSteps = await tx
       .insert(schema.playbookRunSteps)
-      .values(steps.map((s) => ({ runId: run.id, stepId: s.id, position: s.position, title: s.title, goal: s.goal, meddpicc: s.meddpicc, suggestedAction: s.suggestedAction, doneCriterion: s.doneCriterion, dueInDays: s.dueInDays })))
+      .values(steps.map((s) => ({ runId: run.id, stepId: s.id, position: s.position, title: s.title, goal: s.goal, meddpicc: s.meddpicc, suggestedAction: s.suggestedAction, doneCriterion: s.doneCriterion, dueInDays: s.dueInDays, assignee: s.assignee })))
       .returning();
     await activateStep(tx, actor, run, runSteps.sort((a, b) => a.position - b.position)[0]!, runSteps.length);
     await recordAudit(tx, actor, "playbook.run_started", "PLAYBOOK_RUN", run.id, { playbook: playbook.code, owner: ownerUserId });
@@ -310,6 +335,8 @@ export async function startPlaybookRun(actor: Actor, raw: unknown) {
 /** Schritt aktivieren: als normale Aktion für die verantwortliche Person anlegen. */
 async function activateStep(tx: Tx, actor: Actor, run: RunRow, step: RunStepRow, total: number) {
   const agreement = [step.suggestedAction, step.doneCriterion ? `Erledigt, wenn: ${step.doneCriterion}` : null].filter(Boolean).join("\n");
+  // Vorbereitungsschritte übernimmt Sales Operations, sofern dem Vorgehen jemand zugeordnet ist
+  const owner = step.assignee === "SALES_OPS" && run.salesOpsUserId ? run.salesOpsUserId : run.ownerUserId;
   const [a] = await tx
     .insert(schema.actions)
     .values({
@@ -318,8 +345,8 @@ async function activateStep(tx: Tx, actor: Actor, run: RunRow, step: RunStepRow,
       opportunityId: run.opportunityId,
       title: `${run.playbookName} · Schritt ${step.position}/${total}: ${step.title}`,
       agreement: agreement || null,
-      ownerUserId: run.ownerUserId,
-      status: run.ownerUserId === actor.userId ? "ANGENOMMEN" : "VORGESCHLAGEN",
+      ownerUserId: owner,
+      status: owner === actor.userId ? "ANGENOMMEN" : "VORGESCHLAGEN",
       dueDate: dueDateIn(step.dueInDays),
       createdBy: actor.userId,
     })
@@ -476,6 +503,7 @@ export async function reassignRunOwner(actor: Actor, runId: string, raw: unknown
   if (run.ownerUserId !== actor.userId && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Die Verantwortung stellen Principal, CEO, der zuständige BD oder die bisher verantwortliche Person um.");
   if (run.ownerUserId === parsed.data.ownerUserId) throw new ValidationError("Diese Person ist bereits verantwortlich.");
   await requireActiveUser(actor, parsed.data.ownerUserId);
+  await assertCanCarryResponsibility(parsed.data.ownerUserId);
   return db.transaction(async (tx) => {
     const [u] = await tx
       .update(schema.playbookRuns)
@@ -485,7 +513,7 @@ export async function reassignRunOwner(actor: Actor, runId: string, raw: unknown
     if (!u) throw new ConflictError();
     const open = await tx.query.playbookRunSteps.findMany({ where: and(eq(schema.playbookRunSteps.runId, runId), eq(schema.playbookRunSteps.status, "OFFEN")) });
     for (const s of open) {
-      if (!s.actionId) continue;
+      if (!s.actionId || (s.assignee === "SALES_OPS" && run.salesOpsUserId)) continue; // Vorbereitungsschritte bleiben bei Sales Operations
       const a = await tx.query.actions.findFirst({ where: eq(schema.actions.id, s.actionId) });
       if (!a || a.status === "ERLEDIGT" || a.status === "VERWORFEN") continue;
       await tx.update(schema.actions).set({ ownerUserId: parsed.data.ownerUserId, status: parsed.data.ownerUserId === actor.userId ? "ANGENOMMEN" : "VORGESCHLAGEN", version: a.version + 1, updatedAt: new Date() }).where(eq(schema.actions.id, a.id));
@@ -530,12 +558,13 @@ export async function listRuns(actor: Actor, where: { accountId?: string; setupI
   const oppIds = [...new Set(visible.map((r) => r.opportunityId).filter((x): x is string => !!x))];
   const oppRows = oppIds.length ? await db.query.opportunities.findMany({ where: inArray(schema.opportunities.id, oppIds), columns: { id: true, title: true } }) : [];
   const oppTitles = new Map(oppRows.map((o) => [o.id, o.title]));
-  const userIds = [...new Set([...visible.map((r) => r.ownerUserId), ...acts.map((a) => a.ownerUserId)])];
+  const userIds = [...new Set([...visible.map((r) => r.ownerUserId), ...visible.map((r) => r.salesOpsUserId).filter((x): x is string => !!x), ...acts.map((a) => a.ownerUserId)])];
   const users = userIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, userIds) }) : [];
   const names = new Map(users.map((u) => [u.id, u.displayName]));
   return visible.map((r) => ({
     ...r,
     ownerName: names.get(r.ownerUserId) ?? "?",
+    salesOpsName: r.salesOpsUserId ? (names.get(r.salesOpsUserId) ?? "?") : null,
     setupName: setupNames.get(r.setupId) ?? "",
     opportunityTitle: r.opportunityId ? (oppTitles.get(r.opportunityId) ?? null) : null,
     canWork: mayWork.get(r.id) ?? false,

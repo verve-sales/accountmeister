@@ -4,7 +4,7 @@ import { db, schema } from "@/db/client";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
-import { canCreateSetup, canEditSetup, canReassignResponsibility, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
+import { assertCanCarryResponsibility, canCreateSetup, canEditSetup, canReassignResponsibility, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { getAccount } from "@/modules/accounts/service";
 import { getSinceForSetup, listReviewsForSetup } from "@/modules/reviews/service";
 
@@ -260,6 +260,7 @@ export async function reassignSetupBd(actor: Actor, setupId: string, raw: unknow
   if (!canReassignResponsibility(actor, ctx.account) && ctx.setup.bdUserId !== actor.userId) throw new ForbiddenError("Sie dürfen die Setup-Zuständigkeit hier nicht umstellen.");
   const newBd = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.bdUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
   if (!newBd) throw new ValidationError("Person nicht gefunden oder inaktiv.");
+  await assertCanCarryResponsibility(input.bdUserId);
   return db.transaction(async (tx) => {
     const [updated] = await tx
       .update(schema.projectSetups)

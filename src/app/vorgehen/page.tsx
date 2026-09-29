@@ -92,6 +92,7 @@ export default async function VorgehenPage({ searchParams }: { searchParams: Sea
                     <strong>{s.title}</strong>
                     {s.meddpicc && <span className="muted"> · MEDDPICC: {s.meddpicc}</span>}
                     {s.dueInDays !== null && <span className="muted"> · Richtwert {s.dueInDays} Tage</span>}
+                    {s.assignee === "SALES_OPS" && <span className="muted"> · übernimmt Sales Operations</span>}
                     {s.goal && <div><span className="muted">Wozu: </span>{s.goal}</div>}
                     {s.suggestedAction && <div><span className="muted">Vorschlag: </span>{s.suggestedAction}</div>}
                     {s.doneCriterion && <div><span className="muted">Erledigt, wenn: </span>{s.doneCriterion}</div>}

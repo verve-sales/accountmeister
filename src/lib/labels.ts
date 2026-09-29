@@ -53,7 +53,7 @@ export const influenceLabel: Record<string, string> = { UNBEKANNT: "unbekannt", 
 export const interviewStatusLabel: Record<string, string> = { LAUFEND: "Läuft", ABGESCHLOSSEN: "Abgeschlossen", VERWORFEN: "Verworfen" };
 export const extractStatusLabel: Record<string, string> = { OK: "Vollständig", TEILWEISE: "Teilweise", LEER: "Kein Text", FEHLER: "Fehler" };
 export const intakeStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", UEBERNOMMEN: "Übernommen", VERWORFEN: "Verworfen" };
-export const roleLabel: Record<string, string> = { ANKER: "Anker", BD: "BD", PRINCIPAL: "Principal", CEO: "CEO", ADMIN: "Administration" };
+export const roleLabel: Record<string, string> = { ANKER: "Anker", BD: "BD", PRINCIPAL: "Principal", CEO: "CEO", ADMIN: "Administration", SALES_OPS: "Sales Operations" };
 
 export function fmtDate(d: string | Date | null | undefined, tz = "Europe/Berlin"): string {
   if (!d) return "–";

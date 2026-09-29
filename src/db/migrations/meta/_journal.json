@@ -162,6 +162,13 @@
       "when": 1790665917581,
       "tag": "0022_fokus_standardaufgaben",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790671151883,
+      "tag": "0023_sales_operations",
+      "breakpoints": true
     }
   ]
 }

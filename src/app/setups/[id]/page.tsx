@@ -12,7 +12,7 @@ import { canReassignResponsibility, loadSetupContext } from "@/modules/identity/
 import { analyzeSetup, STAGES, stageLabel } from "@/modules/strategy/analysis";
 import { ProcessStepper } from "@/components/ProcessStepper";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
-import { listPlaybooks, listRuns } from "@/modules/playbooks/service";
+import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { ALTKUNDEN_CODE } from "@/modules/playbooks/defaults";
 import { groupByFamily, listRoles } from "@/modules/roles/catalog";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
@@ -80,7 +80,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const roleGroups = groupByFamily(roles);
   const roleName = new Map(roles.map((r) => [r.id, r.name]));
   const openOpportunities = opportunities.filter((o) => o.status !== "BEENDET");
-  const leaderRoles = await db.query.roleAssignments.findMany({ where: or(eq(schema.roleAssignments.role, "PRINCIPAL"), eq(schema.roleAssignments.role, "CEO")) });
+  const leaderRoles = await db.query.roleAssignments.findMany({ where: or(eq(schema.roleAssignments.role, "PRINCIPAL"), eq(schema.roleAssignments.role, "CEO"), eq(schema.roleAssignments.role, "SALES_OPS")) });
+  const opsIds = new Set(leaderRoles.filter((r) => r.role === "SALES_OPS").map((r) => r.userId));
   const leaderIds = [...new Set(leaderRoles.map((r) => r.userId))].filter((uid) => uid !== actor.userId);
   const leaders = leaderIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, leaderIds), orderBy: (u, { asc }) => [asc(u.displayName)] }) : [];
   const openSupport = support.filter((s) => s.status === "ANGEFRAGT" || s.status === "ANGENOMMEN");
@@ -94,7 +95,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const setupCtx = await loadSetupContext(actor, id);
   const analysis = setupCtx ? await analyzeSetup(actor, setupCtx) : null;
   const mayReassign = canReassignResponsibility(actor, d.account);
-  const [runs, setupScoped, accountScoped] = await Promise.all([listRuns(actor, { setupId: id }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true }), listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true })]);
+  const [runs, setupScoped, accountScoped, salesOps] = await Promise.all([listRuns(actor, { setupId: id }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true }), listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true }), listSalesOpsUsers(actor.workspaceId)]);
   // Kunden-Muster (z. B. Altkunden-Reaktivierung) lassen sich auch direkt auf ein bestehendes Setup anwenden.
   const setupPlaybooks = [...accountScoped, ...setupScoped];
   const looksLikeReactivation = /reaktiv|re-?entry|wiedereinstieg|altkunde|bestandskunde|historisch/i.test(`${d.setup.name} ${d.setup.contextNote ?? ""}`);
@@ -137,6 +138,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
             playbooks: setupPlaybooks,
             hidden: { setupId: d.setup.id, accountId: d.account.id },
             defaultOwnerId: d.setup.bdUserId,
+            salesOps,
             recommendedId: looksLikeReactivation && reactivation ? reactivation.id : null,
             recommendation: looksLikeReactivation && reactivation && !setupRuns.some((r) => r.status === "AKTIV") ? "Dieses Setup sieht nach einer Reaktivierung aus – „Altkunden-Reaktivierung“ führt Schritt für Schritt durch und erstellt je Schritt Entwürfe (Mail, Metriken, Pitch)." : null,
           } : null}
@@ -558,8 +560,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       {/* Quellen */}
       {/* Unterstützungsaufträge (11.1, F13) */}
       <section className="card">
-        <h2 className="font-semibold mb-2">Unterstützung durch Principal/CEO ({openSupport.length} offen)</h2>
-        <p className="muted text-sm mb-2">Ein Unterstützungsauftrag ist begrenzt und konkret (z. B. „Kontakt zu Frau X herstellen“, „Angebotsentwurf gegenlesen“). Die operative Fallverantwortung bleibt beim BD.</p>
+        <h2 className="font-semibold mb-2">Unterstützung durch Principal, CEO oder Sales Operations ({openSupport.length} offen)</h2>
+        <p className="muted text-sm mb-2">Ein Unterstützungsauftrag ist begrenzt und konkret – an Principal/CEO z. B. „Kontakt zu Frau X herstellen“, an Sales Operations z. B. „Einseiter zum früheren Projekt bis Freitag vorbereiten“ oder „Registrierung im Lieferantenportal anstoßen“. Die operative Fallverantwortung bleibt beim BD.</p>
         {support.length === 0 ? <p className="muted text-sm">Keine Unterstützungsaufträge zu diesem Setup.</p> : (
           <ul className="space-y-2">
             {support.map((s) => (
@@ -593,7 +595,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
               <div className="sm:col-span-2"><label className="label" htmlFor="srTask">Konkreter Auftrag</label><input id="srTask" name="task" className="input" required minLength={10} placeholder="z. B. Kontakt zur Bereichsleitung Einkauf herstellen" /></div>
               <div>
                 <label className="label" htmlFor="srAddressee">An</label>
-                <select id="srAddressee" name="addresseeUserId" className="select" required>{leaders.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}</select>
+                <select id="srAddressee" name="addresseeUserId" className="select" required>{leaders.map((u) => <option key={u.id} value={u.id}>{u.displayName}{opsIds.has(u.id) ? " (Sales Operations)" : ""}</option>)}</select>
               </div>
               <div><label className="label" htmlFor="srDue">Bis (optional)</label><input id="srDue" name="dueDate" type="date" className="input" /></div>
               <div className="sm:col-span-2"><label className="label" htmlFor="srContext">Kontext (was liegt vor, was wird gebraucht)</label><textarea id="srContext" name="context" className="textarea" rows={2} /></div>

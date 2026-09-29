@@ -8,7 +8,8 @@
 import { and, eq, ne } from "drizzle-orm";
 import { db, schema, type Db, type Tx } from "@/db/client";
 import type { AccessClass } from "@/db/schema";
-import { hasAnyContentRole, hasRole, type Actor } from "./actor";
+import { hasAnyContentRole, hasRole, isSalesOps, isSalesOpsOnly, type Actor } from "./actor";
+import { ForbiddenError, ValidationError } from "@/lib/errors";
 
 export type AccountRow = typeof schema.accounts.$inferSelect;
 export type SetupRow = typeof schema.projectSetups.$inferSelect;
@@ -55,6 +56,7 @@ export function canViewAccount(actor: Actor, account: AccountRow): boolean {
   if (account.workspaceId !== actor.workspaceId) return false;
   if (isResponsibleBd(actor, account)) return true;
   if (hasRole(actor, "PRINCIPAL", account.id) || hasRole(actor, "CEO")) return true;
+  if (isSalesOps(actor)) return true; // Sales Operations unterstützt alle BDs
   // Account-bezogene Rollen (z. B. BD/ANKER mit Scope auf diesen Kunden)
   if (actor.accountRoles.has(account.id)) return true;
   return false;
@@ -88,6 +90,7 @@ export function canViewSetup(actor: Actor, ctx: SetupContext): boolean {
   if (ctx.setup.createdBy === actor.userId || ctx.setup.bdUserId === actor.userId) return true;
   if (isResponsibleBd(actor, ctx.account)) return true;
   if (hasRole(actor, "PRINCIPAL", ctx.account.id)) return true;
+  if (isSalesOps(actor)) return true;
   if (ctx.setup.visibility === "ACCOUNT_TEAM" && canViewAccount(actor, ctx.account)) return true;
   if (ctx.setup.visibility === "WORKSPACE" && hasAnyContentRole(actor)) return true;
   // CEO: Zusammenfassung sichtbar, aber keine Rohquellen (siehe canViewSource)
@@ -100,6 +103,7 @@ export function canEditSetup(actor: Actor, ctx: SetupContext): boolean {
   if (ctx.setup.status === "ARCHIVIERT") return false;
   if (ctx.membership?.canEdit) return true;
   if (ctx.ownsOpportunity) return true; // verantwortlich für eine Chance = bearbeitend beteiligt
+  if (isSalesOps(actor)) return true; // vorbereiten und pflegen – Entscheidungen bleiben beim BD (assertDecisionRight)
   if (ctx.setup.createdBy === actor.userId) return true; // Ersteller bis zur angenommenen Übergabe (6.1)
   if (ctx.setup.bdUserId === actor.userId) return true;
   if (isResponsibleBd(actor, ctx.account)) return true;
@@ -127,8 +131,8 @@ export function canViewSource(actor: Actor, source: SourceRow, ctx: SetupContext
   if (isCeoOnly) return cls === "WORKSPACE";
   if (cls === "WORKSPACE") return hasAnyContentRole(actor);
   if (!ctx) return false;
-  if (cls === "SETUP") return ctx.membership !== null || ctx.ownsOpportunity || ctx.setup.bdUserId === actor.userId;
-  if (cls === "ACCOUNT_TEAM") return ctx.membership !== null || ctx.ownsOpportunity || isResponsibleBd(actor, ctx.account) || hasRole(actor, "PRINCIPAL", ctx.account.id) || ctx.setup.bdUserId === actor.userId;
+  if (cls === "SETUP") return ctx.membership !== null || ctx.ownsOpportunity || isSalesOps(actor) || ctx.setup.bdUserId === actor.userId;
+  if (cls === "ACCOUNT_TEAM") return ctx.membership !== null || ctx.ownsOpportunity || isSalesOps(actor) || isResponsibleBd(actor, ctx.account) || hasRole(actor, "PRINCIPAL", ctx.account.id) || ctx.setup.bdUserId === actor.userId;
   return false;
 }
 
@@ -157,6 +161,26 @@ export function hasRoleForAccountWrite(actor: Actor, account: AccountRow): boole
   if (account.workspaceId !== actor.workspaceId) return false;
   if (isResponsibleBd(actor, account)) return true;
   if (hasRole(actor, "PRINCIPAL", account.id)) return true;
+  if (isSalesOps(actor)) return true; // Personen und Funktionen pflegen
   const acc = actor.accountRoles.get(account.id);
   return !!acc && (acc.has("BD") || acc.has("ANKER"));
+}
+
+/**
+ * Entscheidungsrecht (Etappe 22): Kritische Übergänge – Chance bestätigen/Status setzen, Angebot als vorgestellt
+ * oder akzeptiert markieren, Auftrag/Start bestätigen, Verantwortung übernehmen – bleiben bei BD, Anker, Principal
+ * oder CEO. Wer nur Sales Operations ist, bereitet vor, entscheidet aber nicht.
+ */
+export function assertDecisionRight(actor: Actor, what: string): void {
+  if (isSalesOpsOnly(actor)) throw new ForbiddenError(`${what} bleibt beim BD – Sales Operations bereitet vor, entscheidet aber nicht.`);
+}
+
+/** Ist die Person (per ID) ausschließlich Sales Operations? Für Zuweisungen von Verantwortung. */
+export async function isSalesOpsOnlyUser(userId: string, tx: Tx | Db = db): Promise<boolean> {
+  const rows = await tx.query.roleAssignments.findMany({ where: eq(schema.roleAssignments.userId, userId) });
+  return rows.some((r) => r.role === "SALES_OPS") && !rows.some((r) => r.role === "ANKER" || r.role === "BD" || r.role === "PRINCIPAL" || r.role === "CEO");
+}
+
+export async function assertCanCarryResponsibility(userId: string, tx: Tx | Db = db): Promise<void> {
+  if (await isSalesOpsOnlyUser(userId, tx)) throw new ValidationError("Sales Operations bereitet vor, übernimmt aber keine Verantwortung für Kunden, Setups oder Chancen – bitte BD oder Principal wählen.");
 }

@@ -5,8 +5,8 @@ import type { Db, Tx } from "@/db/client";
 import type { DecisionRole, EngagementStatus, OfferStatus, OpportunityStatus, OrderStatus, RequirementStatus } from "@/db/schema";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
-import { hasRole, type Actor } from "@/modules/identity/actor";
-import { canEditSetup, canReassignResponsibility, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
+import { hasRole, isSalesOpsOnly, type Actor } from "@/modules/identity/actor";
+import { assertCanCarryResponsibility, assertDecisionRight, canEditSetup, canReassignResponsibility, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { listVisibleAccounts } from "@/modules/accounts/service";
 import { listRoles, matchRole } from "@/modules/roles/catalog";
 
@@ -104,6 +104,9 @@ export async function createOpportunity(actor: Actor, raw: unknown) {
   const fastTrack = input.fastTrack === "on" || input.fastTrack === "true" || input.fastTrack === true;
   const anticipated = input.anticipated === "on" || input.anticipated === "true" || input.anticipated === true;
   const chance = await resolveChanceFields(actor.workspaceId, input);
+  // Legt Sales Operations eine Chance an (z. B. aus einem Protokoll), übernimmt der zuständige BD die Verantwortung.
+  const ownerUserId = isSalesOpsOnly(actor) ? (ctx.setup.bdUserId ?? ctx.account.responsibleBdUserId) : actor.userId;
+  if (!ownerUserId) throw new ValidationError("Für dieses Setup ist kein BD zugeordnet, der die Chance verantworten kann – bitte zuerst einen BD zuordnen.");
   return db.transaction(async (tx) => {
     let signal: typeof schema.signals.$inferSelect | null = null;
     if (input.signalId) {
@@ -122,7 +125,7 @@ export async function createOpportunity(actor: Actor, raw: unknown) {
         trigger: input.trigger || null,
         status: anticipated ? "ANTIZIPIERT" : "IN_KLAERUNG",
         ...chance,
-        ownerUserId: actor.userId,
+        ownerUserId,
         fastTrack,
         requestedAt: fastTrack ? new Date() : null,
         signalId: signal?.id ?? null,
@@ -156,6 +159,10 @@ export async function updateOpportunity(actor: Actor, id: string, raw: unknown) 
   const input = parsed.data;
   const { opp } = await requireEditableOpportunity(actor, id);
   if (opp.status === "BEENDET") throw new TransitionError("Eine beendete Chance wird nicht mehr geändert.");
+  if (input.ownerUserId && input.ownerUserId !== opp.ownerUserId) {
+    assertDecisionRight(actor, "Die Verantwortung für eine Chance umzustellen");
+    await assertCanCarryResponsibility(input.ownerUserId);
+  }
   const chance = await resolveChanceFields(actor.workspaceId, { ...input, kind: input.kind ?? opp.kind });
   const [u] = await db
     .update(schema.opportunities)
@@ -187,6 +194,7 @@ export async function reassignOpportunityOwner(actor: Actor, id: string, raw: un
   if (opp.ownerUserId === input.ownerUserId) throw new ValidationError("Diese Person ist bereits verantwortlich.");
   const newOwner = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.ownerUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
   if (!newOwner) throw new ValidationError("Person nicht gefunden oder inaktiv.");
+  await assertCanCarryResponsibility(input.ownerUserId);
   const [u] = await db
     .update(schema.opportunities)
     .set({ ownerUserId: input.ownerUserId, version: input.version + 1, updatedAt: new Date() })
@@ -248,6 +256,7 @@ export const confirmOpportunityInput = z.object({
 
 /** „Chance bestätigt“ (9.3): dokumentierte Bestätigung mit Quelle und Zeitpunkt; Budget-/Beschaffungsinfo nicht zwingend. */
 export async function confirmOpportunity(actor: Actor, id: string, raw: unknown) {
+  assertDecisionRight(actor, "Eine Chance zu bestätigen");
   const parsed = confirmOpportunityInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
@@ -268,6 +277,7 @@ export async function confirmOpportunity(actor: Actor, id: string, raw: unknown)
 
 /** Sonstige Statuswechsel: Zurückstellen/Beenden brauchen Begründung; „vorgestellt“/„beauftragt“ entstehen nur über Angebot/Auftrag. */
 export async function changeOpportunityStatus(actor: Actor, id: string, raw: { version: number; status: OpportunityStatus; reason?: string }) {
+  assertDecisionRight(actor, "Den Status einer Chance zu setzen");
   const { opp } = await requireEditableOpportunity(actor, id);
   const to = raw.status;
   if (to === "BESTAETIGT") throw new TransitionError("Bestätigung erfolgt über „Chance bestätigen“ mit Beleg.");
@@ -412,6 +422,7 @@ export const presentOfferInput = z.object({
 
 /** „Tatsächlich vorgestellt“ (F09): manuell bestätigtes Vorstellungsereignis mit Beleg; ein Entwurf genügt nicht. */
 export async function presentOffer(actor: Actor, offerId: string, raw: unknown) {
+  assertDecisionRight(actor, "Ein Angebot als vorgestellt zu markieren");
   const parsed = presentOfferInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
@@ -441,6 +452,7 @@ export async function presentOffer(actor: Actor, offerId: string, raw: unknown) 
 
 /** Übrige Angebotsübergänge. Akzeptiert ≠ Auftrag (F10): Die Chance wechselt höchstens nach „Auswahl/Bestellung“. */
 export async function changeOfferStatus(actor: Actor, offerId: string, raw: { version: number; status: OfferStatus; note?: string }) {
+  if (raw.status === "AKZEPTIERT" || raw.status === "ABGELEHNT") assertDecisionRight(actor, "Die Kundenentscheidung zu einem Angebot festzuhalten");
   const offer = await db.query.offers.findFirst({ where: and(eq(schema.offers.id, offerId), eq(schema.offers.workspaceId, actor.workspaceId)) });
   if (!offer) throw new NotFoundError("Angebot");
   const { opp } = await requireEditableOpportunity(actor, offer.opportunityId);
@@ -514,6 +526,7 @@ export const confirmOrderInput = z.object({
 
 /** „Beauftragung bestätigt“: prüfbarer Bestell-/Vertragsnachweis (Quelle) + Referenz. */
 export async function confirmOrder(actor: Actor, orderId: string, raw: unknown) {
+  assertDecisionRight(actor, "Eine Beauftragung zu bestätigen");
   const parsed = confirmOrderInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
@@ -553,6 +566,7 @@ export async function markOrderEvidenceIncomplete(actor: Actor, orderId: string,
 }
 
 export async function cancelOrder(actor: Actor, orderId: string, raw: { version: number; reason: string }) {
+  assertDecisionRight(actor, "Einen Auftrag zu stornieren");
   const { order } = await requireOrder(actor, orderId);
   if (order.status === "BEENDET_STORNIERT") throw new TransitionError("Bereits beendet/storniert.");
   const reason = (raw.reason ?? "").trim();
@@ -628,6 +642,7 @@ export async function setRequirementStatus(actor: Actor, requirementId: string, 
  * ohne freigegebene Regelkonfiguration wird nur der dokumentierte Stand gezeigt.
  */
 export async function markReady(actor: Actor, orderId: string, raw: { version: number }) {
+  assertDecisionRight(actor, "Einen Einsatz als startbereit zu bestätigen");
   const { order } = await requireOrder(actor, orderId);
   if (order.status !== "BEAUFTRAGUNG_BESTAETIGT") throw new TransitionError("„Startbereit“ setzt eine bestätigte Beauftragung voraus.");
   if (order.engagementStatus !== "GEPLANT") throw new TransitionError(`Aus „${order.engagementStatus}“ ist „Startbereit“ nicht vorgesehen.`);
@@ -647,6 +662,7 @@ export async function markReady(actor: Actor, orderId: string, raw: { version: n
 
 /** „Gestartet“: tatsächlich bestätigtes Ereignis mit Zeitpunkt – nie die Folge eines erreichten Datums. */
 export async function markStarted(actor: Actor, orderId: string, raw: { version: number; startedAt?: string; note?: string }) {
+  assertDecisionRight(actor, "Einen Einsatzstart zu bestätigen");
   const { order } = await requireOrder(actor, orderId);
   if (order.engagementStatus !== "STARTBEREIT") throw new TransitionError("„Gestartet“ setzt „Startbereit“ voraus.");
   const note = (raw.note ?? "").trim();

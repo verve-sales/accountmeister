@@ -17,15 +17,16 @@ import { buildChanceOverview, MATURITY, type ChanceRow } from "@/modules/strateg
  * CEO: alle Kunden zusammenfassend, ohne Rohquellen). Rechteprüfungen bleiben die der Dienste.
  */
 
-export const DASHBOARD_VIEWS = ["BD", "ANKER", "PRINCIPAL", "CEO"] as const;
+export const DASHBOARD_VIEWS = ["BD", "ANKER", "PRINCIPAL", "CEO", "SALES_OPS"] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
 
-export const viewLabel: Record<DashboardView, string> = { BD: "BD", ANKER: "Anker", PRINCIPAL: "Principal", CEO: "CEO" };
+export const viewLabel: Record<DashboardView, string> = { BD: "BD", ANKER: "Anker", PRINCIPAL: "Principal", CEO: "CEO", SALES_OPS: "Sales Operations" };
 export const viewDescription: Record<DashboardView, string> = {
   BD: "Meine Kunden und Setups als zuständiger BD: was diese Woche dran ist, wo der nächste große Schritt hängt.",
   ANKER: "Setups, in denen ich Kontext beitrage: Rückfragen an mich, Kontaktaufnahmen, die auf mich warten.",
   PRINCIPAL: "Mein Portfolio: Unterstützungsaufträge, Kunden mit Stillstand oder Lücken, Zielbezug.",
   CEO: "Gesamtbild ohne Rohquellen: Stand je Kunde, Ziele, wo es hakt.",
+  SALES_OPS: "Für die BDs vorzubereiten: Vorbereitungsschritte und Unterstützungsaufträge an mich, Kunden mit Lücken (Personen, Buyingcenter, Recherche).",
 };
 
 /** Welche Sichten stehen dieser Person offen? */
@@ -41,6 +42,7 @@ export async function availableViews(actor: Actor): Promise<DashboardView[]> {
   if (anker) views.push("ANKER");
   if (has("PRINCIPAL")) views.push("PRINCIPAL");
   if (has("CEO")) views.push("CEO");
+  if (has("SALES_OPS")) views.push("SALES_OPS");
   return views;
 }
 
@@ -155,8 +157,8 @@ async function buildWeek(actor: Actor, view: DashboardView, ctxs: SetupContext[]
   for (const s of support) {
     const toMe = s.addresseeUserId === actor.userId;
     if (view === "BD" && toMe) continue;
-    if ((view === "PRINCIPAL" || view === "CEO") && !toMe) continue;
-    items.push({ kind: "UNTERSTUETZUNG", text: `${toMe ? "Unterstützung erbeten" : "Meine Anfrage"}: ${s.task.slice(0, 120)}`, href: "/fuehrung", due: s.dueDate, overdue: !!s.dueDate && s.dueDate < today, today: s.dueDate === today });
+    if ((view === "PRINCIPAL" || view === "CEO" || view === "SALES_OPS") && !toMe) continue;
+    items.push({ kind: "UNTERSTUETZUNG", text: `${toMe ? "Unterstützung erbeten" : "Meine Anfrage"}: ${s.task.slice(0, 120)}`, href: s.setupId ? `/setups/${s.setupId}` : "/meine-arbeit", due: s.dueDate, overdue: !!s.dueDate && s.dueDate < today, today: s.dueDate === today });
   }
 
   // Reviews diese Woche (setupbezogen im Bereich, oder Führungs-Reviews mit mir)

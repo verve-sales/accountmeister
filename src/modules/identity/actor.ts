@@ -52,8 +52,22 @@ export function hasRole(actor: Actor, role: Role, accountId?: string): boolean {
 
 /** Fachliche (inhaltliche) Rollen – ADMIN ist Betriebsverwaltung ohne automatischen Inhaltszugriff (16.2). */
 export function hasAnyContentRole(actor: Actor): boolean {
-  const content: Role[] = ["ANKER", "BD", "PRINCIPAL", "CEO"];
+  const content: Role[] = ["ANKER", "BD", "PRINCIPAL", "CEO", "SALES_OPS"];
   if (content.some((r) => actor.roles.has(r))) return true;
   for (const set of actor.accountRoles.values()) if (content.some((r) => set.has(r))) return true;
   return false;
+}
+
+/** Sales Operations (Etappe 22): bereitet vor, pflegt und hält nach – arbeitsraumweit, ohne Entscheidungsrechte. */
+export function isSalesOps(actor: Actor): boolean {
+  return actor.roles.has("SALES_OPS");
+}
+
+/** Nur Sales Operations, keine weitere fachliche Rolle (weder arbeitsraumweit noch kundenbezogen). */
+export function isSalesOpsOnly(actor: Actor): boolean {
+  if (!actor.roles.has("SALES_OPS")) return false;
+  const deciding: Role[] = ["ANKER", "BD", "PRINCIPAL", "CEO"];
+  if (deciding.some((r) => actor.roles.has(r))) return false;
+  for (const set of actor.accountRoles.values()) if (deciding.some((r) => set.has(r))) return false;
+  return true;
 }

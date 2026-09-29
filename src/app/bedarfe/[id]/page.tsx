@@ -4,7 +4,7 @@ import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getOpportunityDetail, MEDDPICC_KEYS } from "@/modules/opportunities/service";
 import { canReassignResponsibility } from "@/modules/identity/authz";
-import { listPlaybooks, listRuns } from "@/modules/playbooks/service";
+import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
 import { getOpportunityAdvice, proposeOpportunityAdvice, ruleBasedOpportunityAdvice, type OpportunityAdviceRow } from "@/modules/opportunities/advisor";
 import { getBuyingCenterAdvice, proposeBuyingCenterAdvice, ruleBasedBuyingCenterAdvice, type BuyingCenterAdviceRow } from "@/modules/opportunities/buyingCenterAdvisor";
@@ -115,7 +115,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   /** Seitenzweig (zurückgestellt/beendet): welche Stufe zuletzt erreicht war, wird hier nicht rekonstruiert (keine erfundenen Werte) – die Kette bleibt neutral, der Zustand steht als eigenes Element daneben. */
   const isSideBranch = opp.status === "ZURUECKGESTELLT" || opp.status === "BEENDET";
   const mayReassign = canReassignResponsibility(actor, ctx.account);
-  const [runs, oppScoped, setupScoped] = await Promise.all([listRuns(actor, { opportunityId: id }), listPlaybooks(actor, { scope: "OPPORTUNITY", activeOnly: true }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true })]);
+  const [runs, oppScoped, setupScoped, salesOps] = await Promise.all([listRuns(actor, { opportunityId: id }), listPlaybooks(actor, { scope: "OPPORTUNITY", activeOnly: true }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true }), listSalesOpsUsers(actor.workspaceId)]);
   // Auf der Chance auch Setup-Muster anbieten (z. B. Verlängerung) – sie hängen dann an dieser Chance.
   const oppPlaybooks = [...oppScoped, ...setupScoped];
   const oppText = `${opp.title} ${opp.needDescription} ${opp.trigger ?? ""}`;
@@ -171,7 +171,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
           runs={runs}
           back={`/bedarfe/${opp.id}`}
           users={activeUsers}
-          start={(canEdit || mayReassign) && !closed ? { playbooks: oppPlaybooks, hidden: { opportunityId: opp.id, setupId: ctx.setup.id }, defaultOwnerId: opp.ownerUserId, recommendedId: recommended?.id ?? null, recommendation } : null}
+          start={(canEdit || mayReassign) && !closed ? { playbooks: oppPlaybooks, hidden: { opportunityId: opp.id, setupId: ctx.setup.id }, defaultOwnerId: opp.ownerUserId, salesOps, recommendedId: recommended?.id ?? null, recommendation } : null}
         />
       )}
 

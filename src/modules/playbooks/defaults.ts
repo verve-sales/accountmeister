@@ -12,6 +12,8 @@ export type DefaultStep = {
   suggestedAction: string;
   doneCriterion: string;
   dueInDays: number;
+  /** Wer übernimmt: Standard = verantwortliche Person (BD); SALES_OPS = Vorbereitung durch Sales Operations */
+  assignee?: "VERANTWORTLICH" | "SALES_OPS";
 };
 
 export type DefaultPlaybook = { code: string; name: string; description: string; scope: PlaybookScope; steps: DefaultStep[] };
@@ -34,6 +36,7 @@ export const DEFAULT_PLAYBOOKS: DefaultPlaybook[] = [
           "Öffentliche Unternehmensrecherche aktualisieren. Prüfen, wer von den früheren Ansprechpartnern noch da ist und wer gewechselt ist (frühere Fürsprecher bei neuen Arbeitgebern sind eigene Chancen). Aktuelle Vorhaben, Umstrukturierungen oder Ausschreibungen notieren.",
         doneCriterion: "Aktuelle Ansprechpartner und ein konkreter Anlass für die Kontaktaufnahme sind dokumentiert.",
         dueInDays: 7,
+        assignee: "SALES_OPS",
       },
       {
         title: "Ergebnisrückblick als Referenzbitte",
@@ -100,8 +103,8 @@ export const DEFAULT_PLAYBOOKS: DefaultPlaybook[] = [
     scope: "OPPORTUNITY",
     steps: [
       { title: "Unterlagen sichten und Go/No-Go", goal: "Nur Ausschreibungen bearbeiten, die wir gewinnen können.", meddpicc: "Decision Criteria, Competition", suggestedAction: "Anforderungen, Zuschlagskriterien und Fristen prüfen; eigene Chancen und Wettbewerb einschätzen; Go/No-Go mit Begründung.", doneCriterion: "Go/No-Go-Entscheidung mit Begründung ist dokumentiert.", dueInDays: 3 },
-      { title: "Bieterfragen fristgerecht stellen", goal: "Unklarheiten vor der Abgabe ausräumen.", meddpicc: "Decision Process", suggestedAction: "Offene Punkte sammeln und innerhalb der Fragefrist einreichen.", doneCriterion: "Fragen gestellt (oder: keine nötig).", dueInDays: 7 },
-      { title: "Profile und Angebot erstellen", goal: "Passende Profile und ein vollständiges Angebot.", meddpicc: "Decision Criteria", suggestedAction: "Profile auswählen und freigeben lassen; Angebot und Pflichtunterlagen vollständig machen.", doneCriterion: "Angebot vollständig und intern freigegeben.", dueInDays: 14 },
+      { title: "Bieterfragen fristgerecht stellen", goal: "Unklarheiten vor der Abgabe ausräumen.", meddpicc: "Decision Process", suggestedAction: "Offene Punkte sammeln und innerhalb der Fragefrist einreichen.", doneCriterion: "Fragen gestellt (oder: keine nötig).", dueInDays: 7 , assignee: "SALES_OPS" },
+      { title: "Profile und Angebot erstellen", goal: "Passende Profile und ein vollständiges Angebot.", meddpicc: "Decision Criteria", suggestedAction: "Profile auswählen und freigeben lassen; Angebot und Pflichtunterlagen vollständig machen.", doneCriterion: "Angebot vollständig und intern freigegeben.", dueInDays: 14 , assignee: "SALES_OPS" },
       { title: "Abgabe und Nachfassen", goal: "Fristgerecht abgeben und dranbleiben.", meddpicc: "Paper Process", suggestedAction: "Fristgerecht abgeben; Termin für Nachfrage bzw. Präsentation festhalten.", doneCriterion: "Abgabe bestätigt; Ergebnis oder nächster Termin dokumentiert.", dueInDays: 21 },
     ],
   },
