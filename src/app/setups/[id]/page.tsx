@@ -100,7 +100,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const looksLikeReactivation = /reaktiv|re-?entry|wiedereinstieg|altkunde|bestandskunde|historisch/i.test(`${d.setup.name} ${d.setup.contextNote ?? ""}`);
   const reactivation = accountScoped.find((p) => p.code === ALTKUNDEN_CODE);
   // Kunden-Vorgehen dieses Setups werden hier ebenfalls gezeigt; Chancen-Vorgehen auf der jeweiligen Chance.
-  const setupRuns = runs.filter((r) => !r.opportunityId);
+  // Alle Vorgehen dieses Setups – auch die an einer Chance hängenden (die Karte nennt dann die Chance).
+  const setupRuns = runs;
 
   return (
     <div className="space-y-6">
@@ -148,6 +149,9 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         {d.setup.contextNote ? <p>{d.setup.contextNote}</p> : <p className="muted">Noch kein Kontextsatz – bewusster Entwurf. Ergänzen, wenn passend.</p>}
         <div className="text-sm mt-2 muted flex flex-wrap gap-3 items-center">
           <span>Beteiligte:</span>
+          {[...new Set(opportunities.filter((o) => o.status !== "BEENDET").map((o) => o.ownerUserId))].filter((uid) => !d.members.some((m) => m.userId === uid)).map((uid) => (
+            <span key={`owner-${uid}`} className="inline-flex items-center gap-1">{name(uid)} – verantwortlich für Chance(n)</span>
+          ))}
           {d.members.map((m) => (
             <span key={m.userId} className="inline-flex items-center gap-1">
               {m.displayName} – {contributionLabel[m.contribution] ?? m.contribution}

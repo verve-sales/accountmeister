@@ -58,7 +58,9 @@ export async function listVisibleAccounts(actor: Actor) {
     .from(schema.setupMemberships)
     .innerJoin(schema.projectSetups, eq(schema.projectSetups.id, schema.setupMemberships.setupId))
     .where(eq(schema.setupMemberships.userId, actor.userId));
-  const memberAccountIds = new Set(memberSetups.map((m) => m.accountId));
+  // Verantwortliche einer Chance sehen den Kunden (zusammenfassend), auch ohne Setup-Beteiligung
+  const ownedOpps = await db.select({ accountId: schema.opportunities.accountId }).from(schema.opportunities).where(and(eq(schema.opportunities.workspaceId, actor.workspaceId), eq(schema.opportunities.ownerUserId, actor.userId)));
+  const memberAccountIds = new Set([...memberSetups.map((m) => m.accountId), ...ownedOpps.map((o) => o.accountId)]);
   return all.filter((a) => canViewAccount(actor, a) || memberAccountIds.has(a.id));
 }
 
@@ -74,7 +76,10 @@ export async function getAccount(actor: Actor, accountId: string) {
       .innerJoin(schema.projectSetups, eq(schema.projectSetups.id, schema.setupMemberships.setupId))
       .where(and(eq(schema.setupMemberships.userId, actor.userId), eq(schema.projectSetups.accountId, accountId)))
       .limit(1);
-    if (member.length === 0) throw new NotFoundError("Kunde");
+    if (member.length === 0) {
+      const owned = await db.query.opportunities.findFirst({ where: and(eq(schema.opportunities.accountId, accountId), eq(schema.opportunities.ownerUserId, actor.userId)), columns: { id: true } });
+      if (!owned) throw new NotFoundError("Kunde");
+    }
   }
   return account;
 }

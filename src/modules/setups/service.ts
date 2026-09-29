@@ -180,7 +180,8 @@ export async function listMySetups(actor: Actor) {
     .select({ setupId: schema.setupMemberships.setupId })
     .from(schema.setupMemberships)
     .where(eq(schema.setupMemberships.userId, actor.userId));
-  const ids = memberRows.map((r) => r.setupId);
+  const ownedRows = await db.select({ setupId: schema.opportunities.setupId }).from(schema.opportunities).where(and(eq(schema.opportunities.ownerUserId, actor.userId), eq(schema.opportunities.workspaceId, actor.workspaceId)));
+  const ids = [...new Set([...memberRows.map((r) => r.setupId), ...ownedRows.map((r) => r.setupId)])];
   const setups = await db.query.projectSetups.findMany({
     where: and(
       eq(schema.projectSetups.workspaceId, actor.workspaceId),

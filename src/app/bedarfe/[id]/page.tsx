@@ -115,7 +115,17 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   /** Seitenzweig (zurückgestellt/beendet): welche Stufe zuletzt erreicht war, wird hier nicht rekonstruiert (keine erfundenen Werte) – die Kette bleibt neutral, der Zustand steht als eigenes Element daneben. */
   const isSideBranch = opp.status === "ZURUECKGESTELLT" || opp.status === "BEENDET";
   const mayReassign = canReassignResponsibility(actor, ctx.account);
-  const [runs, oppPlaybooks] = await Promise.all([listRuns(actor, { opportunityId: id }), listPlaybooks(actor, { scope: "OPPORTUNITY", activeOnly: true })]);
+  const [runs, oppScoped, setupScoped] = await Promise.all([listRuns(actor, { opportunityId: id }), listPlaybooks(actor, { scope: "OPPORTUNITY", activeOnly: true }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true })]);
+  // Auf der Chance auch Setup-Muster anbieten (z. B. Verlängerung) – sie hängen dann an dieser Chance.
+  const oppPlaybooks = [...oppScoped, ...setupScoped];
+  const oppText = `${opp.title} ${opp.needDescription} ${opp.trigger ?? ""}`;
+  const recommended =
+    /verläng|fortsetz|anschluss|folgeauftrag|weiterführ/i.test(oppText) ? setupScoped.find((p) => p.code === "VERLAENGERUNG")
+    : opp.kind === "AUSSCHREIBUNG" || /ausschreib|tender|rfp|vergabe/i.test(oppText) ? oppScoped.find((p) => p.code === "AUSSCHREIBUNG")
+    : null;
+  const recommendation = recommended && !runs.some((r) => r.status === "AKTIV")
+    ? recommended.code === "VERLAENGERUNG" ? "Diese Chance ist eine Verlängerung – „Verlängerung vor Einsatzende“ führt durch Zufriedenheit, Anschlussbedarf und Angebot und erstellt je Schritt Entwürfe." : "Diese Chance ist eine Ausschreibung – „Ausschreibung bearbeiten“ führt durch Go/No-Go, Fristen, Profile und Abgabe."
+    : null;
   const activeUsers = d.users.filter((u) => u.status === "ACTIVE").map((u) => ({ id: u.id, displayName: u.displayName }));
 
   return (
@@ -161,7 +171,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
           runs={runs}
           back={`/bedarfe/${opp.id}`}
           users={activeUsers}
-          start={(canEdit || mayReassign) && !closed ? { playbooks: oppPlaybooks, hidden: { opportunityId: opp.id }, defaultOwnerId: opp.ownerUserId } : null}
+          start={(canEdit || mayReassign) && !closed ? { playbooks: oppPlaybooks, hidden: { opportunityId: opp.id, setupId: ctx.setup.id }, defaultOwnerId: opp.ownerUserId, recommendedId: recommended?.id ?? null, recommendation } : null}
         />
       )}
 

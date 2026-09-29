@@ -231,6 +231,13 @@ export async function startPlaybookRun(actor: Actor, raw: unknown) {
   } else if (playbook.scope === "SETUP") {
     if (!input.setupId) throw new ValidationError("Dieses Muster wird auf ein Setup angewendet.");
     setupId = input.setupId;
+    // Von einer Chance aus gestartet (z. B. Verlängerung): Vorgehen und Aktionen hängen an dieser Chance
+    if (input.opportunityId) {
+      const opp = await db.query.opportunities.findFirst({ where: and(eq(schema.opportunities.id, input.opportunityId), eq(schema.opportunities.workspaceId, actor.workspaceId)) });
+      if (!opp || opp.setupId !== setupId) throw new ValidationError("Die Chance gehört nicht zu diesem Setup.");
+      if (opp.status === "BEENDET") throw new TransitionError("Auf eine beendete Chance wird kein Vorgehen mehr angewendet.");
+      opportunityId = opp.id;
+    }
   } else {
     if (!input.accountId) throw new ValidationError("Dieses Muster wird auf einen Kunden angewendet.");
     if (input.setupId) setupId = input.setupId;
@@ -520,6 +527,9 @@ export async function listRuns(actor: Actor, where: { accountId?: string; setupI
   const setupIds = [...new Set(visible.map((r) => r.setupId))];
   const setups = await db.query.projectSetups.findMany({ where: inArray(schema.projectSetups.id, setupIds) });
   const setupNames = new Map(setups.map((s) => [s.id, s.name]));
+  const oppIds = [...new Set(visible.map((r) => r.opportunityId).filter((x): x is string => !!x))];
+  const oppRows = oppIds.length ? await db.query.opportunities.findMany({ where: inArray(schema.opportunities.id, oppIds), columns: { id: true, title: true } }) : [];
+  const oppTitles = new Map(oppRows.map((o) => [o.id, o.title]));
   const userIds = [...new Set([...visible.map((r) => r.ownerUserId), ...acts.map((a) => a.ownerUserId)])];
   const users = userIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, userIds) }) : [];
   const names = new Map(users.map((u) => [u.id, u.displayName]));
@@ -527,6 +537,7 @@ export async function listRuns(actor: Actor, where: { accountId?: string; setupI
     ...r,
     ownerName: names.get(r.ownerUserId) ?? "?",
     setupName: setupNames.get(r.setupId) ?? "",
+    opportunityTitle: r.opportunityId ? (oppTitles.get(r.opportunityId) ?? null) : null,
     canWork: mayWork.get(r.id) ?? false,
     canReassign: mayReassign.get(r.id) ?? false,
     steps: steps

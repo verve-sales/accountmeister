@@ -5,7 +5,7 @@
  * Grundsatz: kein Zugriff ohne passende Berechtigung. Führungstitel (CEO/Principal) geben
  * Zusammenfassungs-, aber keine pauschale Originalquelleneinsicht.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db, schema, type Db, type Tx } from "@/db/client";
 import type { AccessClass } from "@/db/schema";
 import { hasAnyContentRole, hasRole, type Actor } from "./actor";
@@ -19,6 +19,8 @@ export type SetupContext = {
   setup: SetupRow;
   account: AccountRow;
   membership: MembershipRow | null; // Mitgliedschaft des Akteurs
+  /** Akteur ist für mindestens eine nicht beendete Chance dieses Setups verantwortlich (Etappe 21b) */
+  ownsOpportunity: boolean;
 };
 
 export async function loadSetupContext(actor: Actor, setupId: string, tx: Tx | Db = db): Promise<SetupContext | null> {
@@ -32,7 +34,12 @@ export async function loadSetupContext(actor: Actor, setupId: string, tx: Tx | D
     (await tx.query.setupMemberships.findFirst({
       where: and(eq(schema.setupMemberships.setupId, setupId), eq(schema.setupMemberships.userId, actor.userId)),
     })) ?? null;
-  return { setup, account, membership };
+  // Wer für eine Chance verantwortlich ist, arbeitet am Setup mit – auch ohne ausdrückliche Beteiligung.
+  const owned = await tx.query.opportunities.findFirst({
+    where: and(eq(schema.opportunities.setupId, setupId), eq(schema.opportunities.ownerUserId, actor.userId), ne(schema.opportunities.status, "BEENDET")),
+    columns: { id: true },
+  });
+  return { setup, account, membership, ownsOpportunity: !!owned };
 }
 
 // ---------------------------------------------------------------------------
@@ -77,6 +84,7 @@ export function canReassignResponsibility(actor: Actor, account: AccountRow): bo
 export function canViewSetup(actor: Actor, ctx: SetupContext): boolean {
   if (ctx.setup.workspaceId !== actor.workspaceId) return false;
   if (ctx.membership) return true;
+  if (ctx.ownsOpportunity) return true;
   if (ctx.setup.createdBy === actor.userId || ctx.setup.bdUserId === actor.userId) return true;
   if (isResponsibleBd(actor, ctx.account)) return true;
   if (hasRole(actor, "PRINCIPAL", ctx.account.id)) return true;
@@ -91,6 +99,7 @@ export function canEditSetup(actor: Actor, ctx: SetupContext): boolean {
   if (ctx.setup.workspaceId !== actor.workspaceId) return false;
   if (ctx.setup.status === "ARCHIVIERT") return false;
   if (ctx.membership?.canEdit) return true;
+  if (ctx.ownsOpportunity) return true; // verantwortlich für eine Chance = bearbeitend beteiligt
   if (ctx.setup.createdBy === actor.userId) return true; // Ersteller bis zur angenommenen Übergabe (6.1)
   if (ctx.setup.bdUserId === actor.userId) return true;
   if (isResponsibleBd(actor, ctx.account)) return true;
@@ -118,8 +127,8 @@ export function canViewSource(actor: Actor, source: SourceRow, ctx: SetupContext
   if (isCeoOnly) return cls === "WORKSPACE";
   if (cls === "WORKSPACE") return hasAnyContentRole(actor);
   if (!ctx) return false;
-  if (cls === "SETUP") return ctx.membership !== null || ctx.setup.bdUserId === actor.userId;
-  if (cls === "ACCOUNT_TEAM") return ctx.membership !== null || isResponsibleBd(actor, ctx.account) || hasRole(actor, "PRINCIPAL", ctx.account.id) || ctx.setup.bdUserId === actor.userId;
+  if (cls === "SETUP") return ctx.membership !== null || ctx.ownsOpportunity || ctx.setup.bdUserId === actor.userId;
+  if (cls === "ACCOUNT_TEAM") return ctx.membership !== null || ctx.ownsOpportunity || isResponsibleBd(actor, ctx.account) || hasRole(actor, "PRINCIPAL", ctx.account.id) || ctx.setup.bdUserId === actor.userId;
   return false;
 }
 

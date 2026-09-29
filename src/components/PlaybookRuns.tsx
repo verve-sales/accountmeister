@@ -105,7 +105,7 @@ function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }
       <div className="flex flex-wrap items-baseline gap-2 mb-2">
         <strong>{r.playbookName}</strong>
         <Status label={playbookRunStatusLabel[r.status] ?? r.status} />
-        <span className="muted text-sm">verantwortlich: {r.ownerName} · Setup: <Link href={`/setups/${r.setupId}`}>{r.setupName}</Link> · gestartet {fmtDate(r.createdAt)}</span>
+        <span className="muted text-sm">verantwortlich: {r.ownerName} · Setup: <Link href={`/setups/${r.setupId}`}>{r.setupName}</Link>{r.opportunityId && r.opportunityTitle ? <> · Chance: <Link href={`/bedarfe/${r.opportunityId}`}>{r.opportunityTitle}</Link></> : null} · gestartet {fmtDate(r.createdAt)}</span>
       </div>
       <ProcessStepper
         steps={r.steps.map((s) => ({ key: s.id, label: s.title }))}
