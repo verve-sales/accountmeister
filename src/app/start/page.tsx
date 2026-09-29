@@ -10,6 +10,8 @@ import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { ProcessStepper } from "@/components/ProcessStepper";
 import { goalStatusLabel } from "@/lib/labels";
+import { ensureStandardTasksSafe, freelancerStats } from "@/modules/focus/standardTasks";
+import { getFocus } from "@/modules/focus/service";
 import { createOpportunityAction, setDashboardViewAction, smartDumpAction } from "../actions";
 
 const DASHBOARD_VIEW_COOKIE = "am_sicht";
@@ -22,7 +24,11 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   if (!actor) redirect("/anmelden");
   const store = await cookies();
   const requested = store.get(DASHBOARD_VIEW_COOKIE)?.value ?? null;
+  // Fällige Standardaufgaben (Fokus Freelancer) erzeugen, bevor „Diese Woche dran“ geladen wird
+  await ensureStandardTasksSafe(actor);
   const d = await buildDashboard(actor, requested);
+  const focus = await getFocus(actor.workspaceId);
+  const fl = d && focus.freelancerLever ? await freelancerStats(actor, d.accounts.map((c) => c.accountId)) : null;
   if (!d) {
     return (
       <div className="space-y-6">
@@ -68,6 +74,31 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             }))}
           />
           <p className="muted text-xs mt-2">Je Kunde zählt die am weitesten fortgeschrittene Stufe seiner Setups. Sicht: {viewLabel[d.view]} – jede Rolle sieht nur ihren eigenen Zuordnungsbereich.</p>
+        </section>
+      )}
+
+      {fl && (
+        <section className="card">
+          <div className="flex flex-wrap items-baseline gap-3 mb-2">
+            <h2 className="font-semibold">Freelancer-Hebel</h2>
+            <span className="muted text-xs">Strategischer Fokus · {viewLabel[d.view]} · Zeitraum 90 Tage</span>
+            <Link href="/vorgehen#fokus" className="muted text-xs ml-auto">Was ist der Fokus?</Link>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              { v: fl.openFreelancerChances, l: "offene Freelancer-Chancen" },
+              { v: fl.newFreelancerChances90d, l: "neue Freelancer-Chancen (90 Tage)" },
+              { v: fl.presentedOffers90d, l: "vorgestellte Angebote/Profile (90 Tage)" },
+              { v: `${fl.accountsWithoutFreelancerChance} / ${fl.accountsTotal}`, l: "Kunden ohne Freelancer-Chance" },
+              { v: fl.openChecks, l: "offene Freelancer-Standardaufgaben", href: "/meine-arbeit" },
+            ].map((t) => (
+              <div key={t.l} className="p-3" style={{ background: "var(--surface-2)", borderRadius: 8 }}>
+                <div className="text-2xl font-semibold" style={{ fontVariantNumeric: "tabular-nums" }}>{t.href ? <Link href={t.href}>{t.v}</Link> : t.v}</div>
+                <div className="muted text-xs">{t.l}</div>
+              </div>
+            ))}
+          </div>
+          <p className="muted text-xs mt-2">Nur Zählungen aus dokumentierten Chancen und Angeboten der Art „Freelancer-Experte“ – keine Umsatz- oder Wahrscheinlichkeitswerte.</p>
         </section>
       )}
 

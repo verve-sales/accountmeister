@@ -6,7 +6,8 @@ import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { accountStatusLabel, fmtDate, playbookScopeLabel } from "@/lib/labels";
 import { schema } from "@/db/client";
-import { createPlaybookAction } from "../actions";
+import { createPlaybookAction, updateFocusAction } from "../actions";
+import { canEditFocus, getFocus } from "@/modules/focus/service";
 
 /**
  * Vorgehensmuster (Etappe 20): Übersicht aller Standard-Vorgehen – zugleich Einarbeitungsunterlage für neue BDs –,
@@ -19,12 +20,37 @@ export default async function VorgehenPage({ searchParams }: { searchParams: Sea
   if (!actor) redirect("/anmelden");
   const [playbooks, stats, dormant] = await Promise.all([listPlaybooks(actor), playbookStats(actor), listDormantAccounts(actor)]);
   const mayManage = canManagePlaybooks(actor);
+  const focus = await getFocus(actor.workspaceId);
+  const mayFocus = canEditFocus(actor);
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Vorgehensmuster</h1>
       <p className="muted text-sm max-w-3xl">Standard-Vorgehen als Gerüst: Jeder Schritt hat ein Ziel, einen MEDDPICC-Bezug, einen Vorschlag und ein Erledigt-Kriterium. Angewendet auf einen Kunden, ein Setup oder eine Chance wird immer der aktuelle Schritt als Aktion angelegt. Orientierung, keine Pflichtschleuse – jeder Schritt darf begründet übersprungen werden.</p>
       <Feedback params={sp} />
+
+      <section className="card" id="fokus">
+        <div className="flex flex-wrap items-baseline gap-3 mb-1">
+          <h2 className="font-semibold">Strategischer Fokus</h2>
+          {focus.freelancerLever && <Status label="Freelancer-Hebel aktiv" />}
+          {focus.updatedAt && <span className="muted text-xs ml-auto">zuletzt geändert {fmtDate(focus.updatedAt)}</span>}
+        </div>
+        <p className="text-sm">{focus.focusText || <span className="muted">Kein Fokus gesetzt.</span>}</p>
+        <p className="muted text-xs mt-1">Der Fokus fließt in alle KI-Agenten ein (Notizen und Dokumente auswerten, Assistent, Interview, Strategiefaden, Chancen- und Buying-Center-Berater, Formularvorschläge, Schritt-Assistent) – als Gewichtung, ohne die Regeln zu lockern: nichts wird erfunden, Unbelegtes erscheint als Frage oder Vermutung.{focus.freelancerLever ? " Der Freelancer-Hebel erzeugt außerdem Standardaufgaben (Freelancer-Check je Chance, Ausweitung nach Einsatzstart, Potenzial je Kunde) und die Kachel „Freelancer-Hebel“ auf der Startseite." : ""}</p>
+        {focus.weeklyQuestion && <p className="text-sm mt-2"><span className="muted">Leitfrage im Weekly: </span>{focus.weeklyQuestion}</p>}
+        {mayFocus && (
+          <details className="mt-3">
+            <summary className="text-sm">Fokus bearbeiten</summary>
+            <form action={updateFocusAction} className="mt-2 grid gap-3">
+              <input type="hidden" name="version" value={focus.version ?? 0} />
+              <div><label className="label" htmlFor="fText">Fokus (für alle KI-Agenten)</label><textarea id="fText" name="focusText" className="textarea" rows={3} maxLength={1500} defaultValue={focus.focusText} /></div>
+              <div><label className="label" htmlFor="fQ">Leitfrage im Weekly</label><input id="fQ" name="weeklyQuestion" className="input" maxLength={400} defaultValue={focus.weeklyQuestion} /></div>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="freelancerLever" value="on" defaultChecked={focus.freelancerLever} /> Freelancer-Hebel aktiv (Standardaufgaben, Hinweise in den Lageanalysen, Kennzahlen)</label>
+              <div><button className="btn" type="submit">Fokus speichern</button></div>
+            </form>
+          </details>
+        )}
+      </section>
 
       <section className="card">
         <h2 className="font-semibold mb-2">Reaktivierung prüfen – ruhende Kunden ({dormant.length})</h2>

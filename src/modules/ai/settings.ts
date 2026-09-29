@@ -8,6 +8,7 @@ import type { Actor } from "@/modules/identity/actor";
 import { hasRole } from "@/modules/identity/actor";
 import { getAIProvider } from "./index";
 import type { ModelInfo, TaskOptions } from "./provider";
+import { getFocus, toPromptFocus } from "@/modules/focus/service";
 
 /**
  * KI-Aufgaben und ihre Modellwahl (Verwaltung → KI). Der API-Schlüssel steht ausschließlich in der
@@ -48,6 +49,16 @@ export class TaskDisabledError extends ForbiddenError {
   constructor(label: string) {
     super(`Die KI-Aufgabe „${label}“ ist unter Verwaltung → KI deaktiviert.`);
   }
+}
+
+/**
+ * Wirksame Optionen für einen KI-Aufruf: bei Langdock Modellwahl je Aufgabe, bei jedem Anbieter der
+ * strategische Fokus des Arbeitsraums (Etappe 21). Zentrale Stelle, damit kein Agent den Fokus „vergisst“.
+ */
+export async function resolveTaskOptions(workspaceId: string, task: AiTaskKey, providerId: string): Promise<TaskOptions> {
+  const focus = toPromptFocus(await getFocus(workspaceId));
+  const base = providerId === "langdock" ? await requireTaskOptions(workspaceId, task) : {};
+  return { ...base, focus };
 }
 
 export async function requireTaskOptions(workspaceId: string, task: AiTaskKey): Promise<TaskOptions> {

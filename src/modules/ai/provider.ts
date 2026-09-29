@@ -1,3 +1,4 @@
+import type { PromptFocus } from "@/modules/focus/service";
 import type { PlaybookStepInput } from "@/modules/playbooks/drafts";
 import type { IntakeProposal, StructureNoteOutput } from "./schemas";
 
@@ -79,7 +80,13 @@ export type FormSuggestInput = {
 export type PlaybookStepDraftInput = { stepText: string; contextText: string; structured: PlaybookStepInput };
 
 /** Aufgabenbezogene Modellwahl (Verwaltung → KI). Anbieter ohne Modellwahl ignorieren sie. */
-export type TaskOptions = { model?: string; temperature?: number; maxOutputTokens?: number };
+export type TaskOptions = {
+  model?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  /** Strategischer Fokus des Arbeitsraums (Etappe 21) – als zusätzlicher Systemhinweis, lockert keine Regeln */
+  focus?: PromptFocus | null;
+};
 
 export type Usage = { tokensIn: number | null; tokensOut: number | null; model: string };
 

@@ -5,7 +5,7 @@ import { getConfig } from "@/lib/config";
 import type { Actor } from "@/modules/identity/actor";
 import { getAIProvider } from "./index";
 import type { AIProvider, TaskOptions } from "./provider";
-import { requireTaskOptions, type AiTaskKey } from "./settings";
+import { resolveTaskOptions, type AiTaskKey } from "./settings";
 import { UsageLimitError } from "@/modules/suggestions/service";
 
 /**
@@ -37,7 +37,7 @@ export async function runAiJob<T>(
   since.setHours(0, 0, 0, 0);
   const [cnt] = await db.select({ n: count() }).from(schema.aiJobs).where(and(eq(schema.aiJobs.workspaceId, actor.workspaceId), gte(schema.aiJobs.startedAt, since)));
   if (Number(cnt?.n ?? 0) >= cfg.AI_DAILY_JOB_LIMIT) throw new UsageLimitError(cfg.AI_DAILY_JOB_LIMIT);
-  const opts: TaskOptions = info.id === "langdock" ? await requireTaskOptions(actor.workspaceId, meta.task) : {};
+  const opts: TaskOptions = await resolveTaskOptions(actor.workspaceId, meta.task, info.id);
   const [job] = await db
     .insert(schema.aiJobs)
     .values({ workspaceId: actor.workspaceId, type: meta.task, actorUserId: actor.userId, setupId: meta.setupId ?? null, provider: info.id, model: opts.model ?? info.model, promptVersion: meta.promptVersion, inputHash: sha(meta.inputText), inputChars: meta.inputText.length, dedupeKey: meta.dedupeKey })

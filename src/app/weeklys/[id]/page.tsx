@@ -1,3 +1,4 @@
+import { getFocus } from "@/modules/focus/service";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -18,6 +19,7 @@ export default async function WeeklyPage({ params, searchParams }: { params: Pro
   const sp = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
+  const focus = await getFocus(actor.workspaceId);
   let p;
   try {
     p = await prepareReview(actor, id);
@@ -53,6 +55,11 @@ export default async function WeeklyPage({ params, searchParams }: { params: Pro
       {/* Vorbereitung */}
       <section className="card">
         <h2 className="font-semibold mb-2">Vorbereitung – Stand seit dem letzten bestätigten Weekly</h2>
+        {focus.weeklyQuestion && (
+          <p className="text-sm mb-3" style={{ background: "var(--accent-soft)", borderRadius: 8, padding: ".5rem .8rem" }}>
+            <strong>Leitfrage (strategischer Fokus):</strong> {focus.weeklyQuestion}
+          </p>
+        )}
         {p.lastConfirmed ? (
           <div className="text-sm space-y-1">
             <p>Letzter bestätigter Stand: <strong>{p.lastConfirmed.reviewTitle}</strong> ({fmtDate(p.lastConfirmed.scheduledFor)}), bestätigt von {p.lastConfirmed.confirmedBy} am {fmtDateTime(p.lastConfirmed.confirmedAt)}.</p>

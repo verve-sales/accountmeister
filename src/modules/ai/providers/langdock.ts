@@ -1,4 +1,5 @@
 import { DomainError } from "@/lib/errors";
+import { focusSystemText } from "@/modules/focus/service";
 import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdviceInput, FormSuggestInput, InterviewNextInput, ModelInfo, OpportunityAdviceInput, PlaybookStepDraftInput, ProviderInfo, StrategyInput, StructureNoteInput, TaskOptions, Usage } from "../provider";
 import { ANALYZE_DOCUMENT_SYSTEM, ASSISTANT_CARDS_SYSTEM, ASSISTANT_SYSTEM, BUYING_CENTER_ADVICE_SYSTEM, FORM_SUGGEST_SYSTEM, INTERVIEW_NEXT_SYSTEM, PLAYBOOK_STEP_SYSTEM, OPPORTUNITY_ADVICE_SYSTEM, STRATEGY_SYSTEM, STRUCTURE_NOTE_SYSTEM } from "../prompts";
 
@@ -61,6 +62,7 @@ export class LangdockProvider implements AIProvider {
     const model = opts.model || this.cfg.defaultModel;
     const messages = [
       { role: "system", content: system },
+      ...(opts.focus ? [{ role: "system", content: focusSystemText(opts.focus) }] : []),
       { role: "user", content: user },
     ];
     const strict = { model, messages, temperature: opts.temperature ?? 0.2, max_tokens: opts.maxOutputTokens ?? 4000, response_format: { type: "json_object" } };
@@ -173,6 +175,7 @@ export class LangdockProvider implements AIProvider {
   async assistantReply(input: AssistantInput, opts?: TaskOptions, onDelta?: (chunk: string) => void): Promise<string> {
     const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
       { role: "system", content: ASSISTANT_SYSTEM },
+      ...(opts?.focus ? [{ role: "system" as const, content: focusSystemText(opts.focus) }] : []),
       { role: "system", content: `Modus: ${input.interviewMode ? "Interview (aktiv führen)" : "Dialog"}\n\n=== KONTEXT (Daten) ===\n${clip(input.contextText) || "– kein Kontext (allgemeines Gespräch) –"}\n=== ENDE KONTEXT ===\n\n=== OFFENE PUNKTE (vom System ermittelt) ===\n${input.openPoints || "–"}\n=== ENDE OFFENE PUNKTE ===` },
     ];
     for (const h of input.history.slice(-30)) messages.push({ role: h.role === "NUTZER" ? "user" : "assistant", content: h.text });

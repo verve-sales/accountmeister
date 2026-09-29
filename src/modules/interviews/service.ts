@@ -10,7 +10,7 @@ import { canCreateAccount, canEditSetup, canViewSetup, loadSetupContext, type Se
 import { getAIProvider } from "@/modules/ai";
 import { INTERVIEW_NEXT_PROMPT_VERSION, type AIProvider, type InterviewNextInput, type TaskOptions } from "@/modules/ai/provider";
 import { interviewNextSchema, interviewTopicValues, type InterviewNext, type InterviewTopic } from "@/modules/ai/schemas";
-import { requireTaskOptions } from "@/modules/ai/settings";
+import { resolveTaskOptions } from "@/modules/ai/settings";
 import { UsageLimitError } from "@/modules/suggestions/service";
 import { createProposalFromSource } from "@/modules/intake/service";
 
@@ -128,7 +128,7 @@ async function askNext(actor: Actor, interviewId: string, deps: { provider?: AIP
     since.setHours(0, 0, 0, 0);
     const [cnt] = await db.select({ n: count() }).from(schema.aiJobs).where(and(eq(schema.aiJobs.workspaceId, actor.workspaceId), gte(schema.aiJobs.startedAt, since)));
     if (Number(cnt?.n ?? 0) >= cfg.AI_DAILY_JOB_LIMIT) throw new UsageLimitError(cfg.AI_DAILY_JOB_LIMIT);
-    const taskOpts: TaskOptions = info.id === "langdock" ? await requireTaskOptions(actor.workspaceId, "INTERVIEW_NEXT") : {};
+    const taskOpts: TaskOptions = await resolveTaskOptions(actor.workspaceId, "INTERVIEW_NEXT", info.id);
     const input: InterviewNextInput = { kind: interview.kind, knownContext, transcript, questionCount: interview.questionCount, maxQuestions: MAX_QUESTIONS };
     const inputText = JSON.stringify(input);
     const [job] = await db

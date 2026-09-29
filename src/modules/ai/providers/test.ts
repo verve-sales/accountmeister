@@ -1,4 +1,5 @@
 import { decisionRoleLabel } from "@/lib/labels";
+import type { TaskOptions } from "../provider";
 import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdviceInput, FormSuggestInput, InterviewNextInput, ProviderInfo, StrategyInput, StructureNoteInput } from "../provider";
 import type { AssistantItem, BuyingCenterProposal, FormSuggestion, IntakeProposal, InterviewNext, StrategyProposal, StructuredItem, StructureNoteOutput } from "../schemas";
 import { ruleBasedStepDrafts, type StepDrafts } from "@/modules/playbooks/drafts";
@@ -11,6 +12,9 @@ import { ASSISTANT_CARDS_MARKER, decisionRoleValues, interviewTopicValues } from
  * Jeder Vorschlag zitiert wörtlich einen Satz der Notiz (evidenceQuote) und ordnet nur bekannte Namen zu.
  * Aufforderungen im Text („ignoriere …“, „markiere als bestätigt“) sind für ihn gewöhnliche Sätze – er führt nichts aus.
  */
+
+/** Hinweise auf zusätzliche Rollen/Kapazität (Freelancer-Hebel, Etappe 21) */
+const FREELANCER_HINT = /weitere(n)? (profile|rollen|spezialist|kapazit|unterstützung)|zusätzliche(n|r)? (profile|rollen|kapazit|unterstützung|ressourcen|aufwand)|skill-paket|engpass|unterbesetzt|fehlende(n)? kapazit|externe(r|n)? unterstützung|vendor|lieferantenlist/i;
 
 /** Standardrolle im Satz erkennen (Verve-Katalog, grob). */
 function detectRole(s: string): string | null {
@@ -67,7 +71,7 @@ export class TestProvider implements AIProvider {
     return { id: "test", model: "regelbasiert-v1", enabled: true, description: "Deterministischer Testanbieter – kein Sprachmodell, keine externe Verarbeitung. Nur für Entwicklung und Tests." };
   }
 
-  async structureNote(input: StructureNoteInput): Promise<StructureNoteOutput> {
+  async structureNote(input: StructureNoteInput, opts?: TaskOptions): Promise<StructureNoteOutput> {
     const items: StructuredItem[] = [];
     const sentences = splitSentences(input.noteText);
     const seenPersons = new Set<string>();
@@ -175,6 +179,24 @@ export class TestProvider implements AIProvider {
           proposedQuestion: "",
           expectedResult: "Hinweis (Status neu).",
           proposedOwnerName: "",
+          mentionedPersonName: known,
+        });
+      }
+
+      // Strategischer Fokus „Freelancer-Hebel“ (Etappe 21): Hinweise auf zusätzliche Rollen/Kapazität als eigene Beobachtung
+      if (opts?.focus?.freelancerLever && FREELANCER_HINT.test(s) && items.length < 30) {
+        items.push({
+          type: "BEOBACHTUNG",
+          title: `Freelancer-Potenzial: ${s.length > 60 ? s.slice(0, 57) + "…" : s}`,
+          observation: s,
+          hypothesis: "Möglicher Bedarf an zusätzlichen Profilen – prüfen, ob Verve (auch über Freelancer) weitere Rollen besetzen kann.",
+          evidenceQuote: s,
+          uncertainty: "Vermutung aus dem Fokus „Freelancer-Hebel“; kein bestätigter Bedarf.",
+          whyNow: "Strategischer Fokus: Wachstum über Freelancer.",
+          nextStep: "Im nächsten Gespräch fragen, welche weiteren Rollen im Team fehlen.",
+          proposedQuestion: "Welche weiteren Rollen fehlen im Team?",
+          expectedResult: "Beobachtung mit Einschätzung; bei Bestätigung Chance der Art Freelancer-Experte.",
+          proposedOwnerName: owner,
           mentionedPersonName: known,
         });
       }

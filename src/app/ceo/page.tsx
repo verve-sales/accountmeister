@@ -7,12 +7,16 @@ import { maturityLabel } from "@/modules/strategy/chancen";
 import { BarChart, GroupedBarChart } from "@/components/charts/BarChart";
 import { Status } from "@/components/Status";
 import { fmtDate, goalStatusLabel } from "@/lib/labels";
+import { getFocus } from "@/modules/focus/service";
+import { freelancerStatsByBd } from "@/modules/focus/standardTasks";
 
 export default async function CeoDashboardPage() {
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
   if (!hasRole(actor, "CEO")) redirect("/start");
   const d = await buildCeoDashboard(actor);
+  const focus = await getFocus(actor.workspaceId);
+  const flByBd = focus.freelancerLever ? await freelancerStatsByBd(actor.workspaceId) : [];
 
   return (
     <div className="space-y-6">
@@ -39,6 +43,28 @@ export default async function CeoDashboardPage() {
             ) : null;
           })()}
         </div>
+      )}
+
+      {flByBd.length > 0 && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Freelancer-Hebel je BD (strategischer Fokus)</h2>
+          <table className="list">
+            <thead><tr><th>BD</th><th style={{ textAlign: "right" }}>Kunden</th><th style={{ textAlign: "right" }}>offene Freelancer-Chancen</th><th style={{ textAlign: "right" }}>neu (90 Tage)</th><th style={{ textAlign: "right" }}>vorgestellt (90 Tage)</th><th style={{ textAlign: "right" }}>Kunden ohne Freelancer-Chance</th></tr></thead>
+            <tbody>
+              {flByBd.map((r) => (
+                <tr key={r.bdName}>
+                  <td>{r.bdName}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.accounts}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.openFreelancerChances}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.newFreelancerChances90d}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.presentedOffers90d}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.accountsWithoutFreelancerChance}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="muted text-xs mt-2">Zählungen aus dokumentierten Chancen und Angeboten der Art „Freelancer-Experte“ je zuständigem BD der aktiven Kunden.</p>
+        </section>
       )}
 
       {d.accounts.length === 0 ? null : (

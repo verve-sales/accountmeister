@@ -6,6 +6,7 @@ import { getBuyingCenter } from "@/modules/people/assessments";
 import { opportunityStatusLabel } from "@/lib/labels";
 import { chanceKindLabel } from "@/modules/ai/schemas";
 import { listRoles } from "@/modules/roles/catalog";
+import { getFocus } from "@/modules/focus/service";
 
 /**
  * Regelbasierte Lageanalyse je Setup (Etappe 9): Wo stehen wir, was ist der nächste große Schritt, was blockiert,
@@ -148,6 +149,11 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
   }
   for (const o of activeOpps) if (!o.roleId && o.kind !== "AUSSCHREIBUNG") missing.push(`Chance „${o.title}“: Standardrolle noch offen.`);
   if (activeOpps.length > 0 && activeOpps.every((o) => o.status === "ANTIZIPIERT")) moves.push({ text: "Alle Chancen sind nur antizipiert – im nächsten Gespräch prüfen, ob der Kunde den Bedarf ausspricht.", href: setupHref });
+  // Strategischer Fokus „Freelancer-Hebel“ (Etappe 21): noch keine Freelancer-Chance → Frage nach weiteren Rollen
+  if (ctx.setup.status !== "ARCHIVIERT" && !opps.some((o) => o.kind === "FREELANCER_EXPERTE" && o.status !== "BEENDET")) {
+    const focus = await getFocus(ctx.setup.workspaceId);
+    if (focus.freelancerLever) moves.push({ text: "Freelancer-Hebel: im nächsten Gespräch fragen, welche weiteren Rollen im Team fehlen – daraus eine Chance der Art „Freelancer-Experte“ machen.", href: setupHref });
+  }
 
   // Aktionen
   const overdue = actions.filter((a) => a.dueDate && a.dueDate < today && a.status !== "BLOCKIERT");

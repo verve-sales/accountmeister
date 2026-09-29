@@ -13,6 +13,7 @@ import { strategyProposalSchema, type StrategyProposal } from "@/modules/ai/sche
 import { evidenceFound, runAiJob } from "@/modules/ai/jobs";
 import { buildContextText, resolveContext } from "@/modules/assistant/service";
 import { getOpportunityDetail } from "./service";
+import { getFocus } from "@/modules/focus/service";
 
 /**
  * Persönlicher KI-Berater je Chance (Etappe 15, aus dem BD-Wunsch „ein persönlicher KI-Berater, der mir hilft,
@@ -82,6 +83,10 @@ export async function analyzeOpportunity(actor: Actor, opportunityId: string): P
   if (d.linked.questions.length) moves.push(`${d.linked.questions.length} offene Frage(n) ins nächste Kundengespräch mitnehmen.`);
   if (d.linked.signals.length) moves.push(`${d.linked.signals.length} Beobachtung(en) mit Bezug auf diese Chance.`);
   if (opp.status === "ANTIZIPIERT") moves.push("Im nächsten Gespräch prüfen, ob der Kunde den Bedarf ausspricht.");
+  // Strategischer Fokus „Freelancer-Hebel“ (Etappe 21)
+  if (opp.status !== "BEENDET" && (await getFocus(actor.workspaceId)).freelancerLever) {
+    moves.push(opp.kind === "FREELANCER_EXPERTE" ? "Freelancer-Hebel: prüfen, ob das Team neben dieser Rolle weitere Profile braucht." : "Freelancer-Hebel: fragen, welche weiteren Rollen im Team fehlen – Verve kann alle Spezialistenprofile stellen.");
+  }
 
   return {
     analysis: {

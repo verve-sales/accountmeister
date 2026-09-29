@@ -10,7 +10,7 @@ import { canCreateAccount, canEditSetup, loadSetupContext, type SetupContext } f
 import { getAIProvider } from "@/modules/ai";
 import { ANALYZE_DOCUMENT_PROMPT_VERSION, type AIProvider, type TaskOptions } from "@/modules/ai/provider";
 import { artifactCodeValues, intakeProposalSchema, type IntakeProposal } from "@/modules/ai/schemas";
-import { requireTaskOptions } from "@/modules/ai/settings";
+import { resolveTaskOptions } from "@/modules/ai/settings";
 import { UsageLimitError } from "@/modules/suggestions/service";
 import { attachSourceToSetup, getDocumentForSource, uploadDocument, type UploadedFile } from "@/modules/documents/service";
 import { createAccount, listVisibleAccounts } from "@/modules/accounts/service";
@@ -84,7 +84,7 @@ async function analyzeWithProvider(actor: Actor, provider: AIProvider, input: { 
   const [cnt] = await db.select({ n: count() }).from(schema.aiJobs).where(and(eq(schema.aiJobs.workspaceId, actor.workspaceId), gte(schema.aiJobs.startedAt, since)));
   if (Number(cnt?.n ?? 0) >= cfg.AI_DAILY_JOB_LIMIT) throw new UsageLimitError(cfg.AI_DAILY_JOB_LIMIT);
 
-  const taskOpts: TaskOptions = info.id === "langdock" ? await requireTaskOptions(actor.workspaceId, "ANALYZE_DOCUMENT") : {};
+  const taskOpts: TaskOptions = await resolveTaskOptions(actor.workspaceId, "ANALYZE_DOCUMENT", info.id);
   const modelLabel = taskOpts.model ?? info.model;
   const knownAccounts = (await listVisibleAccounts(actor)).map((a) => a.name);
   const fullText = input.knownContext ? `${input.documentText}\n\n[Bekannter Kontext]\n${input.knownContext}` : input.documentText;

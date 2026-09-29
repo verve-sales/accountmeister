@@ -1564,6 +1564,38 @@ export const playbookRunSteps = pgTable(
   (t) => [index("playbook_run_steps_run_idx").on(t.runId), index("playbook_run_steps_action_idx").on(t.actionId)],
 );
 
+// ---------------------------------------------------------------------------
+// Strategischer Fokus & Standardaufgaben (Etappe 21): das Management setzt einen Fokus (zuerst: Wachstum über
+// Freelancer). Er wird in alle KI-Agenten eingespeist und erzeugt Standardaufgaben als Vorschläge.
+// ---------------------------------------------------------------------------
+
+export const workspaceFocus = pgTable("workspace_focus", {
+  workspaceId: text("workspace_id").primaryKey().references(() => workspaces.id),
+  focusText: text("focus_text").notNull(),
+  /** Freelancer-Hebel: KI-Hinweise, Standardaufgaben und Kennzahlen zum Freelancer-Wachstum */
+  freelancerLever: boolean("freelancer_lever").notNull().default(true),
+  weeklyQuestion: text("weekly_question"),
+  updatedBy: text("updated_by").references(() => users.id),
+  updatedAt: updatedAt(),
+  version: version(),
+});
+
+export const standardTasks = pgTable(
+  "standard_tasks",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    /** Eindeutiger Anlass, z. B. fl-check:opp:<id> – verhindert Doppelungen */
+    key: text("key").notNull(),
+    kind: text("kind").notNull(), // FL_CHECK_CHANCE | FL_AUSWEITUNG | FL_POTENZIAL
+    accountId: text("account_id").references(() => accounts.id),
+    actionId: text("action_id").references(() => actions.id),
+    ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("standard_tasks_key_uq").on(t.workspaceId, t.key), index("standard_tasks_owner_idx").on(t.ownerUserId)],
+);
+
 export type Role = (typeof roleEnum.enumValues)[number];
 export type PlaybookScope = (typeof playbookScopeEnum.enumValues)[number];
 export type PlaybookRunStatus = (typeof playbookRunStatusEnum.enumValues)[number];

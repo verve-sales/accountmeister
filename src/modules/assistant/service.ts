@@ -10,7 +10,7 @@ import { canCreateAccount, canCreateSetup, canEditSetup, canViewSetup, loadSetup
 import { getAIProvider } from "@/modules/ai";
 import { ASSISTANT_PROMPT_VERSION, type AIProvider, type AssistantInput, type TaskOptions } from "@/modules/ai/provider";
 import { ASSISTANT_CARDS_MARKER, assistantItemSchema, interviewTopicLabel, interviewTopicValues, type AssistantCard, type AssistantItem } from "@/modules/ai/schemas";
-import { requireTaskOptions } from "@/modules/ai/settings";
+import { resolveTaskOptions } from "@/modules/ai/settings";
 import { parseJsonLoose } from "@/modules/ai/providers/langdock";
 import { UsageLimitError } from "@/modules/suggestions/service";
 import { getAccount, createAccount, listVisibleAccounts } from "@/modules/accounts/service";
@@ -250,7 +250,7 @@ export async function sendMessage(actor: Actor, raw: unknown, deps: { provider?:
     since.setHours(0, 0, 0, 0);
     const [cnt] = await db.select({ n: count() }).from(schema.aiJobs).where(and(eq(schema.aiJobs.workspaceId, actor.workspaceId), gte(schema.aiJobs.startedAt, since)));
     if (Number(cnt?.n ?? 0) >= cfg.AI_DAILY_JOB_LIMIT) throw new UsageLimitError(cfg.AI_DAILY_JOB_LIMIT);
-    const taskOpts: TaskOptions = info.id === "langdock" ? await requireTaskOptions(actor.workspaceId, "ASSISTANT") : {};
+    const taskOpts: TaskOptions = await resolveTaskOptions(actor.workspaceId, "ASSISTANT", info.id);
     const input: AssistantInput = { contextText, history, interviewMode: thread.interviewMode, openPoints: openPointsText };
     const inputText = JSON.stringify(input);
     const [job] = await db

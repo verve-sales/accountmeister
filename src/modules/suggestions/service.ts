@@ -11,7 +11,7 @@ import { loadActor } from "@/modules/identity/actor";
 import { canEditSetup, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { getAIProvider } from "@/modules/ai";
 import { STRUCTURE_NOTE_PROMPT_VERSION, type AIProvider, type StructureNoteInput, type TaskOptions } from "@/modules/ai/provider";
-import { requireTaskOptions } from "@/modules/ai/settings";
+import { resolveTaskOptions } from "@/modules/ai/settings";
 import { structureNoteOutputSchema, type StructuredItem } from "@/modules/ai/schemas";
 import { requireReview } from "@/modules/reviews/service";
 import { captureObservation } from "@/modules/signals/service";
@@ -170,7 +170,7 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
   const inputHash = sha(noteText);
   const jobDedupe = sha(`${input0.dedupeScope}:${inputHash}:${STRUCTURE_NOTE_PROMPT_VERSION}`);
   // Modellwahl je Aufgabe (Verwaltung → KI); Anbieter ohne Modellwahl ignorieren sie
-  const taskOpts: TaskOptions = info.id === "langdock" ? await requireTaskOptions(actor.workspaceId, "STRUCTURE_NOTE") : {};
+  const taskOpts: TaskOptions = await resolveTaskOptions(actor.workspaceId, "STRUCTURE_NOTE", info.id);
   const modelLabel = taskOpts.model ?? info.model;
 
   const prior = await db.query.aiJobs.findFirst({ where: and(eq(schema.aiJobs.dedupeKey, jobDedupe), eq(schema.aiJobs.status, "ERFOLGREICH")) });

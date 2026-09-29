@@ -15,6 +15,7 @@ import { createHandover, respondToHandover } from "@/modules/handovers/service";
 import { changeActionStatus, createAction } from "@/modules/actions/service";
 import { createAccount, reassignAccountBd } from "@/modules/accounts/service";
 import { proposeStepDrafts } from "@/modules/playbooks/assistant";
+import { updateFocus } from "@/modules/focus/service";
 import { addPlaybookStep, completeRunStep, createPlaybook, movePlaybookStep, pauseRun, reassignRunOwner, removePlaybookStep, resumeRun, setAccountDormant, skipRunStep, startPlaybookRun, updatePlaybook, updatePlaybookStep } from "@/modules/playbooks/service";
 import { archiveAccount, deleteAccountPermanently, restoreAccount } from "@/modules/accounts/deletion";
 import { formToStrategyInput, saveStrategy } from "@/modules/strategy/service";
@@ -1080,4 +1081,14 @@ export async function draftRunStepAction(fd: FormData) {
     await proposeStepDrafts(actor, data.runStepId ?? "");
     return `${back.split("#")[0]}#vorgehen`;
   }, "Entwürfe erstellt – bitte prüfen und Platzhalter ergänzen.");
+}
+
+// --- Strategischer Fokus (Etappe 21) -------------------------------------------
+
+export async function updateFocusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/vorgehen", async (actor) => {
+    await updateFocus(actor, data);
+    return "/vorgehen#fokus";
+  }, "Strategischer Fokus gespeichert – gilt ab sofort für alle KI-Agenten und Standardaufgaben.");
 }
