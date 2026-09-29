@@ -6,8 +6,14 @@ import { getConfig } from "@/lib/config";
 import { ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
-import { canCreateAccount, canCreateSetup, canEditSetup, canViewSetup, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
+import { canCreateAccount, canCreateSetup, canEditSetup, canReassignResponsibility, canViewSetup, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 import { getAIProvider } from "@/modules/ai";
+import { createInitiative, parseDueHint, procurementLabel, updateProcurement } from "@/modules/agenda/service";
+import { createSos } from "@/modules/sos/service";
+import { getHealth, matchUserByName, recordExistingEngagement, riskLabel, saveHealthAnswer } from "@/modules/health/service";
+import { createPriority } from "@/modules/accountplan/service";
+import { priorityKindLabel } from "@/lib/labels";
+
 import { buildHelpText } from "@/modules/help/service";
 import { looksLikeHowTo, type HelpSection } from "@/modules/help/knowledge";
 import { ASSISTANT_PROMPT_VERSION, type AIProvider, type AssistantInput, type TaskOptions } from "@/modules/ai/provider";
@@ -15,8 +21,8 @@ import { ASSISTANT_CARDS_MARKER, assistantItemSchema, interviewTopicLabel, inter
 import { resolveTaskOptions } from "@/modules/ai/settings";
 import { parseJsonLoose } from "@/modules/ai/providers/langdock";
 import { UsageLimitError } from "@/modules/suggestions/service";
-import { getAccount, createAccount, listVisibleAccounts } from "@/modules/accounts/service";
-import { createSetup } from "@/modules/setups/service";
+import { getAccount, createAccount, listVisibleAccounts, reassignAccountBd } from "@/modules/accounts/service";
+import { addMember, createSetup } from "@/modules/setups/service";
 import { createPerson } from "@/modules/people/service";
 import { createOpportunity } from "@/modules/opportunities/service";
 import { createAccountGoal } from "@/modules/leadership/service";
@@ -380,7 +386,7 @@ export function validateCards(json: unknown, allowedText: string): { items: Assi
   const items: AssistantItem[] = [];
   let rejected = 0;
   let invalid = 0;
-  for (const raw of rawItems.slice(0, 30)) {
+  for (const raw of rawItems.slice(0, 40)) {
     const r = assistantItemSchema.safeParse(raw);
     if (!r.success) {
       invalid++;
@@ -391,7 +397,7 @@ export function validateCards(json: unknown, allowedText: string): { items: Assi
     else rejected++;
   }
   const missing = Array.isArray(obj.missing) ? obj.missing.filter((x): x is string => typeof x === "string" && x.trim().length >= 3).map((x) => x.trim().slice(0, 300)).slice(0, 8) : [];
-  return { items: items.slice(0, 20), missing, rejected, invalid };
+  return { items: items.slice(0, 30), missing, rejected, invalid };
 }
 
 // ---------------------------------------------------------------------------
@@ -485,7 +491,8 @@ async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$i
   }
   if (item.type === "PERSON") {
     if (!res.account) throw new ValidationError("Für eine Person fehlt der Kunde – lege zuerst den Kunden an (Karte „Kunde“).");
-    const person = await createPerson(actor, { accountId: res.account.id, displayName: item.displayName, functionTitle: item.functionTitle, knownResponsibility: item.knownResponsibility, setupId: res.ctx?.setup.id ?? "", accessClass: "ACCOUNT_TEAM" });
+    const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item.email.trim()) ? item.email.trim() : "";
+    const person = await createPerson(actor, { accountId: res.account.id, displayName: item.displayName, functionTitle: item.functionTitle, knownResponsibility: item.knownResponsibility, email, phone: item.phone.trim().slice(0, 50), setupId: res.ctx?.setup.id ?? "", accessClass: "ACCOUNT_TEAM" });
     let note = `Person „${person.displayName}“ angelegt.`;
     if (res.ctx && (item.decisionRole || item.stance !== "UNBEKANNT" || item.influence !== "UNBEKANNT")) {
       const sourceId = await db.transaction(async (tx) => ensureThreadSource(tx, actor, thread, res.ctx!.setup.id));
@@ -515,6 +522,64 @@ async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$i
       return { type: "SETUP", id: matchedSetup.id, note: `Zuordnung übernommen – das Gespräch bezieht sich jetzt auf „${account.name} · ${matchedSetup.name}“.`, rebind: { type: "SETUP", id: matchedSetup.id, title: "Assistent · Setup" } };
     }
     return { type: "ACCOUNT", id: account.id, note: `Zuordnung übernommen – das Gespräch bezieht sich jetzt auf „${account.name}“. Als Nächstes kannst du z. B. ein Setup vorschlagen lassen.`, rebind: { type: "ACCOUNT", id: account.id, title: "Assistent · Kunde" } };
+  }
+  // Etappe 26: Karten auf Kundenebene (Kundenagenda, Beschaffung, Risiko, Hebel, Team, SOS)
+  if (item.type === "INITIATIVE" || item.type === "BESCHAFFUNG" || item.type === "RISIKO" || item.type === "HEBEL" || item.type === "TEAM" || item.type === "SOS") {
+    if (!res.account) throw new ValidationError("Dafür fehlt der Kunde – übernimm zuerst die Karte „Kunde“ oder öffne den Assistenten auf der Kundenseite.");
+    const account = await getAccount(actor, res.account.id);
+    if (item.type === "INITIATIVE") {
+      const ini = await createInitiative(actor, { accountId: account.id, kind: item.kind, title: item.title, description: item.description, dueHint: item.dueHint });
+      return { type: "INITIATIVE", id: ini.id, note: `In die Kundenagenda aufgenommen${ini.dueDate ? ` (Termin ${ini.dueDate} – der Accountmeister erinnert rechtzeitig)` : ""}.` };
+    }
+    if (item.type === "BESCHAFFUNG") {
+      await updateProcurement(actor, account.id, { version: account.version, procurementChannel: item.channel, intermediaryName: item.intermediaryName, procurementNote: item.note });
+      return { type: "ACCOUNT", id: account.id, note: `Beschaffungsweg gespeichert: ${procurementLabel[item.channel]}${item.intermediaryName ? ` (${item.intermediaryName})` : ""}.` };
+    }
+    if (item.type === "RISIKO") {
+      const h = await getHealth(actor, account.id);
+      const items = [...new Set([...(h.answers.risks?.items ?? []), item.risk])];
+      const note = [h.answers.risks?.note, item.note].filter(Boolean).join(" · ").slice(0, 1000);
+      await saveHealthAnswer(actor, account.id, { key: "RISKS", items, note });
+      return { type: "ACCOUNT", id: account.id, note: `Risiko „${riskLabel[item.risk] ?? item.risk}“ im Health-Check vermerkt.` };
+    }
+    if (item.type === "HEBEL") {
+      const pr = await createPriority(actor, { accountId: account.id, setupId: res.ctx?.setup.id ?? "", kind: item.lever, title: item.title, rationale: item.rationale || `Aus dem Assistenten: „${item.evidenceQuote.slice(0, 300)}“` });
+      return { type: "PRIORITY", id: pr.id, note: `Als Vorhaben (${priorityKindLabel[item.lever] ?? item.lever}) in den Accountplan aufgenommen – zur Abstimmung vorgeschlagen.` };
+    }
+    if (item.type === "SOS") {
+      const sos = await createSos(actor, { accountId: account.id, setupId: res.ctx?.setup.id ?? "", kind: item.kind, title: item.title, situation: item.situation, need: item.need });
+      return { type: "SOS", id: sos.id, note: "SOS ausgelöst – BD und Principal sehen es sofort auf der Startseite." };
+    }
+    // TEAM: Verve-Kolleginnen und -Kollegen per Namen zuordnen – nur eindeutige Treffer, nichts wird geraten
+    const notes: string[] = [];
+    if (item.bdName) {
+      const u = await matchUserByName(actor.workspaceId, item.bdName);
+      if (!u) notes.push(`BD „${item.bdName}“ nicht eindeutig gefunden.`);
+      else if (u.id === account.responsibleBdUserId) notes.push(`${u.displayName} ist bereits zuständiger BD.`);
+      else if (!canReassignResponsibility(actor, account)) notes.push(`BD ${u.displayName} bitte von Principal oder zuständigem BD umstellen lassen.`);
+      else {
+        await reassignAccountBd(actor, account.id, { version: account.version, responsibleBdUserId: u.id });
+        notes.push(`Zuständiger BD: ${u.displayName}.`);
+      }
+    }
+    for (const name of item.ankerNames) {
+      const u = await matchUserByName(actor.workspaceId, name);
+      if (!u) notes.push(`Anker „${name}“ nicht eindeutig gefunden.`);
+      else if (!res.ctx) notes.push(`Anker ${u.displayName}: bitte im Setup als Beteiligung eintragen.`);
+      else {
+        await addMember(actor, res.ctx.setup.id, { userId: u.id, contribution: "ANKER_KONTEXT", contributionNote: "Aus dem Assistenten übernommen (Account-Anker)." });
+        notes.push(`${u.displayName} als Anker im Setup „${res.ctx.setup.name}“ eingetragen.`);
+      }
+    }
+    if (item.principalName) notes.push(`Principal „${item.principalName}“: Die kundenbezogene Principal-Rolle vergibt die Betriebsverwaltung (Verwaltung → Rolle zuweisen).`);
+    if (item.consultantName) notes.push(`Operativer Berater „${item.consultantName}“: wird am Einsatz eingetragen (Karte „Einsatz“ oder Health-Check → Einsätze).`);
+    return { type: "ACCOUNT", id: account.id, note: notes.join(" ") || "Nichts zuzuordnen." };
+  }
+  if (item.type === "EINSATZ") {
+    if (!res.account || !res.ctx) throw new ValidationError("Für einen laufenden Einsatz braucht es Kunde und Setup – übernimm zuerst die Karte „Kunde“.");
+    const plannedEnd = /^\d{4}-\d{2}-\d{2}$/.test(item.plannedEnd) ? item.plannedEnd : parseDueHint(item.endHint || item.plannedEnd) ?? "";
+    const order = await recordExistingEngagement(actor, res.account.id, { setupId: res.ctx.setup.id, title: item.title, kind: item.kind, plannedEnd, evidenceText: `Aus dem Assistenten übernommen: „${item.evidenceQuote.slice(0, 400)}“`, consultantName: item.consultantName });
+    return { type: "ORDER", id: order.id, note: `Laufender Einsatz nachgetragen${plannedEnd ? ` (Ende ${plannedEnd} – die Verlängerungsregel greift rechtzeitig)` : " – Einsatzende bitte im Health-Check ergänzen"}.` };
   }
   // Alles Weitere braucht ein Setup mit Bearbeitungsrecht
   if (!res.ctx) throw new ValidationError("Dafür braucht es ein Setup. Lege zuerst Kunde und Setup an (Karten „Kunde“/„Setup“) oder öffne den Assistenten in einem Setup.");

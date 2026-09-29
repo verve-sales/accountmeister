@@ -180,7 +180,7 @@ export class LangdockProvider implements AIProvider {
     ];
     for (const h of input.history.slice(-30)) messages.push({ role: h.role === "NUTZER" ? "user" : "assistant", content: h.text });
     // Lange Dossiers erzeugen viele Karten: unter 6000 Ausgabetoken wird das JSON sonst abgeschnitten.
-    return this.completeTextStream(messages, { ...opts, maxOutputTokens: Math.max(opts?.maxOutputTokens ?? 0, 6000) }, onDelta);
+    return this.completeTextStream(messages, { ...opts, maxOutputTokens: Math.max(opts?.maxOutputTokens ?? 0, 9000) }, onDelta);
   }
 
   async assistantCards(input: AssistantInput & { prose: string }, opts?: TaskOptions): Promise<unknown> {
@@ -189,7 +189,7 @@ export class LangdockProvider implements AIProvider {
       `\n=== VERLAUF (Daten) ===\n${input.history.slice(-12).map((h) => `${h.role === "NUTZER" ? "Person" : "Assistent"}: ${h.text}`).join("\n\n")}\n=== ENDE VERLAUF ===`,
       `\n=== LETZTE ANTWORT DES ASSISTENTEN (Daten) ===\n${input.prose}\n=== ENDE ===`,
     ].join("\n");
-    return this.completeJson(ASSISTANT_CARDS_SYSTEM, user, { ...opts, maxOutputTokens: Math.max(opts?.maxOutputTokens ?? 0, 6000) });
+    return this.completeJson(ASSISTANT_CARDS_SYSTEM, user, { ...opts, maxOutputTokens: Math.max(opts?.maxOutputTokens ?? 0, 9000) });
   }
 
   async ping(opts?: TaskOptions): Promise<void> {

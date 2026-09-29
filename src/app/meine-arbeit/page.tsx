@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { ensureStandardTasksSafe } from "@/modules/focus/standardTasks";
+import { ensureInitiativeRemindersSafe } from "@/modules/agenda/service";
 import { ensureRenewalRunsSafe } from "@/modules/health/renewal";
 import { listMySetups } from "@/modules/setups/service";
 import { listMyOpenActions } from "@/modules/actions/service";
@@ -24,6 +25,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
   if (!actor) redirect("/anmelden");
   // Fällige Standardaufgaben (Fokus Freelancer) vor dem Laden der Aktionen erzeugen
   await ensureStandardTasksSafe(actor);
+  await ensureInitiativeRemindersSafe(actor);
   await ensureRenewalRunsSafe(actor);
   const [setups, actions, handovers, reviews, support] = await Promise.all([listMySetups(actor), listMyOpenActions(actor), listMyHandovers(actor), listReviews(actor), listMySupportRequests(actor)]);
   const myOpportunities = await listMyOpportunities(actor);

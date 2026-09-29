@@ -1,4 +1,5 @@
 import { looksLikeHowTo } from "@/modules/help/knowledge";
+import { extractAccountPage } from "@/modules/assistant/accountPage";
 import { decisionRoleLabel } from "@/lib/labels";
 import type { TaskOptions } from "../provider";
 import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdviceInput, FormSuggestInput, InterviewNextInput, ProviderInfo, StrategyInput, StructureNoteInput } from "../provider";
@@ -510,12 +511,22 @@ export class TestProvider implements AIProvider {
       onDelta?.(out);
       return out;
     }
+    // Eingefügte Account-Seite (Etappe 26): Kundenagenda, Stakeholder, Beschaffung, Einsatzende, Hebel, Team, SOS
+    const page = extractAccountPage(lastUser, { hasCustomer: /Kunde:/.test(input.contextText) });
+    if (page.recognized) {
+      const count = (t: string) => page.items.filter((i) => i.type === t).length;
+      const parts = [count("INITIATIVE") && `${count("INITIATIVE")}× Kundenagenda`, count("PERSON") && `${count("PERSON")}× Person`, count("BESCHAFFUNG") && "Beschaffungsweg", count("EINSATZ") && "laufender Einsatz", count("HEBEL") && `${count("HEBEL")}× Hebel`, count("RISIKO") && `${count("RISIKO")}× Risiko`, count("SOS") && `${count("SOS")}× SOS`, count("TEAM") && "Verve-Team"].filter(Boolean).join(", ");
+      const prosa = `Ich habe die Account-Seite ausgewertet und ${page.items.length} Vorschläge abgeleitet (${parts}). Umsatzschätzungen und leere Vorlagenfelder übernehme ich bewusst nicht.${page.missing.length ? ` Offen: ${page.missing[0]}` : ""}`;
+      const out = `${prosa}\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items: page.items, missing: page.missing })}`;
+      onDelta?.(out);
+      return out;
+    }
     const allUser = input.history.filter((h) => h.role === "NUTZER").map((h) => h.text).join("\n");
     const p = await this.analyzeDocument({ documentText: lastUser || allUser, fileName: "Dialog", knownAccountNames: [] });
     const items: AssistantItem[] = [];
     const hasCustomer = /Kunde:/.test(input.contextText);
     if (p.organization && !hasCustomer) items.push({ type: "KUNDE", name: p.organization.name, orgType: p.organization.orgType, setupName: `Erstkontakt ${p.organization.name}`.slice(0, 200), contextNote: "", evidenceQuote: p.organization.evidenceQuote });
-    for (const x of p.persons) items.push({ type: "PERSON", ...x });
+    for (const x of p.persons) items.push({ type: "PERSON", phone: "", ...x });
     // Wofür: bestehende Chancen aus dem Kontext oder die hier vorgeschlagene(n) Chance(n)
     const known = (input.contextText.split("\n").find((l) => l.startsWith("Chancen:")) ?? "").slice("Chancen:".length).split(";").map((x) => x.split(" [")[0]!.trim()).filter(Boolean);
     const purposeFor = (text: string) => p.needs.find((n) => text.includes(n.evidenceQuote) || n.evidenceQuote.includes(text))?.title ?? known.find((k) => text.toLowerCase().includes(k.toLowerCase().split(" ")[0] ?? "\u0000")) ?? p.needs[0]?.title ?? known[0] ?? "";

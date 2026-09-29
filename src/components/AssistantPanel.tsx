@@ -24,7 +24,13 @@ type View = {
   ai: { enabled: boolean; description: string };
 };
 
-const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung" };
+const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Hebel / Vorhaben", TEAM: "Verve-Team" };
+const INITIATIVE_LABEL: Record<string, string> = { PRIORITAET: "Priorität des Kunden", INITIATIVE: "Schlüssel-Initiative", HERAUSFORDERUNG: "Herausforderung" };
+const LEVER_LABEL: Record<string, string> = { VERLAENGERN: "Verlängern", AUSWEITEN: "Ausweiten", VERTIEFEN: "Vertiefen", UEBERTRAGEN: "Übertragen", REAKTIVIEREN: "Reaktivieren" };
+const RISK_LABEL: Record<string, string> = { UMSTRUKTURIERUNG: "Umstrukturierung", BUDGETKUERZUNG: "Budgetkürzung", WETTBEWERBER: "Wettbewerber aktiv", FUERSPRECHER_WEG: "Fürsprecher geht", INSOURCING: "Insourcing", EINKAUF_VERSCHAERFT: "Einkauf verschärft", NACHBARTEAM: "Nachbarteam stellt sich quer" };
+const PROCUREMENT_LABEL: Record<string, string> = { DIREKT: "direkt", VERMITTLER: "über Vermittler", RAHMENVERTRAG: "über Rahmenvertrag" };
+/** Reihenfolge für „Alle übernehmen“: erst Kunde/Einsortierung (bindet das Gespräch), dann Team, dann der Rest. */
+const APPLY_ORDER = ["KUNDE", "EINSORTIERUNG", "SETUP", "TEAM", "BESCHAFFUNG", "INITIATIVE", "PERSON", "EINSATZ", "CHANCE", "HEBEL", "RISIKO", "SOS", "SIGNAL", "AKTION", "KONTAKT", "FRAGE", "ACCOUNTZIEL"];
 const ROLE_FAMILY_LABEL: Record<string, string> = { DELIVERY_MANAGEMENT: "Delivery Management", AGILE_LEADERSHIP: "Agile Leadership", BUSINESS_ANALYSE: "Business Analyse & Beratung", SOLUTION_ARCHITEKTUR: "Solution & Architektur", TEST_QS: "Test & Qualitätssicherung" };
 
 function contextFromPath(pathname: string): { type: string; id: string } {
@@ -58,6 +64,22 @@ function cardTitle(item: Item): string {
       return s("question");
     case "EINSORTIERUNG":
       return `→ ${s("accountName")}${s("setupName") ? ` · ${s("setupName")}` : ""}`;
+    case "INITIATIVE":
+      return `${INITIATIVE_LABEL[s("kind")] ?? s("kind")}: ${s("title")}`;
+    case "BESCHAFFUNG":
+      return `Beschaffung ${PROCUREMENT_LABEL[s("channel")] ?? s("channel")}${s("intermediaryName") ? `: ${s("intermediaryName")}` : ""}`;
+    case "EINSATZ":
+      return `${s("title")}${s("plannedEnd") || s("endHint") ? ` · Ende ${s("plannedEnd") || s("endHint")}` : ""}`;
+    case "RISIKO":
+      return RISK_LABEL[s("risk")] ?? s("risk");
+    case "SOS":
+      return s("title");
+    case "HEBEL":
+      return `${LEVER_LABEL[s("lever")] ?? s("lever")}: ${s("title")}`;
+    case "TEAM": {
+      const ank = Array.isArray(item.ankerNames) ? (item.ankerNames as string[]).join(", ") : "";
+      return [s("bdName") && `BD ${s("bdName")}`, ank && `Anker ${ank}`, s("principalName") && `Principal ${s("principalName")}`, s("consultantName") && `Berater ${s("consultantName")}`].filter(Boolean).join(" · ") || "Team";
+    }
     default:
       return item.type;
   }
@@ -67,7 +89,7 @@ function cardDetail(item: Item): string {
   const s = (k: string) => String(item[k] ?? "");
   switch (item.type) {
     case "PERSON": {
-      const parts = [s("knownResponsibility"), s("decisionRole") && s("decisionRole") !== "null" ? `Rolle: ${s("decisionRole")}` : "", s("stance") !== "UNBEKANNT" ? `Haltung: ${s("stance")}` : "", s("influence") !== "UNBEKANNT" ? `Einfluss: ${s("influence")}` : "", s("assessmentNote")];
+      const parts = [s("email"), s("phone"), s("knownResponsibility"), s("decisionRole") && s("decisionRole") !== "null" ? `Rolle: ${s("decisionRole")}` : "", s("stance") !== "UNBEKANNT" ? `Haltung: ${s("stance")}` : "", s("influence") !== "UNBEKANNT" ? `Einfluss: ${s("influence")}` : "", s("assessmentNote")];
       return parts.filter(Boolean).join(" · ");
     }
     case "SIGNAL":
@@ -90,6 +112,17 @@ function cardDetail(item: Item): string {
       return s("contextNote");
     case "EINSORTIERUNG":
       return s("reasoning");
+    case "INITIATIVE":
+      return s("description");
+    case "BESCHAFFUNG":
+    case "RISIKO":
+      return s("note");
+    case "EINSATZ":
+      return s("consultantName") ? `Operativer Berater: ${s("consultantName")}` : "";
+    case "SOS":
+      return `${s("situation")}${s("need") ? `\nWas hilft: ${s("need")}` : ""}`;
+    case "HEBEL":
+      return s("rationale");
     default:
       return "";
   }
@@ -218,16 +251,17 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
     }
   }
 
-  async function decide(messageId: string, cardId: string, decision: "UEBERNEHMEN" | "VERWERFEN") {
-    if (!view) return;
+  async function decide(messageId: string, cardId: string, decision: "UEBERNEHMEN" | "VERWERFEN", quiet = false): Promise<{ ok: boolean; thread?: { contextType: string; contextId: string | null } }> {
+    if (!view) return { ok: false };
     setError(null);
     const res = await fetch("/api/assistent/karte", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ threadId: view.thread.id, messageId, cardId, decision }) });
     const j = await res.json().catch(() => ({ error: "Fehler" }));
     if (!res.ok) {
       setError(j.error ?? "Fehler");
-      return;
+      return { ok: false };
     }
     setMessages((m) => m.map((x) => (x.id === messageId ? { ...x, cards: x.cards.map((c) => (c.id === cardId ? (j.card as Card) : c)) } : x)));
+    if (quiet) return { ok: true, thread: j.thread };
     if (j.thread && j.thread.contextType !== view.thread.contextType) {
       // Gespräch wurde an ein neues Setup gebunden: dorthin wechseln
       setView({ ...view, thread: { ...view.thread, ...j.thread } });
@@ -235,6 +269,31 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
     } else {
       router.refresh();
     }
+    return { ok: true };
+  }
+
+  /** Alle offenen Karten einer Antwort nacheinander übernehmen – Kunde zuerst; bei einem Fehler anhalten. */
+  async function acceptAll(messageId: string) {
+    const msg = messages.find((x) => x.id === messageId);
+    if (!msg || !view || busy) return;
+    const open = msg.cards.filter((c) => c.status === "NEU").sort((a, b) => APPLY_ORDER.indexOf(a.item.type) - APPLY_ORDER.indexOf(b.item.type));
+    setBusy(true);
+    let lastThread: { contextType: string; contextId: string | null } | undefined;
+    let failed = 0;
+    try {
+      for (const c of open) {
+        const r = await decide(messageId, c.id, "UEBERNEHMEN", true);
+        if (!r.ok) failed++;
+        if (r.thread) lastThread = r.thread;
+      }
+    } finally {
+      setBusy(false);
+    }
+    if (failed) setError(`${failed} Karte(n) konnten nicht übernommen werden – Hinweis steht an der Karte bzw. oben; bitte einzeln prüfen.`);
+    if (lastThread && lastThread.contextType === "SETUP" && lastThread.contextId && lastThread.contextType !== view.thread.contextType) {
+      setView({ ...view, thread: { ...view.thread, ...lastThread } });
+      router.push(`/setups/${lastThread.contextId}`);
+    } else router.refresh();
   }
 
   async function toggleInterview() {
@@ -322,6 +381,12 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
                   <ul className="text-xs muted mt-1 space-y-0.5">
                     {m.missing.map((q, i) => <li key={i}>Fehlt: {q}</li>)}
                   </ul>
+                )}
+                {m.cards.filter((c) => c.status === "NEU").length > 1 && view?.context.canWrite && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <button type="button" className="btn btn-small" disabled={busy} onClick={() => void acceptAll(m.id)}>Alle {m.cards.filter((c) => c.status === "NEU").length} übernehmen</button>
+                    <span className="muted text-xs">Kunde zuerst, dann der Rest – einzeln verwerfen geht vorher.</span>
+                  </div>
                 )}
                 {m.cards.length > 0 && (
                   <ul className="mt-2 space-y-2">

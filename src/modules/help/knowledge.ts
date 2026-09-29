@@ -133,6 +133,30 @@ Einsätze kommen aus den Aufträgen (geplantes Ende, Verlängerungsfrist). Verl�
 Meine Arbeit sammelt alles, was bei dir liegt: offene Übernahmen an dich, Unterstützungsaufträge, deine offenen Aktionen und Chancen, nächste Weeklys und deine Setups.`,
   },
   {
+    id: "agenda",
+    title: "Kundenagenda, Beschaffungsweg und Berater im Einsatz",
+    where: "Kunde → „Kundenagenda – was treibt den Kunden?“ und „Einkauf & Beschaffung“; Health-Check → Einsätze (Spalte Berater)",
+    keywords: ["kundenagenda", "agenda", "prioritaeten", "prioritaet", "initiative", "initiativen", "schluessel initiative", "herausforderung", "herausforderungen", "problembereich", "beschaffung", "beschaffungsweg", "vermittler", "einkauf", "berater", "operativer berater", "kurzangebot", "hebel", "ausweiten", "vertiefen"],
+    body: `Die Kundenagenda hält fest, was den Kunden treibt – in seinen Worten und getrennt von unseren Chancen: Prioritäten des Kunden, Schlüssel-Initiativen (z. B. „Toolvertrag läuft Ende 2026 aus“) und Herausforderungen. Einträge mit Datum oder ungefährem Termin („Ende 2026“, „Q2 2027“) erinnern 120 Tage vorher: Der zuständige BD bekommt eine vorgeschlagene Aktion „Kundeninitiative steht an – Chance prüfen“. Auf der Chance-Seite ordnest du unter „Zahlt ein auf (Kundenagenda)“ zu, auf welche Initiative eine Chance einzahlt.
+Unter „Einkauf & Beschaffung“ steht, ob wir direkt, über einen Vermittler (mit Namen) oder über einen Rahmenvertrag arbeiten; der Health-Check zeigt das bei „Vertrag & Listung“.
+Je Einsatz trägst du im Health-Check den operativen Berater ein (Verve-Kolleg:in oder, z. B. bei Freelancern, nur der Name); ist er zugleich Anker, steht das dabei.
+Ideen für Kurzangebote werden als Vorhaben mit Hebel (Verlängern, Ausweiten, Vertiefen, Übertragen) im Accountplan und als antizipierte Chance erfasst; für den Text gibt es die Artefakt-Vorlage „Kurzangebot“ (A17). Umsatzschätzungen führt der Accountmeister bewusst nicht.`,
+  },
+  {
+    id: "sos",
+    title: "SOS-Protokolle",
+    where: "Kunde → „SOS-Protokolle“ → „SOS auslösen“; Startseite (rotes SOS-Feld)",
+    keywords: ["sos", "sos protokoll", "notfall", "eskalation", "eng", "wird eng", "anker kommt nicht weiter", "blockiert", "hilfe anfordern", "auslaufend", "auslaufende assignments", "kein anschluss"],
+    body: `Ein SOS löst jeder aus dem Kundenteam aus – auch der Anker –, wenn es eng wird: ein Einsatz läuft aus und kein Anschluss ist in Sicht, der Anker kommt beim Kunden nicht mehr weiter, oder die Lage spitzt sich zu (Budget, Zufriedenheit, Konflikt). Du beschreibst kurz die Lage und was helfen würde. Das SOS erscheint sofort unübersehbar auf der Startseite von BD und Principal und zählt im Health-Check als akutes Risiko (je −5, höchstens −10), bis jemand „Gelöst“ mit einer kurzen Lösung dokumentiert. Mit „Ich kümmere mich“ übernimmt jemand die Bearbeitung. Auch der Assistent kann aus deinem Text eine SOS-Karte vorschlagen.`,
+  },
+  {
+    id: "accountseite",
+    title: "Bestehende Account-Seite übernehmen (z. B. aus Notion)",
+    where: "Assistent (auf der Kundenseite oder allgemein) → Seite einfügen → „Alle übernehmen“",
+    keywords: ["notion", "account seite", "accountseite", "einfuegen", "importieren", "uebernehmen", "alle uebernehmen", "migration", "bestehende seite", "kundenanlage"],
+    body: `Füge eine bestehende Account-Seite (z. B. aus Notion) einfach in den Assistenten ein – bei einem neuen Kunden am besten mit dem Namen in der ersten Zeile („Kunde: …“). Der Assistent schlägt dann Karten vor: Kunde, Verve-Team (BD, Anker, Berater), jeden Punkt der Kundenagenda, die Stakeholder als Personen (mit Rolle im Buyingcenter, E-Mail und Telefon), den Beschaffungsweg, laufende Einsätze mit Ende (damit greift die Verlängerungsregel), Risiken wie ein Nachbarteam, das sich querstellt, Ideen für Kurzangebote als Hebel und Chance sowie SOS-Fälle. Leere Vorlagenfelder und Umsatzschätzungen übernimmt er nicht. Mit „Alle übernehmen“ legst du alles in der richtigen Reihenfolge an (Kunde zuerst); einzelne Karten kannst du vorher verwerfen.`,
+  },
+  {
     id: "ceo",
     title: "CEO-Dashboard",
     where: "Hauptmenü → CEO-Dashboard (nur CEO)",

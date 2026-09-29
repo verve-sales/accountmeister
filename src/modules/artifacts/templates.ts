@@ -11,7 +11,7 @@
  * Bestehende Artefaktversionen behalten die Vorlagenversion, mit der sie erstellt wurden.
  */
 
-export const TEMPLATE_REGISTRY_VERSION = 1;
+export const TEMPLATE_REGISTRY_VERSION = 2;
 
 export type ScopeType = "ACCOUNT" | "SETUP" | "SIGNAL" | "HANDOVER" | "ACCESS_PLAN" | "PERSON" | "REVIEW" | "OPPORTUNITY" | "OFFER" | "ORDER" | "ASSIGNMENT" | "GOAL";
 export type Implementation = "ANSICHT" | "TEXTENTWURF" | "FOLGT";
@@ -278,6 +278,24 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
       { key: "wirkung", label: "Wirkung / Ergebnis", hint: "Belegbar; keine Kausalitätsbehauptung ohne Beleg." },
       { key: "belege", label: "Belege", hint: "Quellen referenzieren." },
       { key: "regel", label: "Regelreferenz und Prüfstatus", hint: "Vergütungsregeln sind noch nicht freigegeben – hier wird nichts berechnet." },
+    ],
+  },
+  {
+    code: "A17",
+    name: "Kurzangebot",
+    responsible: "BD mit Anker",
+    trigger: "Idee aus der Kundenagenda (Verlängern, Ausweiten, Vertiefen, Übertragen)",
+    scopeType: "SETUP",
+    implementation: "TEXTENTWURF",
+    qualityCriterion: "Knapp (eine Seite), am Anliegen des Kunden ausgerichtet; keine erfundenen Zahlen, Referenzen oder Preise",
+    externalVariantAllowed: true,
+    sections: [
+      { key: "anliegen", label: "Anliegen des Kunden", hint: "Auf welche Priorität oder Initiative zahlt das ein? In Kundensprache.", required: true, externalAllowed: true },
+      { key: "vorschlag", label: "Unser Vorschlag", hint: "Was bieten wir konkret an – in zwei, drei Sätzen?", required: true, externalAllowed: true },
+      { key: "hebel", label: "Hebel", hint: "Verlängern, Ausweiten, Vertiefen oder Übertragen – und warum?" },
+      { key: "umfang", label: "Umfang und Dauer", hint: "Rollen, Zeitraum, Aufwand – nur was abgestimmt ist.", externalAllowed: true },
+      { key: "nutzen", label: "Nutzen für den Kunden", hint: "Woran merkt der Kunde, dass es sich gelohnt hat?", externalAllowed: true },
+      { key: "naechster_schritt", label: "Nächster Schritt", hint: "Wer, was, bis wann?", externalAllowed: true },
     ],
   },
   {

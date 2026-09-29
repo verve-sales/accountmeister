@@ -15,6 +15,9 @@ import { getFocus } from "@/modules/focus/service";
 import { computeHealthFor } from "@/modules/health/service";
 import { ensureRenewalRunsSafe, listRenewals } from "@/modules/health/renewal";
 import { HealthBadge } from "@/components/HealthBadge";
+import { ensureInitiativeRemindersSafe } from "@/modules/agenda/service";
+import { listOpenSosForActor } from "@/modules/sos/service";
+import { SosBanner } from "@/components/SosPanel";
 import { createOpportunityAction, setDashboardViewAction, smartDumpAction } from "../actions";
 
 const DASHBOARD_VIEW_COOKIE = "am_sicht";
@@ -31,6 +34,8 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   await ensureStandardTasksSafe(actor);
   // Verlängerungsregel: am Auslösetag das Vorgehen „Verlängerung“ anstoßen (Etappe 23)
   await ensureRenewalRunsSafe(actor);
+  await ensureInitiativeRemindersSafe(actor);
+  const openSos = await listOpenSosForActor(actor);
   const d = await buildDashboard(actor, requested);
   const focus = await getFocus(actor.workspaceId);
   const fl = d && focus.freelancerLever ? await freelancerStats(actor, d.accounts.map((c) => c.accountId)) : null;
@@ -68,6 +73,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       </div>
       <p className="muted text-sm">{viewDescription[d.view]}</p>
       <Feedback params={params} />
+      <SosBanner sos={openSos} />
 
       {d.empty && <p className="card text-sm">{d.empty}</p>}
 

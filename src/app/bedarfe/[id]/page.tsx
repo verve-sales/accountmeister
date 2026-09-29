@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { initiativeKindLabel, listInitiatives, type InitiativeKind } from "@/modules/agenda/service";
 import { notFound, redirect } from "next/navigation";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -22,7 +23,7 @@ import { decisionRoleLabel, engagementStatusLabel, epistemicLabel, fmtDate, fmtD
 import { linkedinSearchUrl } from "@/lib/linkedin";
 import {
   addParticipationAction, addStartRequirementAction, cancelOrderAction, changeOfferStatusAction, changeOpportunityStatusAction, confirmOpportunityAction, confirmOrderAction, createOfferAction,
-  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, reassignOpportunityOwnerAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction,
+  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, reassignOpportunityOwnerAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction, linkChanceInitiativeAction,
 } from "../../actions";
 
 /** Reifegradkette dieser Chance – Orientierung, keine Pflichtschleuse (Angebot/Auftrag/Einsatz haben eigene Zustände). */
@@ -56,6 +57,8 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
     throw e;
   }
   const { opp, ctx, canEdit } = d;
+  const initiatives = (await listInitiatives(actor, opp.accountId)).filter((x) => x.status === "OFFEN" || x.id === opp.initiativeId);
+  const linkedInitiative = initiatives.find((x) => x.id === opp.initiativeId) ?? null;
   const name = (uid: string | null | undefined) => (uid ? d.userNames.get(uid) ?? "?" : "–");
 
   // Persönlicher KI-Berater für diese Chance (Etappe 15): Vorbelegung mit KI-Vorschlag (auf Wunsch),
@@ -180,6 +183,23 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
           <div className="sm:col-span-2"><dt className="muted">Wofür</dt><dd><strong>{chanceKindLabel[opp.kind]}</strong>{opp.roleId ? ` · ${d.roles.find((r) => r.id === opp.roleId)?.name ?? "Rolle"}` : " · Standardrolle noch offen"}{opp.headcount ? ` · ${opp.headcount}×` : ""}{opp.horizon ? ` · ${opp.horizon}` : ""}{opp.status === "ANTIZIPIERT" && <span className="muted"> · antizipiert – vom Kunden noch nicht ausgesprochen</span>}</dd></div>
           <div className="sm:col-span-2"><dt className="muted">Beschreibung in Kundensprache</dt><dd className="whitespace-pre-wrap">{opp.needDescription}</dd></div>
           <div><dt className="muted">Konkreter Anlass</dt><dd>{opp.trigger ?? "–"}</dd></div>
+          <div className="sm:col-span-2">
+            <dt className="muted">Zahlt ein auf (Kundenagenda)</dt>
+            <dd>
+              {linkedInitiative ? <>{initiativeKindLabel[linkedInitiative.kind as InitiativeKind] ?? linkedInitiative.kind}: <strong>{linkedInitiative.title}</strong></> : <span className="muted">keine Initiative zugeordnet</span>}
+              {canEdit && initiatives.length > 0 && (
+                <form action={linkChanceInitiativeAction} className="inline-flex flex-wrap gap-1 ml-2 align-middle">
+                  <input type="hidden" name="opportunityId" value={opp.id} />
+                  <input type="hidden" name="back" value={`/bedarfe/${opp.id}`} />
+                  <select name="initiativeId" className="select" defaultValue={opp.initiativeId ?? ""} aria-label="Kundeninitiative" style={{ maxWidth: "18rem" }}>
+                    <option value="">– keine –</option>
+                    {initiatives.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
+                  </select>
+                  <button className="btn btn-secondary btn-small" type="submit">Zuordnen</button>
+                </form>
+              )}
+            </dd>
+          </div>
           <div><dt className="muted">Herkunft</dt><dd>{d.signal ? <>Beobachtung: „{d.signal.observation}“</> : "direkt erfasst"}</dd></div>
           <div className="sm:col-span-2">
             <dt className="muted">Bestätigung</dt>

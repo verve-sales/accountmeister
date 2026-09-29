@@ -10,7 +10,9 @@ import { HealthBadge } from "@/components/HealthBadge";
 import { Feedback } from "@/components/Feedback";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
-import { recordExistingEngagementAction, saveHealthAnswerAction, updateOrderDatesAction } from "../../../actions";
+import { recordExistingEngagementAction, saveHealthAnswerAction, setOrderConsultantAction, updateOrderDatesAction } from "../../../actions";
+import { db, schema } from "@/db/client";
+import { and, eq, inArray } from "drizzle-orm";
 
 /**
  * Kunden-Health-Check (Etappe 23): geführtes Interview – eine Frage nach der anderen, nur was fehlt oder
@@ -36,6 +38,10 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
   const q = h.questions[idx] ?? null;
   const canDecide = !isSalesOpsOnly(actor);
   const activeSetups = setups.filter((s) => s.status !== "ARCHIVIERT");
+  const users = await db.query.users.findMany({ where: and(eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")), orderBy: (u, { asc }) => [asc(u.displayName)] });
+  const setupIds = [...new Set(h.engagements.map((e) => e.setupId))];
+  const ankers = setupIds.length ? await db.query.setupMemberships.findMany({ where: inArray(schema.setupMemberships.setupId, setupIds) }) : [];
+  const isAnker = (setupId: string, userId: string | null) => !!userId && ankers.some((m) => m.setupId === setupId && m.userId === userId && m.contribution.startsWith("ANKER"));
 
   return (
     <div className="space-y-6">
@@ -154,11 +160,28 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
         <h2 className="font-semibold mb-2">Einsätze ({h.engagements.length})</h2>
         {h.engagements.length === 0 ? <p className="muted text-sm">Keine laufenden oder beauftragten Einsätze erfasst.</p> : (
           <table className="list">
-            <thead><tr><th>Einsatz</th><th>Status</th><th>Start</th><th>Ende · Verlängerungsfrist</th><th>Verlängerung startet</th></tr></thead>
+            <thead><tr><th>Einsatz</th><th>Berater</th><th>Status</th><th>Start</th><th>Ende · Verlängerungsfrist</th><th>Verlängerung startet</th></tr></thead>
             <tbody>
               {h.engagements.map((e) => (
                 <tr key={e.orderId}>
                   <td><Link href={`/bedarfe/${e.opportunityId}`}>{e.title}</Link><div className="muted text-xs">{e.setupName}</div></td>
+                  <td className="text-sm">
+                    {e.consultantName ?? <span className="muted">–</span>}
+                    {isAnker(e.setupId, e.consultantUserId) && <div className="muted text-xs">zugleich Anker</div>}
+                    {may && (
+                      <form action={setOrderConsultantAction} className="flex gap-1 mt-1">
+                        <input type="hidden" name="orderId" value={e.orderId} />
+                        <input type="hidden" name="version" value={e.version} />
+                        <input type="hidden" name="back" value={back} />
+                        <select name="consultantUserId" className="select" defaultValue={e.consultantUserId ?? ""} aria-label="Berater (Verve)" style={{ maxWidth: "9rem" }}>
+                          <option value="">extern / Name</option>
+                          {users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+                        </select>
+                        <input name="consultantName" className="input" placeholder="Name" defaultValue={e.consultantUserId ? "" : e.consultantName ?? ""} aria-label="Name (z. B. Freelancer)" style={{ width: "7rem" }} />
+                        <button className="btn btn-secondary btn-small" type="submit">OK</button>
+                      </form>
+                    )}
+                  </td>
                   <td className="text-sm">{e.status === "GESTARTET" ? "läuft" : "beauftragt"}{e.daysToEnd !== null && e.daysToEnd >= 0 ? ` · noch ${e.daysToEnd} Tage` : ""}</td>
                   <td className="text-sm">{fmtDate(e.plannedStart)}</td>
                   <td>
@@ -210,6 +233,7 @@ function ExistingEngagementForm({ accountId, setups, open = false }: { accountId
         <div><label className="label" htmlFor="eeEnd">Ende</label><input id="eeEnd" name="plannedEnd" type="date" className="input" /></div>
         <div><label className="label" htmlFor="eeDl">Verlängerungsfrist (optional)</label><input id="eeDl" name="renewalDeadline" type="date" className="input" /></div>
         <div className="sm:col-span-3"><label className="label" htmlFor="eeEv">Beleg (Bestellnummer, Vertrag, seit wann)</label><input id="eeEv" name="evidenceText" className="input" required minLength={10} /></div>
+        <div className="sm:col-span-3"><label className="label" htmlFor="eeCons">Operativer Berater (optional)</label><input id="eeCons" name="consultantName" className="input" placeholder="Name – Verve-Kolleg:innen werden automatisch zugeordnet" /></div>
         <div><button className="btn" type="submit">Einsatz nachtragen</button></div>
       </form>
     </details>

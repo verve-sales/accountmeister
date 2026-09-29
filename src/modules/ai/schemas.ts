@@ -182,10 +182,13 @@ export const chanceKindLabel: Record<(typeof chanceKindValues)[number], string> 
 /** Rollenfamilien des Verve-Standardrollenkatalogs (Kartenschema; Werte identisch zum DB-Enum role_family). */
 export const roleFamilyCardValues = ["DELIVERY_MANAGEMENT", "AGILE_LEADERSHIP", "BUSINESS_ANALYSE", "SOLUTION_ARCHITEKTUR", "TEST_QS"] as const;
 
+export const initiativeKindCardValues = ["PRIORITAET", "INITIATIVE", "HERAUSFORDERUNG"] as const;
+export const riskCardValues = ["UMSTRUKTURIERUNG", "BUDGETKUERZUNG", "WETTBEWERBER", "FUERSPRECHER_WEG", "INSOURCING", "EINKAUF_VERSCHAERFT", "NACHBARTEAM"] as const;
+
 export const assistantItemSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("KUNDE"), name: z.string().min(2).max(200), orgType: z.enum(orgTypeValues).optional().default("SONSTIGE"), setupName: z.string().min(3).max(200), contextNote: z.string().max(2000).optional().default(""), ...q }),
   z.object({ type: z.literal("SETUP"), name: z.string().min(3).max(200), contextNote: z.string().max(2000).optional().default(""), ...q }),
-  z.object({ type: z.literal("PERSON"), displayName: z.string().min(2).max(200), functionTitle: z.string().max(200).optional().default(""), knownResponsibility: z.string().max(500).optional().default(""), decisionRole: z.enum(decisionRoleValues).nullable().optional().default(null), stance: z.enum(stanceValues).optional().default("UNBEKANNT"), influence: z.enum(influenceValues).optional().default("UNBEKANNT"), assessmentNote: z.string().max(500).optional().default(""), ...q }),
+  z.object({ type: z.literal("PERSON"), displayName: z.string().min(2).max(200), functionTitle: z.string().max(200).optional().default(""), email: z.string().max(200).optional().default(""), phone: z.string().max(50).optional().default(""), knownResponsibility: z.string().max(500).optional().default(""), decisionRole: z.enum(decisionRoleValues).nullable().optional().default(null), stance: z.enum(stanceValues).optional().default("UNBEKANNT"), influence: z.enum(influenceValues).optional().default("UNBEKANNT"), assessmentNote: z.string().max(500).optional().default(""), ...q }),
   z.object({ type: z.literal("SIGNAL"), observation: z.string().min(5).max(2000), relevanceHypothesis: z.string().max(2000).optional().default(""), ...q, ...w }),
   z.object({
     type: z.literal("CHANCE"),
@@ -214,6 +217,14 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("AKTION"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), ownerRole: z.enum(["BD", "ANKER", "PRINCIPAL"]).default("BD"), dueHint: z.string().max(100).optional().default(""), ...q, ...w }),
   z.object({ type: z.literal("KONTAKT"), personName: z.string().min(2).max(200), viaVerveName: z.string().max(200).optional().default(""), occasion: z.string().min(3).max(500), draftMessage: z.string().max(1500).optional().default(""), ...q, ...w }),
   z.object({ type: z.literal("FRAGE"), question: z.string().min(3).max(500), ...q, ...w }),
+  // Etappe 26: Kundenagenda, Beschaffung, Bestandseinsatz, Risiko, SOS, Hebel, Team – z. B. aus einer eingefügten Account-Seite
+  z.object({ type: z.literal("INITIATIVE"), kind: z.enum(initiativeKindCardValues), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), dueHint: z.string().max(100).optional().default(""), ...q }),
+  z.object({ type: z.literal("BESCHAFFUNG"), channel: z.enum(["DIREKT", "VERMITTLER", "RAHMENVERTRAG"]), intermediaryName: z.string().max(200).optional().default(""), note: z.string().max(500).optional().default(""), ...q }),
+  z.object({ type: z.literal("EINSATZ"), title: z.string().min(3).max(200), kind: z.enum(chanceKindValues).optional().default("VERVE_EXPERTE"), plannedEnd: z.string().max(10).optional().default(""), endHint: z.string().max(100).optional().default(""), consultantName: z.string().max(200).optional().default(""), ...q }),
+  z.object({ type: z.literal("RISIKO"), risk: z.enum(riskCardValues), note: z.string().max(500).optional().default(""), ...q }),
+  z.object({ type: z.literal("SOS"), kind: z.enum(["EINSATZ_LAEUFT_AUS", "ANKER_BLOCKIERT", "LAGE_ENG", "SONSTIGES"]), title: z.string().min(3).max(200), situation: z.string().min(10).max(2000), need: z.string().max(500).optional().default(""), ...q }),
+  z.object({ type: z.literal("HEBEL"), lever: z.enum(["VERLAENGERN", "AUSWEITEN", "VERTIEFEN", "UEBERTRAGEN", "REAKTIVIEREN"]), title: z.string().min(3).max(300), rationale: z.string().max(1000).optional().default(""), ...q }),
+  z.object({ type: z.literal("TEAM"), bdName: z.string().max(200).optional().default(""), ankerNames: z.array(z.string().max(200)).max(5).optional().default([]), principalName: z.string().max(200).optional().default(""), consultantName: z.string().max(200).optional().default(""), ...q }),
   z.object({
     type: z.literal("EINSORTIERUNG"),
     /** Name exakt wie in der Liste der bekannten Kunden – nie erfunden. */
@@ -227,7 +238,7 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
 export type AssistantItem = z.infer<typeof assistantItemSchema>;
 
 export const assistantOutputSchema = z.object({
-  items: z.array(assistantItemSchema).max(20).default([]),
+  items: z.array(assistantItemSchema).max(30).default([]),
   /** Informationen, die für weitere Vorschläge fehlen – als konkrete Fragen formuliert */
   missing: z.array(z.string().min(3).max(300)).max(8).default([]),
 });

@@ -55,6 +55,8 @@ export async function createDraft(actor: Actor, raw: unknown) {
   const { content, sourceIds } = await prefill(actor, ctx, template, input.variant);
   const artifactKey = crypto.randomUUID();
   return db.transaction(async (tx) => {
+    // Neue Vorlagen (z. B. A17 Kurzangebot) sind in bestehenden Datenbanken evtl. noch nicht registriert
+    await tx.insert(schema.artifactTemplates).values({ ...template, viewPath: template.viewPath ?? null, sections: template.sections, registryVersion: TEMPLATE_REGISTRY_VERSION }).onConflictDoNothing();
     const [v] = await tx
       .insert(schema.artifactVersions)
       .values({
@@ -114,6 +116,11 @@ async function prefill(actor: Actor, ctx: SetupContext, template: ArtifactTempla
     content.laufzeit = confirmed.length ? `Bestätigt:\n${bullet(confirmed.map((a) => a.content))}` : "Keine bestätigten Laufzeitangaben.";
   }
   if ("intern" in content) content.intern = grenzen.length ? bullet(grenzen) : "";
+  if ("anliegen" in content) {
+    // Kurzangebot (A17): Anliegen aus der Kundenagenda vorbelegen
+    const agenda = await db.query.accountInitiatives.findMany({ where: and(eq(schema.accountInitiatives.accountId, ctx.account.id), eq(schema.accountInitiatives.status, "OFFEN")) });
+    content.anliegen = agenda.length ? `Aus der Kundenagenda:\n${bullet(agenda.map((x) => `${x.title}${x.dueHint || x.dueDate ? ` (${x.dueHint || x.dueDate})` : ""}`))}` : "";
+  }
   return { content, sourceIds: visibleSources.map((s) => s.id) };
 }
 

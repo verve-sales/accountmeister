@@ -28,6 +28,10 @@ import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/
 import { PlaybookRuns } from "@/components/PlaybookRuns";
 import { HealthBadge } from "@/components/HealthBadge";
 import { computeHealthFor } from "@/modules/health/service";
+import { canMaintainAgenda, listInitiatives } from "@/modules/agenda/service";
+import { listSosForAccount } from "@/modules/sos/service";
+import { KundenAgenda, Beschaffung } from "@/components/KundenAgenda";
+import { SosPanel } from "@/components/SosPanel";
 
 export default async function KundePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
@@ -67,6 +71,10 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   ]);
   const mayStartPlaybook = mayReassign || mayCreate || isSalesOps(actor);
   const [health] = await computeHealthFor([{ id: account.id, name: account.name }]);
+  const [initiatives, sosList] = await Promise.all([listInitiatives(actor, id), listSosForAccount(actor, id)]);
+  const mayAgenda = canMaintainAgenda(actor, account);
+  const sosSetups = setups.filter((x) => x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name }));
+  const sosOrders = (health?.engagements ?? []).map((e) => ({ id: e.orderId, title: `${e.title} (${e.setupName})` }));
   const currentBdName = account.responsibleBdUserId
     ? (bdUsers.find((u) => u.id === account.responsibleBdUserId)?.displayName ?? (await db.query.users.findFirst({ where: eq(schema.users.id, account.responsibleBdUserId) }))?.displayName ?? "?")
     : null;
@@ -90,6 +98,9 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         <p className="muted text-xs mt-2">Jede Chance hat ihren eigenen Stand. Wie sicher wir beim Kunden insgesamt stehen, zeigt der Health-Check.</p>
       </section>
       <Feedback params={sp} />
+
+      {sosList.some((x) => x.status !== "GELOEST") && <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} />}
+      <KundenAgenda accountId={account.id} initiatives={initiatives} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} />
 
       {health && (
         <section className="card">
@@ -133,9 +144,13 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         </section>
       )}
 
+      <Beschaffung account={account} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} />
+      {!sosList.some((x) => x.status !== "GELOEST") && account.status !== "ARCHIVED" && <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} />}
+
       {account.status === "DORMANT" && <p className="text-sm" style={{ background: "var(--warn-soft)", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ruht. Mit dem Vorgehen „Altkunden-Reaktivierung“ (unten) wird er wieder aktiv angegangen.</p>}
 
       <PlaybookRuns
+        startCollapsed
         runs={runs}
         back={back}
         users={activeUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}

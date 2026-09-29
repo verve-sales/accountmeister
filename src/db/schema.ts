@@ -160,6 +160,10 @@ export const accounts = pgTable("accounts", {
   parentAccountId: text("parent_account_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => accounts.id),
   status: accountStatusEnum("status").notNull().default("ACTIVE"),
   responsibleBdUserId: text("responsible_bd_user_id").references(() => users.id),
+  /** Beschaffungsweg (Etappe 26): direkt, über Vermittler oder Rahmenvertrag – bestimmt Zugang, Angebotsweg und Marge */
+  procurementChannel: text("procurement_channel"), // DIREKT | VERMITTLER | RAHMENVERTRAG | null = unbekannt
+  intermediaryName: text("intermediary_name"),
+  procurementNote: text("procurement_note"),
   isDemo: boolean("is_demo").notNull().default(false),
   createdBy: text("created_by").notNull().references(() => users.id),
   createdAt: createdAt(),
@@ -1127,6 +1131,8 @@ export const opportunities = pgTable(
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     accountId: text("account_id").notNull().references(() => accounts.id),
     setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    /** Kundeninitiative, auf die die Chance einzahlt (Etappe 26) – kein FK, damit die Tabelle unten stehen darf */
+    initiativeId: text("initiative_id"),
     title: text("title").notNull(),
     needDescription: text("need_description").notNull(), // Bedarfsbeschreibung in Kundensprache
     trigger: text("trigger"), // konkreter Anlass (Identify Pain), nur dokumentiert
@@ -1230,6 +1236,9 @@ export const orders = pgTable(
     plannedEnd: date("planned_end"),
     /** Frist für die Verlängerungsentscheidung (z. B. Kündigungsfrist) – Etappe 23; bestimmt den Verlängerungsauslöser */
     renewalDeadline: date("renewal_deadline"),
+    /** Operativer Berater im Einsatz (Etappe 26): Verve-Nutzer oder – z. B. Freelancer – nur Name */
+    consultantUserId: text("consultant_user_id").references(() => users.id),
+    consultantName: text("consultant_name"),
     status: orderStatusEnum("status").notNull().default("IN_VORBEREITUNG"),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     confirmedBy: text("confirmed_by").references(() => users.id),
@@ -1631,6 +1640,58 @@ export const accountHealthSnapshots = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("account_health_snapshots_account_idx").on(t.accountId)],
+);
+
+// ---------------------------------------------------------------------------
+// Kundenagenda und SOS-Protokolle (Etappe 26)
+// ---------------------------------------------------------------------------
+
+/** Agenda des Kunden: seine Prioritäten, Schlüssel-Initiativen (optional mit Datum) und Herausforderungen. */
+export const accountInitiatives = pgTable(
+  "account_initiatives",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    kind: text("kind").notNull(), // PRIORITAET | INITIATIVE | HERAUSFORDERUNG
+    title: text("title").notNull(),
+    description: text("description"),
+    dueDate: date("due_date"), // z. B. Vertragsende eines Tools, Go-live
+    dueHint: text("due_hint"), // Freitext, wenn kein genaues Datum („Ende 2026“)
+    status: text("status").notNull().default("OFFEN"), // OFFEN | ERLEDIGT | VERWORFEN
+    sourceId: text("source_id").references(() => sources.id),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("account_initiatives_account_idx").on(t.accountId)],
+);
+
+/** SOS-Protokoll: auslaufender Einsatz ohne Anschluss, Anker kommt nicht weiter, Lage wird eng. */
+export const sosReports = pgTable(
+  "sos_reports",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    setupId: text("setup_id").references(() => projectSetups.id),
+    orderId: text("order_id").references(() => orders.id),
+    kind: text("kind").notNull(), // EINSATZ_LAEUFT_AUS | ANKER_BLOCKIERT | LAGE_ENG | SONSTIGES
+    title: text("title").notNull(),
+    situation: text("situation").notNull(),
+    need: text("need"), // Was brauchst du? Wer soll helfen?
+    urgency: text("urgency").notNull().default("HOCH"), // HOCH | MITTEL
+    status: text("status").notNull().default("OFFEN"), // OFFEN | IN_BEARBEITUNG | GELOEST
+    ownerUserId: text("owner_user_id").references(() => users.id), // kümmert sich (i. d. R. BD)
+    resolution: text("resolution"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    version: version(),
+  },
+  (t) => [index("sos_reports_account_idx").on(t.accountId)],
 );
 
 export type Role = (typeof roleEnum.enumValues)[number];

@@ -132,6 +132,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
 
       {(setupRuns.length > 0 || d.canEdit || mayReassign) && (
         <PlaybookRuns
+          startCollapsed
           runs={setupRuns}
           back={back}
           users={allUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}

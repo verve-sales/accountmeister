@@ -39,6 +39,8 @@ import { applyIntake, discardIntake, formToApplyInput, startIntake } from "@/mod
 import { saveTaskSetting, testConnection } from "@/modules/ai/settings";
 import { answerInterview, discardInterview, finishInterview, startInterview } from "@/modules/interviews/service";
 import { upsertAssessment } from "@/modules/people/assessments";
+import { createInitiative, linkChanceToInitiative, setInitiativeStatus, setOrderConsultant, updateProcurement } from "@/modules/agenda/service";
+import { changeSosStatus, createSos } from "@/modules/sos/service";
 import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
 /**
@@ -1118,4 +1120,55 @@ export async function recordExistingEngagementAction(fd: FormData) {
   return run(`/kunden/${id}/health`, async (actor) => {
     await recordExistingEngagement(actor, id, data);
   }, "Laufender Einsatz nachgetragen.");
+}
+
+// --- Kundenagenda, Beschaffungsweg, Berater, SOS (Etappe 26) -------------------
+
+export async function createInitiativeAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/kunden/${data.accountId ?? ""}`), async (actor) => {
+    await createInitiative(actor, data);
+  }, "In die Kundenagenda aufgenommen.");
+}
+
+export async function setInitiativeStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/kunden"), async (actor) => {
+    await setInitiativeStatus(actor, data.initiativeId ?? "", data);
+  }, "Kundenagenda aktualisiert.");
+}
+
+export async function linkChanceInitiativeAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/bedarfe/${data.opportunityId ?? ""}`), async (actor) => {
+    await linkChanceToInitiative(actor, data.opportunityId ?? "", data.initiativeId || null);
+  }, "Zuordnung zur Kundeninitiative gespeichert.");
+}
+
+export async function updateProcurementAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/kunden/${data.accountId ?? ""}`), async (actor) => {
+    await updateProcurement(actor, data.accountId ?? "", data);
+  }, "Beschaffungsweg gespeichert.");
+}
+
+export async function setOrderConsultantAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/kunden"), async (actor) => {
+    await setOrderConsultant(actor, data.orderId ?? "", data);
+  }, "Berater im Einsatz gespeichert.");
+}
+
+export async function createSosAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/kunden/${data.accountId ?? ""}`), async (actor) => {
+    await createSos(actor, data);
+  }, "SOS ausgelöst – BD und Principal sehen es sofort auf der Startseite.");
+}
+
+export async function changeSosStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/start"), async (actor) => {
+    await changeSosStatus(actor, data.sosId ?? "", data);
+  }, "SOS aktualisiert.");
 }

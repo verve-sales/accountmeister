@@ -1,3 +1,5 @@
+import { openSosByAccount } from "@/modules/sos/service";
+import { procurementLabel } from "@/modules/agenda/service";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
@@ -22,7 +24,7 @@ const STALE_DAYS = 90;
 
 export const feedbackToneValues = ["POSITIV", "NEUTRAL", "KRITISCH"] as const;
 export const listingValues = ["RAHMENVERTRAG", "GELISTET", "NICHT_GELISTET"] as const;
-export const riskValues = ["UMSTRUKTURIERUNG", "BUDGETKUERZUNG", "WETTBEWERBER", "FUERSPRECHER_WEG", "INSOURCING", "EINKAUF_VERSCHAERFT"] as const;
+export const riskValues = ["UMSTRUKTURIERUNG", "BUDGETKUERZUNG", "WETTBEWERBER", "FUERSPRECHER_WEG", "INSOURCING", "EINKAUF_VERSCHAERFT", "NACHBARTEAM"] as const;
 
 export const feedbackToneLabel: Record<string, string> = { POSITIV: "positiv", NEUTRAL: "neutral / gemischt", KRITISCH: "kritisch" };
 export const listingLabel: Record<string, string> = { RAHMENVERTRAG: "Rahmenvertrag", GELISTET: "gelistet (ohne Rahmenvertrag)", NICHT_GELISTET: "nicht gelistet" };
@@ -33,6 +35,7 @@ export const riskLabel: Record<string, string> = {
   FUERSPRECHER_WEG: "Fürsprecher geht oder ist gegangen",
   INSOURCING: "Kunde will intern besetzen (Insourcing)",
   EINKAUF_VERSCHAERFT: "Einkauf/Vendor-Prozess verschärft",
+  NACHBARTEAM: "Nachbarteam / interne Stelle stellt sich gegen Änderungen",
 };
 
 type Stamp = { at: string; by: string };
@@ -56,6 +59,8 @@ export type Engagement = {
   renewalDeadline: string | null;
   daysToEnd: number | null;
   triggerDate: string | null;
+  consultantUserId: string | null;
+  consultantName: string | null;
 };
 export type Level = "SATTELFEST" | "WACKELIG" | "GEFAEHRDET" | "UNKLAR";
 export const levelLabel: Record<Level, string> = { SATTELFEST: "sattelfest", WACKELIG: "wackelig", GEFAEHRDET: "gefährdet", UNKLAR: "zu wenig Daten" };
@@ -112,6 +117,8 @@ async function loadEngagements(accountIds: string[]): Promise<Map<string, Engage
       renewalDeadline: r.o.renewalDeadline,
       daysToEnd: r.o.plannedEnd ? daysBetween(t, r.o.plannedEnd) : null,
       triggerDate: renewalTriggerDate(r.o),
+      consultantUserId: r.o.consultantUserId,
+      consultantName: r.o.consultantName,
     };
     out.set(r.accountId, [...(out.get(r.accountId) ?? []), e]);
   }
@@ -137,13 +144,16 @@ async function lastActivity(accountIds: string[]): Promise<Map<string, Date>> {
 export async function computeHealthFor(accounts: { id: string; name: string }[]): Promise<HealthResult[]> {
   const ids = accounts.map((a) => a.id);
   if (ids.length === 0) return [];
-  const [engagements, activity, answersRows, persons, opps] = await Promise.all([
+  const [engagements, activity, answersRows, persons, opps, sos, accRows] = await Promise.all([
     loadEngagements(ids),
     lastActivity(ids),
     db.query.accountHealth.findMany({ where: inArray(schema.accountHealth.accountId, ids) }),
     db.query.persons.findMany({ where: inArray(schema.persons.accountId, ids), columns: { id: true, accountId: true } }),
     db.query.opportunities.findMany({ where: and(inArray(schema.opportunities.accountId, ids), inArray(schema.opportunities.status, ["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG"])), columns: { accountId: true, status: true } }),
+    openSosByAccount(ids),
+    db.query.accounts.findMany({ where: inArray(schema.accounts.id, ids), columns: { id: true, procurementChannel: true, intermediaryName: true } }),
   ]);
+  const accById = new Map(accRows.map((a) => [a.id, a]));
   const personIds = persons.map((p) => p.id);
   const rels = personIds.length ? await db.query.relationships.findMany({ where: inArray(schema.relationships.personId, personIds), columns: { personId: true, holderUserId: true, state: true } }) : [];
   const accountOfPerson = new Map(persons.map((p) => [p.id, p.accountId]));
@@ -234,6 +244,8 @@ export async function computeHealthFor(accounts: { id: string; name: string }[])
           d.reasons.push(`−5: läuft bis ${l.validUntil} (≤ 90 Tage).`);
         }
       }
+      const pc = accById.get(acc.id);
+      if (pc?.procurementChannel) d.reasons.push(`Beschaffung ${procurementLabel[pc.procurementChannel] ?? pc.procurementChannel}${pc.intermediaryName ? ` (${pc.intermediaryName})` : ""}.`);
       if (!l || isStale(l.at)) questions.push({ key: "LISTING", text: "Sind wir beim Kunden gelistet oder im Rahmenvertrag – und bis wann gilt das?", why: "Ohne Listung sehen wir viele Anfragen gar nicht." });
       dims.push(d);
     }
@@ -267,6 +279,14 @@ export async function computeHealthFor(accounts: { id: string; name: string }[])
         penalty = Math.min(15, r.items.length * 5);
         d.points = -penalty;
         d.reasons.push(`−${penalty}: ${r.items.map((i) => riskLabel[i] ?? i).join(", ")}.`);
+      }
+      // Offene SOS-Protokolle zählen wie ein akutes Risiko (je −5, höchstens −10 zusätzlich)
+      const open = sos.get(acc.id) ?? [];
+      if (open.length) {
+        const sp = Math.min(10, open.length * 5);
+        penalty += sp;
+        d.points = -penalty;
+        d.reasons.push(`−${sp}: ${open.length} offene(s) SOS – ${open.map((x) => x.title).join(", ")}.`);
       }
       if (!r || isStale(r.at)) questions.push({ key: "RISKS", text: "Gibt es gerade Risiken im Umfeld – Umstrukturierung, Sparprogramm, Wettbewerber, Fürsprecher geht?", why: "Frühe Warnzeichen lassen sich noch abfangen." });
       dims.push(d);
@@ -363,6 +383,8 @@ export const existingEngagementInput = z.object({
   plannedEnd: dateOpt,
   renewalDeadline: dateOpt,
   evidenceText: z.string().trim().min(10, "Bitte einen Beleg nennen (z. B. Bestellnummer, Vertrag, seit wann).").max(2000),
+  /** Operativer Berater (Etappe 26): Name; wird einem Verve-Nutzer zugeordnet, wenn der Name eindeutig passt */
+  consultantName: z.string().trim().max(200).optional().or(z.literal("")),
 });
 
 export async function recordExistingEngagement(actor: Actor, accountId: string, raw: unknown) {
@@ -375,6 +397,7 @@ export async function recordExistingEngagement(actor: Actor, accountId: string, 
   const setup = await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.id, i.setupId), eq(schema.projectSetups.accountId, accountId)) });
   if (!setup) throw new ValidationError("Das Setup gehört nicht zu diesem Kunden.");
   const owner = setup.bdUserId ?? account.responsibleBdUserId ?? actor.userId;
+  const consultant = i.consultantName ? await matchUserByName(actor.workspaceId, i.consultantName) : null;
   return db.transaction(async (tx) => {
     const [src] = await tx.insert(schema.sources).values({ workspaceId: actor.workspaceId, setupId: setup.id, type: "NOTIZ", title: `Bestandseinsatz: ${i.title}`, body: i.evidenceText, origin: "manuell", sourceTime: new Date(), ownerUserId: actor.userId, accessClass: "SETUP" }).returning();
     const [opp] = await tx
@@ -383,11 +406,24 @@ export async function recordExistingEngagement(actor: Actor, accountId: string, 
       .returning();
     const [order] = await tx
       .insert(schema.orders)
-      .values({ workspaceId: actor.workspaceId, opportunityId: opp!.id, evidenceSourceId: src!.id, evidenceNote: i.evidenceText, plannedStart: i.plannedStart || null, plannedEnd: i.plannedEnd || null, renewalDeadline: i.renewalDeadline || null, status: "BEAUFTRAGUNG_BESTAETIGT", confirmedAt: new Date(), confirmedBy: actor.userId, engagementStatus: "GESTARTET", startedAt: i.plannedStart ? new Date(i.plannedStart) : new Date(), createdBy: actor.userId })
+      .values({ workspaceId: actor.workspaceId, opportunityId: opp!.id, evidenceSourceId: src!.id, evidenceNote: i.evidenceText, plannedStart: i.plannedStart || null, plannedEnd: i.plannedEnd || null, renewalDeadline: i.renewalDeadline || null, status: "BEAUFTRAGUNG_BESTAETIGT", confirmedAt: new Date(), confirmedBy: actor.userId, engagementStatus: "GESTARTET", startedAt: i.plannedStart ? new Date(i.plannedStart) : new Date(), consultantUserId: consultant?.id ?? null, consultantName: consultant?.displayName ?? (i.consultantName || null), createdBy: actor.userId })
       .returning();
     await recordAudit(tx, actor, "engagement.recorded_existing", "ORDER", order!.id, { accountId, titel: i.title });
     return order!;
   });
+}
+
+/** Verve-Nutzer unscharf nach Namen finden (eindeutig, sonst null) – z. B. „Ferdinand Henze“ ~ „Ferdinand Henze (Anker)“. */
+export async function matchUserByName(workspaceId: string, name: string) {
+  const norm = (x: string) => x.toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-zäöüß ]/g, " ").replace(/\s+/g, " ").trim();
+  const q = norm(name);
+  if (q.length < 3) return null;
+  const users = await db.query.users.findMany({ where: and(eq(schema.users.workspaceId, workspaceId), eq(schema.users.status, "ACTIVE")) });
+  const exact = users.filter((u) => norm(u.displayName) === q);
+  if (exact.length === 1) return exact[0]!;
+  if (!q.includes(" ")) return null; // nur Vorname ist zu unsicher
+  const partial = users.filter((u) => norm(u.displayName).startsWith(q) || q.startsWith(norm(u.displayName)));
+  return partial.length === 1 ? partial[0]! : null;
 }
 
 // ---------------------------------------------------------------------------
