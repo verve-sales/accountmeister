@@ -66,7 +66,7 @@ export default async function WeeklysPage({ searchParams }: { searchParams: Prom
           </form>
         </details>
       )}
-      <p className="muted text-sm">Principal-/BD-Weeklys und CEO-/Principal-Zielgespräche folgen in Etappe 4.</p>
+      <p className="muted text-sm">Principal-/BD-Weeklys und CEO-/Principal-Zielgespräche werden unter <Link href="/ziele">Ziele &amp; Portfolio</Link> → „Führungs-Reviews“ angelegt.</p>
     </div>
   );
 }

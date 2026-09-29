@@ -134,10 +134,11 @@ Meine Arbeit sammelt alles, was bei dir liegt: offene Übernahmen an dich, Unter
   },
   {
     id: "weekly",
-    title: "Weeklys",
-    where: "Hauptmenü → Weeklys → „Weekly anlegen“",
-    keywords: ["weekly", "weeklys", "wochenstand", "review", "bestaetigen", "entscheidung", "notiz", "zielgespraech"],
-    body: `Ein Weekly ist der bestätigte Wochenstand je Setup (BD-/Anker-Weekly, Principal-/BD-Weekly, CEO-/Principal-Zielgespräch). Ablauf: anlegen → vorbereiten (das Tool zeigt, was sich seit dem letzten bestätigten Weekly geändert hat) → Entscheidungen erfassen → bestätigen. Bestätigte Stände lassen sich nur über eine Korrektur ändern. Die Setup-Seite ist entlang der Weekly-Fragen aufgebaut (Was läuft? Was hat sich geändert? Was ist vereinbart? Welche Anregungen helfen?).`,
+    title: "Weeklys und Führungs-Reviews",
+    where: "Hauptmenü → Weeklys → „Weekly anlegen“ (je Setup); Ziele & Portfolio → „Führungs-Reviews“ → „Review anlegen“ (Principal-/BD-Weekly, Zielgespräch)",
+    keywords: ["weekly", "weeklys", "wochenstand", "review", "reviews", "fuehrungs review", "principal bd weekly", "zielgespraech", "entscheidung", "notiz"],
+    body: `Ein BD-/Anker-Weekly ist der bestätigte Wochenstand je Setup: unter Weeklys anlegen → vorbereiten (das Tool zeigt, was sich seit dem letzten bestätigten Weekly geändert hat) → Entscheidungen erfassen → bestätigen. Bestätigte Stände lassen sich nur über eine Korrektur ändern. Die Setup-Seite ist entlang der Weekly-Fragen aufgebaut (Was läuft? Was hat sich geändert? Was ist vereinbart? Welche Anregungen helfen?).
+Principal-/BD-Weeklys und CEO-/Principal-Zielgespräche sind Führungs-Reviews ohne festes Setup; sie werden unter Ziele & Portfolio → „Führungs-Reviews“ → „Review anlegen“ angelegt und haben Vorbereitung, Notizen, Entscheidungen und vertrauliche Notizen.`,
   },
   {
     id: "personen",
@@ -247,7 +248,7 @@ export function searchHelp(query: string, limit = 3): { section: HelpSection; sc
 /** Erkennt Fragen zur Bedienung („wie kann ich…“, „wo finde ich…“, „warum geht … nicht“). */
 export function looksLikeHowTo(text: string): boolean {
   const t = norm(text);
-  return /\b(wie (kann|komme|kriege|bekomme|mache|geht|funktioniert|stelle|lege|finde|setze|aendere|starte)|wo (finde|ist|sehe|stelle|kann)|was (bedeutet|heisst|ist|macht|passiert)|warum (kann|geht|sehe|fehlt|ist)|wer darf|darf ich|kann ich|gibt es|welche (rechte|rolle|einstellung)|hilfe|handbuch|erklaer)/.test(t);
+  return /\b(wie \w+ (ich|man|wir)\b|was (darf|kann|muss|soll) |wie (kann|komme|kriege|bekomme|mache|geht|funktioniert|stelle|lege|finde|setze|aendere|starte)|wo (finde|ist|sehe|stelle|kann)|was (bedeutet|heisst|ist|macht|passiert)|warum (kann|geht|sehe|fehlt|ist)|wer darf|darf ich|kann ich|gibt es|welche (rechte|rolle|einstellung)|hilfe|handbuch|erklaer)/.test(t);
 }
 
 export function formatSection(s: HelpSection): string {

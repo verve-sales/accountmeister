@@ -20,6 +20,8 @@ describe("Etappe 25: Hilfe-Wissen für den Assistenten", () => {
     expect(searchHelp("Wie stelle ich den BD um?")[0]?.section.id).toBe("delegation");
     expect(searchHelp("xyz qqq")).toHaveLength(0);
     expect(looksLikeHowTo("Wie kann ich eine Chance bestätigen?")).toBe(true);
+    expect(looksLikeHowTo("Wie bestätige ich eine Chance?")).toBe(true);
+    expect(looksLikeHowTo("Was darf Sales Operations?")).toBe(true);
     expect(looksLikeHowTo("Frau Keller sagte: Budget ist freigegeben.")).toBe(false);
   });
 
