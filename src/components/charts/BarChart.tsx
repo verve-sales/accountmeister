@@ -18,6 +18,12 @@ const ROW_GAP = 10;
 const RADIUS = 4;
 
 /** Rechteck, an der Spitze (rechts) gerundet, an der Grundlinie (links) eckig – „4px rounded data-end, square at the baseline“. */
+/** Beschriftung auf die Labelspalte kürzen (ca. 6,6 px je Zeichen bei 12 px); voller Text steht im Tooltip. */
+function fitLabel(label: string, width: number): string {
+  const max = Math.max(6, Math.floor((width - 12) / 6.6));
+  return label.length > max ? `${label.slice(0, max - 1).trimEnd()}…` : label;
+}
+
 function roundedBarPath(width: number, height: number, radius: number): string {
   const r = Math.min(radius, height / 2, Math.max(width, 0.01));
   if (width <= 0) return "";
@@ -45,7 +51,7 @@ export function BarChart({ title, bars, unit = "", maxValue, labelWidth = 160 }:
             <g key={i} transform={`translate(0, ${y})`}>
               <title>{`${b.label}: ${fmt(b.value)}${b.detail ? ` – ${b.detail}` : ""}`}</title>
               <text x={labelWidth - 8} y={BAR_HEIGHT / 2} textAnchor="end" dominantBaseline="middle" fontSize="12" fill="var(--muted)">
-                {b.label}
+                {fitLabel(b.label, labelWidth)}
               </text>
               <rect x={labelWidth} y={0} width={trackWidth} height={BAR_HEIGHT} rx={RADIUS} fill={CHART_COLORS.track} />
               <g transform={`translate(${labelWidth}, 0)`}>
@@ -91,7 +97,7 @@ export function GroupedBarChart({ title, legend, bars, unit = "" }: { title: str
             <g key={i} transform={`translate(0, ${y})`}>
               <title>{`${b.label}: ${legend[0]} ${fmt(b.values[0])}, ${legend[1]} ${fmt(b.values[1])}${b.detail ? ` – ${b.detail}` : ""}`}</title>
               <text x={labelWidth - 8} y={rowHeight / 2} textAnchor="end" dominantBaseline="middle" fontSize="12" fill="var(--muted)">
-                {b.label}
+                {fitLabel(b.label, labelWidth)}
               </text>
               {b.values.map((v, s) => {
                 const w = (v / max) * trackWidth;

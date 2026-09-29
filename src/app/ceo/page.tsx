@@ -38,7 +38,7 @@ export default async function CeoDashboardPage() {
             <BarChart title="Aktivitätskoeffizient je Kunde" bars={d.accounts.map((a) => ({ label: a.accountName, value: a.activity.coefficient, detail: "Aktivitätskoeffizient" }))} />
           </section>
           {(() => {
-            const goalBars = d.accounts.flatMap((a) => a.goals.filter((g) => g.targetHeadcount != null).map((g) => ({ label: g.roleFamilyLabel ? `${a.accountName} · ${g.roleFamilyLabel}` : a.accountName, values: [g.currentHeadcount ?? 0, g.targetHeadcount as number] as [number, number], detail: g.title })));
+            const goalBars = d.accounts.flatMap((a) => a.goals.filter((g) => g.targetHeadcount != null).map((g) => ({ label: g.roleFamilyLabel ? `${g.roleFamilyLabel} · ${a.accountName}` : a.accountName, values: [g.currentHeadcount ?? 0, g.targetHeadcount as number] as [number, number], detail: g.title })));
             return goalBars.length > 0 ? (
               <section className="card">
                 <h2 className="font-semibold mb-2">Ist- vs. Zielbild (Positionen)</h2>

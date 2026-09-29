@@ -18,6 +18,7 @@ describe("Etappe 25: Hilfe-Wissen für den Assistenten", () => {
     expect(searchHelp("Wann startet die Verlängerungsregel?")[0]?.section.id).toBe("health");
     expect(searchHelp("Was darf Sales Operations?")[0]?.section.id).toBe("rollen");
     expect(searchHelp("Wie stelle ich den BD um?")[0]?.section.id).toBe("delegation");
+    expect(searchHelp("Was zeigt das CEO-Dashboard?")[0]?.section.id).toBe("ceo");
     expect(searchHelp("xyz qqq")).toHaveLength(0);
     expect(looksLikeHowTo("Wie kann ich eine Chance bestätigen?")).toBe(true);
     expect(looksLikeHowTo("Wie bestätige ich eine Chance?")).toBe(true);

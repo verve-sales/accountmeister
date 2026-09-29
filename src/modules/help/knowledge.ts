@@ -133,6 +133,19 @@ Einsätze kommen aus den Aufträgen (geplantes Ende, Verlängerungsfrist). Verl�
 Meine Arbeit sammelt alles, was bei dir liegt: offene Übernahmen an dich, Unterstützungsaufträge, deine offenen Aktionen und Chancen, nächste Weeklys und deine Setups.`,
   },
   {
+    id: "ceo",
+    title: "CEO-Dashboard",
+    where: "Hauptmenü → CEO-Dashboard (nur CEO)",
+    keywords: ["ceo", "ceo dashboard", "aktivitaetskoeffizient", "koeffizient", "zielbild", "ist vs ziel", "sattelfestigkeit", "gesamtbild", "fuehrung", "management"],
+    body: `Das CEO-Dashboard zeigt das Gesamtbild ohne Rohquellen (keine Mails, keine persönlichen Notizen):
+- Aktivitätskoeffizient je Kunde: dokumentierte Aktivitäten der letzten 7 Tage × Anzahl beteiligter Rollen (Principal, BD, Anker) ÷ 3 – hoch, wenn viel passiert und die Rollen zusammenarbeiten.
+- Ist- vs. Zielbild: Positionen je vereinbartem Accountziel (Ist aus den dokumentierten Chancen, Ziel aus dem Accountziel).
+- Sattelfestigkeit je Kunde aus dem Health-Check, sortiert nach Handlungsbedarf (viele Einsätze bei niedriger Sattelfestigkeit zuerst); ein Klick auf den Kunden öffnet die Begründung.
+- Freelancer-Hebel je BD: offene und neue Freelancer-Chancen, vorgestellte Profile, Kunden ohne Freelancer-Chance.
+- Je Kunde eine Karte mit Zielen vs. Ist-Stand, Top-Chancen und der Zusammenarbeit dieser Woche.
+Alles sind Zählungen dokumentierter Objekte – keine Umsatz-, Forecast- oder Wahrscheinlichkeitswerte. Accountziele gelten erst als vereinbart, wenn Principal und CEO zugestimmt haben; das Zielgespräch CEO/Principal liegt unter Ziele & Portfolio → „Führungs-Reviews“.`,
+  },
+  {
     id: "weekly",
     title: "Weeklys und Führungs-Reviews",
     where: "Hauptmenü → Weeklys → „Weekly anlegen“ (je Setup); Ziele & Portfolio → „Führungs-Reviews“ → „Review anlegen“ (Principal-/BD-Weekly, Zielgespräch)",
@@ -248,7 +261,7 @@ export function searchHelp(query: string, limit = 3): { section: HelpSection; sc
 /** Erkennt Fragen zur Bedienung („wie kann ich…“, „wo finde ich…“, „warum geht … nicht“). */
 export function looksLikeHowTo(text: string): boolean {
   const t = norm(text);
-  return /\b(wie \w+ (ich|man|wir)\b|was (darf|kann|muss|soll) |wie (kann|komme|kriege|bekomme|mache|geht|funktioniert|stelle|lege|finde|setze|aendere|starte)|wo (finde|ist|sehe|stelle|kann)|was (bedeutet|heisst|ist|macht|passiert)|warum (kann|geht|sehe|fehlt|ist)|wer darf|darf ich|kann ich|gibt es|welche (rechte|rolle|einstellung)|hilfe|handbuch|erklaer)/.test(t);
+  return /\b(wie \w+ (ich|man|wir)\b|was (darf|kann|muss|soll) |wie (kann|komme|kriege|bekomme|mache|geht|funktioniert|stelle|lege|finde|setze|aendere|starte)|wo (finde|ist|sehe|stelle|kann)|was (bedeutet|heisst|ist|macht|passiert|zeigt)|warum (kann|geht|sehe|fehlt|ist)|wer darf|darf ich|kann ich|gibt es|welche (rechte|rolle|einstellung)|hilfe|handbuch|erklaer)/.test(t);
 }
 
 export function formatSection(s: HelpSection): string {

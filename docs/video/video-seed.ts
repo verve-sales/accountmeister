@@ -16,6 +16,7 @@ import { createAction } from "@/modules/actions/service";
 import { recordExistingEngagement, saveHealthAnswer } from "@/modules/health/service";
 import { completeRunStep, listPlaybooks, setAccountDormant, startPlaybookRun } from "@/modules/playbooks/service";
 import { createReview } from "@/modules/reviews/service";
+import { changeGoalStatus, createAccountGoal, createLeadershipReview } from "@/modules/leadership/service";
 
 const iso = (days: number) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
 
@@ -74,6 +75,15 @@ async function main() {
   const alt = await createAccount(david, { name: "Stadtwerke Nordhafen (fiktiv)", orgType: "KONZERN", responsibleBdUserId: david.userId });
   await createSetup(david, { accountId: alt.id, name: "Netzleitstelle", contextNote: "Früherer Einsatz im Projektmanagement bis 2024.", bdUserId: david.userId });
   await setAccountDormant(petra, alt.id, true);
+
+  // Accountziel (Principal) und Zielgespräch CEO/Principal – für das CEO-Video
+  const goal = await createAccountGoal(petra, { accountId: s.accountId, title: "Solution-Architektur beim Beispielkonzern ausbauen", desiredOutcome: "Drei Architekturrollen im Konzern besetzt, davon mindestens eine über Freelancer.", roleFamily: "SOLUTION_ARCHITEKTUR", targetHeadcount: 3, horizon: "Q4 2027", successCriterion: "Drei beauftragte Positionen in der Rollenfamilie Solution & Architektur." });
+  const clemens = (await loadActor(s.users.clemens))!;
+  for (const who of [petra, clemens]) {
+    const g = await db.query.goals.findFirst({ where: eq(schema.goals.id, goal.id) });
+    await changeGoalStatus(who, goal.id, { version: g!.version, status: "VEREINBART" }); // Principal und CEO stimmen zu
+  }
+  await createLeadershipReview(clemens, { type: "CEO_PRINCIPAL_ZIELGESPRAECH", scheduledFor: iso(6), participantIds: [petra.userId] });
 
   console.log("Video-Datenstand angelegt.");
   process.exit(0);

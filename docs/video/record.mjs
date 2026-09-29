@@ -189,6 +189,10 @@ function helpers(page, getD, tBegin) {
       await page.locator("#assistent-panel textarea").waitFor({ state: "visible" });
       await sleep(1500);
     },
+    /** Schaubild: Elemente mit data-step=n einblenden */
+    async show(n) {
+      await page.evaluate((n) => document.querySelectorAll(`[data-step="${n}"]`).forEach((e) => e.classList.add("on")), n);
+    },
     ids,
   };
   return h;
@@ -246,8 +250,11 @@ async function recordVideo(browser, video) {
     const tPage = Date.now();
     let begin = 0;
     const h = helpers(page, () => D, () => begin);
-    await h.goto(typeof scene.start === "function" ? await scene.start(h) : scene.start);
-    if (scene.prepare) await scene.prepare(h);
+    if (scene.html) {
+      await page.setContent(scene.html, { waitUntil: "load" });
+      await sleep(300);
+    } else await h.goto(typeof scene.start === "function" ? await scene.start(h) : scene.start);
+    if (scene.prepare) await scene.prepare(h).catch((e) => console.error(`  Vorbereitung: ${e.message.split("\n")[0]}`));
     await sleep(400);
     begin = Date.now();
     const offset = (begin - tPage) / 1000;
@@ -290,7 +297,7 @@ try {
     const ctx = await browser.newContext({ storageState: st });
     const p = await ctx.newPage();
     const acc = await ids.account("Beispielkonzern AG (fiktiv)");
-    const warm = ["/start", "/kunden", `/kunden/${acc}`, `/kunden/${acc}/health`, `/setups/${await ids.setup("Migrationsteam")}`, `/bedarfe/${await ids.chance("Testmanagement für die Migration")}`, "/meine-arbeit", "/ziele", "/vorgehen", "/weeklys", "/hilfe", `/weeklys/${await ids.review()}`, `/vorgehen/${await ids.playbook("Altkunden-Reaktivierung")}`];
+    const warm = ["/start", "/ceo", "/kunden", `/kunden/${acc}`, `/kunden/${acc}/health`, `/setups/${await ids.setup("Migrationsteam")}`, `/bedarfe/${await ids.chance("Testmanagement für die Migration")}`, "/meine-arbeit", "/ziele", "/vorgehen", "/weeklys", "/hilfe", `/weeklys/${await ids.review()}`, `/vorgehen/${await ids.playbook("Altkunden-Reaktivierung")}`];
     for (const w of warm) await p.goto(BASE + w, { timeout: 180000 }).catch(() => {});
     await ctx.close();
   }

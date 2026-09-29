@@ -1,3 +1,4 @@
+import { introScene } from "./intro.mjs";
 // Drehbücher der Erklärvideos: je Szene Sprechertext (= Untertitel) und Klickweg.
 // Aussprache-Hilfen für die Sprachausgabe (nur gesprochen, Untertitel bleiben korrekt geschrieben).
 export const SAY_MAP = [
@@ -18,6 +19,10 @@ export const SAY_MAP = [
   [/KI-/g, "Ka-I-"],
   [/\bKI\b/g, "Ka-I"],
   [/Q1 2027/g, "erstes Quartal 2027"],
+  [/Salesmodell/g, "Säils-Modell"],
+  [/Verve/g, "Wörv"],
+  [/CEO-Dashboard/g, "Si-I-O-Däschbord"],
+  [/\bCEO\b/g, "Si-I-O"],
 ];
 
 const ACC = "Beispielkonzern AG (fiktiv)";
@@ -31,9 +36,10 @@ export const VIDEOS = [
     subtitle: "Vom ersten Gespräch zur bestätigten Chance",
     user: "David",
     scenes: [
+      introScene("BD"),
       {
         start: "/start",
-        say: "Willkommen im Accountmeister. In diesem Video zeige ich dir als BD die wichtigsten Abläufe. Du startest auf der Startseite. Oben siehst du, wie viele Chancen auf welcher Stufe stehen. Darunter meldet der Health-Check, welche Angaben noch fehlen. Und die Liste der auslaufenden Einsätze zeigt dir, wo eine Verlängerung ansteht.",
+        say: "Los geht's auf der Startseite. Oben siehst du, wie viele Chancen auf welcher Stufe stehen. Darunter meldet der Health-Check, welche Angaben noch fehlen. Und die Liste der auslaufenden Einsätze zeigt dir, wo eine Verlängerung ansteht.",
         async run(h) {
           await h.at(0.3);
           await h.highlight(h.page.locator("section", { hasText: "Wo stehen wir insgesamt?" }).first(), 3000);
@@ -135,6 +141,7 @@ export const VIDEOS = [
     subtitle: "Portfolio steuern, Zuständigkeit, Fokus und Vorgehen",
     user: "Petra",
     scenes: [
+      introScene("PRINCIPAL"),
       {
         start: "/start",
         say: "Als Principal hast du bei deinen Kunden volle Rechte: Du siehst und pflegst Setups und Chancen, und du steuerst, wer zuständig ist. Auf der Startseite siehst du dein ganzes Portfolio – Chancen je Stufe, fehlende Angaben im Health-Check und auslaufende Einsätze.",
@@ -236,9 +243,10 @@ export const VIDEOS = [
     subtitle: "Kontext beitragen und BDs den Rücken freihalten",
     user: "Nina",
     scenes: [
+      introScene("ANKER_SALESOPS"),
       {
         start: "/meine-arbeit",
-        say: "Dieses Video ist für Anker und für Sales Operations. Als Anker arbeitest du im Kundenteam und bringst Kontext ein. Unter „Meine Arbeit“ findest du die Setups, an denen du beteiligt bist, und deine nächsten Weeklys.",
+        say: "Zuerst die Sicht als Anker. Unter „Meine Arbeit“ findest du die Setups, an denen du beteiligt bist, und deine nächsten Weeklys.",
         async run(h) {
           await h.at(0.45);
           await h.highlight(h.page.locator("section", { hasText: "Meine Setups" }).first(), 3000);
@@ -321,6 +329,105 @@ export const VIDEOS = [
           await h.highlight(h.page.locator("details", { hasText: "Angebot anlegen (Entwurf)" }).first(), 3500);
           await h.at(0.55);
           await h.assistant("Was darf Sales Operations?");
+          await h.wait(4000);
+        },
+      },
+    ],
+  },
+  // ======================================================================= CEO
+  {
+    id: "ceo",
+    file: "Accountmeister-Erklaervideo-CEO",
+    title: "Accountmeister für den CEO",
+    subtitle: "Das Gesamtbild – ohne Rohquellen",
+    user: "Clemens",
+    scenes: [
+      introScene("CEO"),
+      {
+        start: "/start",
+        say: "Als CEO siehst du im Accountmeister das Gesamtbild – ohne Rohquellen wie Mails oder persönliche Notizen. Schon die Startseite zeigt dir, wie viele Chancen auf welcher Stufe stehen, wo im Health-Check Angaben fehlen und welche Einsätze bald auslaufen.",
+        async run(h) {
+          await h.at(0.35);
+          await h.highlight(h.page.locator("section", { hasText: "Wo stehen wir insgesamt?" }).first(), 3000);
+          await h.at(0.62);
+          await h.highlight(h.page.locator("section", { hasText: "Health-Check: Accountmeister braucht" }).first(), 3000);
+          await h.at(0.85);
+          await h.highlight(h.page.locator("section", { hasText: "Auslaufende Einsätze" }).first(), 2500);
+        },
+      },
+      {
+        start: "/start",
+        say: "Dein wichtigstes Werkzeug ist das CEO-Dashboard. Links siehst du den Aktivitätskoeffizienten je Kunde: wie viel in den letzten sieben Tagen dokumentiert wurde – und wie viele Rollen daran beteiligt waren. Rechts steht das Ist- gegenüber dem Zielbild aus den vereinbarten Accountzielen.",
+        async run(h) {
+          await h.at(0.05);
+          await h.click(h.page.locator("header").getByRole("link", { name: "CEO-Dashboard" }), { navigate: true });
+          await h.at(0.3);
+          await h.highlight(h.page.locator("section", { hasText: "Aktivitätskoeffizient je Kunde" }).first(), 4000);
+          await h.at(0.7);
+          await h.highlight(h.page.locator("section", { hasText: "Ist- vs. Zielbild" }).first(), 3500);
+        },
+      },
+      {
+        start: "/ceo",
+        say: "Die Sattelfestigkeit je Kunde kommt aus dem Health-Check. Sortiert wird nach Handlungsbedarf: Kunden mit vielen Einsätzen und niedriger Sattelfestigkeit stehen oben. Ein Klick auf den Kunden zeigt dir die Begründung je Dimension.",
+        async run(h) {
+          await h.at(0.05);
+          const sec = h.page.locator("section", { hasText: "Sattelfestigkeit je Kunde" }).first();
+          await h.scrollTo(sec);
+          await h.highlight(sec, 4500);
+          await h.at(0.7);
+          await h.click(sec.getByRole("link", { name: "Beispielkonzern AG (fiktiv)" }), { navigate: true });
+        },
+      },
+      {
+        start: "/ceo",
+        prepare: async (h) => { await h.scrollTo(h.page.locator("section", { hasText: "Freelancer-Hebel je BD" }).first()); },
+        say: "Wie gut der strategische Fokus greift, zeigt der Freelancer-Hebel je BD: offene und neue Freelancer-Chancen, vorgestellte Profile und Kunden ohne Freelancer-Chance. Das sind Zählungen aus dokumentierten Chancen – keine Umsatz- oder Wahrscheinlichkeitswerte.",
+        async run(h) {
+          await h.at(0.05);
+          await h.highlight(h.page.locator("section", { hasText: "Freelancer-Hebel je BD" }).first(), 5000);
+          await h.at(0.6);
+          await h.highlight(h.page.locator("section", { hasText: "Freelancer-Hebel je BD" }).locator("tbody tr").first(), 3000, 3);
+        },
+      },
+      {
+        start: "/ceo",
+        prepare: async (h) => { await h.scrollTo(h.page.locator("article", { hasText: "Zusammenarbeit diese Woche" }).first(), "start"); },
+        say: "Darunter bekommst du je Kunde eine Karte: die Ziele gegenüber dem Ist-Stand, die wichtigsten Chancen und wer diese Woche zusammengearbeitet hat – Principal, BD und Anker. So erkennst du schnell, wo ein Kunde Aufmerksamkeit braucht.",
+        async run(h) {
+          await h.at(0.05);
+          const card = h.page.locator("article", { hasText: "Zusammenarbeit diese Woche" }).first();
+          await h.highlight(card, 3000);
+          await h.at(0.25);
+          await h.highlight(card.getByText("Ziele vs. Ist-Stand").locator("..").first(), 2500, 4);
+          await h.at(0.45);
+          await h.highlight(card.getByText("Top-Chancen").locator("..").first(), 2500, 4);
+          await h.at(0.65);
+          await h.highlight(card.getByText("Zusammenarbeit diese Woche").locator("..").first(), 3000, 4);
+        },
+      },
+      {
+        start: "/ziele",
+        say: "Ziele vereinbarst du gemeinsam mit dem Principal. Ein Accountziel gilt erst als vereinbart, wenn Principal und CEO zugestimmt haben. Euer Zielgespräch findest du unter „Ziele und Portfolio“ bei den Führungs-Reviews.",
+        async run(h) {
+          await h.at(0.05);
+          const goals = h.page.locator("section", { has: h.page.locator("h2", { hasText: /^Ziele \(/ }) }).first();
+          await h.scrollTo(goals);
+          await h.highlight(goals, 4000);
+          await h.at(0.6);
+          const rev = h.page.locator("section", { hasText: "Führungs-Reviews" }).first();
+          await h.scrollTo(rev);
+          await h.highlight(rev, 3500);
+        },
+      },
+      {
+        start: "/vorgehen",
+        say: "Den strategischen Fokus – aktuell Wachstum über Freelancer – setzt du unter „Vorgehen“. Und bei Fragen zur Bedienung hilft dir der Assistent, zum Beispiel: Was zeigt das CEO-Dashboard?",
+        async run(h) {
+          await h.at(0.03);
+          await h.highlight(h.page.locator("section", { hasText: "Strategischer Fokus" }).first(), 3000);
+          await h.at(0.4);
+          await h.assistant("Was zeigt das CEO-Dashboard?");
           await h.wait(4000);
         },
       },
