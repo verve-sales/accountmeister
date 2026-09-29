@@ -12,7 +12,7 @@ const ROLES = [
   { key: "CEO", name: "CEO", text: "sieht das Gesamtbild und setzt den Fokus" },
 ];
 
-function slide(question, highlight) {
+export function slide(question, highlight) {
   const cards = ROLES.map(
     (r, i) => `<div class="role step ${highlight.includes(r.key) ? "me" : ""}" data-step="1" style="transition-delay:${i * 0.18}s"><div class="rn">${r.name}</div><div class="rt">${r.text}</div>${highlight.includes(r.key) ? '<div class="you">du</div>' : ""}</div>`,
   ).join("");

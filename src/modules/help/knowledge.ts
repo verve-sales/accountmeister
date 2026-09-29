@@ -21,7 +21,7 @@ export const HELP_SECTIONS: HelpSection[] = [
     id: "grundidee",
     title: "Worum es geht: Kunde, Setup, Chance, Wofür",
     where: "Kunden → Kunde → Setup → Chance",
-    keywords: ["begriff", "kunde", "setup", "chance", "wofuer", "grundidee", "was ist", "vermittlung", "struktur", "aufbau"],
+    keywords: ["begriff", "kunde", "setup", "chance", "wofuer", "grundidee", "vermittlung", "struktur", "aufbau"],
     body: `Das Ergebnis unserer Vertriebsarbeit ist eine Vermittlung. Im Tool heißt sie „Chance“ – mit drei Arten: Verve-Experte in einer Standardrolle, Freelancer-Experte auf einer Spezialistenrolle oder Ausschreibung/Rahmenvertrag.
 Ein Kunde ist die Organisation. Ein Setup ist ein Arbeitszusammenhang beim Kunden (Team, Bereich, Vorhaben); ein Kunde hat meist mehrere Setups, ein Setup mehrere Chancen.
 Beobachtungen, Personen, Aktionen und offene Fragen tragen immer ein „Wofür“: die Chance, auf die sie einzahlen. Auf der Chance-Seite zeigt der Block „Was auf diese Chance einzahlt“ genau das.
@@ -146,7 +146,7 @@ Ideen für Kurzangebote werden als Vorhaben mit Hebel (Verlängern, Ausweiten, V
     id: "sos",
     title: "SOS-Protokolle",
     where: "Kunde → „SOS-Protokolle“ → „SOS auslösen“; Startseite (rotes SOS-Feld)",
-    keywords: ["sos", "sos protokoll", "notfall", "eskalation", "eng", "wird eng", "anker kommt nicht weiter", "blockiert", "hilfe anfordern", "auslaufend", "auslaufende assignments", "kein anschluss"],
+    keywords: ["sos", "ausloesen", "sos protokoll", "notfall", "eskalation", "eng", "wird eng", "anker kommt nicht weiter", "blockiert", "hilfe anfordern", "auslaufend", "auslaufende assignments", "kein anschluss"],
     body: `Ein SOS löst jeder aus dem Kundenteam aus – auch der Anker –, wenn es eng wird: ein Einsatz läuft aus und kein Anschluss ist in Sicht, der Anker kommt beim Kunden nicht mehr weiter, oder die Lage spitzt sich zu (Budget, Zufriedenheit, Konflikt). Du beschreibst kurz die Lage und was helfen würde. Das SOS erscheint sofort unübersehbar auf der Startseite von BD und Principal und zählt im Health-Check als akutes Risiko (je −5, höchstens −10), bis jemand „Gelöst“ mit einer kurzen Lösung dokumentiert. Mit „Ich kümmere mich“ übernimmt jemand die Bearbeitung. Auch der Assistent kann aus deinem Text eine SOS-Karte vorschlagen.`,
   },
   {

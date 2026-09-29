@@ -16,6 +16,7 @@ import { createAction } from "@/modules/actions/service";
 import { recordExistingEngagement, saveHealthAnswer } from "@/modules/health/service";
 import { completeRunStep, listPlaybooks, setAccountDormant, startPlaybookRun } from "@/modules/playbooks/service";
 import { createReview } from "@/modules/reviews/service";
+import { createSos } from "@/modules/sos/service";
 import { changeGoalStatus, createAccountGoal, createLeadershipReview } from "@/modules/leadership/service";
 
 const iso = (days: number) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
@@ -84,6 +85,9 @@ async function main() {
     await changeGoalStatus(who, goal.id, { version: g!.version, status: "VEREINBART" }); // Principal und CEO stimmen zu
   }
   await createLeadershipReview(clemens, { type: "CEO_PRINCIPAL_ZIELGESPRAECH", scheduledFor: iso(6), participantIds: [petra.userId] });
+
+  // Offenes SOS (Anker) – für das Werbevideo
+  await createSos(nina, { accountId: s.accountId, setupId: s.setupId, kind: "EINSATZ_LAEUFT_AUS", title: "Testautomatisierung endet im November", situation: "Der Einsatz endet in sieben Wochen, Frau Keller hat sich zur Verlängerung noch nicht geäußert.", need: "BD soll das Verlängerungsgespräch vorziehen" });
 
   console.log("Video-Datenstand angelegt.");
   process.exit(0);

@@ -1,4 +1,5 @@
 import { introScene } from "./intro.mjs";
+import { PROMO } from "./promo.mjs";
 // Drehbücher der Erklärvideos: je Szene Sprechertext (= Untertitel) und Klickweg.
 // Aussprache-Hilfen für die Sprachausgabe (nur gesprochen, Untertitel bleiben korrekt geschrieben).
 export const SAY_MAP = [
@@ -21,6 +22,10 @@ export const SAY_MAP = [
   [/Q1 2027/g, "erstes Quartal 2027"],
   [/Salesmodell/g, "Säils-Modell"],
   [/Verve/g, "Wörv"],
+  [/Notion/g, "Nouschen"],
+  [/\bSOS\b/g, "S-O-S"],
+  [/Pitch/g, "Pitsch"],
+  [/Setup/g, "Setapp"],
   [/CEO-Dashboard/g, "Si-I-O-Däschbord"],
   [/\bCEO\b/g, "Si-I-O"],
 ];
@@ -433,4 +438,5 @@ export const VIDEOS = [
       },
     ],
   },
+  PROMO,
 ];

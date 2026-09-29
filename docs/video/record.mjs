@@ -48,10 +48,10 @@ const ids = {
 };
 
 // ---------------------------------------------------------------- Ton und Untertitel
-function speak(text, file) {
+function speak(text, file, lengthScale = 1.08) {
   let spoken = text;
   for (const [k, v] of SAY_MAP) spoken = spoken.replace(k, v);
-  sh("python3", ["-m", "piper", "-m", VOICE, "-f", file, "--sentence-silence", "0.35", "--length-scale", "1.08"], spoken);
+  sh("python3", ["-m", "piper", "-m", VOICE, "-f", file, "--sentence-silence", "0.35", "--length-scale", String(lengthScale)], spoken);
   return duration(file);
 }
 const assTime = (t) => {
@@ -153,6 +153,13 @@ function helpers(page, getD, tBegin) {
       else await l.click();
       await sleep(500);
     },
+    /** Langen Text auf einmal einfügen (wie Einfügen aus der Zwischenablage) */
+    async paste(target, text) {
+      const l = loc(target);
+      await h.click(l);
+      await l.fill(text);
+      await sleep(400);
+    },
     async type(target, text, delay = 28) {
       const l = loc(target);
       await h.click(l);
@@ -240,7 +247,7 @@ async function recordVideo(browser, video) {
   for (const [i, scene] of video.scenes.entries()) {
     const n = String(i + 1).padStart(2, "0");
     const wav = path.join(WORK, `${video.id}-${n}.wav`);
-    const D = speak(scene.say, wav);
+    const D = speak(scene.say, wav, video.lengthScale);
     const tail = 0.9;
     const user = scene.user ?? video.user;
     states[user] ??= await storageFor(browser, user);
@@ -279,7 +286,7 @@ async function recordVideo(browser, video) {
     segs.push(out);
   }
   const endFile = path.join(WORK, `${video.id}-99-end.mp4`);
-  card(endFile, "Fragen zur Bedienung?", "Assistent fragen oder Seite „Hilfe“ öffnen", 3);
+  card(endFile, video.end?.title ?? "Fragen zur Bedienung?", video.end?.subtitle ?? "Assistent fragen oder Seite „Hilfe“ öffnen", video.end?.secs ?? 3);
   segs.push(endFile);
   const list = path.join(WORK, `${video.id}-list.txt`);
   fs.writeFileSync(list, segs.map((s) => `file '${s}'`).join("\n"));
