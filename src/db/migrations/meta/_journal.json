@@ -183,6 +183,13 @@
       "when": 1790690619491,
       "tag": "0025_kundenagenda_sos",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790780658365,
+      "tag": "0026_vertrag_am_einsatz",
+      "breakpoints": true
     }
   ]
 }

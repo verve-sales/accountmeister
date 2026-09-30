@@ -6,6 +6,7 @@ import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
 import { canViewAccount, hasRoleForAccountWrite, canReassignResponsibility } from "@/modules/identity/authz";
 import { getAccount } from "@/modules/accounts/service";
+import { uploadDocument, type UploadedFile } from "@/modules/documents/service";
 
 /**
  * Kundenagenda (Etappe 26): Was treibt den Kunden? Seine Prioritäten, Schlüssel-Initiativen (z. B. „Jira-Vertrag läuft
@@ -234,4 +235,37 @@ export async function ensureInitiativeRemindersSafe(actor: Actor): Promise<numbe
     console.error("Erinnerungen zur Kundenagenda konnten nicht erzeugt werden", e);
     return 0;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Vertrag / Bestellung am Einsatz (Feedback Pilot): Dokument hochladen oder auf das führende System verweisen
+// ---------------------------------------------------------------------------
+
+export const contractLinkInput = z.object({ version: z.coerce.number().int().positive(), contractLink: z.string().trim().max(500).optional().or(z.literal("")) });
+
+async function requireOrderForAgenda(actor: Actor, orderId: string) {
+  const order = await db.query.orders.findFirst({ where: and(eq(schema.orders.id, orderId), eq(schema.orders.workspaceId, actor.workspaceId)) });
+  if (!order) throw new NotFoundError("Einsatz");
+  const opp = await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, order.opportunityId) });
+  await requireAgendaAccount(actor, opp!.accountId);
+  return { order, opp: opp! };
+}
+
+export async function setContractLink(actor: Actor, orderId: string, raw: unknown) {
+  const parsed = contractLinkInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError("Ungültige Angabe.");
+  const { order } = await requireOrderForAgenda(actor, orderId);
+  const [u] = await db.update(schema.orders).set({ contractLink: parsed.data.contractLink || null, updatedAt: new Date(), version: order.version + 1 }).where(and(eq(schema.orders.id, orderId), eq(schema.orders.version, parsed.data.version))).returning();
+  if (!u) throw new ConflictError();
+  await recordAudit(db, actor, "order.contract_link", "ORDER", orderId, {});
+  return u;
+}
+
+/** Vertrags-/Bestelldokument als Quelle (Kundenteam sichtbar: zuständiger BD, Principal, Sales Operations, Beteiligte). */
+export async function attachContractDocument(actor: Actor, orderId: string, file: UploadedFile | null) {
+  const { order, opp } = await requireOrderForAgenda(actor, orderId);
+  const r = await uploadDocument(actor, { setupId: opp.setupId, title: `Vertrag/Bestellung: ${opp.title}`.slice(0, 200), accessClass: "ACCOUNT_TEAM" }, file);
+  await db.update(schema.orders).set({ contractSourceId: r.sourceId, updatedAt: new Date(), version: order.version + 1 }).where(eq(schema.orders.id, orderId));
+  await recordAudit(db, actor, "order.contract_document", "ORDER", orderId, { sourceId: r.sourceId });
+  return r;
 }

@@ -39,7 +39,7 @@ import { applyIntake, discardIntake, formToApplyInput, startIntake } from "@/mod
 import { saveTaskSetting, testConnection } from "@/modules/ai/settings";
 import { answerInterview, discardInterview, finishInterview, startInterview } from "@/modules/interviews/service";
 import { upsertAssessment } from "@/modules/people/assessments";
-import { createInitiative, linkChanceToInitiative, setInitiativeStatus, setOrderConsultant, updateProcurement } from "@/modules/agenda/service";
+import { attachContractDocument, createInitiative, linkChanceToInitiative, setContractLink, setInitiativeStatus, setOrderConsultant, updateProcurement } from "@/modules/agenda/service";
 import { changeSosStatus, createSos } from "@/modules/sos/service";
 import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
@@ -746,7 +746,7 @@ export async function confirmOrderAction(fd: FormData) {
   const data = formToObject(fd);
   return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
     await confirmOrder(actor, data.orderId ?? "", data);
-  }, "Beauftragung mit Nachweis bestätigt.");
+  }, "Beauftragung bestätigt.");
 }
 
 export async function orderEvidenceIncompleteAction(fd: FormData) {
@@ -1171,4 +1171,20 @@ export async function changeSosStatusAction(fd: FormData) {
   return run(backOf(data, "/start"), async (actor) => {
     await changeSosStatus(actor, data.sosId ?? "", data);
   }, "SOS aktualisiert.");
+}
+
+// --- Vertrag am Einsatz (Feedback Pilot) --------------------------------------
+
+export async function setContractLinkAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/kunden"), async (actor) => {
+    await setContractLink(actor, data.orderId ?? "", data);
+  }, "Verweis auf Vertrag/Bestellung gespeichert.");
+}
+
+export async function attachContractAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/kunden"), async (actor) => {
+    await attachContractDocument(actor, data.orderId ?? "", fileFrom(fd, "file"));
+  }, "Vertrag/Bestellung hochgeladen – sichtbar für das Kundenteam (BD, Principal, Sales Operations, Beteiligte).");
 }

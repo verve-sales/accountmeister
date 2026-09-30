@@ -5,12 +5,12 @@ import { isSalesOpsOnly } from "@/modules/identity/actor";
 import { DomainError } from "@/lib/errors";
 import { getAccount } from "@/modules/accounts/service";
 import { listSetupsForAccount } from "@/modules/setups/service";
-import { canMaintainHealth, feedbackToneLabel, feedbackToneValues, getHealth, listingLabel, listingValues, listSnapshots, riskLabel, riskValues, ensureRecentSnapshot } from "@/modules/health/service";
+import { renewalRoadmaps, canMaintainHealth, feedbackToneLabel, feedbackToneValues, getHealth, listingLabel, listingValues, listSnapshots, riskLabel, riskValues, ensureRecentSnapshot } from "@/modules/health/service";
 import { HealthBadge } from "@/components/HealthBadge";
 import { Feedback } from "@/components/Feedback";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
-import { recordExistingEngagementAction, saveHealthAnswerAction, setOrderConsultantAction, updateOrderDatesAction } from "../../../actions";
+import { attachContractAction, recordExistingEngagementAction, saveHealthAnswerAction, setContractLinkAction, setOrderConsultantAction, updateOrderDatesAction } from "../../../actions";
 import { db, schema } from "@/db/client";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -38,6 +38,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
   const q = h.questions[idx] ?? null;
   const canDecide = !isSalesOpsOnly(actor);
   const activeSetups = setups.filter((s) => s.status !== "ARCHIVIERT");
+  const roadmaps = await renewalRoadmaps(h.engagements);
   const users = await db.query.users.findMany({ where: and(eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")), orderBy: (u, { asc }) => [asc(u.displayName)] });
   const setupIds = [...new Set(h.engagements.map((e) => e.setupId))];
   const ankers = setupIds.length ? await db.query.setupMemberships.findMany({ where: inArray(schema.setupMemberships.setupId, setupIds) }) : [];
@@ -80,6 +81,8 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
             {q.key === "ENGAGEMENT_END" && (() => {
               const e = h.engagements.find((x) => x.orderId === q.orderId)!;
               return (
+                <>
+                <p className="text-sm mb-2">{e.contractSourceId || e.evidenceSourceId || e.contractLink ? <>Nachschlagen: {(e.contractSourceId || e.evidenceSourceId) && <Link href={`/quellen/${e.contractSourceId ?? e.evidenceSourceId}`}>Vertrag/Bestellung ansehen</Link>}{e.contractLink && <> {(e.contractSourceId || e.evidenceSourceId) ? "· " : ""}{/^https?:\/\//.test(e.contractLink) ? <a href={e.contractLink} target="_blank" rel="noreferrer">im führenden System</a> : <span>liegt: {e.contractLink}</span>}</>}</> : <span className="muted">Kein Vertrag hinterlegt – unten bei „Einsätze“ hochladen oder verlinken. Unbekannt? „Später beantworten“ und den BD bzw. Sales Operations fragen.</span>}</p>
                 <form action={updateOrderDatesAction} className="flex flex-wrap gap-3 items-end">
                   <input type="hidden" name="orderId" value={e.orderId} />
                   <input type="hidden" name="version" value={e.version} />
@@ -88,6 +91,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
                   <div><label className="label" htmlFor="qDl">Frist für Verlängerungsentscheidung (optional)</label><input id="qDl" name="renewalDeadline" type="date" className="input" defaultValue={e.renewalDeadline ?? ""} /></div>
                   <button className="btn" type="submit">Speichern</button>
                 </form>
+                </>
               );
             })()}
 
@@ -160,7 +164,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
         <h2 className="font-semibold mb-2">Einsätze ({h.engagements.length})</h2>
         {h.engagements.length === 0 ? <p className="muted text-sm">Keine laufenden oder beauftragten Einsätze erfasst.</p> : (
           <table className="list">
-            <thead><tr><th>Einsatz</th><th>Berater</th><th>Status</th><th>Start</th><th>Ende · Verlängerungsfrist</th><th>Verlängerung startet</th></tr></thead>
+            <thead><tr><th>Einsatz</th><th>Berater</th><th>Vertrag / Bestellung</th><th>Status</th><th>Start</th><th>Ende · Verlängerungsfrist</th><th>Verlängerung startet</th></tr></thead>
             <tbody>
               {h.engagements.map((e) => (
                 <tr key={e.orderId}>
@@ -169,7 +173,8 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
                     {e.consultantName ?? <span className="muted">–</span>}
                     {isAnker(e.setupId, e.consultantUserId) && <div className="muted text-xs">zugleich Anker</div>}
                     {may && (
-                      <form action={setOrderConsultantAction} className="flex gap-1 mt-1">
+                      <details className="mt-1"><summary className="text-xs">ändern</summary>
+                      <form action={setOrderConsultantAction} className="flex flex-wrap gap-1 mt-1">
                         <input type="hidden" name="orderId" value={e.orderId} />
                         <input type="hidden" name="version" value={e.version} />
                         <input type="hidden" name="back" value={back} />
@@ -180,6 +185,31 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
                         <input name="consultantName" className="input" placeholder="Name" defaultValue={e.consultantUserId ? "" : e.consultantName ?? ""} aria-label="Name (z. B. Freelancer)" style={{ width: "7rem" }} />
                         <button className="btn btn-secondary btn-small" type="submit">OK</button>
                       </form>
+                      </details>
+                    )}
+                  </td>
+                  <td className="text-sm">
+                    {(e.contractSourceId || e.evidenceSourceId) && <div><Link href={`/quellen/${e.contractSourceId ?? e.evidenceSourceId}`}>{e.contractSourceId ? "Vertrag ansehen" : "Nachweis ansehen"}</Link></div>}
+                    {e.orderReference && <div className="muted text-xs">Ref. {e.orderReference}</div>}
+                    {e.contractLink && <div className="text-xs">{/^https?:\/\//.test(e.contractLink) ? <a href={e.contractLink} target="_blank" rel="noreferrer">führendes System</a> : e.contractLink}</div>}
+                    {!e.contractSourceId && !e.evidenceSourceId && !e.contractLink && <span className="muted">–</span>}
+                    {may && (
+                      <details className="mt-1">
+                        <summary className="text-xs">hinterlegen</summary>
+                        <form action={attachContractAction} className="flex flex-wrap gap-1 mt-1" encType="multipart/form-data">
+                          <input type="hidden" name="orderId" value={e.orderId} />
+                          <input type="hidden" name="back" value={back} />
+                          <input type="file" name="file" className="text-xs" aria-label="Vertrag oder Bestellung hochladen" style={{ maxWidth: "12rem" }} />
+                          <button className="btn btn-secondary btn-small" type="submit">Hochladen</button>
+                        </form>
+                        <form action={setContractLinkAction} className="flex flex-wrap gap-1 mt-1">
+                          <input type="hidden" name="orderId" value={e.orderId} />
+                          <input type="hidden" name="version" value={e.version} />
+                          <input type="hidden" name="back" value={back} />
+                          <input name="contractLink" className="input" placeholder="Link oder Ablageort" defaultValue={e.contractLink ?? ""} aria-label="Link oder Ablageort" style={{ width: "11rem" }} />
+                          <button className="btn btn-secondary btn-small" type="submit">OK</button>
+                        </form>
+                      </details>
                     )}
                   </td>
                   <td className="text-sm">{e.status === "GESTARTET" ? "läuft" : "beauftragt"}{e.daysToEnd !== null && e.daysToEnd >= 0 ? ` · noch ${e.daysToEnd} Tage` : ""}</td>
@@ -202,7 +232,26 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
             </tbody>
           </table>
         )}
-        <p className="muted text-xs mt-2">Verlängerungsregel: Am Auslösetag (Verlängerungsfrist − 14 Tage, sonst Einsatzende − 8 Wochen) startet automatisch „Verlängerung vor Einsatzende“ an der Chance; der erste Schritt kommt als Vorschlag zum BD. Vier Wochen vor Ende ohne Fortschritt erscheint der Einsatz bei Principal und CEO als Eskalation.</p>
+        {[...roadmaps.entries()].filter(([oid]) => { const e = h.engagements.find((x) => x.orderId === oid); return e && e.daysToEnd !== null && e.daysToEnd <= 180; }).map(([oid, ms]) => {
+          const e = h.engagements.find((x) => x.orderId === oid)!;
+          const color: Record<string, string> = { ERLEDIGT: "#2f7d32", UEBERFAELLIG: "#c0392b", BALD: "#8a6d1f", SPAETER: "var(--muted)" };
+          const label: Record<string, string> = { ERLEDIGT: "erledigt", UEBERFAELLIG: "überfällig", BALD: "steht an", SPAETER: "später" };
+          return (
+            <div key={oid} className="mt-4">
+              <h3 className="text-sm font-semibold">Fahrplan Verlängerung – {e.title} <span className="muted font-normal">(endet {fmtDate(e.plannedEnd ?? e.renewalDeadline)}{e.daysToEnd !== null ? `, noch ${e.daysToEnd} Tage` : ""})</span></h3>
+              <ol className="text-sm mt-1 space-y-1">
+                {ms.map((m) => (
+                  <li key={m.key} className="flex gap-2 items-baseline">
+                    <span style={{ minWidth: "5.5rem" }} className="text-xs">{fmtDate(m.date)}</span>
+                    <span className="status" style={{ color: color[m.state], borderColor: color[m.state], minWidth: "5.5rem", textAlign: "center" }}>{label[m.state]}</span>
+                    <span>{m.label}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          );
+        })}
+        <p className="muted text-xs mt-2">Verlängerungsregel: 3 Monate vor Ende bekommt der BD einen Ping („Verlängerung ansprechen“). Am Auslösetag (Verlängerungsfrist − 14 Tage, sonst Einsatzende − 8 Wochen) startet automatisch „Verlängerung vor Einsatzende“ an der Chance; der erste Schritt kommt als Vorschlag zum BD. Vier Wochen vor Ende ohne Fortschritt erscheint der Einsatz bei Principal und CEO als Eskalation.</p>
         {canDecide && may && q?.key !== "ENGAGEMENT_MISSING" && <ExistingEngagementForm accountId={id} setups={activeSetups} />}
       </section>
 
@@ -232,7 +281,7 @@ function ExistingEngagementForm({ accountId, setups, open = false }: { accountId
         <div><label className="label" htmlFor="eeStart">Start</label><input id="eeStart" name="plannedStart" type="date" className="input" /></div>
         <div><label className="label" htmlFor="eeEnd">Ende</label><input id="eeEnd" name="plannedEnd" type="date" className="input" /></div>
         <div><label className="label" htmlFor="eeDl">Verlängerungsfrist (optional)</label><input id="eeDl" name="renewalDeadline" type="date" className="input" /></div>
-        <div className="sm:col-span-3"><label className="label" htmlFor="eeEv">Beleg (Bestellnummer, Vertrag, seit wann)</label><input id="eeEv" name="evidenceText" className="input" required minLength={10} /></div>
+        <div className="sm:col-span-3"><label className="label" htmlFor="eeEv">Beleg (optional: Bestellnummer, Vertrag, seit wann)</label><input id="eeEv" name="evidenceText" className="input" /></div>
         <div className="sm:col-span-3"><label className="label" htmlFor="eeCons">Operativer Berater (optional)</label><input id="eeCons" name="consultantName" className="input" placeholder="Name – Verve-Kolleg:innen werden automatisch zugeordnet" /></div>
         <div><button className="btn" type="submit">Einsatz nachtragen</button></div>
       </form>

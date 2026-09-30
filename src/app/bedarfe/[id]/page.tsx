@@ -39,7 +39,7 @@ function EvidenceFields({ prefix, sources, label = "Beleg" }: { prefix: string; 
           {sources.map((s) => <option key={s.id} value={s.id}>{sourceTypeLabel[s.type] ?? s.type}: {s.title}</option>)}
         </select>
       </div>
-      <div><label className="label" htmlFor={`${prefix}Text`}>oder Belegnotiz (wer, was, wann)</label><input id={`${prefix}Text`} name="evidenceText" className="input" placeholder="mind. 10 Zeichen" /></div>
+      <div><label className="label" htmlFor={`${prefix}Text`}>oder Belegnotiz (optional: wer, was, wann)</label><input id={`${prefix}Text`} name="evidenceText" className="input" placeholder="optional" /></div>
     </>
   );
 }
@@ -223,7 +223,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
             )}
             {(opp.status === "ANTIZIPIERT" || opp.status === "IN_KLAERUNG" || opp.status === "ZURUECKGESTELLT") && (
               <details open={opp.status === "IN_KLAERUNG"}>
-                <summary>Chance bestätigen (mit Beleg)</summary>
+                <summary>Chance bestätigen (Beleg optional)</summary>
                 <form action={confirmOpportunityAction} className="mt-2 grid sm:grid-cols-2 gap-3">
                   <input type="hidden" name="opportunityId" value={opp.id} />
                   <input type="hidden" name="version" value={opp.version} />
@@ -479,7 +479,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       {/* Angebote (F09, F10) */}
       <section className="card" id="angebote">
         <h2 className="font-semibold mb-2">Angebote / Profilvorstellungen ({d.offers.length})</h2>
-        <p className="muted text-sm mb-2">„Tatsächlich vorgestellt“ setzt ein manuell bestätigtes Vorstellungsereignis mit Beleg voraus – ein Entwurf genügt nicht. Ein akzeptiertes Angebot ist noch kein Auftrag.</p>
+        <p className="muted text-sm mb-2">„Tatsächlich vorgestellt“ setzt ein manuell bestätigtes Vorstellungsereignis voraus (Beleg optional) – ein Entwurf genügt nicht. Ein akzeptiertes Angebot ist noch kein Auftrag.</p>
         {d.offers.length === 0 ? <p className="muted text-sm">Noch kein Angebot.</p> : (
           <ul className="space-y-3">
             {d.offers.map((o) => {
@@ -602,10 +602,10 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
                     <div className="mt-3 space-y-2">
                       {!confirmed && (
                         <details>
-                          <summary>Beauftragung bestätigen (mit Nachweis)</summary>
+                          <summary>Beauftragung bestätigen (Nachweis optional)</summary>
                           <form action={confirmOrderAction} className="mt-2 grid sm:grid-cols-2 gap-3">
                             <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
-                            <div><label className="label" htmlFor={`or-${o.id}`}>Bestell-/Vertragsreferenz</label><input id={`or-${o.id}`} name="orderReference" className="input" required minLength={2} defaultValue={o.orderReference ?? ""} /></div>
+                            <div><label className="label" htmlFor={`or-${o.id}`}>Bestell-/Vertragsreferenz (optional)</label><input id={`or-${o.id}`} name="orderReference" className="input" defaultValue={o.orderReference ?? ""} /></div>
                             <div><label className="label" htmlFor={`on-${o.id}`}>Anmerkung</label><input id={`on-${o.id}`} name="evidenceNote" className="input" /></div>
                             <EvidenceFields prefix={`ord-${o.id}`} sources={d.sources} label="Bestell-/Vertragsnachweis" />
                             <div className="sm:col-span-2"><button className="btn" type="submit">Beauftragung bestätigen</button></div>
@@ -641,7 +641,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
                         <form action={markStartedAction} className="flex flex-wrap gap-2 items-end">
                           <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
                           <div><label className="label" htmlFor={`sa-${o.id}`}>Startzeitpunkt</label><input id={`sa-${o.id}`} name="startedAt" type="datetime-local" className="input" /></div>
-                          <div><label className="label" htmlFor={`sn-${o.id}`}>Bestätigung des Startereignisses</label><input id={`sn-${o.id}`} name="note" className="input" style={{ width: "22rem" }} required minLength={3} placeholder="z. B. Kick-off mit … durchgeführt" /></div>
+                          <div><label className="label" htmlFor={`sn-${o.id}`}>Bestätigung des Startereignisses</label><input id={`sn-${o.id}`} name="note" className="input" style={{ width: "22rem" }} placeholder="z. B. Kick-off mit … durchgeführt" /></div>
                           <button className="btn" type="submit">Start bestätigen</button>
                         </form>
                       )}

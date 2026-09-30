@@ -116,7 +116,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
 
       {renewals.length > 0 && (
         <section className="card">
-          <h2 className="font-semibold mb-2">Auslaufende Einsätze (nächste 12 Wochen)</h2>
+          <h2 className="font-semibold mb-2">Auslaufende Einsätze (nächste 3 Monate)</h2>
           <table className="list">
             <thead><tr><th>Kunde · Einsatz</th><th>Ende</th><th>Verlängerung</th></tr></thead>
             <tbody>

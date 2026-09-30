@@ -4,7 +4,7 @@ import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
 import { isSalesOpsOnlyUser } from "@/modules/identity/authz";
 import { ensureDefaultPlaybooks, startPlaybookRun } from "@/modules/playbooks/service";
-import { DAY, renewalTriggerDate } from "./service";
+import { DAY, renewalPingDate, renewalTriggerDate } from "./service";
 
 /**
  * Verlängerungsregel (Etappe 23): Für jeden laufenden Einsatz mit bekanntem Ende bzw. bekannter Verlängerungsfrist
@@ -20,6 +20,32 @@ export async function ensureRenewalRuns(actor: Actor, now = new Date()): Promise
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.opportunities.accountId))
     .where(and(eq(schema.orders.workspaceId, actor.workspaceId), eq(schema.orders.status, "BEAUFTRAGUNG_BESTAETIGT"), eq(schema.orders.engagementStatus, "GESTARTET"), or(eq(schema.opportunities.ownerUserId, actor.userId), eq(schema.accounts.responsibleBdUserId, actor.userId))));
   const t = now.toISOString().slice(0, 10);
+  // Fahrplan Schritt 1 (Feedback Pilot): ab 3 Monaten Restlaufzeit ein Ping an den BD – „Verlängerung ansprechen“
+  const pingDue = rows.filter((r) => {
+    const ping = renewalPingDate(r.o);
+    const end = r.o.plannedEnd ?? r.o.renewalDeadline;
+    return ping !== null && ping <= t && (!end || end >= t);
+  });
+  if (pingDue.length) {
+    const pingKeys = pingDue.map((r) => `renewal-ping:order:${r.o.id}`);
+    const have = new Set((await db.query.standardTasks.findMany({ where: and(eq(schema.standardTasks.workspaceId, actor.workspaceId), inArray(schema.standardTasks.key, pingKeys)) })).map((x) => x.key));
+    for (const r of pingDue) {
+      const key = `renewal-ping:order:${r.o.id}`;
+      if (have.has(key)) continue;
+      const owner = (await isSalesOpsOnlyUser(r.opp.ownerUserId)) ? (r.bd ?? actor.userId) : r.opp.ownerUserId;
+      await db.transaction(async (tx) => {
+        const [log] = await tx.insert(schema.standardTasks).values({ workspaceId: actor.workspaceId, key, kind: "RENEWAL_PING", accountId: r.opp.accountId, ownerUserId: owner }).onConflictDoNothing().returning();
+        if (!log) return;
+        const end = r.o.plannedEnd ?? r.o.renewalDeadline;
+        const [a] = await tx
+          .insert(schema.actions)
+          .values({ workspaceId: actor.workspaceId, setupId: r.opp.setupId, opportunityId: r.opp.id, title: `Verlängerung ansprechen: „${r.opp.title.slice(0, 80)}“ endet am ${end}`, agreement: "Fahrplan Verlängerung, Schritt 1 (3 Monate vor Ende): Beim nächsten Kontakt mit dem Kunden die Verlängerung ansprechen – Zufriedenheit, Anschlussbedarf, Bestellweg und Fristen. Acht Wochen vor Ende startet das Vorgehen „Verlängerung vor Einsatzende“.", ownerUserId: owner, status: "VORGESCHLAGEN", dueDate: new Date(now.getTime() + 7 * DAY).toISOString().slice(0, 10), createdBy: actor.userId })
+          .returning();
+        await tx.update(schema.standardTasks).set({ actionId: a!.id }).where(eq(schema.standardTasks.id, log.id));
+        await recordAudit(tx, actor, "renewal.ping", "ORDER", r.o.id, { ende: end });
+      });
+    }
+  }
   const due = rows.filter((r) => {
     const trig = renewalTriggerDate(r.o);
     const end = r.o.plannedEnd ?? r.o.renewalDeadline;
@@ -60,7 +86,7 @@ export async function ensureRenewalRunsSafe(actor: Actor): Promise<number> {
 
 export type RenewalRow = { accountId: string; accountName: string; orderId: string; opportunityId: string; title: string; plannedEnd: string | null; renewalDeadline: string | null; daysToEnd: number | null; runStatus: "OHNE_VORGEHEN" | "LAEUFT" | "ABGESCHLOSSEN"; currentStep: string | null; escalate: boolean };
 
-/** Auslaufende Einsätze (≤ 12 Wochen) für die Kunden einer Sicht – mit Stand der Verlängerung und Eskalation (≤ 4 Wochen ohne Fortschritt). */
+/** Auslaufende Einsätze (≤ 3 Monate) für die Kunden einer Sicht – mit Stand der Verlängerung und Eskalation (≤ 4 Wochen ohne Fortschritt). */
 export async function listRenewals(accountIds: string[], now = new Date()): Promise<RenewalRow[]> {
   if (accountIds.length === 0) return [];
   const rows = await db
@@ -70,7 +96,7 @@ export async function listRenewals(accountIds: string[], now = new Date()): Prom
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.opportunities.accountId))
     .where(and(inArray(schema.opportunities.accountId, accountIds), eq(schema.orders.status, "BEAUFTRAGUNG_BESTAETIGT"), eq(schema.orders.engagementStatus, "GESTARTET")));
   const t = now.getTime();
-  const soon = rows.filter((r) => r.o.plannedEnd && new Date(r.o.plannedEnd).getTime() - t <= 84 * DAY && new Date(r.o.plannedEnd).getTime() >= t - DAY);
+  const soon = rows.filter((r) => r.o.plannedEnd && new Date(r.o.plannedEnd).getTime() - t <= 92 * DAY && new Date(r.o.plannedEnd).getTime() >= t - DAY);
   if (soon.length === 0) return [];
   const runs = await db.query.playbookRuns.findMany({ where: inArray(schema.playbookRuns.opportunityId, soon.map((r) => r.opp.id)) });
   const runSteps = runs.length ? await db.query.playbookRunSteps.findMany({ where: inArray(schema.playbookRunSteps.runId, runs.map((r) => r.id)) }) : [];

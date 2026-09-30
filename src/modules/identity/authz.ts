@@ -132,7 +132,7 @@ export function canViewSource(actor: Actor, source: SourceRow, ctx: SetupContext
   if (isCeoOnly) return cls === "WORKSPACE";
   if (cls === "WORKSPACE") return hasAnyContentRole(actor);
   if (!ctx) return false;
-  if (cls === "SETUP") return ctx.membership !== null || ctx.ownsOpportunity || isSalesOps(actor) || hasRole(actor, "PRINCIPAL", ctx.account.id) || ctx.setup.bdUserId === actor.userId;
+  if (cls === "SETUP") return ctx.membership !== null || ctx.ownsOpportunity || isSalesOps(actor) || isResponsibleBd(actor, ctx.account) || hasRole(actor, "PRINCIPAL", ctx.account.id) || ctx.setup.bdUserId === actor.userId;
   if (cls === "ACCOUNT_TEAM") return ctx.membership !== null || ctx.ownsOpportunity || isSalesOps(actor) || isResponsibleBd(actor, ctx.account) || hasRole(actor, "PRINCIPAL", ctx.account.id) || ctx.setup.bdUserId === actor.userId;
   return false;
 }

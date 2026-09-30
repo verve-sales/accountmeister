@@ -39,10 +39,11 @@ async function requireEditableOpportunity(actor: Actor, id: string) {
 }
 
 /**
- * Beleg auflösen: entweder eine vorhandene, für den Akteur sichtbare Quelle oder eine neue Belegnotiz.
- * Ohne Beleg wird kein kritischer Übergang gespeichert (9.3).
+ * Beleg auflösen (optional, Feedback Pilot 09/2026): vorhandene Quelle, neue Belegnotiz – oder nichts.
+ * Bestellnummern und Verträge liegen oft in anderen Systemen; ohne Beleg wird der Übergang trotzdem gespeichert
+ * und als „ohne Beleg“ gekennzeichnet.
  */
-async function resolveEvidence(tx: Tx | Db, actor: Actor, ctx: SetupContext, raw: { sourceId?: string; evidenceText?: string }, title: string): Promise<string> {
+async function resolveEvidence(tx: Tx | Db, actor: Actor, ctx: SetupContext, raw: { sourceId?: string; evidenceText?: string }, title: string): Promise<string | null> {
   if (raw.sourceId) {
     const src = await tx.query.sources.findFirst({ where: and(eq(schema.sources.id, raw.sourceId), eq(schema.sources.workspaceId, actor.workspaceId)) });
     if (!src || !canViewSource(actor, src, ctx)) throw new NotFoundError("Quelle");
@@ -50,10 +51,10 @@ async function resolveEvidence(tx: Tx | Db, actor: Actor, ctx: SetupContext, raw
     return src.id;
   }
   const text = (raw.evidenceText ?? "").trim();
-  if (text.length < 10) throw new ValidationError("Bitte einen Beleg angeben: vorhandene Quelle wählen oder eine Belegnotiz (mind. 10 Zeichen) erfassen.");
+  if (!text) return null;
   const [src] = await tx
     .insert(schema.sources)
-    .values({ workspaceId: actor.workspaceId, setupId: ctx.setup.id, type: "NOTIZ", title, body: text, origin: "manuell", sourceTime: new Date(), ownerUserId: actor.userId, accessClass: "SETUP" })
+    .values({ workspaceId: actor.workspaceId, setupId: ctx.setup.id, type: "NOTIZ", title, body: text, origin: "manuell", sourceTime: new Date(), ownerUserId: actor.userId, accessClass: "ACCOUNT_TEAM" })
     .returning();
   if (!src) throw new Error("Quelle");
   return src.id;
@@ -280,9 +281,9 @@ export async function changeOpportunityStatus(actor: Actor, id: string, raw: { v
   assertDecisionRight(actor, "Den Status einer Chance zu setzen");
   const { opp } = await requireEditableOpportunity(actor, id);
   const to = raw.status;
-  if (to === "BESTAETIGT") throw new TransitionError("Bestätigung erfolgt über „Chance bestätigen“ mit Beleg.");
+  if (to === "BESTAETIGT") throw new TransitionError("Bestätigung erfolgt über „Chance bestätigen“ (Beleg optional).");
   if (to === "PROFIL_ANGEBOT_VORGESTELLT") throw new TransitionError("„Vorgestellt“ entsteht nur über ein tatsächlich vorgestelltes Angebot (F09).");
-  if (to === "BEAUFTRAGT") throw new TransitionError("„Beauftragt“ entsteht nur über einen Auftrag mit Nachweis.");
+  if (to === "BEAUFTRAGT") throw new TransitionError("„Beauftragt“ entsteht über einen Auftrag („Beauftragung bestätigen“).");
   if (!oppTransitions[opp.status].includes(to)) throw new TransitionError(`Übergang von „${opp.status}“ nach „${to}“ ist nicht vorgesehen.`);
   const reason = (raw.reason ?? "").trim();
   if ((to === "ZURUECKGESTELLT" || to === "BEENDET") && reason.length < 3) throw new ValidationError("Bitte begründen, warum die Chance zurückgestellt bzw. beendet wird.");
@@ -420,7 +421,7 @@ export const presentOfferInput = z.object({
   evidenceText: z.string().trim().max(4000).optional().or(z.literal("")),
 });
 
-/** „Tatsächlich vorgestellt“ (F09): manuell bestätigtes Vorstellungsereignis mit Beleg; ein Entwurf genügt nicht. */
+/** „Tatsächlich vorgestellt“ (F09): manuell bestätigtes Vorstellungsereignis (Beleg optional); ein Entwurf genügt nicht. */
 export async function presentOffer(actor: Actor, offerId: string, raw: unknown) {
   assertDecisionRight(actor, "Ein Angebot als vorgestellt zu markieren");
   const parsed = presentOfferInput.safeParse(raw);
@@ -457,7 +458,7 @@ export async function changeOfferStatus(actor: Actor, offerId: string, raw: { ve
   if (!offer) throw new NotFoundError("Angebot");
   const { opp } = await requireEditableOpportunity(actor, offer.opportunityId);
   const to = raw.status;
-  if (to === "VORGESTELLT") throw new TransitionError("„Vorgestellt“ wird über das Vorstellungsereignis mit Beleg gesetzt.");
+  if (to === "VORGESTELLT") throw new TransitionError("„Vorgestellt“ wird über „Vorstellungsereignis bestätigen“ gesetzt.");
   if (!offerTransitions[offer.status].includes(to)) throw new TransitionError(`Übergang von „${offer.status}“ nach „${to}“ ist nicht vorgesehen.`);
   const note = (raw.note ?? "").trim();
   if ((to === "ABGELEHNT" || to === "ZURUECKGEZOGEN") && note.length < 3) throw new ValidationError("Bitte den Grund festhalten.");
@@ -491,7 +492,7 @@ export const orderInput = z.object({
   renewalDeadline: z.string().optional().or(z.literal("")),
 });
 
-/** Auftrag in Vorbereitung anlegen; „Beauftragung bestätigt“ folgt nur mit Nachweis. */
+/** Auftrag in Vorbereitung anlegen; „Beauftragung bestätigt“ folgt als eigener Schritt (Nachweis optional). */
 export async function createOrder(actor: Actor, raw: unknown) {
   const parsed = orderInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
@@ -519,7 +520,7 @@ async function requireOrder(actor: Actor, orderId: string) {
 
 export const confirmOrderInput = z.object({
   version: z.coerce.number().int().positive(),
-  orderReference: z.string().trim().min(2, "Bestell-/Vertragsreferenz fehlt").max(200),
+  orderReference: z.string().trim().max(200).optional().or(z.literal("")),
   sourceId: z.string().optional().or(z.literal("")),
   evidenceText: z.string().trim().max(4000).optional().or(z.literal("")),
   evidenceNote: z.string().trim().max(1000).optional().or(z.literal("")),
@@ -535,10 +536,10 @@ export async function confirmOrder(actor: Actor, orderId: string, raw: unknown) 
   if (order.status === "BEAUFTRAGUNG_BESTAETIGT") throw new TransitionError("Bereits bestätigt.");
   if (order.status === "BEENDET_STORNIERT") throw new TransitionError("Ein beendeter/stornierter Auftrag wird nicht bestätigt.");
   return db.transaction(async (tx) => {
-    const sourceId = await resolveEvidence(tx, actor, ctx, { sourceId: input.sourceId || undefined, evidenceText: input.evidenceText || undefined }, `Bestell-/Vertragsnachweis ${input.orderReference}`);
+    const sourceId = await resolveEvidence(tx, actor, ctx, { sourceId: input.sourceId || undefined, evidenceText: input.evidenceText || undefined }, `Bestell-/Vertragsnachweis ${input.orderReference || "(ohne Referenz)"}`);
     const [u] = await tx
       .update(schema.orders)
-      .set({ status: "BEAUFTRAGUNG_BESTAETIGT", orderReference: input.orderReference, evidenceSourceId: sourceId, evidenceNote: input.evidenceNote || null, confirmedAt: new Date(), confirmedBy: actor.userId, version: input.version + 1, updatedAt: new Date() })
+      .set({ status: "BEAUFTRAGUNG_BESTAETIGT", orderReference: input.orderReference || null, evidenceSourceId: sourceId, evidenceNote: input.evidenceNote || null, confirmedAt: new Date(), confirmedBy: actor.userId, version: input.version + 1, updatedAt: new Date() })
       .where(and(eq(schema.orders.id, orderId), eq(schema.orders.version, input.version)))
       .returning();
     if (!u) throw new ConflictError();
@@ -648,9 +649,9 @@ export async function markReady(actor: Actor, orderId: string, raw: { version: n
   if (order.status !== "BEAUFTRAGUNG_BESTAETIGT") throw new TransitionError("„Startbereit“ setzt eine bestätigte Beauftragung voraus.");
   if (order.engagementStatus !== "GEPLANT") throw new TransitionError(`Aus „${order.engagementStatus}“ ist „Startbereit“ nicht vorgesehen.`);
   const reqs = await db.query.startRequirements.findMany({ where: eq(schema.startRequirements.orderId, orderId) });
-  if (reqs.length === 0) throw new ValidationError("Ohne erfasste Startvoraussetzungen gibt es keine Startfreigabe – eine leere Prüfliste gilt nicht als erfüllt.");
+  // Offene Startvoraussetzungen blockieren; eine leere Liste ist erlaubt (Prüfung läuft oft in anderen Systemen)
   const open = reqs.filter((r) => r.status !== "BESTAETIGT" && r.status !== "NICHT_ANWENDBAR");
-  if (open.length > 0) throw new ValidationError(`Noch ${open.length} Startvoraussetzung(en) ohne bestätigten Nachweis.`);
+  if (open.length > 0) throw new ValidationError(`Noch ${open.length} Startvoraussetzung(en) offen – bestätigen oder als nicht anwendbar markieren.`);
   const [u] = await db
     .update(schema.orders)
     .set({ engagementStatus: "STARTBEREIT", version: Number(raw.version) + 1, updatedAt: new Date() })
@@ -666,8 +667,7 @@ export async function markStarted(actor: Actor, orderId: string, raw: { version:
   assertDecisionRight(actor, "Einen Einsatzstart zu bestätigen");
   const { order } = await requireOrder(actor, orderId);
   if (order.engagementStatus !== "STARTBEREIT") throw new TransitionError("„Gestartet“ setzt „Startbereit“ voraus.");
-  const note = (raw.note ?? "").trim();
-  if (note.length < 3) throw new ValidationError("Bitte das Startereignis kurz bestätigen (z. B. „Kick-off am … mit … durchgeführt“).");
+  const note = (raw.note ?? "").trim() || "Start bestätigt.";
   const startedAt = raw.startedAt ? new Date(raw.startedAt) : new Date();
   if (startedAt.getTime() > Date.now() + 60_000) throw new ValidationError("Ein Startereignis liegt nicht in der Zukunft.");
   const [u] = await db

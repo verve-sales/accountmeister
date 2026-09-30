@@ -30,10 +30,10 @@ export const stageLabel: Record<Stage, string> = {
 /** Der nächste große Schritt je Stufe – als Satz, den der BD lesen kann. */
 export const nextBigStep: Record<Stage, string> = {
   KONTAKT: "Ersten konkreten Chance in Kundensprache erfassen (aus Gespräch, Signal oder Dokument).",
-  BEDARF_IN_KLAERUNG: "Chance mit dem Bedarfsträger bestätigen – mit Beleg (Gesprächsnotiz, Mail).",
+  BEDARF_IN_KLAERUNG: "Chance mit dem Bedarfsträger bestätigen (Beleg wie Gesprächsnotiz oder Mail optional).",
   BEDARF_BESTAETIGT: "Passendes Profil oder Angebot vorstellen und Rückmeldung vereinbaren.",
   ANGEBOT: "Rückmeldung zum Angebot einholen; Entscheidungsweg und Freigaben klären.",
-  AUSWAHL: "Beauftragung mit Nachweis festhalten (Bestellung, Bestätigung).",
+  AUSWAHL: "Beauftragung festhalten (Bestellung/Bestätigung, Nachweis optional).",
   BEAUFTRAGT: "Startvoraussetzungen abschließen und Start terminieren.",
   GESTARTET: "Verlängerung, Ausweitung oder Übertragung vorbereiten (Vorhaben im Accountplan).",
 };

@@ -61,6 +61,10 @@ export type Engagement = {
   triggerDate: string | null;
   consultantUserId: string | null;
   consultantName: string | null;
+  contractSourceId: string | null;
+  contractLink: string | null;
+  evidenceSourceId: string | null;
+  orderReference: string | null;
 };
 export type Level = "SATTELFEST" | "WACKELIG" | "GEFAEHRDET" | "UNKLAR";
 export const levelLabel: Record<Level, string> = { SATTELFEST: "sattelfest", WACKELIG: "wackelig", GEFAEHRDET: "gefährdet", UNKLAR: "zu wenig Daten" };
@@ -87,6 +91,54 @@ const daysBetween = (fromIso: string, toIso: string) => Math.round((new Date(toI
 const isStale = (at: string | undefined) => !at || Date.now() - new Date(at).getTime() > STALE_DAYS * DAY;
 
 /** Verlängerungsauslöser: Frist minus 14 Tage, sonst Einsatzende minus 8 Wochen. */
+/** Fahrplan Verlängerung, Schritt 1: Ping an den BD 3 Monate vor Ende (bzw. 30 Tage vor der Verlängerungsfrist). */
+export function renewalPingDate(o: { plannedEnd: string | null; renewalDeadline: string | null }): string | null {
+  const cands: number[] = [];
+  if (o.plannedEnd) cands.push(new Date(o.plannedEnd).getTime() - 90 * DAY);
+  if (o.renewalDeadline) cands.push(new Date(o.renewalDeadline).getTime() - 30 * DAY);
+  return cands.length ? new Date(Math.min(...cands)).toISOString().slice(0, 10) : null;
+}
+
+export type Milestone = { key: string; date: string; label: string; state: "ERLEDIGT" | "UEBERFAELLIG" | "BALD" | "SPAETER" };
+
+/**
+ * Fahrplan je auslaufendem Einsatz (Feedback Pilot): Was ist wann zu tun? Stand aus dem Ping (Aktion) und den
+ * Schritten des Vorgehens „Verlängerung vor Einsatzende“. Orientierung, keine Sperre.
+ */
+export async function renewalRoadmaps(engagements: Engagement[], now = new Date()): Promise<Map<string, Milestone[]>> {
+  const out = new Map<string, Milestone[]>();
+  const withEnd = engagements.filter((e) => e.plannedEnd || e.renewalDeadline);
+  if (!withEnd.length) return out;
+  const pingTasks = await db.query.standardTasks.findMany({ where: inArray(schema.standardTasks.key, withEnd.map((e) => `renewal-ping:order:${e.orderId}`)) });
+  const pingActions = pingTasks.filter((x) => x.actionId).length ? await db.query.actions.findMany({ where: inArray(schema.actions.id, pingTasks.map((x) => x.actionId!).filter(Boolean)) }) : [];
+  const pb = await db.query.playbooks.findMany({ where: eq(schema.playbooks.code, "VERLAENGERUNG") });
+  const runs = pb.length ? await db.query.playbookRuns.findMany({ where: and(inArray(schema.playbookRuns.opportunityId, withEnd.map((e) => e.opportunityId)), inArray(schema.playbookRuns.playbookId, pb.map((p) => p.id))) }) : [];
+  const steps = runs.length ? await db.query.playbookRunSteps.findMany({ where: inArray(schema.playbookRunSteps.runId, runs.map((r) => r.id)) }) : [];
+  const t = now.toISOString().slice(0, 10);
+  const soon = new Date(now.getTime() + 14 * DAY).toISOString().slice(0, 10);
+  const add = (d: string, n: number) => new Date(new Date(d).getTime() + n * DAY).toISOString().slice(0, 10);
+  for (const e of withEnd) {
+    const end = e.plannedEnd ?? e.renewalDeadline!;
+    const ping = renewalPingDate(e)!;
+    const trig = renewalTriggerDate(e)!;
+    const pingAction = pingActions.find((a) => pingTasks.some((x) => x.key === `renewal-ping:order:${e.orderId}` && x.actionId === a.id));
+    const run = runs.filter((r) => r.opportunityId === e.opportunityId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+    const st = (pos: number) => (run ? steps.find((s) => s.runId === run.id && s.position === pos) : undefined);
+    const doneStep = (pos: number) => { const x = st(pos); return !!x && (x.status === "ERLEDIGT" || x.status === "UEBERSPRUNGEN"); };
+    const raw: { key: string; date: string; label: string; done: boolean }[] = [
+      { key: "PING", date: ping, label: "Ping an den BD: Verlängerung beim Kunden ansprechen (Zufriedenheit, Anschlussbedarf, Bestellweg)", done: pingAction?.status === "ERLEDIGT" || doneStep(1) },
+      { key: "START", date: trig, label: run ? "Vorgehen „Verlängerung vor Einsatzende“ läuft – Schritt 1: Zufriedenheit und Wirkung abfragen" : "Vorgehen „Verlängerung vor Einsatzende“ startet – Zufriedenheit und Wirkung abfragen", done: !!run },
+      { key: "WIRKUNG", date: add(trig, 7), label: "Zufriedenheit und belegbare Wirkung sind notiert", done: doneStep(1) },
+      { key: "BEDARF", date: add(trig, 14), label: "Anschlussbedarf klären – weitere Rollen, Freelancer, neue Vorhaben?", done: doneStep(2) },
+      { key: "ANGEBOT", date: add(trig, 28), label: "Verlängerung oder Ausweitung anbieten; Bestell- und Freigabeweg klären", done: doneStep(3) },
+      { key: "ESKALATION", date: add(end, -28), label: "Spätestens jetzt: Principal/CEO sehen den Einsatz als Eskalation, wenn nichts erledigt ist", done: doneStep(1) || doneStep(3) },
+      { key: "ENDE", date: end, label: "Einsatzende – Entscheidung dokumentiert (verlängert, ausgeweitet oder Ende bestätigt)", done: run?.status === "ABGESCHLOSSEN" },
+    ];
+    out.set(e.orderId, raw.sort((a, b) => a.date.localeCompare(b.date)).map((m) => ({ key: m.key, date: m.date, label: m.label, state: m.done ? "ERLEDIGT" : m.date < t ? "UEBERFAELLIG" : m.date <= soon ? "BALD" : "SPAETER" })));
+  }
+  return out;
+}
+
 export function renewalTriggerDate(o: { plannedEnd: string | null; renewalDeadline: string | null }): string | null {
   if (o.renewalDeadline) return new Date(new Date(o.renewalDeadline).getTime() - 14 * DAY).toISOString().slice(0, 10);
   if (o.plannedEnd) return new Date(new Date(o.plannedEnd).getTime() - 56 * DAY).toISOString().slice(0, 10);
@@ -119,6 +171,10 @@ async function loadEngagements(accountIds: string[]): Promise<Map<string, Engage
       triggerDate: renewalTriggerDate(r.o),
       consultantUserId: r.o.consultantUserId,
       consultantName: r.o.consultantName,
+      contractSourceId: r.o.contractSourceId,
+      contractLink: r.o.contractLink,
+      evidenceSourceId: r.o.evidenceSourceId,
+      orderReference: r.o.orderReference,
     };
     out.set(r.accountId, [...(out.get(r.accountId) ?? []), e]);
   }
@@ -382,7 +438,7 @@ export const existingEngagementInput = z.object({
   plannedStart: dateOpt,
   plannedEnd: dateOpt,
   renewalDeadline: dateOpt,
-  evidenceText: z.string().trim().min(10, "Bitte einen Beleg nennen (z. B. Bestellnummer, Vertrag, seit wann).").max(2000),
+  evidenceText: z.string().trim().max(2000).optional().or(z.literal("")), // optional: Belege liegen oft in anderen Systemen
   /** Operativer Berater (Etappe 26): Name; wird einem Verve-Nutzer zugeordnet, wenn der Name eindeutig passt */
   consultantName: z.string().trim().max(200).optional().or(z.literal("")),
 });
@@ -399,14 +455,14 @@ export async function recordExistingEngagement(actor: Actor, accountId: string, 
   const owner = setup.bdUserId ?? account.responsibleBdUserId ?? actor.userId;
   const consultant = i.consultantName ? await matchUserByName(actor.workspaceId, i.consultantName) : null;
   return db.transaction(async (tx) => {
-    const [src] = await tx.insert(schema.sources).values({ workspaceId: actor.workspaceId, setupId: setup.id, type: "NOTIZ", title: `Bestandseinsatz: ${i.title}`, body: i.evidenceText, origin: "manuell", sourceTime: new Date(), ownerUserId: actor.userId, accessClass: "SETUP" }).returning();
+    const [src] = i.evidenceText ? await tx.insert(schema.sources).values({ workspaceId: actor.workspaceId, setupId: setup.id, type: "NOTIZ", title: `Bestandseinsatz: ${i.title}`, body: i.evidenceText, origin: "manuell", sourceTime: new Date(), ownerUserId: actor.userId, accessClass: "ACCOUNT_TEAM" }).returning() : [null];
     const [opp] = await tx
       .insert(schema.opportunities)
-      .values({ workspaceId: actor.workspaceId, accountId, setupId: setup.id, title: i.title, needDescription: `Laufender Einsatz, im Health-Check nachgetragen. ${i.evidenceText}`.slice(0, 4000), status: "BEAUFTRAGT", kind: i.kind, headcount: i.headcount ?? null, ownerUserId: owner, confirmedAt: new Date(), confirmedSourceId: src!.id, createdBy: actor.userId })
+      .values({ workspaceId: actor.workspaceId, accountId, setupId: setup.id, title: i.title, needDescription: `Laufender Einsatz, im Health-Check nachgetragen.${i.evidenceText ? ` ${i.evidenceText}` : ""}`.slice(0, 4000), status: "BEAUFTRAGT", kind: i.kind, headcount: i.headcount ?? null, ownerUserId: owner, confirmedAt: new Date(), confirmedSourceId: src?.id ?? null, createdBy: actor.userId })
       .returning();
     const [order] = await tx
       .insert(schema.orders)
-      .values({ workspaceId: actor.workspaceId, opportunityId: opp!.id, evidenceSourceId: src!.id, evidenceNote: i.evidenceText, plannedStart: i.plannedStart || null, plannedEnd: i.plannedEnd || null, renewalDeadline: i.renewalDeadline || null, status: "BEAUFTRAGUNG_BESTAETIGT", confirmedAt: new Date(), confirmedBy: actor.userId, engagementStatus: "GESTARTET", startedAt: i.plannedStart ? new Date(i.plannedStart) : new Date(), consultantUserId: consultant?.id ?? null, consultantName: consultant?.displayName ?? (i.consultantName || null), createdBy: actor.userId })
+      .values({ workspaceId: actor.workspaceId, opportunityId: opp!.id, evidenceSourceId: src?.id ?? null, evidenceNote: i.evidenceText || null, plannedStart: i.plannedStart || null, plannedEnd: i.plannedEnd || null, renewalDeadline: i.renewalDeadline || null, status: "BEAUFTRAGUNG_BESTAETIGT", confirmedAt: new Date(), confirmedBy: actor.userId, engagementStatus: "GESTARTET", startedAt: i.plannedStart ? new Date(i.plannedStart) : new Date(), consultantUserId: consultant?.id ?? null, consultantName: consultant?.displayName ?? (i.consultantName || null), createdBy: actor.userId })
       .returning();
     await recordAudit(tx, actor, "engagement.recorded_existing", "ORDER", order!.id, { accountId, titel: i.title });
     return order!;

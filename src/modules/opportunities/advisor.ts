@@ -30,10 +30,10 @@ export type OpportunityAdviceRow = typeof schema.opportunityAdvice.$inferSelect;
 /** Der nächste große Schritt je Status dieser einen Chance – als Satz, den der BD lesen kann. */
 const NEXT_STEP: Record<OpportunityStatus, string> = {
   ANTIZIPIERT: "Prüfen, ob der Kunde den Bedarf inzwischen angesprochen hat.",
-  IN_KLAERUNG: "Chance mit dem Bedarfsträger bestätigen – mit Beleg (Gesprächsnotiz, Mail).",
+  IN_KLAERUNG: "Chance mit dem Bedarfsträger bestätigen (Beleg wie Gesprächsnotiz oder Mail optional).",
   BESTAETIGT: "Passendes Profil oder Angebot vorstellen und Rückmeldung vereinbaren.",
   PROFIL_ANGEBOT_VORGESTELLT: "Rückmeldung zum Angebot einholen; Entscheidungsweg und Freigaben klären.",
-  AUSWAHL_BESTELLUNG: "Beauftragung mit Nachweis festhalten (Bestellung, Bestätigung).",
+  AUSWAHL_BESTELLUNG: "Beauftragung festhalten (Bestellung/Bestätigung, Nachweis optional).",
   BEAUFTRAGT: "Startvoraussetzungen abschließen und Start terminieren.",
   ZURUECKGESTELLT: "Grund prüfen – ist eine Reaktivierung sinnvoll?",
   BEENDET: "Beendet – kein weiterer Schritt zu dieser Chance.",
@@ -66,7 +66,7 @@ export async function analyzeOpportunity(actor: Actor, opportunityId: string): P
   const ageDays = Math.floor((Date.now() - opp.createdAt.getTime()) / (24 * 60 * 60 * 1000));
 
   if (opp.status === "IN_KLAERUNG" && ageDays > 21) blockers.push(`Seit ${ageDays} Tagen in Klärung – Bestätigung mit Beleg einholen oder zurückstellen.`);
-  if (!opp.confirmedAt && opp.status !== "ANTIZIPIERT") missing.push("Chance ist noch nicht mit Beleg bestätigt.");
+  if (!opp.confirmedAt && opp.status !== "ANTIZIPIERT") missing.push("Chance ist noch nicht bestätigt.");
   if (!opp.roleId && opp.kind !== "AUSSCHREIBUNG") missing.push("Standardrolle noch offen.");
   if (d.participations.length === 0) missing.push("Buyingcenter: noch keine Rolle erfasst.");
 

@@ -36,9 +36,9 @@ Das Tool rechnet keine Umsätze, Wahrscheinlichkeiten oder Forecasts; es zählt,
 Stufen: Antizipiert → In Klärung → Bestätigt → Profil/Angebot vorgestellt → Auswahl/Bestellung → Beauftragt. Daneben: Zurückgestellt und Beendet.
 So kommt man weiter (alles auf der Chance-Seite, Block „Chance“):
 - Antizipiert → In Klärung: Button „In Klärung nehmen“.
-- → Bestätigt: Aufklapper „Chance bestätigen (mit Beleg)“ – dazu gehört ein Beleg (Quelle oder kurzer Text, z. B. „Bestätigung durch den Kunden“). Bestätigen geht aus Antizipiert, In Klärung oder Zurückgestellt. Ein freies Setzen auf „Bestätigt“ ohne Beleg gibt es bewusst nicht.
+- → Bestätigt: Aufklapper „Chance bestätigen (Beleg optional)“. Ein Beleg (vorhandene Quelle oder kurze Notiz, z. B. „Bestätigung durch den Kunden“) ist hilfreich, aber keine Pflicht – Bestellnummern und Verträge liegen oft in anderen Systemen. Bestätigen geht aus Antizipiert, In Klärung oder Zurückgestellt.
 - → Profil/Angebot vorgestellt: im Block „Angebote / Profilvorstellungen“ ein Angebot anlegen (Entwurf), auf „Geprüft“ setzen und dann „Vorstellungsereignis bestätigen“. Ein Entwurf gilt nie als vorgestellt.
-- → Beauftragt: im Block „Auftrag und Einsatz“ einen Auftrag anlegen und „Beauftragung bestätigen (mit Nachweis)“.
+- → Beauftragt: im Block „Auftrag und Einsatz“ einen Auftrag anlegen und „Beauftragung bestätigen (Nachweis optional)“.
 - Zurückstellen oder Beenden: Aufklapper „Zurückstellen / Beenden (mit Begründung)“; von dort auch „Wieder in Klärung“.
 Wer darf: die verantwortliche Person der Chance, Setup-Beteiligte, der zuständige BD, Principals und Sales Operations (Sales Operations bereitet vor, bestätigen/entscheiden bleibt beim BD). Fehlt ein Button, fehlt meist die Bearbeitungsberechtigung – oder die Chance ist beendet.`,
   },
@@ -119,10 +119,11 @@ Bearbeiten dürfen arbeitsraumweite Principals, CEO und Betriebsverwaltung; lese
     id: "health",
     title: "Kunden-Health-Check und Verlängerungsregel",
     where: "Kunde → „Health-Check – wie sicher sitzen wir im Sattel?“ → Interview; Start → Hinweisbanner und „Auslaufende Einsätze“",
-    keywords: ["health", "health check", "healthcheck", "score", "sattel", "sattelfest", "wackelig", "gefaehrdet", "zufriedenheit", "listung", "rahmenvertrag", "risiko", "risiken", "einsatz", "einsaetze", "auslaufend", "verlaengerung", "verlaengerungsregel", "datenlage", "punkte"],
+    keywords: ["health", "health check", "fahrplan", "vertrag", "bestellung", "ping", "restlaufzeit", "healthcheck", "score", "sattel", "sattelfest", "wackelig", "gefaehrdet", "zufriedenheit", "listung", "rahmenvertrag", "risiko", "risiken", "einsatz", "einsaetze", "auslaufend", "verlaengerung", "verlaengerungsregel", "datenlage", "punkte"],
     body: `Der Health-Check bewertet je Kunde mit 0–100 Punkten, wie sicher wir im Sattel sitzen – nach festen, sichtbaren Regeln: Einsätze (25), Beziehungsbreite (20), Zufriedenheit (20), Vertrag & Listung (15), Pipeline (10), Aktivität (10); Risiken im Umfeld ziehen ab. Ab 70 „sattelfest“, ab 45 „wackelig“, darunter „gefährdet“; „zu wenig Daten“, wenn zu viel unbekannt ist. Unbekanntes zählt nicht als schlecht, sondern senkt die getrennt ausgewiesene Datenlage.
 Fehlende Angaben (Zufriedenheit, Listung, Risiken) fragt ein kurzes Interview ab; die Startseite weist unübersehbar darauf hin, bei welchen Kunden Angaben fehlen.
-Einsätze kommen aus den Aufträgen (geplantes Ende, Verlängerungsfrist). Verlängerungsregel: 14 Tage vor der Verlängerungsfrist bzw. 8 Wochen vor dem Einsatzende startet automatisch das Vorgehen „Verlängerung vor Einsatzende“ als Vorschlag. „Auslaufende Einsätze“ auf Start zeigt alles mit Ende in den nächsten 12 Wochen und eskaliert, wenn 4 Wochen vor Ende nichts passiert ist. Der Score bewertet Kunden, nie Personen, und sperrt nichts.`,
+Einsätze kommen aus den Aufträgen (geplantes Ende, Verlängerungsfrist). Verlängerungsregel: 14 Tage vor der Verlängerungsfrist bzw. 8 Wochen vor dem Einsatzende startet automatisch das Vorgehen „Verlängerung vor Einsatzende“ als Vorschlag. Vorher, 3 Monate vor Ende (bzw. 30 Tage vor der Verlängerungsfrist), bekommt der BD einen Ping „Verlängerung ansprechen“. Den ganzen Ablauf zeigt der „Fahrplan Verlängerung“ im Health-Check je Einsatz: Ping (3 Monate) → Vorgehen startet (8 Wochen) → Anschlussbedarf klären → Angebot → Eskalation an Principal/CEO (4 Wochen vor Ende, wenn nichts erledigt ist) → Entscheidung zum Einsatzende – jeweils mit Datum und Stand (erledigt, steht an, überfällig). „Auslaufende Einsätze“ auf Start zeigt alles mit Ende in den nächsten 3 Monaten.
+Vertrag oder Bestellung hinterlegst du im Health-Check bei „Einsätze“ → „hinterlegen“: Datei hochladen oder Link/Ablageort im führenden System eintragen. Sichtbar für das Kundenteam – zuständiger BD, Principal, Sales Operations und Beteiligte –, damit Enddatum und Fristen nachschlagbar sind. Der Score bewertet Kunden, nie Personen, und sperrt nichts.`,
   },
   {
     id: "start",
@@ -226,7 +227,7 @@ Einen Kunden löschst du in zwei Schritten: erst archivieren, dann endgültig l�
     title: "Regeln, die das Tool durchsetzt",
     where: "überall",
     keywords: ["regel", "regeln", "warum", "geht nicht", "nicht moeglich", "fehler", "beleg", "nachweis", "version", "konflikt", "gleichzeitig"],
-    body: `Bestätigen, Vorstellen und Beauftragen gehen nur mit Beleg bzw. Nachweis. KI-Ergebnisse sind immer Vorschläge; jede Karte braucht eine wörtliche Textstelle. Beendete Chancen werden nicht mehr geändert. Hat jemand anderes denselben Datensatz gerade gespeichert, meldet das Tool einen Konflikt – Seite neu laden und erneut speichern. Persönliche Notizen und vertrauliche Führungsnotizen bleiben privat.`,
+    body: `Bestätigen, Vorstellen und Beauftragen sind eigene, bewusste Schritte; Belege und Nachweise sind optional (ohne Beleg steht „ohne Beleg“ dabei). KI-Ergebnisse sind immer Vorschläge; jede Karte braucht eine wörtliche Textstelle. Beendete Chancen werden nicht mehr geändert. Hat jemand anderes denselben Datensatz gerade gespeichert, meldet das Tool einen Konflikt – Seite neu laden und erneut speichern. Persönliche Notizen und vertrauliche Führungsnotizen bleiben privat.`,
   },
 ];
 

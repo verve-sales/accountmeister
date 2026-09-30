@@ -33,12 +33,14 @@ describe("Etappe 5: Bedarfe, Angebote, Aufträge (Briefing 8.3, 9.2–9.4, F02, 
     const b = await createOpportunity(david, { setupId: s.setupId, title: "Coaching Product Owner", needDescription: "Begleitung der Product Owner im Plattformteam über drei Monate." });
     const sig = await db.query.signals.findFirst({ where: eq(schema.signals.id, signal.id) });
     expect(sig?.status).toBe("MIT_BEDARF_VERKNUEPFT");
-    // Bestätigung nur mit Beleg
-    await expect(confirmOpportunity(david, a.id, { version: a.version })).rejects.toBeInstanceOf(ValidationError);
-    const aConfirmed = await confirmOpportunity(david, a.id, { version: a.version, evidenceText: "Frau Keller hat den Bedarf im Termin am 15.09. ausdrücklich bestätigt." });
+    // Pilot-Feedback: Beleg ist optional – ohne Beleg wird bestätigt, aber keine Quelle angelegt
+    const aConfirmed = await confirmOpportunity(david, a.id, { version: a.version });
     expect(aConfirmed.status).toBe("BESTAETIGT");
-    expect(aConfirmed.confirmedSourceId).toBeTruthy();
+    expect(aConfirmed.confirmedSourceId).toBeNull();
     expect(aConfirmed.confirmedAt).toBeInstanceOf(Date);
+    const c = await createOpportunity(david, { setupId: s.setupId, title: "Architektur-Review", needDescription: "Review der Zielarchitektur vor der Migration." });
+    const cConfirmed = await confirmOpportunity(david, c.id, { version: c.version, evidenceText: "Frau Keller hat den Bedarf im Termin am 15.09. ausdrücklich bestätigt." });
+    expect(cConfirmed.confirmedSourceId).toBeTruthy();
     const list = await listOpportunitiesForAccount(david, s.accountId);
     const sa = list.find((o) => o.id === a.id)!;
     const sb = list.find((o) => o.id === b.id)!;
@@ -71,7 +73,7 @@ describe("Etappe 5: Bedarfe, Angebote, Aufträge (Briefing 8.3, 9.2–9.4, F02, 
     expect(d.participations).toHaveLength(3);
   });
 
-  it("F09/F10: Entwurf ist nicht vorgestellt; Vorstellung braucht Ereignis + Beleg; akzeptiert ≠ Auftrag/Start", async () => {
+  it("F09/F10: Entwurf ist nicht vorgestellt; Vorstellung braucht das Ereignis (Beleg optional); akzeptiert ≠ Auftrag/Start", async () => {
     const s = await ensureSeed();
     const david = await actorFor("david");
     const opp0 = await createOpportunity(david, { setupId: s.setupId, title: "Angebotsfall", needDescription: "Bedarf für den Angebotsdurchlauf." });
@@ -82,13 +84,12 @@ describe("Etappe 5: Bedarfe, Angebote, Aufträge (Briefing 8.3, 9.2–9.4, F02, 
     // Entwurf kann nicht „vorgestellt“ werden
     await expect(presentOffer(david, offer!.id, { version: offer!.version, presentedTo: "Frau Keller", evidenceText: "Profil per Mail gesendet am 17.09." })).rejects.toBeInstanceOf(TransitionError);
     const checked = await changeOfferStatus(david, offer!.id, { version: offer!.version, status: "GEPRUEFT" });
-    // Ohne Beleg keine Vorstellung
-    await expect(presentOffer(david, offer!.id, { version: checked.version, presentedTo: "Frau Keller" })).rejects.toBeInstanceOf(ValidationError);
     // Direktes Setzen von „vorgestellt“ ohne Ereignis ist gesperrt
     await expect(changeOfferStatus(david, offer!.id, { version: checked.version, status: "VORGESTELLT" })).rejects.toBeInstanceOf(TransitionError);
-    const presented = await presentOffer(david, offer!.id, { version: checked.version, presentedTo: "Frau Keller, Herr Brandt (Einkauf)", evidenceText: "Profil am 17.09. per Mail an Frau Keller und Herrn Brandt gesendet; Eingang bestätigt." });
+    // Vorstellungsereignis ist Pflicht, der Beleg dazu optional (Pilot-Feedback)
+    const presented = await presentOffer(david, offer!.id, { version: checked.version, presentedTo: "Frau Keller, Herr Brandt (Einkauf)" });
     expect(presented.status).toBe("VORGESTELLT");
-    expect(presented.presentedSourceId).toBeTruthy();
+    expect(presented.presentedSourceId).toBeNull();
     let d = await getOpportunityDetail(david, opp.id);
     expect(d.opp.status).toBe("PROFIL_ANGEBOT_VORGESTELLT");
     // Positive Rückmeldung → Auswahl/Bestellung, aber kein Auftrag und kein Start (F10)
@@ -99,7 +100,7 @@ describe("Etappe 5: Bedarfe, Angebote, Aufträge (Briefing 8.3, 9.2–9.4, F02, 
     expect(d.orders).toHaveLength(0);
   });
 
-  it("9.3: Beauftragung nur mit Nachweis; startbereit nicht über leere Prüfliste; gestartet ist ein bestätigtes Ereignis", async () => {
+  it("9.3 (angepasst): Beauftragung ohne Pflicht-Nachweis; offene Startvoraussetzungen blockieren; Start nie in der Zukunft", async () => {
     const s = await ensureSeed();
     const david = await actorFor("david");
     const opp0 = await createOpportunity(david, { setupId: s.setupId, title: "Auftragsfall", needDescription: "Bedarf für den Auftragsdurchlauf." });
@@ -108,28 +109,24 @@ describe("Etappe 5: Bedarfe, Angebote, Aufträge (Briefing 8.3, 9.2–9.4, F02, 
     expect(order!.status).toBe("IN_VORBEREITUNG");
     // Startbereit vor Beauftragung unmöglich
     await expect(markReady(david, order!.id, { version: order!.version })).rejects.toBeInstanceOf(TransitionError);
-    // Beauftragung ohne Nachweis unmöglich
-    await expect(confirmOrder(david, order!.id, { version: order!.version, orderReference: "PO-4711" })).rejects.toBeInstanceOf(ValidationError);
-    const confirmed = await confirmOrder(david, order!.id, { version: order!.version, orderReference: "PO-4711", evidenceText: "Bestellung PO-4711 vom 20.10. liegt als PDF im Auftragsordner; Laufzeit 02.11.–31.03." });
+    // Beauftragung: Referenz und Nachweis optional (Pilot-Feedback – liegen oft in anderen Systemen)
+    const confirmed = await confirmOrder(david, order!.id, { version: order!.version });
     expect(confirmed.status).toBe("BEAUFTRAGUNG_BESTAETIGT");
-    expect(confirmed.evidenceSourceId).toBeTruthy();
+    expect(confirmed.evidenceSourceId).toBeNull();
     let d = await getOpportunityDetail(david, opp.id);
     expect(d.opp.status).toBe("BEAUFTRAGT");
-    // Leere Prüfliste ist keine Freigabe
-    await expect(markReady(david, order!.id, { version: confirmed.version })).rejects.toBeInstanceOf(ValidationError);
     const r1 = await addStartRequirement(david, { orderId: order!.id, requirement: "Geheimhaltungsvereinbarung unterschrieben", checkedBy: "Backoffice" });
     const r2 = await addStartRequirement(david, { orderId: order!.id, requirement: "Zugangsdaten/Onboarding beim Kunden beantragt", checkedBy: "BD" });
+    // Offene Startvoraussetzungen blockieren weiterhin
     await expect(markReady(david, order!.id, { version: confirmed.version })).rejects.toBeInstanceOf(ValidationError);
-    // Bestätigung braucht Nachweis
-    await expect(setRequirementStatus(david, r1!.id, { version: r1!.version, status: "BESTAETIGT" })).rejects.toBeInstanceOf(ValidationError);
-    await setRequirementStatus(david, r1!.id, { version: r1!.version, status: "BESTAETIGT", evidenceText: "NDA unterschrieben am 21.10., abgelegt im Vertragsordner." });
+    await setRequirementStatus(david, r1!.id, { version: r1!.version, status: "BESTAETIGT" });
+    await expect(setRequirementStatus(david, r2!.id, { version: r2!.version, status: "NICHT_ANWENDBAR" })).rejects.toBeInstanceOf(ValidationError);
     await setRequirementStatus(david, r2!.id, { version: r2!.version, status: "NICHT_ANWENDBAR", evidenceNote: "Kunde stellt Zugänge erst am ersten Tag vor Ort bereit; keine Vorab-Beantragung." });
     const ready = await markReady(david, order!.id, { version: confirmed.version });
     expect(ready.engagementStatus).toBe("STARTBEREIT");
-    // Gestartet: bestätigtes Ereignis, nicht Datum
-    await expect(markStarted(david, order!.id, { version: ready.version })).rejects.toBeInstanceOf(ValidationError);
+    // Gestartet: nie in der Zukunft; Notiz optional
     await expect(markStarted(david, order!.id, { version: ready.version, startedAt: "2099-01-01", note: "Kick-off" })).rejects.toBeInstanceOf(ValidationError);
-    const started = await markStarted(david, order!.id, { version: ready.version, note: "Kick-off am 02.11. mit Frau Keller durchgeführt; Berater vor Ort." });
+    const started = await markStarted(david, order!.id, { version: ready.version });
     expect(started.engagementStatus).toBe("GESTARTET");
     expect(started.startedAt).toBeInstanceOf(Date);
     d = await getOpportunityDetail(david, opp.id);

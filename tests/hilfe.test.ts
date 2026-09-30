@@ -29,7 +29,7 @@ describe("Etappe 25: Hilfe-Wissen für den Assistenten", () => {
 
   it("Grundaussagen der Hilfe stimmen mit den Regeln der Anwendung überein", () => {
     const body = (id: string) => HELP_SECTIONS.find((s) => s.id === id)!.body;
-    expect(body("chance-status")).toMatch(/Chance bestätigen \(mit Beleg\)/);
+    expect(body("chance-status")).toMatch(/Chance bestätigen \(Beleg optional\)/);
     expect(body("chance-status")).toMatch(/In Klärung nehmen/);
     expect(body("health")).toMatch(/14 Tage vor der Verlängerungsfrist bzw\. 8 Wochen vor dem Einsatzende/);
     expect(body("ruhend")).toMatch(/180 Tagen/);
@@ -76,7 +76,7 @@ describe("Etappe 25: Hilfe-Wissen für den Assistenten", () => {
     // Testanbieter antwortet deterministisch aus dem Abschnitt, ohne Karten
     const r = await sendMessage(david, { threadId: view.thread.id, text: "Wie kann ich eine Chance von In Klärung auf Bestätigt setzen?" });
     expect(r.message.text).toMatch(/Laut Hilfe/);
-    expect(r.message.text).toMatch(/Chance bestätigen \(mit Beleg\)/);
+    expect(r.message.text).toMatch(/Chance bestätigen \(Beleg optional\)/);
     expect(r.cards).toHaveLength(0);
 
     // Ohne KI: Abschnitt direkt aus der Hilfe

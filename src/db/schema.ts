@@ -1239,6 +1239,9 @@ export const orders = pgTable(
     /** Operativer Berater im Einsatz (Etappe 26): Verve-Nutzer oder – z. B. Freelancer – nur Name */
     consultantUserId: text("consultant_user_id").references(() => users.id),
     consultantName: text("consultant_name"),
+    /** Vertrag/Bestellung (Feedback Pilot): hochgeladenes Dokument und/oder Verweis auf das führende System */
+    contractSourceId: text("contract_source_id").references(() => sources.id),
+    contractLink: text("contract_link"),
     status: orderStatusEnum("status").notNull().default("IN_VORBEREITUNG"),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     confirmedBy: text("confirmed_by").references(() => users.id),
