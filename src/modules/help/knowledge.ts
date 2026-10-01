@@ -115,6 +115,25 @@ Teams, Mitglieder, Leitung und Anfragearten pflegen Betriebsverwaltung, Principa
     body: `Rückfragen und Absprachen schreibst du direkt an das Objekt. Mit „@Vorname Nachname“ erwähnst du eine Person; sie wird benachrichtigt – aber nur, wenn sie das Objekt auch sehen darf (sonst erscheint ein Hinweis und die Erwähnung entfällt). Wer an einem Objekt schon kommentiert hat oder verantwortlich ist, erfährt von neuen Kommentaren. Eigene Kommentare lassen sich bearbeiten und löschen.`,
   },
   {
+    id: "besetzung",
+    title: "Besetzung: Position, Suchauftrag, Kandidaten, Auswahl",
+    where: "Chance → Block „Besetzung“; Mehr → Besetzung; Positionsseite",
+    keywords: ["besetzung", "besetzen", "position", "positionen", "platz", "bedarf besetzen", "freelancer suchen", "suchauftrag", "suche", "kandidat", "kandidatin", "kandidatur", "kandidaturen", "shortlist", "vorstellen", "vorstellung", "interview", "auswahl", "auswaehlen", "nachbesetzung", "ausschreibung entwurf", "ausschreibungstext"],
+    body: `Eine Position ist ein zu besetzender Platz an einer Chance (drei Plätze = drei Positionen, „Kopieren“ hilft). Anlegen im Block „Besetzung“ auf der Chance-Seite oder aus einem eingefügten Text (E-Mail, Notiz): daraus entstehen Vorschläge mit Belegstellen, die du vor der Übernahme prüfst.
+Status: Entwurf → offen (braucht Titel, Muss-Anforderungen, verantwortlichen BD) → besetzt; außerdem pausiert (Grund, Prüftermin) und abgebrochen (Grund). Offene Positionen bekommen einen Suchauftrag an Sales Operations (erwartetes Ergebnis, Fälligkeit). Sales Operations sieht bis zur Übernahme nur eine Vorschau, danach die Position mit Konditionen und pflegt Kandidaturen.
+Kandidatur: identifiziert → in Kontakt → qualifiziert → dem BD vorgeschlagen (EK-Stand nötig) → zur Vorstellung freigegeben (nur BD) → vorgestellt (Datum, Empfänger, Profilstand und erlaubte Weitergabe sind Pflicht; der Stand wird festgehalten) → Interview → ausgewählt. Absage, Rückzug und „nicht verfügbar“ brauchen einen Grund; Wiederaufnahme Grund und aktualisierte Verfügbarkeit. Schritte überspringen geht mit Grund, aber nie an Freigabe oder Auswahl vorbei.
+Auswahl bestätigt der verantwortliche BD ausdrücklich; die Position wird besetzt, andere Kandidaturen bleiben mit Verlauf. Die Chance wird dadurch nicht automatisch beauftragt – der Abschluss läuft wie bisher über Angebot und Auftrag. Keine Stundenzettel, keine CV-Erstellung, kein Ranking im Accountmeister.
+Rechte: Positionen und Kandidaturen sehen der verantwortliche BD bzw. der BD-Kontext des Kunden, Principal, CEO und die Person, die den Suchauftrag übernommen hat. Anker sehen keine Kandidaturen. BDs sehen von einem Freelancer nur die Kandidaturen an eigenen Positionen; den Pool sehen Sales Operations, Principal und CEO.`,
+  },
+  {
+    id: "ausschreibung",
+    title: "Ausschreibungsentwurf (KI) und Texteingang",
+    where: "Positionsseite → „Ausschreibungsentwurf“; Chance → Besetzung → „Aus Text übernehmen“",
+    keywords: ["ausschreibung", "ausschreibungstext", "stellenanzeige", "anzeige", "entwurf", "entwerfen", "texteingang", "text einfuegen", "e mail einfuegen", "bedarf aus text", "freigeben", "veroeffentlichen"],
+    body: `Der Ausschreibungsentwurf entsteht nur aus den freigegebenen Bedarfsfeldern (Titel, Aufgaben, Muss/Kann, Ort, Sprache, Start, Ende, Umfang) – nie aus EK, internen Hinweisen oder dem Kundennamen, außer du gibst Zusatzinformationen ausdrücklich frei. Fehlende Angaben stehen unter „Offen“. Du kannst den Entwurf bearbeiten; der BD gibt ihn frei. Veröffentlichen bleibt ein manueller Schritt (Text kopieren). Ohne KI entsteht ein regelbasierter Entwurf; der Prompt ist als vorläufig gekennzeichnet.
+Texteingang: E-Mail oder Notiz einfügen → Vorschläge je Position mit wörtlicher Belegstelle → auswählen, Titel anpassen, als Entwürfe übernehmen. Der Text bleibt als Quelle am Setup. Hinweise zu Sätzen oder Budget landen nur als Notiz, nie als EK/VK-Zahl. Anweisungen im Text werden nicht befolgt.`,
+  },
+  {
     id: "benachrichtigungen",
     title: "Benachrichtigungen, E-Mail und Vertretung",
     where: "Glocke oben rechts → Benachrichtigungen; Einstellungen → Benachrichtigungen und Abwesenheit",
@@ -199,7 +218,7 @@ Ideen für Kurzangebote werden als Vorhaben mit Hebel (Verlängern, Ausweiten, V
     where: "Mehr → Provisionsrechner (Anker, BD, Principal, CEO)",
     keywords: ["provision", "provisionsrechner", "marge", "nettomarge", "finding fee", "signing fee", "provisionssatz", "basisprovision", "ek", "vk", "einkauf", "verkauf", "vermittlung"],
     body: `Der Provisionsrechner zeigt, welche Provision eine Vermittlung bringt. Je Deal wählst du das Profil – eine interne Rolle mit festem EK (Associate 500, Analyst Consultant 576, Consultant 672, Consultant Lvl 2 736, Specialist 828, Senior Specialist 874, Senior Consultant 880, Executive Consultant 1.012, Director 1.320 €/Tag) oder „Freelancer“ mit frei eingetragenem EK – und trägst VK, Einsatztage und deinen Anteil an Finding und Signing Fee ein.
-Rechnung: Nettomarge = Tage × (VK − EK) − Kostenpauschale (40 € je Einsatztag); Nettomarge % = Nettomarge / Umsatz. Provisionssatz nach Stufe: unter 10 % keine Basisprovision, ab 10 % → 10 %, ab 17 % → 15 %, ab 20 % → 20 %; nur für Principals zusätzlich ab 45 % → 43 %. BDs und Anker erhalten höchstens 20 %. Basisprovision = Nettomarge × Satz; dazu Finding Fee (250 €) und Signing Fee (1.000 €) je Deal, jeweils mit deinem Anteil. Der Rechner speichert nichts; verbindlich ist die Abrechnung.`,
+Rechnung: Nettomarge = Tage × (VK − EK) − Kostenpauschale (40 € je Einsatztag); Nettomarge % = Nettomarge / Umsatz. Provisionssatz nach Stufe der Nettomarge – die für dich geltenden Stufen zeigt die Legende im Rechner. Basisprovision = Nettomarge × Satz; dazu Finding Fee (250 €) und Signing Fee (1.000 €) je Deal, jeweils mit deinem Anteil. Der Rechner speichert nichts; verbindlich ist die Abrechnung.`,
   },
   {
     id: "ceo",

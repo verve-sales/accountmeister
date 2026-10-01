@@ -58,3 +58,18 @@ describe("Provisionsrechner (Nachbau Verve_Freelancer_ProvisionV2.xlsx)", () => 
     expect(provisionAccess(await actorFor("admin")).allowed).toBe(false);
   });
 });
+
+describe("Vertraulichkeit der Principal-Stufe (A10)", () => {
+  it("die Browser-Konfiguration für Nicht-Principals enthält weder Stufe noch Hinweis darauf", async () => {
+    const { configFor } = await import("@/modules/provision/model");
+    const cfg = configFor(false);
+    expect(JSON.stringify(cfg)).not.toMatch(/PRINCIPAL|0\.43|0\.45/);
+    const r = computeDeal(fl(500, 1500, 100), "ANKER", cfg)!;
+    expect(r.rate).toBe(0.2);
+    expect(r.capped).toBe(false);
+    expect(r.warnings).toEqual([]);
+    expect(legendFor("BD", cfg).map((l) => l.text).join("\n")).not.toMatch(/43|45|Principal|Höchstsatz/);
+    const { HELP_SECTIONS } = await import("@/modules/help/knowledge");
+    expect(JSON.stringify(HELP_SECTIONS)).not.toMatch(/43 %|ab 45 %/);
+  });
+});

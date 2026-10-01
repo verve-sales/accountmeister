@@ -45,6 +45,9 @@ import { actOnWorkItem, createWorkItem, reassignWorkItem, setWatching, toggleChe
 import { addAbsence, createTeam, removeAbsence, removeTeamMember, saveServiceType, setTeamMember } from "@/modules/work/teams";
 import { addComment, deleteComment, editComment } from "@/modules/comments/service";
 import { markRead, openNotification, saveMyPrefs } from "@/modules/notifications/service";
+import { addCandidacy, changeCandidacyStatus, changePositionStatus, copyPosition, createPosition, recordCustomerFeedback, recordInterview, recordPresentation, requestSearch, selectCandidacy, updateCandidacy, updateFreelancer, updatePosition } from "@/modules/staffing/service";
+import { applyIntake as applyStaffingIntake, createIntake as createStaffingIntake, generateAdDraft, saveAdDraft } from "@/modules/staffing/ai";
+import { getConfig } from "@/lib/config";
 import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
 /**
@@ -1331,4 +1334,151 @@ export async function saveServiceTypeAction(fd: FormData) {
   return run(backOf(data, "/verwaltung/teams"), async (actor) => {
     await saveServiceType(actor, data.teamId ?? "", data);
   }, "Anfrageart gespeichert.");
+}
+
+// --- Besetzung (Etappe 28, E1) ------------------------------------------------
+
+function requireStaffingFlag() {
+  if (getConfig().FEATURE_BESETZUNG !== "true") throw new DomainError("FEATURE_OFF", "Der Bereich Besetzung ist in dieser Umgebung nicht eingeschaltet.", 404);
+}
+
+export async function createPositionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/bedarfe/${data.opportunityId ?? ""}#besetzung`), async (actor) => {
+    requireStaffingFlag();
+    const p = await createPosition(actor, data.opportunityId ?? "", data);
+    if (data.open === "1") return `/besetzung/${p.id}`;
+  }, "Position als Entwurf angelegt – Mindestangaben prüfen und auf „offen“ setzen.");
+}
+
+export async function updatePositionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/besetzung/${data.positionId ?? ""}`), async (actor) => {
+    requireStaffingFlag();
+    await updatePosition(actor, data.positionId ?? "", data);
+  }, "Position gespeichert.");
+}
+
+export async function changePositionStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/besetzung/${data.positionId ?? ""}`), async (actor) => {
+    requireStaffingFlag();
+    await changePositionStatus(actor, data.positionId ?? "", data);
+  }, data.status === "OFFEN" ? "Position ist offen – jetzt kann ein Suchauftrag erteilt werden." : "Status geändert.");
+}
+
+export async function copyPositionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/besetzung/${data.positionId ?? ""}`), async (actor) => {
+    requireStaffingFlag();
+    const p = await copyPosition(actor, data.positionId ?? "");
+    return `/besetzung/${p.id}`;
+  }, "Position kopiert (Entwurf).");
+}
+
+export async function requestSearchAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/besetzung/${data.positionId ?? ""}`), async (actor) => {
+    requireStaffingFlag();
+    await requestSearch(actor, data.positionId ?? "", data);
+  }, "Suchauftrag an Sales Operations gestellt – wartet auf Übernahme.");
+}
+
+export async function addCandidacyAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/besetzung/${data.positionId ?? ""}#kandidaturen`), async (actor) => {
+    requireStaffingFlag();
+    await addCandidacy(actor, data.positionId ?? "", data);
+  }, "Kandidatur angelegt.");
+}
+
+export async function updateCandidacyAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/besetzung"), async (actor) => {
+    requireStaffingFlag();
+    await updateCandidacy(actor, data.candidacyId ?? "", data);
+  }, "Kandidatur gespeichert.");
+}
+
+export async function changeCandidacyStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/besetzung"), async (actor) => {
+    requireStaffingFlag();
+    await changeCandidacyStatus(actor, data.candidacyId ?? "", data);
+  }, "Status der Kandidatur geändert.");
+}
+
+export async function recordPresentationAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/besetzung"), async (actor) => {
+    requireStaffingFlag();
+    await recordPresentation(actor, data.candidacyId ?? "", data);
+  }, "Vorstellung dokumentiert.");
+}
+
+export async function recordInterviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/besetzung"), async (actor) => {
+    requireStaffingFlag();
+    await recordInterview(actor, data.candidacyId ?? "", data);
+  }, "Interview dokumentiert.");
+}
+
+export async function recordFeedbackAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/besetzung"), async (actor) => {
+    requireStaffingFlag();
+    await recordCustomerFeedback(actor, data.candidacyId ?? "", data);
+  }, "Kundenrückmeldung festgehalten.");
+}
+
+export async function selectCandidacyAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/besetzung"), async (actor) => {
+    requireStaffingFlag();
+    const r = await selectCandidacy(actor, data.candidacyId ?? "", data);
+    if (r.already) throw new PendingInfo("Diese Auswahl war bereits bestätigt – nichts geändert.");
+  }, "Auswahl bestätigt – die Position ist besetzt. Weiter im Abschluss der Chance (Angebot/Auftrag).");
+}
+
+export async function updateFreelancerAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/besetzung/freelancer/${data.freelancerId ?? ""}`), async (actor) => {
+    requireStaffingFlag();
+    await updateFreelancer(actor, data.freelancerId ?? "", data);
+  }, "Stammdaten gespeichert.");
+}
+
+export async function generateAdDraftAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/besetzung/${data.positionId ?? ""}#ausschreibung`), async (actor) => {
+    requireStaffingFlag();
+    await generateAdDraft(actor, data.positionId ?? "", data);
+  }, "Ausschreibungsentwurf erstellt – bitte prüfen, ggf. bearbeiten und freigeben.");
+}
+
+export async function saveAdDraftAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/besetzung/${data.positionId ?? ""}#ausschreibung`), async (actor) => {
+    requireStaffingFlag();
+    await saveAdDraft(actor, data.positionId ?? "", data);
+  }, data.approve ? "Ausschreibungstext freigegeben – Veröffentlichen bleibt ein manueller Schritt (Text kopieren)." : data.withdraw ? "Freigabe zurückgenommen." : "Entwurf gespeichert.");
+}
+
+export async function createStaffingIntakeAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/bedarfe/${data.opportunityId ?? ""}#besetzung`), async (actor) => {
+    requireStaffingFlag();
+    const r = await createStaffingIntake(actor, data.opportunityId ?? "", data);
+    return `/besetzung/eingang/${r.id}`;
+  }, "Text aufgenommen – bitte die Vorschläge prüfen.");
+}
+
+export async function applyStaffingIntakeAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/besetzung/eingang/${data.intakeId ?? ""}`), async (actor) => {
+    requireStaffingFlag();
+    await applyStaffingIntake(actor, data.intakeId ?? "", data);
+    return `/bedarfe/${data.opportunityId ?? ""}#besetzung`;
+  }, data.decision === "VERWERFEN" ? "Texteingang verworfen." : "Positionen als Entwurf übernommen.");
 }

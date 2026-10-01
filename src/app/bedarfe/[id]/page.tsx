@@ -8,6 +8,8 @@ import { canReassignResponsibility } from "@/modules/identity/authz";
 import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
 import { Comments, WorkBlock } from "@/components/Work";
+import { StaffingBlock } from "@/components/Staffing";
+import { getConfig } from "@/lib/config";
 import { getOpportunityAdvice, proposeOpportunityAdvice, ruleBasedOpportunityAdvice, type OpportunityAdviceRow } from "@/modules/opportunities/advisor";
 import { getBuyingCenterAdvice, proposeBuyingCenterAdvice, ruleBasedBuyingCenterAdvice, type BuyingCenterAdviceRow } from "@/modules/opportunities/buyingCenterAdvisor";
 import type { StrategyMove } from "@/modules/strategy/service";
@@ -300,6 +302,9 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         />
       )}
 
+      {getConfig().FEATURE_BESETZUNG === "true" && (
+        <StaffingBlock actor={actor} opportunityId={opp.id} back={`/bedarfe/${opp.id}#besetzung`} users={activeUsers.map((u) => ({ id: u.id, name: u.displayName }))} defaultBdId={opp.ownerUserId ?? null} roles={d.roles.filter((r) => r.active).map((r) => ({ id: r.id, name: r.name }))} closed={closed} />
+      )}
       <WorkBlock actor={actor} subjectType="CHANCE" subjectId={opp.id} back={`/bedarfe/${opp.id}`} canCreate={!closed} />
 
       {/* Buyingcenter (8.3) */}

@@ -358,3 +358,40 @@ export const buyingCenterProposalSchema = z.unknown().optional().transform((raw)
 });
 export type BuyingCenterRoleHint = { role: (typeof decisionRoleValues)[number]; hint: string; proposedPersonName: string; evidenceQuote: string };
 export type BuyingCenterProposal = z.infer<typeof buyingCenterProposalSchema>;
+
+// --- Besetzung (Etappe 28) ----------------------------------------------------
+export const staffingAdSchema = z.object({
+  title: z.string().trim().min(3).max(200),
+  intro: z.string().trim().max(1000).optional().default(""),
+  tasks: z.array(z.string().trim().min(1).max(400)).max(20).default([]),
+  must: z.array(z.string().trim().min(1).max(400)).max(20).default([]),
+  nice: z.array(z.string().trim().min(1).max(400)).max(20).default([]),
+  conditions: z.array(z.string().trim().min(1).max(300)).max(12).default([]),
+  missing: z.array(z.string().trim().min(1).max(300)).max(12).default([]),
+});
+export type StaffingAd = z.infer<typeof staffingAdSchema>;
+
+export const staffingTextSchema = z.object({
+  positions: z
+    .array(
+      z.object({
+        title: z.string().trim().min(2).max(200),
+        tasks: z.string().trim().max(4000).optional().default(""),
+        mustHave: z.string().trim().max(4000).optional().default(""),
+        niceToHave: z.string().trim().max(4000).optional().default(""),
+        location: z.string().trim().max(200).optional().default(""),
+        language: z.string().trim().max(100).optional().default(""),
+        desiredStart: z.string().trim().max(10).optional().default(""),
+        startHint: z.string().trim().max(100).optional().default(""),
+        plannedEnd: z.string().trim().max(10).optional().default(""),
+        endHint: z.string().trim().max(100).optional().default(""),
+        scopeText: z.string().trim().max(100).optional().default(""),
+        rateHint: z.string().trim().max(200).optional().default(""),
+        evidenceQuote: z.string().trim().min(3).max(400),
+      }),
+    )
+    .max(12),
+  missing: z.array(z.string().trim().max(300)).max(12).default([]),
+  summary: z.string().trim().max(600).optional().default(""),
+});
+export type StaffingTextProposal = z.infer<typeof staffingTextSchema>;

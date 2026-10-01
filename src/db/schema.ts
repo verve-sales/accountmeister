@@ -14,6 +14,7 @@ import {
   integer,
   boolean,
   real,
+  numeric,
   date,
   jsonb,
   uniqueIndex,
@@ -1789,6 +1790,8 @@ export const workItems = pgTable(
     statusNote: text("status_note"),
     /** Bei Vertretung: ursprünglich vorgesehene Person */
     deputyFor: text("deputy_for").references(() => users.id),
+    /** Bei Rückfrage: Status, in den der Vorgang nach der Antwort zurückkehrt (Etappe 28) */
+    resumeStatus: text("resume_status"),
     createdBy: text("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -1882,6 +1885,178 @@ export const notificationPrefs = pgTable("notification_prefs", {
   prefs: jsonb("prefs").notNull().default({}),
   updatedAt: updatedAt(),
 });
+
+// ---------------------------------------------------------------------------
+// Besetzung (Etappe 28, E1): Position, Freelancer-Minimalstamm, Kandidatur, Ereignisse, Texteingang
+// ---------------------------------------------------------------------------
+
+/** Ein zu besetzender Platz an einer Chance. Mehrere Plätze = mehrere Positionen (Kopieren). */
+export const staffingPositions = pgTable(
+  "staffing_positions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    title: text("title").notNull(),
+    roleId: text("role_id").references(() => standardRoles.id),
+    tasks: text("tasks"),
+    mustHave: text("must_have"),
+    niceToHave: text("nice_to_have"),
+    location: text("location"),
+    language: text("language"),
+    desiredStart: date("desired_start"),
+    plannedEnd: date("planned_end"),
+    endOpen: boolean("end_open").notNull().default(false),
+    scopeAmount: integer("scope_amount"),
+    scopeUnit: text("scope_unit"), // TAGE_PRO_WOCHE | STUNDEN_PRO_WOCHE | PROZENT
+    proposalDue: date("proposal_due"),
+    bdUserId: text("bd_user_id").notNull().references(() => users.id),
+    status: text("status").notNull().default("ENTWURF"), // ENTWURF | OFFEN | PAUSIERT | BESETZT | ABGEBROCHEN
+    statusReason: text("status_reason"),
+    holdReviewDate: date("hold_review_date"),
+    internalNotes: text("internal_notes"),
+    /** Interne Konditionen (Datenklasse „interne Konditionen“): EK-Verhandlungsrahmen, getrennt vom Angebotsrahmen. Unbekannt = null. */
+    ekMin: numeric("ek_min", { precision: 10, scale: 2 }),
+    ekMax: numeric("ek_max", { precision: 10, scale: 2 }),
+    vkMin: numeric("vk_min", { precision: 10, scale: 2 }),
+    vkMax: numeric("vk_max", { precision: 10, scale: 2 }),
+    currency: text("currency").notNull().default("EUR"),
+    rateUnit: text("rate_unit").notNull().default("TAG"), // TAG | STUNDE
+    /** Kundenfähiger Ausschreibungsentwurf { title, tasks[], must[], nice[], conditions[], missing[], note, promptVersion } */
+    adDraft: jsonb("ad_draft"),
+    adStatus: text("ad_status").notNull().default("KEIN"), // KEIN | ENTWURF | FREIGEGEBEN
+    adApprovedBy: text("ad_approved_by").references(() => users.id),
+    adApprovedAt: timestamp("ad_approved_at", { withTimezone: true }),
+    sourceId: text("source_id").references(() => sources.id),
+    copiedFromId: text("copied_from_id").references((): AnyPgColumn => staffingPositions.id),
+    replacesPositionId: text("replaces_position_id").references((): AnyPgColumn => staffingPositions.id),
+    filledCandidacyId: text("filled_candidacy_id"),
+    filledAt: timestamp("filled_at", { withTimezone: true }),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("staffing_positions_opp_idx").on(t.opportunityId), index("staffing_positions_account_idx").on(t.accountId), index("staffing_positions_bd_idx").on(t.bdUserId)],
+);
+
+/** Freelancer-Minimalstamm: global, getrennt von kundenspezifischen Kandidaturen. Keine Bank-/Ausweis-/Steuerdaten. */
+export const freelancers = pgTable(
+  "freelancers",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    displayName: text("display_name").notNull(),
+    email: text("email"),
+    phone: text("phone"),
+    company: text("company"),
+    skills: text("skills"),
+    availabilityNote: text("availability_note"),
+    availabilityAsOf: date("availability_as_of"),
+    availabilitySource: text("availability_source"),
+    externalCvRef: text("external_cv_ref"),
+    externalToolRef: text("external_tool_ref"),
+    mergedIntoId: text("merged_into_id").references((): AnyPgColumn => freelancers.id),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("freelancers_name_idx").on(t.workspaceId, t.displayName)],
+);
+
+/** Kandidatur: Freelancer × Position; höchstens eine aktive je Paar. */
+export const candidacies = pgTable(
+  "candidacies",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    positionId: text("position_id").notNull().references(() => staffingPositions.id),
+    freelancerId: text("freelancer_id").notNull().references(() => freelancers.id),
+    handlerUserId: text("handler_user_id").notNull().references(() => users.id),
+    status: text("status").notNull().default("IDENTIFIZIERT"),
+    statusReason: text("status_reason"),
+    availableFrom: date("available_from"),
+    availableTo: date("available_to"),
+    ekRate: numeric("ek_rate", { precision: 10, scale: 2 }),
+    ekAsOf: date("ek_as_of"),
+    ekNote: text("ek_note"),
+    vkRate: numeric("vk_rate", { precision: 10, scale: 2 }),
+    rateUnit: text("rate_unit").notNull().default("TAG"),
+    currency: text("currency").notNull().default("EUR"),
+    originRef: text("origin_ref"),
+    notes: text("notes"),
+    nextStep: text("next_step"),
+    nextStepDue: date("next_step_due"),
+    presentationApprovedBy: text("presentation_approved_by").references(() => users.id),
+    presentationApprovedAt: timestamp("presentation_approved_at", { withTimezone: true }),
+    selectedBy: text("selected_by").references(() => users.id),
+    selectedAt: timestamp("selected_at", { withTimezone: true }),
+    isActive: boolean("is_active").notNull().default(true),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [
+    index("candidacies_position_idx").on(t.positionId),
+    index("candidacies_freelancer_idx").on(t.freelancerId),
+    uniqueIndex("candidacies_active_uq").on(t.positionId, t.freelancerId).where(sql`is_active = true`),
+  ],
+);
+
+/** Unveränderliche Ereignisse an der Kandidatur: Vorstellung, Interview, Rückmeldung, Absage, Wiederaufnahme, Statuswechsel. */
+export const candidacyEvents = pgTable(
+  "candidacy_events",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    candidacyId: text("candidacy_id").notNull().references(() => candidacies.id),
+    kind: text("kind").notNull(), // VORSTELLUNG | INTERVIEW | RUECKMELDUNG | ABSAGE | WIEDERAUFNAHME | STATUS | AUSWAHL
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    recipientPersonId: text("recipient_person_id").references(() => persons.id),
+    recipientText: text("recipient_text"),
+    profileRef: text("profile_ref"),
+    profileHash: text("profile_hash"),
+    summary: text("summary"),
+    releaseScope: text("release_scope"),
+    releaseConfirmedBy: text("release_confirmed_by"),
+    releaseAsOf: date("release_as_of"),
+    pricePresented: numeric("price_presented", { precision: 10, scale: 2 }),
+    priceUnit: text("price_unit"),
+    communicationRef: text("communication_ref"),
+    interviewStatus: text("interview_status"), // ANGEFRAGT | GEPLANT | DURCHGEFUEHRT | ABGESAGT
+    interviewAt: timestamp("interview_at", { withTimezone: true }),
+    participants: text("participants"),
+    outcome: text("outcome"),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status"),
+    reason: text("reason"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("candidacy_events_candidacy_idx").on(t.candidacyId)],
+);
+
+/** Texteingang für Besetzungsbedarfe: Quelle + Vorschlag, der vor der Übernahme geprüft wird. */
+export const staffingIntakes = pgTable(
+  "staffing_intakes",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
+    sourceId: text("source_id").notNull().references(() => sources.id),
+    /** { positions: [{ title, tasks, mustHave, niceToHave, location, language, desiredStart, plannedEnd, scopeText, evidenceQuote }], missing: [] , note, promptVersion } */
+    proposal: jsonb("proposal").notNull(),
+    status: text("status").notNull().default("OFFEN"), // OFFEN | UEBERNOMMEN | VERWORFEN
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+  },
+  (t) => [index("staffing_intakes_opp_idx").on(t.opportunityId)],
+);
 
 export type Role = (typeof roleEnum.enumValues)[number];
 export type PlaybookScope = (typeof playbookScopeEnum.enumValues)[number];

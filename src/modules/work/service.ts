@@ -23,11 +23,12 @@ import { deputyOf, ensureDefaultTeams, isTeamLead, isTeamMember, teamMemberIds, 
  */
 
 export type WorkItem = typeof schema.workItems.$inferSelect;
-export const workStatusValues = ["ANGEFRAGT", "OFFEN", "IN_ARBEIT", "BLOCKIERT", "ZUR_PRUEFUNG", "ERLEDIGT", "ABGELEHNT", "VERWORFEN"] as const;
+export const workStatusValues = ["ANGEFRAGT", "RUECKFRAGE", "OFFEN", "IN_ARBEIT", "BLOCKIERT", "ZUR_PRUEFUNG", "ERLEDIGT", "ABGELEHNT", "VERWORFEN"] as const;
 export type WorkStatus = (typeof workStatusValues)[number];
 export const FINAL: WorkStatus[] = ["ERLEDIGT", "VERWORFEN"];
 export const workStatusLabel: Record<string, string> = {
   ANGEFRAGT: "angefragt",
+  RUECKFRAGE: "Rückfrage offen",
   OFFEN: "offen",
   IN_ARBEIT: "in Arbeit",
   BLOCKIERT: "blockiert",
@@ -36,12 +37,13 @@ export const workStatusLabel: Record<string, string> = {
   ABGELEHNT: "abgelehnt",
   VERWORFEN: "verworfen",
 };
-export const workKindLabel: Record<string, string> = { AKTION: "Aufgabe", ANFRAGE: "Anfrage", PRUEFUNG: "Prüfung", ERINNERUNG: "Erinnerung" };
+export const workKindLabel: Record<string, string> = { AKTION: "Aufgabe", ANFRAGE: "Anfrage", PRUEFUNG: "Prüfung", ERINNERUNG: "Erinnerung", SUCHE: "Suchauftrag", SHORTLIST: "Shortlist prüfen", NACHFASSEN: "Nachfassen" };
 
 const TRANSITIONS: Record<WorkStatus, WorkStatus[]> = {
-  ANGEFRAGT: ["OFFEN", "ABGELEHNT", "VERWORFEN"],
-  OFFEN: ["IN_ARBEIT", "BLOCKIERT", "ZUR_PRUEFUNG", "ERLEDIGT", "VERWORFEN"],
-  IN_ARBEIT: ["BLOCKIERT", "ZUR_PRUEFUNG", "ERLEDIGT", "VERWORFEN"],
+  ANGEFRAGT: ["OFFEN", "RUECKFRAGE", "ABGELEHNT", "VERWORFEN"],
+  RUECKFRAGE: ["ANGEFRAGT", "OFFEN", "IN_ARBEIT", "VERWORFEN"],
+  OFFEN: ["IN_ARBEIT", "BLOCKIERT", "ZUR_PRUEFUNG", "RUECKFRAGE", "ANGEFRAGT", "ERLEDIGT", "VERWORFEN"],
+  IN_ARBEIT: ["BLOCKIERT", "ZUR_PRUEFUNG", "RUECKFRAGE", "ANGEFRAGT", "ERLEDIGT", "VERWORFEN"],
   BLOCKIERT: ["IN_ARBEIT", "ZUR_PRUEFUNG", "ERLEDIGT", "VERWORFEN"],
   ZUR_PRUEFUNG: ["ERLEDIGT", "IN_ARBEIT", "VERWORFEN"],
   ABGELEHNT: ["ANGEFRAGT", "VERWORFEN"],
@@ -84,7 +86,7 @@ export const createWorkItemInput = z
     /** zusätzliche Checklistenpunkte, je Zeile einer */
     checklistText: z.string().max(4000).optional().or(z.literal("")),
     parentId: z.string().optional().or(z.literal("")),
-    kind: z.enum(["AKTION", "ANFRAGE", "PRUEFUNG", "ERINNERUNG"]).optional(),
+    kind: z.enum(["AKTION", "ANFRAGE", "PRUEFUNG", "ERINNERUNG", "SUCHE", "SHORTLIST", "NACHFASSEN"]).optional(),
   })
   .passthrough();
 
@@ -234,7 +236,7 @@ async function requireVisible(actor: Actor, id: string): Promise<WorkItem> {
 // Statuswechsel
 // ---------------------------------------------------------------------------
 
-export const workActionValues = ["ANNEHMEN", "UEBERNEHMEN", "ABLEHNEN", "STARTEN", "BLOCKIEREN", "FORTSETZEN", "ABSCHLIESSEN", "ABNEHMEN", "ZURUECKGEBEN", "VERWERFEN", "ERNEUT_ANFRAGEN"] as const;
+export const workActionValues = ["ANNEHMEN", "UEBERNEHMEN", "ABLEHNEN", "STARTEN", "BLOCKIEREN", "FORTSETZEN", "ABSCHLIESSEN", "ABNEHMEN", "ZURUECKGEBEN", "VERWERFEN", "ERNEUT_ANFRAGEN", "RUECKFRAGE", "BEANTWORTEN", "ABGEBEN"] as const;
 export type WorkAction = (typeof workActionValues)[number];
 
 export const workActionInput = z.object({
@@ -251,6 +253,8 @@ export async function actOnWorkItem(actor: Actor, id: string, raw: unknown) {
   if (!parsed.success) throw new ValidationError(issues(parsed.error));
   const i = parsed.data;
   const item = await requireVisible(actor, id);
+  // Veralteter Stand (z. B. parallele Übernahme durch eine Kollegin): verständlicher Konflikt statt Statusfehler
+  if (i.version !== item.version) throw new ConflictError(item.assigneeUserId && item.assigneeUserId !== actor.userId ? "Der Vorgang wurde inzwischen von jemand anderem übernommen oder geändert. Bitte neu laden." : undefined);
   const r = await rolesOn(actor, item);
   const worker = r.assignee || (!item.assigneeUserId && r.teamMember);
   const deny = (msg: string): never => {
@@ -339,6 +343,45 @@ export async function actOnWorkItem(actor: Actor, id: string, raw: unknown) {
       if (i.note) patch.statusNote = i.note;
       if (item.assigneeUserId && item.assigneeUserId !== actor.userId) event = { kind: "KOMMENTAR", to: [item.assigneeUserId], title: `Verworfen: ${item.title}` };
       break;
+    case "RUECKFRAGE": {
+      // Fehlende Information sichtbar machen – vor der Annahme nur als kurze Intake-Rückfrage durch das Team
+      if (!(worker || (item.status === "ANGEFRAGT" && (r.assignee || r.teamMember || r.teamLead)))) deny("Rückfragen stellt die angefragte Person oder das Team.");
+      if (!i.note || i.note.length < 3) throw new ValidationError("Bitte die Rückfrage formulieren.");
+      to = "RUECKFRAGE";
+      patch.statusNote = i.note;
+      patch.resumeStatus = item.status === "ANGEFRAGT" ? "ANGEFRAGT" : "IN_ARBEIT";
+      event = { kind: "KOMMENTAR", to: [item.requesterUserId], title: `Rückfrage zu „${item.title}“: ${i.note.slice(0, 120)}` };
+      break;
+    }
+    case "BEANTWORTEN": {
+      if (!r.requester) deny("Beantworten kann die Auftraggeber:in.");
+      if (item.status !== "RUECKFRAGE") throw new TransitionError("Es ist keine Rückfrage offen.");
+      if (!i.note || i.note.length < 2) throw new ValidationError("Bitte die Antwort eintragen.");
+      to = (item.resumeStatus as WorkStatus | null) ?? (item.assigneeUserId ? "IN_ARBEIT" : "ANGEFRAGT");
+      patch.statusNote = `Antwort: ${i.note}`;
+      patch.resumeStatus = null;
+      if (!item.description?.includes(i.note)) patch.description = `${item.description ?? ""}\n\nAntwort auf Rückfrage (${todayIso()}): ${i.note}`.trim();
+      if (item.assigneeUserId) event = { kind: "KOMMENTAR", to: [item.assigneeUserId], title: `Antwort zu „${item.title}“: ${i.note.slice(0, 120)}` };
+      else if (item.teamId) event = { kind: "TEAM_EINGANG", to: await teamMemberIds((await db.query.teams.findFirst({ where: eq(schema.teams.id, item.teamId) }))!), title: `Antwort zu „${item.title}“ – wieder im Eingang` };
+      break;
+    }
+    case "ABGEBEN": {
+      // Angenommenen Vorgang zurückgeben: Team-Vorgang in die Warteschlange, sonst zurück an die Auftraggeber:in
+      if (!r.assignee) deny("Abgeben kann nur die bearbeitende Person.");
+      if (!i.note || i.note.length < 3) throw new ValidationError("Bitte kurz begründen, warum du den Vorgang abgibst.");
+      if (item.teamId) {
+        to = "ANGEFRAGT";
+        patch.assigneeUserId = null;
+        patch.statusNote = `Abgegeben von ${who}: ${i.note}`;
+        const team = (await db.query.teams.findFirst({ where: eq(schema.teams.id, item.teamId) }))!;
+        event = { kind: "TEAM_EINGANG", to: [...(await teamMemberIds(team)), item.requesterUserId], title: `Zurück im Eingang (${who}): ${item.title}` };
+      } else {
+        to = "ABGELEHNT";
+        patch.statusNote = i.note;
+        event = { kind: "ABGELEHNT", to: [item.requesterUserId], title: `${who} gibt zurück: ${item.title}` };
+      }
+      break;
+    }
     case "ERNEUT_ANFRAGEN": {
       if (!r.requester) deny("Erneut anfragen kann die Auftraggeber:in.");
       to = "ANGEFRAGT";
@@ -621,7 +664,7 @@ export async function workTargets(actor: Actor) {
 export async function generateOverdueNotifications(workspaceId?: string): Promise<number> {
   const today = todayIso();
   const rows = await db.query.workItems.findMany({
-    where: and(workspaceId ? eq(schema.workItems.workspaceId, workspaceId) : undefined, notInArray(schema.workItems.status, [...FINAL, "ZUR_PRUEFUNG", "ABGELEHNT"]), lt(schema.workItems.dueDate, today)),
+    where: and(workspaceId ? eq(schema.workItems.workspaceId, workspaceId) : undefined, notInArray(schema.workItems.status, [...FINAL, "ZUR_PRUEFUNG", "ABGELEHNT", "RUECKFRAGE"]), lt(schema.workItems.dueDate, today)),
     limit: 500,
   });
   let n = 0;

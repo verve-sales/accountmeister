@@ -9,6 +9,14 @@ import { roleLabel } from "@/lib/labels";
 import { AssistantPanel } from "@/components/AssistantPanel";
 import { provisionAccess } from "@/modules/provision/access";
 import { unreadCount } from "@/modules/notifications/service";
+import type { Actor } from "@/modules/identity/actor";
+
+/** Navigationseintrag „Besetzung“ für BD, Principal, CEO und Sales Operations (keine Sicherheitsgrenze – die liegt in den Services). */
+function staffingNav(actor: Actor): boolean {
+  const roles = new Set<string>(actor.roles);
+  for (const set of actor.accountRoles.values()) for (const r of set) roles.add(r);
+  return ["BD", "PRINCIPAL", "CEO", "SALES_OPS"].some((r) => roles.has(r));
+}
 
 export const metadata: Metadata = { title: "Accountmeister – Verve AI", description: "Interne Sales-Arbeitsumgebung von Verve Consulting", icons: { icon: "/verve-ai-lockup.png" } };
 export const dynamic = "force-dynamic";
@@ -64,7 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {actor ? (
                 <>
                   <nav aria-label="Weitere Bereiche" className="flex flex-wrap gap-x-3 text-xs">
-                    {[...MORE.slice(0, 3), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(3)].map((n) => (
+                    {[...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/besetzung", label: "Besetzung" }] : []), ...MORE.slice(0, 3), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(3)].map((n) => (
                       <Link key={n.href} href={n.href} className="muted">
                         {n.label}
                       </Link>

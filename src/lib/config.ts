@@ -38,6 +38,8 @@ const envSchema = z.object({
   MAIL_FILE_DIR: z.string().default("./data/mails"),
   /** Mandant für Graph; Standard: aus OIDC_ISSUER */
   MAIL_GRAPH_TENANT_ID: z.string().min(1).optional(),
+  /** Lieferbereich Besetzung (Etappe 28): Navigation, Seiten und Aktionen; kein Ersatz für serverseitige Rechte */
+  FEATURE_BESETZUNG: z.enum(["true", "false"]).default("true"),
   /** Uhrzeit (Europe/Berlin) des Tagesdigests */
   MAIL_DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(7),
 });

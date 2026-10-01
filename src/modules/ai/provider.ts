@@ -81,6 +81,26 @@ export type FormSuggestInput = {
 /** Schritt-Assistent (Etappe 20b): Entwürfe für den aktuellen Schritt eines Vorgehensmusters. */
 export type PlaybookStepDraftInput = { stepText: string; contextText: string; structured: PlaybookStepInput };
 
+/** Ausschreibungsentwurf (Etappe 28): nur freigegebene Bedarfsfelder – keine EK, keine internen Notizen, kein Kundenname ohne Freigabe. */
+export type StaffingAdInput = {
+  title: string;
+  tasks: string;
+  mustHave: string;
+  niceToHave: string;
+  location: string;
+  language: string;
+  desiredStart: string;
+  plannedEnd: string;
+  scope: string;
+  channel: "FREELANCER_PLATTFORM" | "NETZWERK" | "INTERN";
+  tone: "SACHLICH" | "ANSPRECHEND";
+  /** ausdrücklich zur Veröffentlichung freigegebene Zusatzinformationen (z. B. Branche, Kundenname) */
+  releasedInfo: string;
+};
+
+/** Texteingang Besetzung (Etappe 28): E-Mail/Notiz → Positionsvorschläge mit Belegstellen. */
+export type StaffingTextInput = { text: string; opportunityTitle: string; accountName: string };
+
 /** Aufgabenbezogene Modellwahl (Verwaltung → KI). Anbieter ohne Modellwahl ignorieren sie. */
 export type TaskOptions = {
   model?: string;
@@ -126,6 +146,10 @@ export interface AIProvider {
   draftPlaybookStep?(input: PlaybookStepDraftInput, opts?: TaskOptions): Promise<unknown>;
   /** Formularfelder vorbelegen (Etappe 9) – optional. */
   suggestForm?(input: FormSuggestInput, opts?: TaskOptions): Promise<unknown>;
+  /** Ausschreibungsentwurf aus freigegebenen Bedarfsfeldern (Etappe 28) – optional. */
+  draftStaffingAd?(input: StaffingAdInput, opts?: TaskOptions): Promise<unknown>;
+  /** Positionsvorschläge aus eingefügtem Text (Etappe 28) – optional. */
+  structureStaffingText?(input: StaffingTextInput, opts?: TaskOptions): Promise<unknown>;
   /** Verbrauch des letzten Aufrufs (Kostenspur), falls der Anbieter ihn liefert. */
   lastUsage?(): Usage | null;
   /** Verfügbare Modelle im Arbeitsraum des Anbieters (für die Konfigurationsseite). */

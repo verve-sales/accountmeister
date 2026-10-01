@@ -5,6 +5,8 @@ import type { TaskOptions } from "../provider";
 import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdviceInput, FormSuggestInput, InterviewNextInput, ProviderInfo, StrategyInput, StructureNoteInput } from "../provider";
 import type { AssistantItem, BuyingCenterProposal, FormSuggestion, IntakeProposal, InterviewNext, StrategyProposal, StructuredItem, StructureNoteOutput } from "../schemas";
 import { ruleBasedStepDrafts, type StepDrafts } from "@/modules/playbooks/drafts";
+import { ruleBasedStaffingAd, ruleBasedStaffingText } from "@/modules/staffing/drafts";
+import type { StaffingAdInput, StaffingTextInput } from "../provider";
 import type { PlaybookStepDraftInput } from "../provider";
 import { ASSISTANT_CARDS_MARKER, decisionRoleValues, interviewTopicValues } from "../schemas";
 
@@ -432,6 +434,14 @@ export class TestProvider implements AIProvider {
   /** Schritt-Assistent: derselbe regelbasierte Entwurf wie ohne KI – deterministisch, erfindet nichts. */
   async draftPlaybookStep(input: PlaybookStepDraftInput): Promise<StepDrafts> {
     return ruleBasedStepDrafts(input.structured);
+  }
+
+  async draftStaffingAd(input: StaffingAdInput) {
+    return ruleBasedStaffingAd(input);
+  }
+
+  async structureStaffingText(input: StaffingTextInput) {
+    return ruleBasedStaffingText(input);
   }
 
   async suggestForm(input: FormSuggestInput): Promise<FormSuggestion> {

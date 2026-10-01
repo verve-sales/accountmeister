@@ -54,6 +54,17 @@ export const FREELANCER = "FREELANCER";
 
 export type Recipient = "PRINCIPAL" | "BD" | "ANKER";
 
+export type ProvisionConfig = typeof PROVISION_CONFIG;
+
+/**
+ * Konfiguration, die an den Browser gehen darf: Für Nicht-Principals ohne die Principal-Stufe – weder als Stufe noch
+ * als Deckelungs-Hinweis. Der Rechner erfährt so nichts, was die Person nicht sehen darf (Vertraulichkeit der Stufe).
+ */
+export function configFor(principal: boolean): ProvisionConfig {
+  if (principal) return PROVISION_CONFIG;
+  return { ...PROVISION_CONFIG, tiers: PROVISION_CONFIG.tiers.filter((t) => !t.principalOnly) as unknown as ProvisionConfig["tiers"] };
+}
+
 export type DealInput = {
   /** Rolle aus INTERNAL_ROLES oder FREELANCER */
   profile: string;
@@ -159,7 +170,7 @@ export function legendFor(recipient: Recipient, cfg = PROVISION_CONFIG): { color
     const next = tiers[i + 1];
     const rate = recipient === "PRINCIPAL" ? t.rate : Math.min(t.rate, cfg.nonPrincipalMaxRate);
     const range = i === 0 ? `Nettomarge < ${pct(next!.from)}` : next ? `Nettomarge ${pct(t.from)} bis < ${pct(next.from)}` : `Nettomarge ab ${pct(t.from)}`;
-    const what = rate === 0 ? `${pct(0)} Basisprovision (Finding und Signing Fee bleiben bestehen)` : `${pct(rate)} auf die Nettomarge${t.key === "PRINCIPAL" ? " (Premium, nur Principals)" : ""}${!next && recipient !== "PRINCIPAL" ? " (Höchstsatz für BDs und Anker)" : ""}`;
+    const what = rate === 0 ? `${pct(0)} Basisprovision (Finding und Signing Fee bleiben bestehen)` : `${pct(rate)} auf die Nettomarge${t.key === "PRINCIPAL" ? " (Premium, nur Principals)" : ""}`;
     return { color: t.color.replace(" (Principal)", ""), text: `${range} → ${what}` };
   });
 }

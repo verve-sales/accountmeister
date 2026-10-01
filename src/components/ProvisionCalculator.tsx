@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { computeDeal, FREELANCER, INTERNAL_ROLES, legendFor, PROVISION_CONFIG, type DealInput, type Recipient } from "@/modules/provision/model";
+import { computeDeal, FREELANCER, INTERNAL_ROLES, legendFor, type DealInput, type ProvisionConfig, type Recipient } from "@/modules/provision/model";
 
 type Row = DealInput & { id: number; name: string };
 
@@ -15,11 +15,12 @@ let nextId = 1;
 const emptyRow = (): Row => ({ id: nextId++, name: "", profile: FREELANCER, ek: null, vk: null, days: null, findingShare: 100, signingShare: 100 });
 
 /** Provisionsrechner zum freien Ausfüllen – rechnet nur im Browser, speichert nichts. */
-export function ProvisionCalculator({ isPrincipal }: { isPrincipal: boolean }) {
+export function ProvisionCalculator({ isPrincipal, config }: { isPrincipal: boolean; config: ProvisionConfig }) {
+  const PROVISION_CONFIG = config;
   const [recipient, setRecipient] = useState<Recipient>(isPrincipal ? "PRINCIPAL" : "BD");
   const [rows, setRows] = useState<Row[]>(() => [emptyRow()]);
-  const results = useMemo(() => rows.map((r) => computeDeal(r, recipient)), [rows, recipient]);
-  const legend = useMemo(() => legendFor(recipient), [recipient]);
+  const results = useMemo(() => rows.map((r) => computeDeal(r, recipient, config)), [rows, recipient, config]);
+  const legend = useMemo(() => legendFor(recipient, config), [recipient, config]);
   const set = (id: number, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const totals = results.reduce((a, r) => (r ? { base: a.base + r.baseCommission, finding: a.finding + r.findingFee, signing: a.signing + r.signingFee, total: a.total + r.total, net: a.net + r.netMargin, revenue: a.revenue + r.revenue } : a), { base: 0, finding: 0, signing: 0, total: 0, net: 0, revenue: 0 });
 
@@ -34,7 +35,7 @@ export function ProvisionCalculator({ isPrincipal }: { isPrincipal: boolean }) {
               <label className="text-sm flex items-center gap-1"><input type="radio" name="rcp" checked={recipient !== "PRINCIPAL"} onChange={() => setRecipient("BD")} /> BD / Anker (höchstens 20 %)</label>
             </>
           ) : (
-            <strong className="text-sm">BD / Anker – Provisionssatz höchstens 20 %</strong>
+            <strong className="text-sm">BD / Anker</strong>
           )}
           <span className="muted text-xs ml-auto">Kostenpauschale {PROVISION_CONFIG.costTiers[0]!.perDay} €/Tag · Finding Fee {eur(PROVISION_CONFIG.findingFee)} · Signing Fee {eur(PROVISION_CONFIG.signingFee)} je Deal</span>
         </div>

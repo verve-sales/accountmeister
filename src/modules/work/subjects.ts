@@ -10,9 +10,9 @@ import { getAccount } from "@/modules/accounts/service";
  * wer den Kunden/das Setup/die Chance nicht sehen darf, sieht auch Kommentare und Vorgänge daran nicht (Ausnahme:
  * direkt Beteiligte eines Vorgangs, siehe work/service).
  */
-export const subjectTypeValues = ["KUNDE", "SETUP", "CHANCE", "SOS", "OHNE"] as const;
+export const subjectTypeValues = ["KUNDE", "SETUP", "CHANCE", "SOS", "POSITION", "OHNE"] as const;
 export type SubjectType = (typeof subjectTypeValues)[number];
-export const subjectTypeLabel: Record<string, string> = { KUNDE: "Kunde", SETUP: "Setup", CHANCE: "Chance", SOS: "SOS", OHNE: "ohne Bezug", VORGANG: "Vorgang" };
+export const subjectTypeLabel: Record<string, string> = { KUNDE: "Kunde", SETUP: "Setup", CHANCE: "Chance", SOS: "SOS", POSITION: "Position", OHNE: "ohne Bezug", VORGANG: "Vorgang" };
 
 export type ResolvedSubject = { type: SubjectType; id: string | null; accountId: string | null; label: string; link: string | null };
 
@@ -40,6 +40,12 @@ export async function resolveSubject(actor: Actor, type: string, id: string | nu
       if (!s) throw new NotFoundError("SOS");
       const a = await getAccount(actor, s.accountId);
       return { type, id, accountId: a.id, label: `${a.name} · SOS: ${s.title}`, link: `/kunden/${a.id}#sos` };
+    }
+    case "POSITION": {
+      // Besetzung (Etappe 28): voller Zugriff nur mit Positionsrecht; Team-Mitglieder sehen den Vorgang über das Team.
+      const { requireViewablePosition } = await import("@/modules/staffing/authz");
+      const p = await requireViewablePosition(actor, id);
+      return { type, id, accountId: p.position.accountId, label: `${p.accountName} · Position: ${p.position.title}`, link: `/besetzung/${id}` };
     }
     default:
       throw new ValidationError("Unbekannter Bezug.");
