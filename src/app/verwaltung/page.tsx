@@ -5,7 +5,7 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { hasRole } from "@/modules/identity/actor";
 import { dataInventory, listAuditEvents, listUsersWithRoles } from "@/modules/governance/service";
 import { db, schema } from "@/db/client";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { fmtDateTime, roleLabel } from "@/lib/labels";
@@ -28,6 +28,9 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
     throw e;
   }
   const accounts = await db.query.accounts.findMany({ where: eq(schema.accounts.workspaceId, actor.workspaceId), orderBy: (a, { asc }) => [asc(a.name)] });
+  const jobRuns = await db.query.jobRuns.findMany({ orderBy: desc(schema.jobRuns.startedAt), limit: 12 });
+  const lastOk = new Map<string, Date>();
+  for (const r of jobRuns) if (r.ok && r.finishedAt && !lastOk.has(r.name)) lastOk.set(r.name, r.finishedAt);
   const cfg = getConfig();
 
   return (
@@ -35,6 +38,21 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
       <h1 className="text-2xl font-semibold">Verwaltung (Betriebsverwaltung)</h1>
       <p className="muted text-sm">Rollen, Zugänge, Protokoll und Bestandszahlen. Kein Zugriff auf Setup-Inhalte, Quellen, Notizen oder Vorschläge (Briefing 16.2). KI-Anbieter und Modelle je Aufgabe: <Link href="/verwaltung/ki">Verwaltung → KI</Link>. Standardrollenkatalog für Chancen: <Link href="/verwaltung/rollen">Verwaltung → Rollen</Link>. Teams, Warteschlangen und Leistungskatalog: <Link href="/verwaltung/teams">Verwaltung → Teams</Link>. Was laut Löschkonzept fällig ist: <Link href="/verwaltung/fristen">Verwaltung → Fristenprüfung</Link>.</p>
       <Feedback params={sp} />
+
+      <section className="card">
+        <h2 className="font-semibold mb-2">Hintergrundläufe (Takt im App-Prozess)</h2>
+        <p className="muted text-sm mb-2">Stündlich ab 6 Uhr: Überfällig-Hinweise und Einsatzregeln (Catch-ups, Check-in-Hinweise, Verlängerungen); minütlich Sofort-Mails; täglich Digest. Letzter erfolgreicher Lauf je Regel: {[...lastOk].map(([n, d]) => `${n} ${fmtDateTime(d)}`).join(" · ") || "noch keiner (startet 15 s nach dem Hochfahren, erster Lauf zur vollen Stunde)"}.</p>
+        {jobRuns.length > 0 && (
+          <table className="list text-sm">
+            <thead><tr><th>Lauf</th><th>Start</th><th>Ergebnis</th></tr></thead>
+            <tbody>
+              {jobRuns.map((r) => (
+                <tr key={r.id}><td>{r.name}</td><td>{fmtDateTime(r.startedAt)}</td><td>{r.ok === null ? "läuft" : r.ok ? JSON.stringify(r.counts) : <span style={{ color: "#c0392b" }}>Fehler: {r.error}</span>}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       <section className="card">
         <h2 className="font-semibold mb-2">Konfiguration und Schutzmaßnahmen</h2>

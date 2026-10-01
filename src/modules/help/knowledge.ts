@@ -134,6 +134,25 @@ Rechte: Positionen und Kandidaturen sehen der verantwortliche BD bzw. der BD-Kon
 Texteingang: E-Mail oder Notiz einfügen → Vorschläge je Position mit wörtlicher Belegstelle → auswählen, Titel anpassen, als Entwürfe übernehmen. Der Text bleibt als Quelle am Setup. Hinweise zu Sätzen oder Budget landen nur als Notiz, nie als EK/VK-Zahl. Anweisungen im Text werden nicht befolgt.`,
   },
   {
+    id: "einsatz",
+    title: "Einsatzakte: Status, Betreuung, Verträge, Konditionen",
+    where: "Mehr → Einsätze; Einsatzseite (entsteht mit der bestätigten Auswahl an einer Position)",
+    keywords: ["einsatz", "einsaetze", "einsatzakte", "betreuung", "betreuen", "uebergabe betreuung", "kundenbetreuung", "freelancer betreuung", "vertrag", "vertraege", "bestellung", "rahmenvertrag", "einzelbeauftragung", "nda", "nachtrag", "beschaffungsprofil", "periode", "konditionen", "satzaenderung", "geplant", "aktiv", "start bestaetigen", "pause", "moco", "stundenzettel"],
+    body: `Mit der bestätigten Auswahl entsteht genau ein Einsatz (Einsatzakte) mit Plan-Periode aus Kandidatur und Position; der verantwortliche BD ist zunächst Kundenbetreuung. Status: in Vorbereitung → geplant (braucht Kundenbetreuung und vollständige Vertragslage nach dem Beschaffungsprofil des Kunden oder eine begründete Ausnahme) → aktiv (nur mit bestätigtem tatsächlichem Start, nie durch Datumsablauf) → endet → abgeschlossen; außerdem pausiert (Grund, Prüftermin) und abgebrochen. Verlängerung ist kein Status.
+Betreuung ist eine eigene Zuordnung je Funktion (Kunde, Freelancer). Übergabe als Vorgang an Person oder Team: die Annahme aktiviert die Zuordnung; der Abschluss des Vorgangs beendet sie nicht. Betreuende sehen Einsatz, Check-ins, Unterlagen, Konditionen und Verlängerung, aber keine Account-Rechte. Direkt umstellen kann der BD-Kontext.
+Verträge: zwei Seiten (Kunde ↔ Verve, Verve ↔ Freelancer), Typen Rahmenvertrag, Einzelbeauftragung, Bestellung, Nachtrag, NDA, Kündigung, Sonstiges; Status Entwurf → versendet → unterschrieben (braucht Datei oder Link). Welche Unterlagen Pflicht sind, bestimmt das Beschaffungsprofil auf der Kundenseite (freigeben!). Ohne Profil ist die Vertragslage unbestimmt – nie automatisch grün. Hochgeladene Dateien bekommen einen Typ-Vorschlag mit Belegstelle; Scans werden erkannt, aber nicht ausgewertet.
+Konditionen als Perioden: Plan oder bestätigt, mit Gültigkeit, EK/VK, Umfang, Quelle. Eine Satzänderung oder Verlängerung legt eine neue Periode an und löst die alte ab; Überlappungen bestätigter Perioden nur als ausdrückliche Korrektur. Keine Umsatzhochrechnung. Stundenzettel und Abrechnung bleiben in Moco (nur Referenzlink).`,
+  },
+  {
+    id: "checkin",
+    title: "Check-ins, Verlängerung und Sales-Hinweise aus der Betreuung",
+    where: "Einsatzseite → Check-ins / Verlängerung; Meine Arbeit → Meine Check-ins",
+    keywords: ["check in", "checkin", "checkins", "catch up", "catchup", "42 tage", "kundengespraech", "gespraech", "verlaengerung", "verlaengern", "kuendigungsfrist", "frist", "optionsfrist", "sales hinweis", "signal aus betreuung", "verschieben"],
+    body: `Kunden-Catch-up: alle 42 Tage nach dem letzten tatsächlich geführten Gespräch (ohne Gespräch: Start + 42); die Betreuungsperson kann früher terminieren. Freelancer-Check-ins legst du separat an. Erledigen braucht den tatsächlichen Termin und ein kurzes Ergebnis und setzt den nächsten Kunden-Check-in; Verschieben ändert nur die Fälligkeit. Pause oder Ende des Einsatzes beenden offene Routine-Check-ins, Fristen bleiben.
+Ein Sales-Hinweis im Check-in wird als Beobachtung (Signal) im Setup zur Prüfung an den BD gegeben – mit erlaubter Verwendung „intern aus Betreuungsgespräch“. Erst der BD macht daraus eine Chance oder ergänzt eine bestehende.
+Verlängerung: 90 Tage vor Ende bzw. 30 Tage vor der Kündigungs-/Optionsfrist entsteht automatisch der Stand „zu klären“ mit Hinweis an BD und Betreuung. Stände: zu klären, in Abstimmung, angeboten, bestätigt, abgelehnt, erledigt. Bestätigen (nur BD-Kontext) braucht Zeitraum, Konditionsstand und Vertragsfolge und erzeugt eine neue bestätigte Periode; das Einsatzende wird angepasst. Ist die Frist unbekannt, trage sie ein oder kläre sie – das Tool legt keine Rechtsauslegung aus.`,
+  },
+  {
     id: "benachrichtigungen",
     title: "Benachrichtigungen, E-Mail und Vertretung",
     where: "Glocke oben rechts → Benachrichtigungen; Einstellungen → Benachrichtigungen und Abwesenheit",

@@ -48,6 +48,8 @@ await shot(david, "02-chance-besetzung");
 
 // 2) Erste Position: Konditionen, offen setzen, Suchauftrag
 await Promise.all([nav(david), david.click("#besetzung a[href^='/besetzung/']")]);
+const bedarf = david.locator("details:has(> summary:has-text('Bedarf'))").first();
+if (!(await bedarf.evaluate((d) => d.open))) await bedarf.locator("> summary").click();
 await david.locator("summary:has-text('Bedarf bearbeiten')").click();
 await david.fill("#e-ekmax", "850");
 await david.fill("#e-vkmin", "1050");
@@ -65,7 +67,8 @@ await sofia.goto(BASE + posUrl, { timeout: 180000 });
 await shot(sofia, "04-teamvorschau");
 await sofia.goto(BASE + "/meine-arbeit?v=team#vorgaenge", { timeout: 180000 });
 await Promise.all([nav(sofia), sofia.click("#vorgaenge a[href^='/vorgaenge/']")]);
-await Promise.all([nav(sofia), sofia.click("button:has-text('Übernehmen')")]);
+await sofia.click("button:has-text('Übernehmen')");
+await sofia.waitForURL(/[?&]ok=/, { timeout: 120000 });
 await sofia.goto(BASE + posUrl + "#kandidaturen", { timeout: 180000 });
 for (const [name, ek, skills] of [["Mara Muster (fiktiv)", "820", "Spark, Kafka, Databricks"], ["Tom Test (fiktiv)", "900", "Spark"]]) {
   await sofia.locator("summary:has-text('Kandidatur anlegen')").click();

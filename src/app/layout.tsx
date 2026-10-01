@@ -72,7 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {actor ? (
                 <>
                   <nav aria-label="Weitere Bereiche" className="flex flex-wrap gap-x-3 text-xs">
-                    {[...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/besetzung", label: "Besetzung" }] : []), ...MORE.slice(0, 3), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(3)].map((n) => (
+                    {[...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/besetzung", label: "Besetzung" }, { href: "/einsaetze", label: "Einsätze" }] : []), ...MORE.slice(0, 3), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(3)].map((n) => (
                       <Link key={n.href} href={n.href} className="muted">
                         {n.label}
                       </Link>

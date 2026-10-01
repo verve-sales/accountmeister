@@ -1,6 +1,8 @@
 import { getConfig } from "@/lib/config";
 import { generateOverdueNotifications } from "@/modules/work/service";
 import { dispatchDigests, dispatchPendingEmails } from "./mailer";
+import { db, schema } from "@/db/client";
+import { eq } from "drizzle-orm";
 
 /**
  * Hintergrundtakt im App-Prozess (Etappe 27), gestartet über src/instrumentation.ts:
@@ -13,6 +15,18 @@ function berlinHourAndDate(now = new Date()) {
   const parts = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Berlin", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(now);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   return { date: `${get("year")}-${get("month")}-${get("day")}`, hour: Number(get("hour")) };
+}
+
+/** Lauf protokollieren (Heartbeat, Ergebnis, Fehler) – sichtbar unter Verwaltung. Fehler brechen den Takt nicht ab. */
+export async function runJob(name: string, fn: () => Promise<Record<string, number>>): Promise<void> {
+  const [row] = await db.insert(schema.jobRuns).values({ name }).returning({ id: schema.jobRuns.id });
+  try {
+    const counts = await fn();
+    await db.update(schema.jobRuns).set({ finishedAt: new Date(), ok: true, counts }).where(eq(schema.jobRuns.id, row!.id));
+  } catch (e) {
+    await db.update(schema.jobRuns).set({ finishedAt: new Date(), ok: false, error: (e as Error).message.slice(0, 500) }).where(eq(schema.jobRuns.id, row!.id));
+    console.error(`Hintergrundlauf ${name}`, (e as Error).message);
+  }
 }
 
 export function startNotificationWorker(): void {
@@ -30,7 +44,12 @@ export function startNotificationWorker(): void {
       const hourKey = `${date}T${hour}`;
       if (hourKey !== lastOverdueHour && hour >= 6) {
         lastOverdueHour = hourKey;
-        await generateOverdueNotifications();
+        await runJob("ueberfaellig", async () => ({ hinweise: await generateOverdueNotifications() }));
+        // Einsatzregeln (Etappe 29): Catch-ups, fällige Check-ins, Verlängerung – idempotent über Schlüssel
+        await runJob("einsatz-regeln", async () => {
+          const { ensureCatchups, notifyDueCheckins, ensureRenewalDecisions } = await import("@/modules/engagements/care");
+          return { catchups: await ensureCatchups(), checkinHinweise: await notifyDueCheckins(), verlaengerungen: await ensureRenewalDecisions() };
+        });
       }
       await dispatchPendingEmails(cfg);
       if (hour >= cfg.MAIL_DIGEST_HOUR && lastDigestDate !== date) {

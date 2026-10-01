@@ -37,7 +37,7 @@ export const workStatusLabel: Record<string, string> = {
   ABGELEHNT: "abgelehnt",
   VERWORFEN: "verworfen",
 };
-export const workKindLabel: Record<string, string> = { AKTION: "Aufgabe", ANFRAGE: "Anfrage", PRUEFUNG: "Prüfung", ERINNERUNG: "Erinnerung", SUCHE: "Suchauftrag", SHORTLIST: "Shortlist prüfen", NACHFASSEN: "Nachfassen" };
+export const workKindLabel: Record<string, string> = { AKTION: "Aufgabe", ANFRAGE: "Anfrage", PRUEFUNG: "Prüfung", ERINNERUNG: "Erinnerung", SUCHE: "Suchauftrag", SHORTLIST: "Shortlist prüfen", NACHFASSEN: "Nachfassen", BETREUUNG: "Betreuungsübergabe" };
 
 const TRANSITIONS: Record<WorkStatus, WorkStatus[]> = {
   ANGEFRAGT: ["OFFEN", "RUECKFRAGE", "ABGELEHNT", "VERWORFEN"],
@@ -86,7 +86,7 @@ export const createWorkItemInput = z
     /** zusätzliche Checklistenpunkte, je Zeile einer */
     checklistText: z.string().max(4000).optional().or(z.literal("")),
     parentId: z.string().optional().or(z.literal("")),
-    kind: z.enum(["AKTION", "ANFRAGE", "PRUEFUNG", "ERINNERUNG", "SUCHE", "SHORTLIST", "NACHFASSEN"]).optional(),
+    kind: z.enum(["AKTION", "ANFRAGE", "PRUEFUNG", "ERINNERUNG", "SUCHE", "SHORTLIST", "NACHFASSEN", "BETREUUNG"]).optional(),
   })
   .passthrough();
 
@@ -415,6 +415,11 @@ export async function actOnWorkItem(actor: Actor, id: string, raw: unknown) {
       .returning();
     if (!u) throw new ConflictError();
     await recordAudit(tx, actor, "work.status_changed", "WORK_ITEM", item.id, { aktion: i.action, von: item.status, nach: to });
+    // Betreuungsübergabe (Etappe 29): Annahme aktiviert die dauerhafte Zuordnung in derselben Transaktion
+    if ((i.action === "ANNEHMEN" || i.action === "UEBERNEHMEN") && item.kind === "BETREUUNG" && u.assigneeUserId) {
+      const { activateCareFromWorkItem } = await import("@/modules/engagements/care");
+      await activateCareFromWorkItem(tx, actor, u, u.assigneeUserId);
+    }
     const watchers = await tx.query.workWatchers.findMany({ where: eq(schema.workWatchers.workItemId, item.id) });
     if (event) await notify(tx, { workspaceId: actor.workspaceId, userIds: event.to, kind: event.kind, title: event.title, link: link(item.id), actorUserId: actor.userId });
     if (to === "ERLEDIGT" && watchers.length) await notify(tx, { workspaceId: actor.workspaceId, userIds: watchers.map((w) => w.userId).filter((w) => !event?.to.includes(w)), kind: "ERLEDIGT", title: `Erledigt: ${item.title}`, link: link(item.id), actorUserId: actor.userId });

@@ -2058,6 +2058,219 @@ export const staffingIntakes = pgTable(
   (t) => [index("staffing_intakes_opp_idx").on(t.opportunityId)],
 );
 
+// ---------------------------------------------------------------------------
+// Einsatz und Betreuung (Etappe 29, E2): Einsatzakte, Betreuungszuordnung, Perioden, Vertragsunterlagen,
+// Beschaffungsprofil, Check-ins, Verlängerungsentscheidung, Hintergrundläufe
+// ---------------------------------------------------------------------------
+
+/** Einsatz: entsteht idempotent aus einer bestätigten Auswahl (genau einer je Kandidatur). `orders` bleibt Beleg der Bestellung. */
+export const engagements = pgTable(
+  "engagements",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    positionId: text("position_id").notNull().references(() => staffingPositions.id),
+    candidacyId: text("candidacy_id").notNull().references(() => candidacies.id),
+    freelancerId: text("freelancer_id").notNull().references(() => freelancers.id),
+    opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    orderId: text("order_id").references(() => orders.id),
+    title: text("title").notNull(),
+    status: text("status").notNull().default("VORBEREITUNG"), // VORBEREITUNG | GEPLANT | AKTIV | PAUSIERT | ENDET | ABGESCHLOSSEN | ABGEBROCHEN
+    statusReason: text("status_reason"),
+    reviewDate: date("review_date"),
+    plannedStart: date("planned_start"),
+    actualStart: date("actual_start"),
+    plannedEnd: date("planned_end"),
+    actualEnd: date("actual_end"),
+    renewalDeadline: date("renewal_deadline"),
+    noticeNote: text("notice_note"),
+    bdUserId: text("bd_user_id").notNull().references(() => users.id),
+    /** Ausnahme vom Beschaffungscheck für „geplant“: Grund, wer, wann */
+    procurementException: text("procurement_exception"),
+    procurementExceptionBy: text("procurement_exception_by").references(() => users.id),
+    procurementExceptionAt: timestamp("procurement_exception_at", { withTimezone: true }),
+    externalRef: text("external_ref"), // z. B. Moco-Projekt-Link (nur Referenz)
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [uniqueIndex("engagements_candidacy_uq").on(t.candidacyId), index("engagements_account_idx").on(t.accountId), index("engagements_status_idx").on(t.workspaceId, t.status)],
+);
+
+/** Dauerhafte Betreuungszuordnung – unabhängig vom Ticketstatus; höchstens eine primäre je Einsatz/Funktion gleichzeitig. */
+export const careAssignments = pgTable(
+  "care_assignments",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    engagementId: text("engagement_id").notNull().references(() => engagements.id),
+    role: text("role").notNull(), // CUSTOMER_CARE | FREELANCER_CARE
+    userId: text("user_id").notNull().references(() => users.id),
+    fromDate: date("from_date").notNull(),
+    toDate: date("to_date"),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    grantedBy: text("granted_by").notNull().references(() => users.id),
+    handoverWorkItemId: text("handover_work_item_id").references(() => workItems.id),
+    endedReason: text("ended_reason"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("care_assignments_eng_idx").on(t.engagementId), index("care_assignments_user_idx").on(t.userId), uniqueIndex("care_assignments_primary_uq").on(t.engagementId, t.role).where(sql`to_date IS NULL`)],
+);
+
+/** Konditions-/Einsatzperiode: Plan vs. bestätigt; Änderungen erzeugen neue Perioden, alte bleiben. */
+export const engagementPeriods = pgTable(
+  "engagement_periods",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    engagementId: text("engagement_id").notNull().references(() => engagements.id),
+    kind: text("kind").notNull().default("PLAN"), // PLAN | BESTAETIGT
+    validFrom: date("valid_from").notNull(),
+    validTo: date("valid_to"),
+    ek: numeric("ek", { precision: 10, scale: 2 }),
+    vk: numeric("vk", { precision: 10, scale: 2 }),
+    currency: text("currency").notNull().default("EUR"),
+    rateUnit: text("rate_unit").notNull().default("TAG"),
+    scopeAmount: integer("scope_amount"),
+    scopeUnit: text("scope_unit"),
+    source: text("source"),
+    confirmedBy: text("confirmed_by").references(() => users.id),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    supersededById: text("superseded_by_id").references((): AnyPgColumn => engagementPeriods.id),
+    note: text("note"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("engagement_periods_eng_idx").on(t.engagementId)],
+);
+
+/** Vertrags-/Beschaffungsunterlage (Partei getrennt vom Dokument); kann mehrere Einsätze betreffen. */
+export const contractDocuments = pgTable(
+  "contract_documents",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    side: text("side").notNull(), // KUNDE | FREELANCER
+    docType: text("doc_type").notNull(), // RAHMENVERTRAG | EINZELBEAUFTRAGUNG | BESTELLUNG | NACHTRAG | NDA | KUENDIGUNG | SONSTIGES
+    title: text("title").notNull(),
+    versionLabel: text("version_label"),
+    validFrom: date("valid_from"),
+    validTo: date("valid_to"),
+    signedStatus: text("signed_status").notNull().default("ENTWURF"), // ENTWURF | VERSENDET | UNTERSCHRIEBEN | GEKUENDIGT
+    sourceId: text("source_id").references(() => sources.id),
+    link: text("link"),
+    reference: text("reference"), // Bestell-/Vertragsnummer
+    freelancerId: text("freelancer_id").references(() => freelancers.id),
+    reviewedBy: text("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewNote: text("review_note"),
+    /** Vorschlag aus dem Dateieingang: { docType, evidence, status } */
+    suggestion: jsonb("suggestion"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("contract_documents_account_idx").on(t.accountId)],
+);
+
+export const engagementDocuments = pgTable(
+  "engagement_documents",
+  {
+    engagementId: text("engagement_id").notNull().references(() => engagements.id),
+    documentId: text("document_id").notNull().references(() => contractDocuments.id),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.engagementId, t.documentId] })],
+);
+
+/** Beschaffungsprofil je Kunde: welche Unterlagen (Seite × Typ) vor „geplant“ unterschrieben vorliegen müssen. */
+export const procurementProfiles = pgTable("procurement_profiles", {
+  accountId: text("account_id").primaryKey().references(() => accounts.id),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  /** [{ side, docType }] */
+  required: jsonb("required").notNull().default([]),
+  note: text("note"),
+  approvedBy: text("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  updatedAt: updatedAt(),
+  version: version(),
+});
+
+/** Check-in (Kunde oder Freelancer) am Einsatz. */
+export const checkins = pgTable(
+  "checkins",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    engagementId: text("engagement_id").notNull().references(() => engagements.id),
+    side: text("side").notNull(), // KUNDE | FREELANCER
+    ownerUserId: text("owner_user_id").notNull().references(() => users.id),
+    dueDate: date("due_date").notNull(),
+    status: text("status").notNull().default("FAELLIG"), // FAELLIG | ANGEFRAGT | GEPLANT | ERLEDIGT | VERSCHOBEN | ABGESAGT
+    scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+    heldAt: timestamp("held_at", { withTimezone: true }),
+    participants: text("participants"),
+    note: text("note"),
+    risks: text("risks"),
+    openPoints: text("open_points"),
+    nextStep: text("next_step"),
+    salesHint: text("sales_hint"),
+    salesSignalId: text("sales_signal_id").references(() => signals.id),
+    ruleKey: text("rule_key"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("checkins_eng_idx").on(t.engagementId), index("checkins_owner_idx").on(t.ownerUserId, t.status), uniqueIndex("checkins_rule_uq").on(t.ruleKey)],
+);
+
+/** Verlängerungsentscheidung je Einsatz (kein Einsatzstatus). */
+export const renewalDecisions = pgTable(
+  "renewal_decisions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    engagementId: text("engagement_id").notNull().references(() => engagements.id),
+    triggerDate: date("trigger_date"),
+    status: text("status").notNull().default("ZU_KLAEREN"), // ZU_KLAEREN | IN_ABSTIMMUNG | ANGEBOTEN | BESTAETIGT | ABGELEHNT | ERLEDIGT
+    proposedFrom: date("proposed_from"),
+    proposedTo: date("proposed_to"),
+    conditionsNote: text("conditions_note"),
+    availabilityNote: text("availability_note"),
+    commercialOwnerUserId: text("commercial_owner_user_id").references(() => users.id),
+    contractFollowUp: text("contract_follow_up"),
+    resultPeriodId: text("result_period_id").references(() => engagementPeriods.id),
+    decidedBy: text("decided_by").references(() => users.id),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [index("renewal_decisions_eng_idx").on(t.engagementId)],
+);
+
+/** Hintergrundläufe (Heartbeat, Ergebnis, Fehler) – sichtbar in der Verwaltung. */
+export const jobRuns = pgTable(
+  "job_runs",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    ok: boolean("ok"),
+    error: text("error"),
+    counts: jsonb("counts"),
+  },
+  (t) => [index("job_runs_name_idx").on(t.name, t.startedAt)],
+);
+
 export type Role = (typeof roleEnum.enumValues)[number];
 export type PlaybookScope = (typeof playbookScopeEnum.enumValues)[number];
 export type PlaybookRunStatus = (typeof playbookRunStatusEnum.enumValues)[number];

@@ -33,6 +33,8 @@ import { listSosForAccount } from "@/modules/sos/service";
 import { KundenAgenda, Beschaffung } from "@/components/KundenAgenda";
 import { SosPanel } from "@/components/SosPanel";
 import { Comments, WorkBlock } from "@/components/Work";
+import { Beschaffungsprofil } from "@/components/Beschaffungsprofil";
+import { getConfig } from "@/lib/config";
 
 export default async function KundePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
@@ -147,6 +149,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       )}
 
       <Beschaffung account={account} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} />
+      {getConfig().FEATURE_BESETZUNG === "true" && <Beschaffungsprofil actor={actor} account={account} back={back} />}
       {!sosList.some((x) => x.status !== "GELOEST") && account.status !== "ARCHIVED" && <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} />}
 
       {account.status === "DORMANT" && <p className="text-sm" style={{ background: "var(--warn-soft)", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ruht. Mit dem Vorgehen „Altkunden-Reaktivierung“ (unten) wird er wieder aktiv angegangen.</p>}

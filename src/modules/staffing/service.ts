@@ -696,6 +696,10 @@ export async function selectCandidacy(actor: Actor, candidacyId: string, raw: un
     if (!u) throw new ConflictError();
     await tx.insert(schema.candidacyEvents).values({ workspaceId: actor.workspaceId, candidacyId: c.id, kind: "AUSWAHL", fromStatus: c.status, toStatus: "AUSGEWAEHLT", reason: p.data.reason || null, createdBy: actor.userId });
     await recordAudit(tx, actor, "position.filled", "POSITION", pos.id, { kandidatur: c.id });
+    // Einsatzakte (Etappe 29) – idempotent, eine je Kandidatur; beweist weder Vertragslage noch Start
+    const { ensureEngagementForSelection } = await import("@/modules/engagements/service");
+    const engagement = await ensureEngagementForSelection(tx, actor, c.id);
+    void engagement;
     // Offenen Suchauftrag zur Abnahme bringen bzw. als erledigt kennzeichnen
     const open = await tx.query.workItems.findMany({ where: and(eq(schema.workItems.subjectType, "POSITION"), eq(schema.workItems.subjectId, pos.id), eq(schema.workItems.kind, "SUCHE"), notInArray(schema.workItems.status, WORK_FINAL)) });
     for (const w of open) {

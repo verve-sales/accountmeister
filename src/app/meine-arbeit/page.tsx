@@ -19,6 +19,9 @@ import { Status } from "@/components/Status";
 import { actionStatusLabel, fmtDate, handoverStatusLabel, reviewStatusLabel, setupStatusLabel, supportStatusLabel, opportunityStatusLabel } from "@/lib/labels";
 import { listMyWork, workFilterValues, workTargets, ensureOverdueNotificationsSafe, type WorkFilter } from "@/modules/work/service";
 import { WorkList } from "@/components/Work";
+import { listMyCheckins } from "@/modules/engagements/care";
+import { getConfig } from "@/lib/config";
+import { checkinAction } from "../actions";
 import { WorkCreateForm } from "@/components/WorkCreateForm";
 import { changeActionStatusAction, respondHandoverAction, respondSupportRequestAction } from "../actions";
 
@@ -47,6 +50,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
   const tab = (TABS.find((t) => t.key === params.v)?.key ?? "mir") as (typeof TABS)[number]["key"];
   const filter = (workFilterValues as readonly string[]).includes(params.f ?? "") ? (params.f as WorkFilter) : "alle";
   const [work, targets] = await Promise.all([listMyWork(actor, filter), workTargets(actor)]);
+  const checkins = getConfig().FEATURE_BESETZUNG === "true" ? await listMyCheckins(actor) : [];
   const tabItems = { mir: work.assigned, beauftragt: work.requested, team: work.queue, beobachtet: work.watched }[tab];
   const tabCount = { mir: work.counts.assigned, beauftragt: work.counts.requested, team: work.counts.queue, beobachtet: work.counts.watched };
   const [setups, actions, handovers, reviews, support] = await Promise.all([listMySetups(actor), listMyOpenActions(actor), listMyHandovers(actor), listReviews(actor), listMySupportRequests(actor)]);
@@ -96,6 +100,27 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
           <WorkCreateForm users={targets.users} teams={targets.teams} back="/meine-arbeit?v=beauftragt#vorgaenge" idPrefix="ma" />
         </details>
       </section>
+
+      {checkins.length > 0 && (
+        <section className="card" id="checkins">
+          <h2 className="font-semibold mb-2">Meine Check-ins ({checkins.length})</h2>
+          <ul className="space-y-2 text-sm">
+            {checkins.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-baseline gap-2" style={{ borderLeft: `3px solid ${c.overdue ? "#c0392b" : "var(--border)"}`, paddingLeft: ".6rem" }}>
+                <Link href={`/einsaetze/${c.engagementId}#checkins`}><strong>{c.engagementTitle}</strong></Link>
+                <span className="muted text-xs">{c.accountName} · {c.side === "KUNDE" ? "Kunde" : "Freelancer"} · fällig {fmtDate(c.dueDate)}{c.overdue ? " (überfällig)" : ""} · {c.status.toLowerCase()}</span>
+                <form action={checkinAction} className="flex flex-wrap gap-1 items-center ml-auto">
+                  <input type="hidden" name="checkinId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="back" value="/meine-arbeit#checkins" /><input type="hidden" name="action" value="ERLEDIGEN" />
+                  <input type="datetime-local" name="heldAt" className="input" aria-label="Gesprächstermin" required />
+                  <input name="note" className="input" placeholder="Ergebnis" aria-label="Ergebnis" required style={{ minWidth: 200 }} />
+                  <input name="salesHint" className="input" placeholder="Sales-Hinweis (optional)" aria-label="Sales-Hinweis" />
+                  <button className="btn btn-small" type="submit">Geführt</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card">
         <h2 className="font-semibold mb-2">Offene Übernahmen an mich ({openIncoming.length})</h2>

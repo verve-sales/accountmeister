@@ -48,6 +48,8 @@ import { markRead, openNotification, saveMyPrefs } from "@/modules/notifications
 import { addCandidacy, changeCandidacyStatus, changePositionStatus, copyPosition, createPosition, recordCustomerFeedback, recordInterview, recordPresentation, requestSearch, selectCandidacy, updateCandidacy, updateFreelancer, updatePosition } from "@/modules/staffing/service";
 import { applyIntake as applyStaffingIntake, createIntake as createStaffingIntake, generateAdDraft, saveAdDraft } from "@/modules/staffing/ai";
 import { getConfig } from "@/lib/config";
+import { addContractDocument, addPeriod, changeEngagementStatus, linkContractDocument, saveProcurementProfile, setContractDocumentStatus, updateEngagement } from "@/modules/engagements/service";
+import { actOnCheckin, createCheckin, requestCareHandover, setCareDirect, upsertRenewalDecision } from "@/modules/engagements/care";
 import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
 /**
@@ -1481,4 +1483,105 @@ export async function applyStaffingIntakeAction(fd: FormData) {
     await applyStaffingIntake(actor, data.intakeId ?? "", data);
     return `/bedarfe/${data.opportunityId ?? ""}#besetzung`;
   }, data.decision === "VERWERFEN" ? "Texteingang verworfen." : "Positionen als Entwurf übernommen.");
+}
+
+// --- Einsatz und Betreuung (Etappe 29, E2) --------------------------------------
+
+export async function updateEngagementAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}`), async (actor) => {
+    requireStaffingFlag();
+    await updateEngagement(actor, data.engagementId ?? "", data);
+  }, "Einsatz gespeichert.");
+}
+
+export async function changeEngagementStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}`), async (actor) => {
+    requireStaffingFlag();
+    await changeEngagementStatus(actor, data.engagementId ?? "", data);
+  }, "Einsatzstatus geändert.");
+}
+
+export async function addPeriodAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#konditionen`), async (actor) => {
+    requireStaffingFlag();
+    await addPeriod(actor, data.engagementId ?? "", data);
+  }, "Periode angelegt – der bisherige Stand bleibt erhalten.");
+}
+
+export async function saveProcurementProfileAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/kunden/${data.accountId ?? ""}#beschaffungsprofil`), async (actor) => {
+    requireStaffingFlag();
+    await saveProcurementProfile(actor, data.accountId ?? "", data);
+  }, data.approve ? "Beschaffungsprofil freigegeben." : "Beschaffungsprofil gespeichert (noch nicht freigegeben).");
+}
+
+export async function addContractDocumentAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#vertraege`), async (actor) => {
+    requireStaffingFlag();
+    const r = await addContractDocument(actor, data.engagementId ?? "", data, fileFrom(fd, "file"));
+    if (r.suggestion?.docType && r.suggestion.docType !== data.docType) throw new PendingInfo(`Unterlage gespeichert. Hinweis aus dem Dokumenttext: Es sieht nach „${r.suggestion.docType}“ aus („${r.suggestion.evidence.slice(0, 80)}…“) – bitte Typ prüfen.`);
+    if (r.suggestion?.extractStatus === "LEER") throw new PendingInfo("Unterlage gespeichert. Scan erkannt – der Inhalt wurde nicht ausgewertet; Angaben bitte manuell prüfen.");
+  }, "Unterlage gespeichert.");
+}
+
+export async function setContractDocumentStatusAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#vertraege`), async (actor) => {
+    requireStaffingFlag();
+    await setContractDocumentStatus(actor, data.engagementId ?? "", data.documentId ?? "", data);
+  }, "Vertragsstatus gesetzt.");
+}
+
+export async function linkContractDocumentAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#vertraege`), async (actor) => {
+    requireStaffingFlag();
+    await linkContractDocument(actor, data.engagementId ?? "", data.documentId ?? "");
+  }, "Unterlage verknüpft.");
+}
+
+export async function requestCareHandoverAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#betreuung`), async (actor) => {
+    requireStaffingFlag();
+    await requestCareHandover(actor, data.engagementId ?? "", data);
+  }, "Betreuungsübergabe angefragt – die Zuordnung wird mit der Annahme wirksam.");
+}
+
+export async function setCareDirectAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#betreuung`), async (actor) => {
+    requireStaffingFlag();
+    await setCareDirect(actor, data.engagementId ?? "", data);
+  }, "Betreuung umgestellt.");
+}
+
+export async function createCheckinAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#checkins`), async (actor) => {
+    requireStaffingFlag();
+    await createCheckin(actor, data.engagementId ?? "", data);
+  }, "Check-in angelegt.");
+}
+
+export async function checkinAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/meine-arbeit#checkins"), async (actor) => {
+    requireStaffingFlag();
+    const r = await actOnCheckin(actor, data.checkinId ?? "", data);
+    if (data.action === "ERLEDIGEN" && data.salesHint && !r.salesSignalId) throw new PendingInfo("Check-in erledigt. Der Sales-Hinweis konnte nicht als Signal angelegt werden (kein Bearbeitungsrecht am Setup) – der BD wurde benachrichtigt.");
+  }, data.action === "ERLEDIGEN" ? "Check-in erledigt – der nächste Kunden-Check-in ist in 42 Tagen fällig." : "Check-in aktualisiert.");
+}
+
+export async function renewalDecisionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#verlaengerung`), async (actor) => {
+    requireStaffingFlag();
+    await upsertRenewalDecision(actor, data.engagementId ?? "", data);
+  }, data.status === "BESTAETIGT" ? "Verlängerung bestätigt – neue Periode angelegt, Einsatzende angepasst." : "Verlängerungsstand gespeichert.");
 }

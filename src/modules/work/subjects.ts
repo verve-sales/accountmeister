@@ -10,9 +10,9 @@ import { getAccount } from "@/modules/accounts/service";
  * wer den Kunden/das Setup/die Chance nicht sehen darf, sieht auch Kommentare und Vorgänge daran nicht (Ausnahme:
  * direkt Beteiligte eines Vorgangs, siehe work/service).
  */
-export const subjectTypeValues = ["KUNDE", "SETUP", "CHANCE", "SOS", "POSITION", "OHNE"] as const;
+export const subjectTypeValues = ["KUNDE", "SETUP", "CHANCE", "SOS", "POSITION", "EINSATZ", "OHNE"] as const;
 export type SubjectType = (typeof subjectTypeValues)[number];
-export const subjectTypeLabel: Record<string, string> = { KUNDE: "Kunde", SETUP: "Setup", CHANCE: "Chance", SOS: "SOS", POSITION: "Position", OHNE: "ohne Bezug", VORGANG: "Vorgang" };
+export const subjectTypeLabel: Record<string, string> = { KUNDE: "Kunde", SETUP: "Setup", CHANCE: "Chance", SOS: "SOS", POSITION: "Position", EINSATZ: "Einsatz", OHNE: "ohne Bezug", VORGANG: "Vorgang" };
 
 export type ResolvedSubject = { type: SubjectType; id: string | null; accountId: string | null; label: string; link: string | null };
 
@@ -46,6 +46,11 @@ export async function resolveSubject(actor: Actor, type: string, id: string | nu
       const { requireViewablePosition } = await import("@/modules/staffing/authz");
       const p = await requireViewablePosition(actor, id);
       return { type, id, accountId: p.position.accountId, label: `${p.accountName} · Position: ${p.position.title}`, link: `/besetzung/${id}` };
+    }
+    case "EINSATZ": {
+      const { requireEngagement } = await import("@/modules/engagements/authz");
+      const a = await requireEngagement(actor, id);
+      return { type, id, accountId: a.engagement.accountId, label: `${a.account.name} · Einsatz: ${a.engagement.title}`, link: `/einsaetze/${id}` };
     }
     default:
       throw new ValidationError("Unbekannter Bezug.");
