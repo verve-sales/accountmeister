@@ -31,10 +31,10 @@ export function ProvisionCalculator({ isPrincipal }: { isPrincipal: boolean }) {
           {isPrincipal ? (
             <>
               <label className="text-sm flex items-center gap-1"><input type="radio" name="rcp" checked={recipient === "PRINCIPAL"} onChange={() => setRecipient("PRINCIPAL")} /> Principal (alle Stufen)</label>
-              <label className="text-sm flex items-center gap-1"><input type="radio" name="rcp" checked={recipient !== "PRINCIPAL"} onChange={() => setRecipient("BD")} /> BD / Anker (höchstens 15 %)</label>
+              <label className="text-sm flex items-center gap-1"><input type="radio" name="rcp" checked={recipient !== "PRINCIPAL"} onChange={() => setRecipient("BD")} /> BD / Anker (höchstens 20 %)</label>
             </>
           ) : (
-            <strong className="text-sm">BD / Anker – Provisionssatz höchstens 15 %</strong>
+            <strong className="text-sm">BD / Anker – Provisionssatz höchstens 20 %</strong>
           )}
           <span className="muted text-xs ml-auto">Kostenpauschale {PROVISION_CONFIG.costTiers[0]!.perDay} €/Tag · Finding Fee {eur(PROVISION_CONFIG.findingFee)} · Signing Fee {eur(PROVISION_CONFIG.signingFee)} je Deal</span>
         </div>

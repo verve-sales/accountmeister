@@ -13,8 +13,8 @@
  *   Signing Fee     = Signing Fee je Deal × eigener Anteil
  *   Provision ges.  = Basisprovision + Finding Fee + Signing Fee
  *
- * Rollenregel: Die Stufen über 15 % (20 % ab 20 % Nettomarge, 43 % ab 45 % Nettomarge) gelten nur für Principals;
- * BDs und Anker erhalten höchstens 15 %.
+ * Rollenregel: Die Premium-Stufe (43 % ab 45 % Nettomarge) ist Principals vorbehalten; BDs und Anker erhalten
+ * höchstens 20 %.
  */
 
 export const PROVISION_CONFIG = {
@@ -31,11 +31,11 @@ export const PROVISION_CONFIG = {
     { key: "KEINE", label: "Keine Provision", from: 0, rate: 0, color: "Rot", principalOnly: false },
     { key: "BASIS", label: "Basis", from: 0.1, rate: 0.1, color: "Orange", principalOnly: false },
     { key: "STANDARD", label: "Standard", from: 0.17, rate: 0.15, color: "Grün", principalOnly: false },
-    { key: "PREMIUM", label: "Premium", from: 0.2, rate: 0.2, color: "Grün (Principal)", principalOnly: true },
+    { key: "PREMIUM", label: "Premium", from: 0.2, rate: 0.2, color: "Grün", principalOnly: false },
     { key: "PRINCIPAL", label: "Principal", from: 0.45, rate: 0.43, color: "Blau", principalOnly: true },
   ],
   /** Höchstsatz für BDs und Anker */
-  nonPrincipalMaxRate: 0.15,
+  nonPrincipalMaxRate: 0.2,
 } as const;
 
 /** Feste Einkaufspreise (EUR/Tag) der internen Rollen */

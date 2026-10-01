@@ -26,12 +26,14 @@ describe("Provisionsrechner (Nachbau Verve_Freelancer_ProvisionV2.xlsx)", () => 
     expect(computeDeal(fl(800, 920, 150), "PRINCIPAL")!.total).toBe(1250);
   });
 
-  it("BDs und Anker erhalten höchstens 15 % – auch bei Premium-Margen", () => {
-    const b = computeDeal(fl(720, 1026, 55.5), "BD")!;
-    expect(b.rate).toBe(0.15);
-    expect(b.capped).toBe(true);
-    expect(b.warnings.join(" ")).toMatch(/höchstens 15 %/);
-    expect(computeDeal(fl(500, 1500, 100), "ANKER")!.rate).toBe(0.15);
+  it("BDs und Anker erhalten höchstens 20 % – die 43 % ab 45 % Marge sind Principals vorbehalten", () => {
+    const b = computeDeal(fl(720, 1026, 55.5), "BD")!; // 25,9 % → 20 % wie beim Principal
+    expect(b.rate).toBe(0.2);
+    expect(b.capped).toBe(false);
+    const c = computeDeal(fl(500, 1500, 100), "ANKER")!; // > 45 %
+    expect(c.rate).toBe(0.2);
+    expect(c.capped).toBe(true);
+    expect(c.warnings.join(" ")).toMatch(/höchstens 20 %/);
     expect(computeDeal(fl(1000, 1200, 150), "ANKER")!.rate).toBe(0.1);
     expect(legendFor("BD").map((l) => l.text).join("\n")).not.toMatch(/43/);
     expect(legendFor("PRINCIPAL").map((l) => l.text).join("\n")).toMatch(/ab 45 % → 43 %/);
