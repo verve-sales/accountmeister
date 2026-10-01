@@ -94,11 +94,16 @@ export const positionInput = z.object({
   vkMin: money,
   vkMax: money,
   rateUnit: z.enum(["TAG", "STUNDE"]).optional(),
+  /** Freelancer (Standard) oder interne Besetzung – intern ohne Einkaufskonditionen */
+  resourceKind: z.enum(["FREELANCER", "INTERN"]).optional(),
 });
+export const resourceKindLabel: Record<string, string> = { FREELANCER: "Freelancer", INTERN: "intern" };
 const truthy = (v: unknown) => v === true || v === "true" || v === "on";
 
 function positionValues(i: z.infer<typeof positionInput>) {
+  const intern = i.resourceKind === "INTERN";
   return {
+    resourceKind: i.resourceKind ?? "FREELANCER",
     title: i.title,
     roleId: nul(i.roleId),
     tasks: nul(i.tasks),
@@ -113,8 +118,8 @@ function positionValues(i: z.infer<typeof positionInput>) {
     scopeUnit: i.scopeUnit || null,
     proposalDue: nul(i.proposalDue),
     internalNotes: nul(i.internalNotes),
-    ekMin: nul(i.ekMin),
-    ekMax: nul(i.ekMax),
+    ekMin: intern ? null : nul(i.ekMin),
+    ekMax: intern ? null : nul(i.ekMax),
     vkMin: nul(i.vkMin),
     vkMax: nul(i.vkMax),
     rateUnit: i.rateUnit ?? "TAG",
@@ -386,6 +391,13 @@ export async function similarFreelancers(actor: Actor, name: string) {
   return rows.filter((r) => parts.some((pt) => r.displayName.toLowerCase().includes(pt))).slice(0, 8).map((r) => ({ id: r.id, displayName: r.displayName, company: r.company, skills: r.skills }));
 }
 
+/** Auswahlliste für die Schnellbesetzung – leer, wenn der Akteur den Pool nicht sehen darf (dann Namenseingabe). */
+export async function freelancerOptions(actor: Actor): Promise<{ id: string; name: string }[]> {
+  if (!canBrowseFreelancerPool(actor)) return [];
+  const rows = await db.query.freelancers.findMany({ where: and(eq(schema.freelancers.workspaceId, actor.workspaceId), isNull(schema.freelancers.mergedIntoId)), orderBy: asc(schema.freelancers.displayName), columns: { id: true, displayName: true } });
+  return rows.map((r) => ({ id: r.id, name: r.displayName }));
+}
+
 export async function listFreelancerPool(actor: Actor) {
   if (!canBrowseFreelancerPool(actor)) throw new ForbiddenError("Den Freelancer-Pool sehen Sales Operations, Principals und CEO.");
   const rows = await db.query.freelancers.findMany({ where: and(eq(schema.freelancers.workspaceId, actor.workspaceId), isNull(schema.freelancers.mergedIntoId)), orderBy: asc(schema.freelancers.displayName) });
@@ -400,6 +412,8 @@ export async function listFreelancerPool(actor: Actor) {
 
 export const candidacyInput = z.object({
   freelancerId: opt(100),
+  /** interne Person (Nutzerkonto) statt Freelancer – nur an Positionen mit Ressourcenart „intern“ */
+  internalUserId: opt(100),
   /** neu anlegen, wenn keine freelancerId */
   newName: opt(200),
   newEmail: opt(200),
@@ -434,6 +448,43 @@ function candidacyValues(i: z.infer<typeof candidacyInput>) {
   };
 }
 
+type PersonInput = { freelancerId?: string; internalUserId?: string; newName?: string; newEmail?: string; newCompany?: string; newSkills?: string };
+
+/** Person einer Kandidatur auflösen: Freelancer (bestehend oder neu) oder interne Person; prüft Doppelkandidatur. */
+async function resolvePerson(tx: Tx, actor: Actor, position: PositionRow, i: PersonInput): Promise<{ freelancerId: string | null; internalUserId: string | null }> {
+  if (position.resourceKind === "INTERN") {
+    if (!i.internalUserId) throw new ValidationError("Bitte die interne Person wählen.");
+    const u = await tx.query.users.findFirst({ where: and(eq(schema.users.id, i.internalUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")), columns: { id: true } });
+    if (!u) throw new ValidationError("Interne Person nicht gefunden.");
+    const dup = await tx.query.candidacies.findFirst({ where: and(eq(schema.candidacies.positionId, position.id), eq(schema.candidacies.internalUserId, u.id), eq(schema.candidacies.isActive, true)) });
+    if (dup) throw new ConflictError("Für diese Person gibt es an der Position bereits eine aktive Kandidatur.");
+    return { freelancerId: null, internalUserId: u.id };
+  }
+  let freelancerId = i.freelancerId || "";
+  if (!freelancerId) {
+    if (!i.newName || i.newName.length < 2) throw new ValidationError("Bitte einen Freelancer wählen oder einen Namen für einen neuen eintragen.");
+    // Gleichnamiger Freelancer im Pool → wiederverwenden statt Dublette
+    const same = await tx.query.freelancers.findFirst({ where: and(eq(schema.freelancers.workspaceId, actor.workspaceId), isNull(schema.freelancers.mergedIntoId), sql`lower(${schema.freelancers.displayName}) = ${i.newName.trim().toLowerCase()}`), columns: { id: true } });
+    if (same) freelancerId = same.id;
+    else {
+      const f = await createFreelancer(actor, { displayName: i.newName, email: i.newEmail, company: i.newCompany, skills: i.newSkills }, tx);
+      freelancerId = f.id;
+    }
+  } else {
+    const f = await tx.query.freelancers.findFirst({ where: and(eq(schema.freelancers.id, freelancerId), eq(schema.freelancers.workspaceId, actor.workspaceId)) });
+    if (!f) throw new ValidationError("Freelancer nicht gefunden.");
+  }
+  const dup = await tx.query.candidacies.findFirst({ where: and(eq(schema.candidacies.positionId, position.id), eq(schema.candidacies.freelancerId, freelancerId), eq(schema.candidacies.isActive, true)) });
+  if (dup) throw new ConflictError("Für diese Person gibt es an der Position bereits eine aktive Kandidatur – bitte dort weiterarbeiten oder sie wieder aufnehmen.");
+  return { freelancerId, internalUserId: null };
+}
+
+export async function candidacyPersonName(tx: Tx, c: { freelancerId: string | null; internalUserId: string | null }): Promise<string> {
+  if (c.freelancerId) return (await tx.query.freelancers.findFirst({ where: eq(schema.freelancers.id, c.freelancerId), columns: { displayName: true } }))?.displayName ?? "?";
+  if (c.internalUserId) return `${(await tx.query.users.findFirst({ where: eq(schema.users.id, c.internalUserId), columns: { displayName: true } }))?.displayName ?? "?"} (intern)`;
+  return "?";
+}
+
 function requireCandidacyWork(a: PositionAccess) {
   if (!a.full) throw new NotFoundError("Position");
   if (!(a.manage || a.searcher)) throw new ForbiddenError("Kandidaturen pflegen die angenommene Suchbearbeiter:in und der verantwortliche BD.");
@@ -447,20 +498,10 @@ export async function addCandidacy(actor: Actor, positionId: string, raw: unknow
   requireCandidacyWork(a);
   const i = p.data;
   return db.transaction(async (tx) => {
-    let freelancerId = i.freelancerId || "";
-    if (!freelancerId) {
-      if (!i.newName || i.newName.length < 2) throw new ValidationError("Bitte einen Freelancer wählen oder einen Namen für einen neuen eintragen.");
-      const f = await createFreelancer(actor, { displayName: i.newName, email: i.newEmail, company: i.newCompany, skills: i.newSkills }, tx);
-      freelancerId = f.id;
-    } else {
-      const f = await tx.query.freelancers.findFirst({ where: and(eq(schema.freelancers.id, freelancerId), eq(schema.freelancers.workspaceId, actor.workspaceId)) });
-      if (!f) throw new ValidationError("Freelancer nicht gefunden.");
-    }
-    const dup = await tx.query.candidacies.findFirst({ where: and(eq(schema.candidacies.positionId, positionId), eq(schema.candidacies.freelancerId, freelancerId), eq(schema.candidacies.isActive, true)) });
-    if (dup) throw new ConflictError("Für diese Person gibt es an der Position bereits eine aktive Kandidatur – bitte dort weiterarbeiten oder sie wieder aufnehmen.");
+    const person = await resolvePerson(tx, actor, a.position, i);
     const [c] = await tx
       .insert(schema.candidacies)
-      .values({ workspaceId: actor.workspaceId, positionId, freelancerId, handlerUserId: actor.userId, ...candidacyValues(i), createdBy: actor.userId })
+      .values({ workspaceId: actor.workspaceId, positionId, ...person, handlerUserId: actor.userId, ...candidacyValues(i), createdBy: actor.userId })
       .returning();
     await tx.insert(schema.candidacyEvents).values({ workspaceId: actor.workspaceId, candidacyId: c!.id, kind: "STATUS", toStatus: "IDENTIFIZIERT", createdBy: actor.userId });
     await recordAudit(tx, actor, "candidacy.created", "CANDIDACY", c!.id, { position: positionId });
@@ -535,7 +576,7 @@ export async function changeCandidacyStatus(actor: Actor, candidacyId: string, r
       patch.presentationApprovedAt = new Date();
     }
     if (to === "INTERVIEW" && from !== "VORGESTELLT") throw new TransitionError("Ein Interview setzt eine dokumentierte Vorstellung voraus.");
-    if (to === "VORGESCHLAGEN" && !c.ekRate) throw new ValidationError("Vor dem Vorschlag an den BD bitte den EK-Stand der Kandidatur erfassen.");
+    if (to === "VORGESCHLAGEN" && !c.ekRate && a.position.resourceKind !== "INTERN") throw new ValidationError("Vor dem Vorschlag an den BD bitte den EK-Stand der Kandidatur erfassen.");
   }
   return db.transaction(async (tx) => {
     const [u] = await tx
@@ -546,9 +587,9 @@ export async function changeCandidacyStatus(actor: Actor, candidacyId: string, r
     if (!u) throw new ConflictError();
     await tx.insert(schema.candidacyEvents).values({ workspaceId: actor.workspaceId, candidacyId, kind: CANDIDACY_TERMINAL.includes(to) ? "ABSAGE" : CANDIDACY_TERMINAL.includes(from) ? "WIEDERAUFNAHME" : "STATUS", fromStatus: from, toStatus: to, reason: p.data.reason || null, createdBy: actor.userId });
     await recordAudit(tx, actor, "candidacy.status", "CANDIDACY", candidacyId, { von: from, nach: to });
-    const f = await tx.query.freelancers.findFirst({ where: eq(schema.freelancers.id, c.freelancerId), columns: { displayName: true } });
-    if (to === "VORGESCHLAGEN" && a.position.bdUserId !== actor.userId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [a.position.bdUserId], kind: "ZUR_PRUEFUNG", title: `Kandidat vorgeschlagen für „${a.position.title}“: ${f?.displayName ?? ""}`, link: `/besetzung/${a.position.id}`, actorUserId: actor.userId });
-    if (to === "FREIGEGEBEN" && c.handlerUserId !== actor.userId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [c.handlerUserId], kind: "ANGENOMMEN", title: `Zur Vorstellung freigegeben: ${f?.displayName ?? ""} („${a.position.title}“)`, link: `/besetzung/${a.position.id}`, actorUserId: actor.userId });
+    const name = await candidacyPersonName(tx, c);
+    if (to === "VORGESCHLAGEN" && a.position.bdUserId !== actor.userId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [a.position.bdUserId], kind: "ZUR_PRUEFUNG", title: `Kandidat vorgeschlagen für „${a.position.title}“: ${name}`, link: `/besetzung/${a.position.id}`, actorUserId: actor.userId });
+    if (to === "FREIGEGEBEN" && c.handlerUserId !== actor.userId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [c.handlerUserId], kind: "ANGENOMMEN", title: `Zur Vorstellung freigegeben: ${name} („${a.position.title}“)`, link: `/besetzung/${a.position.id}`, actorUserId: actor.userId });
     return u;
   });
 }
@@ -700,14 +741,121 @@ export async function selectCandidacy(actor: Actor, candidacyId: string, raw: un
     const { ensureEngagementForSelection } = await import("@/modules/engagements/service");
     const engagement = await ensureEngagementForSelection(tx, actor, c.id);
     void engagement;
-    // Offenen Suchauftrag zur Abnahme bringen bzw. als erledigt kennzeichnen
-    const open = await tx.query.workItems.findMany({ where: and(eq(schema.workItems.subjectType, "POSITION"), eq(schema.workItems.subjectId, pos.id), eq(schema.workItems.kind, "SUCHE"), notInArray(schema.workItems.status, WORK_FINAL)) });
-    for (const w of open) {
-      await tx.update(schema.workItems).set({ status: "ERLEDIGT", result: `${w.result ?? ""}\nPosition besetzt (Auswahl bestätigt).`.trim(), completedAt: new Date(), version: w.version + 1, updatedAt: new Date() }).where(eq(schema.workItems.id, w.id));
-      await recordAudit(tx, actor, "work.status_changed", "WORK_ITEM", w.id, { von: w.status, nach: "ERLEDIGT", grund: "Position besetzt" });
-      if (w.assigneeUserId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [w.assigneeUserId], kind: "ERLEDIGT", title: `Position besetzt: „${pos.title}“`, link: `/besetzung/${pos.id}`, actorUserId: actor.userId });
-    }
+    await closeSearchItems(tx, actor, pos, "Position besetzt (Auswahl bestätigt).");
     return { candidacy: u, position: pos, already: false };
+  });
+}
+
+/** Offene Suchaufträge zur Position als erledigt kennzeichnen (Auswahl bestätigt / Schnellbesetzung). */
+async function closeSearchItems(tx: Tx, actor: Actor, pos: PositionRow, note: string) {
+  const open = await tx.query.workItems.findMany({ where: and(eq(schema.workItems.subjectType, "POSITION"), eq(schema.workItems.subjectId, pos.id), eq(schema.workItems.kind, "SUCHE"), notInArray(schema.workItems.status, WORK_FINAL)) });
+  for (const w of open) {
+    await tx.update(schema.workItems).set({ status: "ERLEDIGT", result: `${w.result ?? ""}\n${note}`.trim(), completedAt: new Date(), version: w.version + 1, updatedAt: new Date() }).where(eq(schema.workItems.id, w.id));
+    await recordAudit(tx, actor, "work.status_changed", "WORK_ITEM", w.id, { von: w.status, nach: "ERLEDIGT", grund: "Position besetzt" });
+    if (w.assigneeUserId && w.assigneeUserId !== actor.userId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [w.assigneeUserId], kind: "ERLEDIGT", title: `Position besetzt: „${pos.title}“`, link: `/besetzung/${pos.id}`, actorUserId: actor.userId });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Schnellbesetzung: Person steht fest → Position + Kandidatur + bestätigte Auswahl + Einsatz in einem Schritt
+// ---------------------------------------------------------------------------
+
+export const quickFillInput = z.object({
+  /** bestehende Position (sonst neue an der Chance) */
+  positionId: opt(100),
+  title: opt(200),
+  roleId: opt(100),
+  resourceKind: z.enum(["FREELANCER", "INTERN"]).optional(),
+  desiredStart: dateStr,
+  plannedEnd: dateStr,
+  endOpen: z.union([z.boolean(), z.enum(["true", "false", "on"])]).optional(),
+  scopeAmount: z.coerce.number().int().min(0).max(1000).optional().or(z.literal("")),
+  scopeUnit: z.enum(["TAGE_PRO_WOCHE", "STUNDEN_PRO_WOCHE", "PROZENT", ""]).optional(),
+  location: opt(200),
+  tasks: opt(4000),
+  mustHave: opt(4000),
+  bdUserId: opt(100),
+  // Person
+  internalUserId: opt(100),
+  freelancerId: opt(100),
+  newName: opt(200),
+  newEmail: opt(200),
+  newCompany: opt(200),
+  newSkills: opt(2000),
+  ekRate: money,
+  vkRate: money,
+  rateUnit: z.enum(["TAG", "STUNDE"]).optional(),
+  reason: opt(2000),
+});
+
+/**
+ * Schnellbesetzung (BD-Kontext): wenn klar ist, wer den Einsatz macht – typischerweise intern oder ein bekannter
+ * Freelancer. Legt bei Bedarf die Position an, erzeugt die Kandidatur direkt als „ausgewählt“, setzt die Position
+ * „besetzt“, schließt offene Suchaufträge und legt die Einsatzakte an. Intern: keine Einkaufskonditionen; VK optional.
+ */
+export async function quickFill(actor: Actor, opportunityId: string, raw: unknown) {
+  const p = quickFillInput.safeParse(raw);
+  if (!p.success) throw new ValidationError(issues(p.error));
+  const i = p.data;
+  return db.transaction(async (tx) => {
+    let position: PositionRow;
+    if (i.positionId) {
+      const a = await requireFullPosition(actor, i.positionId);
+      if (!a.manage) throw new ForbiddenError("Eine Schnellbesetzung macht der verantwortliche BD, Principal oder CEO.");
+      if (["BESETZT", "ABGEBROCHEN"].includes(a.position.status)) throw new TransitionError("Die Position ist bereits abgeschlossen.");
+      const patch: Partial<typeof schema.staffingPositions.$inferInsert> = {};
+      if (i.resourceKind && i.resourceKind !== a.position.resourceKind) patch.resourceKind = i.resourceKind;
+      if (i.desiredStart) patch.desiredStart = i.desiredStart;
+      if (i.plannedEnd) patch.plannedEnd = i.plannedEnd;
+      if (truthy(i.endOpen)) { patch.endOpen = true; patch.plannedEnd = null; }
+      position = Object.keys(patch).length ? (await tx.update(schema.staffingPositions).set({ ...patch, updatedAt: new Date() }).where(eq(schema.staffingPositions.id, a.position.id)).returning())[0]! : a.position;
+    } else {
+      if (!i.title || i.title.length < 3) throw new ValidationError("Titel/Rolle fehlt.");
+      position = await createPosition(
+        actor,
+        opportunityId,
+        { title: i.title, roleId: i.roleId, resourceKind: i.resourceKind ?? (i.internalUserId ? "INTERN" : "FREELANCER"), desiredStart: i.desiredStart, plannedEnd: i.plannedEnd, endOpen: i.endOpen, scopeAmount: i.scopeAmount, scopeUnit: i.scopeUnit, location: i.location, tasks: i.tasks, mustHave: i.mustHave, bdUserId: i.bdUserId, internalNotes: "Schnellbesetzung (Person stand fest, kein Suchauftrag).", vkMin: i.vkRate, rateUnit: i.rateUnit },
+        { tx },
+      );
+    }
+    const intern = position.resourceKind === "INTERN";
+    if (!intern && !i.ekRate) throw new ValidationError("Für einen Freelancer bitte den Einkaufssatz (EK) angeben.");
+    const person = await resolvePerson(tx, actor, position, i);
+    const [c] = await tx
+      .insert(schema.candidacies)
+      .values({
+        workspaceId: actor.workspaceId,
+        positionId: position.id,
+        ...person,
+        handlerUserId: actor.userId,
+        status: "AUSGEWAEHLT",
+        availableFrom: nul(i.desiredStart) ?? position.desiredStart,
+        availableTo: position.endOpen ? null : (nul(i.plannedEnd) ?? position.plannedEnd),
+        ekRate: intern ? null : nul(i.ekRate),
+        ekAsOf: intern || !i.ekRate ? null : todayIso(),
+        vkRate: nul(i.vkRate),
+        rateUnit: i.rateUnit ?? "TAG",
+        statusReason: i.reason || "Schnellbesetzung – Person stand fest.",
+        selectedBy: actor.userId,
+        selectedAt: new Date(),
+        createdBy: actor.userId,
+      })
+      .returning();
+    await tx.insert(schema.candidacyEvents).values([
+      { workspaceId: actor.workspaceId, candidacyId: c!.id, kind: "STATUS", toStatus: "IDENTIFIZIERT", createdBy: actor.userId },
+      { workspaceId: actor.workspaceId, candidacyId: c!.id, kind: "AUSWAHL", fromStatus: "IDENTIFIZIERT", toStatus: "AUSGEWAEHLT", reason: i.reason || "Schnellbesetzung", createdBy: actor.userId },
+    ]);
+    const [pos] = await tx
+      .update(schema.staffingPositions)
+      .set({ status: "BESETZT", filledCandidacyId: c!.id, filledAt: new Date(), version: position.version + 1, updatedAt: new Date() })
+      .where(and(eq(schema.staffingPositions.id, position.id), isNull(schema.staffingPositions.filledCandidacyId), eq(schema.staffingPositions.version, position.version)))
+      .returning();
+    if (!pos) throw new ConflictError("Die Position wurde inzwischen geändert oder bereits besetzt.");
+    await recordAudit(tx, actor, "position.filled", "POSITION", pos.id, { kandidatur: c!.id, schnellbesetzung: true, ressourcenart: pos.resourceKind });
+    const { ensureEngagementForSelection } = await import("@/modules/engagements/service");
+    const engagement = await ensureEngagementForSelection(tx, actor, c!.id);
+    await closeSearchItems(tx, actor, pos, "Position per Schnellbesetzung besetzt.");
+    return { position: pos, candidacy: c!, engagement };
   });
 }
 
@@ -829,7 +977,8 @@ export async function getPositionDetail(actor: Actor, positionId: string) {
     return { access: a, view: previewOf(view!), search: search ? { id: search.id, status: search.status, dueDate: search.dueDate, assigneeName: search.assigneeUserId ? un.get(search.assigneeUserId) ?? "?" : null } : null, candidacies: [], events: [], persons: [], users: [], roles: [], readiness: [] as string[], history: [] as { at: Date; who: string; action: string; changes: Record<string, unknown> | null }[] };
   }
   const cands = await db.query.candidacies.findMany({ where: eq(schema.candidacies.positionId, positionId), orderBy: asc(schema.candidacies.createdAt) });
-  const fls = cands.length ? await db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, cands.map((c) => c.freelancerId)) }) : [];
+  const flIds = cands.map((c) => c.freelancerId).filter((x): x is string => !!x);
+  const fls = flIds.length ? await db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, flIds) }) : [];
   const fm = new Map(fls.map((f) => [f.id, f]));
   const events = cands.length ? await db.query.candidacyEvents.findMany({ where: inArray(schema.candidacyEvents.candidacyId, cands.map((c) => c.id)), orderBy: asc(schema.candidacyEvents.at) }) : [];
   const persons = await db.query.persons.findMany({ where: eq(schema.persons.accountId, a.position.accountId), columns: { id: true, displayName: true } });
@@ -839,8 +988,8 @@ export async function getPositionDetail(actor: Actor, positionId: string) {
   return {
     access: a,
     view: view!,
-    search: search ? { id: search.id, status: search.status, dueDate: search.dueDate, assigneeName: search.assigneeUserId ? un.get(search.assigneeUserId) ?? "?" : null, statusNote: search.statusNote, description: search.description } : null,
-    candidacies: cands.map((c) => ({ ...c, freelancer: fm.get(c.freelancerId)!, handlerName: un.get(c.handlerUserId) ?? "?", events: events.filter((e) => e.candidacyId === c.id).map((e) => ({ ...e, who: un.get(e.createdBy) ?? "?", recipientName: e.recipientPersonId ? pn.get(e.recipientPersonId) ?? null : null })) })),
+    search: search ? { id: search.id, version: search.version, status: search.status, dueDate: search.dueDate, assigneeName: search.assigneeUserId ? un.get(search.assigneeUserId) ?? "?" : null, statusNote: search.statusNote, description: search.description } : null,
+    candidacies: cands.map((c) => ({ ...c, freelancer: c.freelancerId ? fm.get(c.freelancerId) ?? null : null, personName: c.freelancerId ? fm.get(c.freelancerId)?.displayName ?? "?" : c.internalUserId ? `${un.get(c.internalUserId) ?? "?"} (intern)` : "?", handlerName: un.get(c.handlerUserId) ?? "?", events: events.filter((e) => e.candidacyId === c.id).map((e) => ({ ...e, who: un.get(e.createdBy) ?? "?", recipientName: e.recipientPersonId ? pn.get(e.recipientPersonId) ?? null : null })) })),
     events,
     persons,
     users: users.map((u) => ({ id: u.id, name: u.displayName })),
@@ -867,6 +1016,6 @@ export async function getFreelancerDetail(actor: Actor, freelancerId: string) {
 /** Kurze Zusammenfassung für die Chance-Seite: Zahl offener/besetzter Positionen. */
 export async function staffingSummary(actor: Actor, opportunityId: string) {
   const list = await listPositionsForOpportunity(actor, opportunityId);
-  return { total: list.length, open: list.filter((p) => p.status === "OFFEN").length, filled: list.filter((p) => p.status === "BESETZT").length, items: list };
+  return { total: list.length, open: list.filter((p) => ["ENTWURF", "OFFEN", "PAUSIERT"].includes(p.status)).length, filled: list.filter((p) => p.status === "BESETZT").length, items: list };
 }
 

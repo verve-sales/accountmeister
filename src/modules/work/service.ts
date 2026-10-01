@@ -306,20 +306,29 @@ export async function actOnWorkItem(actor: Actor, id: string, raw: unknown) {
       if (item.requesterUserId !== actor.userId) event = { kind: "KOMMENTAR", to: [item.requesterUserId], title: `Blockiert: ${item.title} – ${i.note.slice(0, 120)}` };
       break;
     case "ABSCHLIESSEN": {
-      if (!(worker || (r.requester && item.assigneeUserId === item.requesterUserId))) deny("Abschließen kann die bearbeitende Person.");
+      // Die bearbeitende Person schließt ab; die Auftraggeber:in darf den eigenen Auftrag jederzeit selbst als erledigt setzen
+      // (z. B. Suchauftrag, der sich anders erledigt hat) – dann ohne Prüfschleife, die Bearbeiter:in wird informiert.
+      if (!(worker || r.requester)) deny("Abschließen kann die bearbeitende Person oder die Auftraggeber:in.");
       const openChildren = await db.query.workItems.findFirst({ where: and(eq(schema.workItems.parentId, item.id), notInArray(schema.workItems.status, FINAL)), columns: { id: true } });
       if (openChildren) throw new ValidationError("Es sind noch Unteraufgaben offen.");
-      const needsReview = item.reviewRequired && item.requesterUserId !== actor.userId;
+      const byRequester = r.requester && !worker;
+      const needsReview = !byRequester && item.reviewRequired && item.requesterUserId !== actor.userId;
       if (needsReview && !i.result) throw new ValidationError("Bitte das Ergebnis kurz beschreiben – es geht zur Prüfung an die Auftraggeber:in.");
       to = needsReview ? "ZUR_PRUEFUNG" : "ERLEDIGT";
       if (i.result) patch.result = i.result;
-      if (!item.assigneeUserId) patch.assigneeUserId = actor.userId;
+      if (!item.assigneeUserId && !byRequester) patch.assigneeUserId = actor.userId;
       if (to === "ERLEDIGT") patch.completedAt = new Date();
       event = needsReview
         ? { kind: "ZUR_PRUEFUNG", to: [item.requesterUserId], title: `Bitte prüfen: ${item.title}` }
-        : item.requesterUserId !== actor.userId
-          ? { kind: "ERLEDIGT", to: [item.requesterUserId], title: `Erledigt: ${item.title}` }
-          : null;
+        : byRequester
+          ? item.assigneeUserId && item.assigneeUserId !== actor.userId
+            ? { kind: "ERLEDIGT", to: [item.assigneeUserId], title: `Von der Auftraggeber:in erledigt: ${item.title}` }
+            : item.teamId && !item.assigneeUserId
+              ? { kind: "ERLEDIGT", to: await teamMemberIds((await db.query.teams.findFirst({ where: eq(schema.teams.id, item.teamId) }))!), title: `Auftrag zurückgezogen/erledigt: ${item.title}` }
+              : null
+          : item.requesterUserId !== actor.userId
+            ? { kind: "ERLEDIGT", to: [item.requesterUserId], title: `Erledigt: ${item.title}` }
+            : null;
       break;
     }
     case "ABNEHMEN":

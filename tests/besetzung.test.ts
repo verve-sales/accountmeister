@@ -212,10 +212,10 @@ describe("Etappe 28 (E1): Suchauftrag → Teamvorschau → Annahme → Kandidatu
     await changePositionStatus(lars, pL.id, { version: pL.version, status: "OFFEN" });
     const cL = await addCandidacy(lars, pL.id, { freelancerId: c1.freelancerId, ekRate: "830" });
     expect(cL.freelancerId).toBe(c1.freelancerId);
-    const fdLars = await getFreelancerDetail(lars, c1.freelancerId);
+    const fdLars = await getFreelancerDetail(lars, c1.freelancerId!);
     expect(fdLars.candidacies.map((x) => x.candidacy.id)).toEqual([cL.id]);
     expect(fdLars.hiddenCount).toBe(1);
-    await expect(getFreelancerDetail(await actorFor("nina"), c1.freelancerId)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(getFreelancerDetail(await actorFor("nina"), c1.freelancerId!)).rejects.toBeInstanceOf(NotFoundError);
     // A19: zurückgegebener Auftrag bleibt mit Verantwortung und Frist sichtbar
     const w2b = await actOnWorkItem(ops2, w2.id, { version: answered.version, action: "ANNEHMEN" });
     const back = await actOnWorkItem(ops2, w2.id, { version: w2b.version, action: "ABGEBEN", note: "Krank bis Monatsende." });
@@ -318,5 +318,129 @@ describe("Etappe 28 (E1): Hilfe", () => {
     expect(searchHelp("Wie gebe ich einen Suchauftrag an Sales Operations?").map((x) => x.section.id)).toContain("besetzung");
     expect(searchHelp("Wie erzeuge ich einen Ausschreibungstext?")[0]?.section.id).toBe("ausschreibung");
     expect(searchHelp("Wer darf die Auswahl eines Kandidaten bestätigen?")[0]?.section.id).toBe("besetzung");
+  });
+});
+
+describe("Etappe 30: Schnellbesetzung, interne Besetzung, Suchauftrag selbst erledigen, Assistent", () => {
+  it("B01: Schnellbesetzung intern – ohne EK, Position besetzt, Einsatzakte mit interner Person, Freelancer-Unterlagen entfallen", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const { quickFill } = await import("@/modules/staffing/service");
+    const { getEngagementDetail, procurementCheck, saveProcurementProfile } = await import("@/modules/engagements/service");
+    const david = await actorFor("david");
+    const nina = await actorFor("nina");
+    const opp = await newOpportunity(david, "Testautomatisierung Plattform (intern)");
+    await expect(quickFill(david, opp.id, { title: "Testautomatisierer:in", resourceKind: "INTERN" })).rejects.toThrow(/interne Person/);
+    const r = await quickFill(david, opp.id, { title: "Testautomatisierer:in", resourceKind: "INTERN", internalUserId: nina.userId, desiredStart: "2026-11-02", endOpen: "on", scopeAmount: 4, scopeUnit: "TAGE_PRO_WOCHE", vkRate: "980" });
+    expect(r.position.status).toBe("BESETZT");
+    expect(r.position.resourceKind).toBe("INTERN");
+    expect(r.position.ekMin).toBeNull();
+    expect(r.candidacy.status).toBe("AUSGEWAEHLT");
+    expect(r.candidacy.internalUserId).toBe(nina.userId);
+    expect(r.candidacy.freelancerId).toBeNull();
+    expect(r.candidacy.ekRate).toBeNull();
+    expect(r.engagement.internalUserId).toBe(nina.userId);
+    expect(r.engagement.plannedEnd).toBeNull();
+    const d = await getEngagementDetail(david, r.engagement.id);
+    expect(d.view.freelancerName).toMatch(/Nina Demo.*\(intern\)/);
+    expect(d.freelancer).toBeNull();
+    expect(d.periods[0]?.vk).toBe("980.00");
+    expect(d.periods[0]?.ek).toBeNull();
+    // Beschaffungsprofil mit Freelancer-Unterlage → für interne Besetzung nicht gefordert
+    await saveProcurementProfile(david, r.engagement.accountId, { req_KUNDE_BESTELLUNG: "on", req_FREELANCER_EINZELBEAUFTRAGUNG: "on", approve: "on" });
+    const chk = await procurementCheck(r.engagement);
+    expect(chk.required.length).toBe(1);
+    expect(chk.required.every((x) => x.side !== "FREELANCER")).toBe(true);
+    // Positionsseite zeigt die Person
+    const pd = await getPositionDetail(david, r.position.id);
+    expect(pd.candidacies[0]?.personName).toMatch(/Nina Demo/);
+    expect(pd.candidacies[0]?.freelancer).toBeNull();
+    // Anker darf nicht
+    await expect(quickFill(nina, opp.id, { title: "Noch eine", resourceKind: "INTERN", internalUserId: nina.userId })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("B02: Schnellbesetzung Freelancer – EK Pflicht, Name wird wiedererkannt, offener Suchauftrag wird erledigt", async () => {
+    const { quickFill } = await import("@/modules/staffing/service");
+    const david = await actorFor("david");
+    const ops = await makeSalesOps("Olga Ops 30");
+    const opp = await newOpportunity(david, "Data Engineering Verstärkung (schnell)");
+    const p = await createPosition(david, opp.id, { title: "Data Engineer", ...base });
+    const open = await changePositionStatus(david, p.id, { version: p.version, status: "OFFEN" });
+    const w = await requestSearch(david, p.id, { expectedResult: "Zwei Profile mit Spark-Erfahrung bis Ende Oktober." });
+    await actOnWorkItem(ops, w.id, { version: w.version, action: "UEBERNEHMEN" });
+    void open;
+    await expect(quickFill(david, opp.id, { positionId: p.id, newName: "Mara Muster (fiktiv) 30" })).rejects.toThrow(/Einkaufssatz/);
+    const r = await quickFill(david, opp.id, { positionId: p.id, newName: "Mara Muster (fiktiv) 30", ekRate: "820", vkRate: "1050" });
+    expect(r.position.id).toBe(p.id);
+    expect(r.position.status).toBe("BESETZT");
+    expect(r.candidacy.freelancerId).toBeTruthy();
+    expect(r.engagement.freelancerId).toBe(r.candidacy.freelancerId);
+    const wd = await getWorkItemDetail(ops, w.id);
+    expect(wd.item.status).toBe("ERLEDIGT");
+    expect(wd.item.result).toMatch(/Schnellbesetzung/);
+    // gleicher Name an anderer Position → kein Dublette
+    const opp2 = await newOpportunity(david, "Data Engineering zweiter Platz");
+    const r2 = await quickFill(david, opp2.id, { title: "Data Engineer", newName: "mara muster (fiktiv) 30", ekRate: "830" });
+    expect(r2.candidacy.freelancerId).toBe(r.candidacy.freelancerId);
+    // besetzte Position nicht erneut
+    await expect(quickFill(david, opp.id, { positionId: p.id, newName: "Tom Test", ekRate: "900" })).rejects.toBeInstanceOf(TransitionError);
+  });
+
+  it("B03: Auftraggeber setzt den Suchauftrag selbst auf erledigt – Bearbeiterin wird informiert", async () => {
+    const { listNotifications } = await import("@/modules/notifications/service");
+    const david = await actorFor("david");
+    const ops = await makeSalesOps("Olga Ops 30b");
+    const opp = await newOpportunity(david, "Suche erledigt sich anders");
+    const p = await createPosition(david, opp.id, { title: "Scrum Master", ...base });
+    await changePositionStatus(david, p.id, { version: p.version, status: "OFFEN" });
+    const w = await requestSearch(david, p.id, { expectedResult: "Ein Profil mit SAFe-Erfahrung bis Mitte November." });
+    // noch nicht übernommen: Auftraggeber kann trotzdem schließen
+    const d0 = await getPositionDetail(david, p.id);
+    expect(d0.search?.version).toBe(w.version);
+    const taken = await actOnWorkItem(ops, w.id, { version: w.version, action: "UEBERNEHMEN" });
+    const done = await actOnWorkItem(david, w.id, { version: taken.version, action: "ABSCHLIESSEN", result: "Kunde hat intern besetzt." });
+    expect(done.status).toBe("ERLEDIGT");
+    expect(done.assigneeUserId).toBe(ops.userId);
+    const n = await listNotifications(ops);
+    expect(n.some((x) => x.kind === "ERLEDIGT" && /Auftraggeber/.test(x.title))).toBe(true);
+    // Fremde dürfen nicht
+    const opp2 = await newOpportunity(david, "Suche fremd");
+    const p2 = await createPosition(david, opp2.id, { title: "Tester:in", ...base });
+    await changePositionStatus(david, p2.id, { version: p2.version, status: "OFFEN" });
+    const w2 = await requestSearch(david, p2.id, { expectedResult: "Ein Profil für Testautomatisierung bis Ende November." });
+    await expect(actOnWorkItem(await actorFor("nina"), w2.id, { version: w2.version, action: "ABSCHLIESSEN" })).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("B04: Assistent – Mail einfügen → Karte BESETZUNG; intern mit bekannter Person → Position besetzt und Einsatz", async () => {
+    const { getThreadView, sendMessage, decideCard } = await import("@/modules/assistant/service");
+    process.env.AI_PROVIDER = "test";
+    process.env.FEATURE_BESETZUNG = "true";
+    resetConfigCacheForTests();
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const view = await getThreadView(david, { type: "SETUP", id: s.setupId });
+    const r = await sendMessage(david, { threadId: view.thread.id, text: "Hallo Herr Demo, wir suchen ab 1. Dezember 2026 einen Testautomatisierer für das Plattformteam. Erfahrung in Playwright ist zwingend erforderlich, Kenntnisse in Kubernetes wären wünschenswert. Umfang 4 Tage pro Woche, 2 Tage vor Ort in Köln. Die Position besetzen wir intern mit Nina Demo." });
+    const card = r.cards.find((c) => c.item.type === "BESETZUNG");
+    expect(card?.item).toMatchObject({ resourceKind: "INTERN", personName: "Nina Demo", desiredStart: "2026-12-01", scopeAmount: 4, scopeUnit: "TAGE_PRO_WOCHE" });
+    expect(String((card?.item as { mustHave?: string }).mustHave)).toMatch(/Playwright/);
+    const res = await decideCard(david, { threadId: view.thread.id, messageId: r.message.id, cardId: card!.id, decision: "UEBERNEHMEN" });
+    expect(res.card.resultType).toBe("ENGAGEMENT");
+    expect(res.card.note).toMatch(/intern mit Nina Demo.*Chance „.*“ neu angelegt/);
+    const eng = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, res.card.resultId!) });
+    expect(eng?.internalUserId).toBeTruthy();
+    expect(eng?.plannedStart).toBe("2026-12-01");
+    const pos = await db.query.staffingPositions.findFirst({ where: eq(schema.staffingPositions.id, eng!.positionId) });
+    expect(pos?.status).toBe("BESETZT");
+    expect(pos?.scopeAmount).toBe(4);
+    // Freelancer ohne Person → Position offen, kein Einsatz
+    const r2 = await sendMessage(david, { threadId: view.thread.id, text: "Zusätzlich suchen wir ab 1. Februar 2027 zwei Java-Entwickler. Erfahrung in Spring ist zwingend erforderlich. Umfang 5 Tage pro Woche." });
+    const cards2 = r2.cards.filter((c) => c.item.type === "BESETZUNG");
+    expect(cards2).toHaveLength(2);
+    expect((cards2[0]?.item as { resourceKind?: string }).resourceKind).toBe("FREELANCER");
+    const res2 = await decideCard(david, { threadId: view.thread.id, messageId: r2.message.id, cardId: cards2[0]!.id, decision: "UEBERNEHMEN" });
+    expect(res2.card.resultType).toBe("POSITION");
+    const pos2 = await db.query.staffingPositions.findFirst({ where: eq(schema.staffingPositions.id, res2.card.resultId!) });
+    expect(pos2?.status).toBe("OFFEN");
+    expect(pos2?.resourceKind).toBe("FREELANCER");
   });
 });

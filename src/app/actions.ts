@@ -45,7 +45,7 @@ import { actOnWorkItem, createWorkItem, reassignWorkItem, setWatching, toggleChe
 import { addAbsence, createTeam, removeAbsence, removeTeamMember, saveServiceType, setTeamMember } from "@/modules/work/teams";
 import { addComment, deleteComment, editComment } from "@/modules/comments/service";
 import { markRead, openNotification, saveMyPrefs } from "@/modules/notifications/service";
-import { addCandidacy, changeCandidacyStatus, changePositionStatus, copyPosition, createPosition, recordCustomerFeedback, recordInterview, recordPresentation, requestSearch, selectCandidacy, updateCandidacy, updateFreelancer, updatePosition } from "@/modules/staffing/service";
+import { addCandidacy, changeCandidacyStatus, changePositionStatus, copyPosition, createPosition, quickFill, recordCustomerFeedback, recordInterview, recordPresentation, requestSearch, selectCandidacy, updateCandidacy, updateFreelancer, updatePosition } from "@/modules/staffing/service";
 import { applyIntake as applyStaffingIntake, createIntake as createStaffingIntake, generateAdDraft, saveAdDraft } from "@/modules/staffing/ai";
 import { getConfig } from "@/lib/config";
 import { addContractDocument, addPeriod, changeEngagementStatus, linkContractDocument, saveProcurementProfile, setContractDocumentStatus, updateEngagement } from "@/modules/engagements/service";
@@ -1351,6 +1351,15 @@ export async function createPositionAction(fd: FormData) {
     const p = await createPosition(actor, data.opportunityId ?? "", data);
     if (data.open === "1") return `/besetzung/${p.id}`;
   }, "Position als Entwurf angelegt – Mindestangaben prüfen und auf „offen“ setzen.");
+}
+
+export async function quickFillAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/bedarfe/${data.opportunityId ?? ""}#besetzung`), async (actor) => {
+    requireStaffingFlag();
+    const r = await quickFill(actor, data.opportunityId ?? "", data);
+    return `/einsaetze/${r.engagement.id}`;
+  }, "Besetzt – die Einsatzakte ist angelegt. Start, Betreuung und Unterlagen pflegst du hier; ein offener Suchauftrag wurde erledigt.");
 }
 
 export async function updatePositionAction(fd: FormData) {

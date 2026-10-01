@@ -3,13 +3,14 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { DomainError } from "@/lib/errors";
 import { getConfig } from "@/lib/config";
-import { CANDIDACY_FLOW, CANDIDACY_TERMINAL, candidacyStatusLabel, getPositionDetail, positionStatusLabel, rateUnitLabel, scopeUnitLabel, type CandidacyStatus } from "@/modules/staffing/service";
+import { CANDIDACY_FLOW, CANDIDACY_TERMINAL, candidacyStatusLabel, freelancerOptions, getPositionDetail, positionStatusLabel, rateUnitLabel, resourceKindLabel, scopeUnitLabel, type CandidacyStatus } from "@/modules/staffing/service";
+import { QuickFillForm } from "@/components/QuickFillForm";
 import { adToText, type AdDraftStored } from "@/modules/staffing/ai";
 import { workStatusLabel } from "@/modules/work/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Comments } from "@/components/Work";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
-import { addCandidacyAction, changeCandidacyStatusAction, changePositionStatusAction, copyPositionAction, generateAdDraftAction, recordFeedbackAction, recordInterviewAction, recordPresentationAction, requestSearchAction, saveAdDraftAction, selectCandidacyAction, updateCandidacyAction, updatePositionAction } from "../../actions";
+import { addCandidacyAction, changeCandidacyStatusAction, changePositionStatusAction, copyPositionAction, generateAdDraftAction, recordFeedbackAction, recordInterviewAction, recordPresentationAction, requestSearchAction, saveAdDraftAction, selectCandidacyAction, updateCandidacyAction, updatePositionAction, workItemAction } from "../../actions";
 
 const eur = (v: string | null, unit: string) => (v ? `${Number(v).toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${rateUnitLabel[unit] ?? unit}` : "offen");
 
@@ -56,6 +57,9 @@ export default async function PositionPage({ params, searchParams }: { params: P
 
   const p = a.position;
   const final = p.status === "BESETZT" || p.status === "ABGEBROCHEN";
+  const intern = p.resourceKind === "INTERN";
+  const freelancers = a.manage && !final && !intern ? await freelancerOptions(actor) : [];
+  const searchOpen = !!d.search && !["ERLEDIGT", "VERWORFEN", "ABGELEHNT"].includes(d.search.status);
   const ad = (p.adDraft as AdDraftStored | null) ?? null;
   const activeCands = d.candidacies.filter((c) => c.isActive);
 
@@ -69,6 +73,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
         <h1 className="text-2xl font-semibold mt-1">{p.title}</h1>
         <div className="flex flex-wrap gap-2 items-baseline mt-1">
           <span className="status">{positionStatusLabel[p.status] ?? p.status}</span>
+          <span className="status">{resourceKindLabel[p.resourceKind] ?? p.resourceKind}</span>
           <span className="muted text-sm">{v.progress}</span>
           {v.nextDue && <span className="text-sm" style={v.overdue ? { color: "#c0392b", fontWeight: 600 } : undefined}>nächste Frist {fmtDate(v.nextDue)}{v.overdue ? " (überfällig)" : ""}</span>}
           <span className="muted text-xs ml-auto">{a.manage ? "Du führst diese Position (BD-Kontext)." : "Du bearbeitest die Suche (Suchbearbeiter:in)."}</span>
@@ -103,7 +108,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
             <div className="sm:col-span-3"><dt className="muted">Muss-Anforderungen</dt><dd style={{ whiteSpace: "pre-wrap" }}>{p.mustHave ?? "–"}</dd></div>
             <div className="sm:col-span-3"><dt className="muted">Aufgaben</dt><dd style={{ whiteSpace: "pre-wrap" }}>{p.tasks ?? "–"}</dd></div>
             <div className="sm:col-span-3"><dt className="muted">Kann-Anforderungen</dt><dd style={{ whiteSpace: "pre-wrap" }}>{p.niceToHave ?? "–"}</dd></div>
-            <div><dt className="muted">EK-Rahmen (intern)</dt><dd>{p.ekMin || p.ekMax ? `${eur(p.ekMin, p.rateUnit)} – ${eur(p.ekMax, p.rateUnit)}` : "offen"}</dd></div>
+            {!intern && <div><dt className="muted">EK-Rahmen (intern)</dt><dd>{p.ekMin || p.ekMax ? `${eur(p.ekMin, p.rateUnit)} – ${eur(p.ekMax, p.rateUnit)}` : "offen"}</dd></div>}
             <div><dt className="muted">Angebotsrahmen Kunde (intern)</dt><dd>{p.vkMin || p.vkMax ? `${eur(p.vkMin, p.rateUnit)} – ${eur(p.vkMax, p.rateUnit)}` : "offen"}</dd></div>
             <div><dt className="muted">Interne Hinweise</dt><dd style={{ whiteSpace: "pre-wrap" }}>{p.internalNotes ?? "–"}</dd></div>
           </dl>
@@ -115,6 +120,11 @@ export default async function PositionPage({ params, searchParams }: { params: P
                 <input type="hidden" name="version" value={p.version} />
                 <input type="hidden" name="back" value={back} />
                 <div className="sm:col-span-2"><label className="label" htmlFor="e-title">Titel / Rolle</label><input id="e-title" name="title" className="input" defaultValue={p.title} required /></div>
+                <fieldset className="sm:col-span-2 flex flex-wrap gap-4 items-center">
+                  <legend className="label">Ressourcenart</legend>
+                  <label className="text-sm flex items-center gap-1"><input type="radio" name="resourceKind" value="FREELANCER" defaultChecked={!intern} /> Freelancer</label>
+                  <label className="text-sm flex items-center gap-1"><input type="radio" name="resourceKind" value="INTERN" defaultChecked={intern} /> intern (keine Einkaufskonditionen)</label>
+                </fieldset>
                 <div>
                   <label className="label" htmlFor="e-bd">Verantwortlicher BD</label>
                   <select id="e-bd" name="bdUserId" className="input" defaultValue={p.bdUserId}>{d.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
@@ -140,8 +150,8 @@ export default async function PositionPage({ params, searchParams }: { params: P
                 <label className="text-sm flex items-center gap-2 self-end"><input type="checkbox" name="endOpen" value="on" defaultChecked={p.endOpen} /> Ende offen</label>
                 <fieldset className="sm:col-span-2 grid sm:grid-cols-5 gap-2 border rounded-md p-2" style={{ borderColor: "var(--border)" }}>
                   <legend className="label">Interne Konditionen</legend>
-                  <div><label className="label" htmlFor="e-ekmin">EK von</label><input id="e-ekmin" name="ekMin" className="input" defaultValue={p.ekMin ?? ""} /></div>
-                  <div><label className="label" htmlFor="e-ekmax">EK bis</label><input id="e-ekmax" name="ekMax" className="input" defaultValue={p.ekMax ?? ""} /></div>
+                  {!intern && <div><label className="label" htmlFor="e-ekmin">EK von</label><input id="e-ekmin" name="ekMin" className="input" defaultValue={p.ekMin ?? ""} /></div>}
+                  {!intern && <div><label className="label" htmlFor="e-ekmax">EK bis</label><input id="e-ekmax" name="ekMax" className="input" defaultValue={p.ekMax ?? ""} /></div>}
                   <div><label className="label" htmlFor="e-vkmin">Angebot von</label><input id="e-vkmin" name="vkMin" className="input" defaultValue={p.vkMin ?? ""} /></div>
                   <div><label className="label" htmlFor="e-vkmax">Angebot bis</label><input id="e-vkmax" name="vkMax" className="input" defaultValue={p.vkMax ?? ""} /></div>
                   <div><label className="label" htmlFor="e-rate">je</label><select id="e-rate" name="rateUnit" className="input" defaultValue={p.rateUnit}><option value="TAG">Tag</option><option value="STUNDE">Stunde</option></select></div>
@@ -198,6 +208,18 @@ export default async function PositionPage({ params, searchParams }: { params: P
         </section>
       )}
 
+      {/* Schnellbesetzung */}
+      {a.manage && !final && (
+        <section className="card" id="schnellbesetzung">
+          <h2 className="font-semibold mb-1">Schnellbesetzung</h2>
+          <p className="text-sm muted">Steht die Person fest (intern oder Freelancer)? Dann hier direkt besetzen – ohne Suchauftrag und Kandidaturen-Schritte. Ein offener Suchauftrag wird dabei erledigt.</p>
+          <details>
+            <summary>Direkt besetzen</summary>
+            <QuickFillForm opportunityId={p.opportunityId} positionId={p.id} back={back} users={d.users} freelancers={freelancers} defaults={{ resourceKind: p.resourceKind, desiredStart: p.desiredStart, plannedEnd: p.plannedEnd, endOpen: p.endOpen }} />
+          </details>
+        </section>
+      )}
+
       {/* Suchauftrag */}
       <section className="card" id="suche">
         <h2 className="font-semibold mb-1">Suchauftrag</h2>
@@ -210,6 +232,16 @@ export default async function PositionPage({ params, searchParams }: { params: P
           </p>
         ) : (
           <p className="muted text-sm">Noch kein Suchauftrag.</p>
+        )}
+        {a.manage && d.search && searchOpen && (
+          <form action={workItemAction} className="flex flex-wrap gap-2 items-end mt-2">
+            <input type="hidden" name="workItemId" value={d.search.id} />
+            <input type="hidden" name="version" value={d.search.version} />
+            <input type="hidden" name="back" value={`${back}#suche`} />
+            <input type="hidden" name="action" value="ABSCHLIESSEN" />
+            <div className="grow"><label className="label" htmlFor="s-done">Suchauftrag selbst als erledigt setzen – kurz warum</label><input id="s-done" name="result" className="input" maxLength={4000} placeholder="z. B. anderweitig besetzt, Bedarf entfallen" /></div>
+            <button className="btn btn-secondary btn-small" type="submit">Als erledigt setzen</button>
+          </form>
         )}
         {a.manage && p.status === "OFFEN" && (!d.search || ["ERLEDIGT", "VERWORFEN", "ABGELEHNT"].includes(d.search.status)) && (
           <form action={requestSearchAction} className="grid sm:grid-cols-2 gap-3 mt-2">
@@ -236,9 +268,9 @@ export default async function PositionPage({ params, searchParams }: { params: P
             return (
               <li key={c.id} className="border rounded-md p-3" style={{ borderColor: st === "AUSGEWAEHLT" ? "#2f7d32" : "var(--border)" }}>
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <Link href={`/besetzung/freelancer/${c.freelancerId}`}><strong>{c.freelancer.displayName}</strong></Link>
+                  {c.freelancerId ? <Link href={`/besetzung/freelancer/${c.freelancerId}`}><strong>{c.personName}</strong></Link> : <strong>{c.personName}</strong>}
                   <span className="status">{candidacyStatusLabel[c.status] ?? c.status}</span>
-                  <span className="muted text-xs">bearbeitet von {c.handlerName}{c.freelancer.company ? ` · ${c.freelancer.company}` : ""}{c.originRef ? ` · Quelle: ${c.originRef}` : ""}</span>
+                  <span className="muted text-xs">bearbeitet von {c.handlerName}{c.freelancer?.company ? ` · ${c.freelancer.company}` : ""}{c.originRef ? ` · Quelle: ${c.originRef}` : ""}</span>
                 </div>
                 <dl className="text-sm grid sm:grid-cols-4 gap-x-4 gap-y-1 mt-1">
                   <div><dt className="muted">Verfügbar</dt><dd>{c.availableFrom ? `${fmtDate(c.availableFrom)}${c.availableTo ? ` – ${fmtDate(c.availableTo)}` : ""}` : "offen"}</dd></div>
@@ -367,13 +399,19 @@ export default async function PositionPage({ params, searchParams }: { params: P
             <summary>Kandidatur anlegen</summary>
             <form action={addCandidacyAction} className="grid sm:grid-cols-4 gap-2 mt-2">
               <input type="hidden" name="positionId" value={p.id} /><input type="hidden" name="back" value={`${back}#kandidaturen`} />
-              <div className="sm:col-span-2"><label className="label" htmlFor="c-name">Neuer Freelancer: Name</label><input id="c-name" name="newName" className="input" placeholder="oder unten eine bestehende ID wählen" /></div>
-              <div><label className="label" htmlFor="c-mail">E-Mail</label><input id="c-mail" name="newEmail" className="input" /></div>
-              <div><label className="label" htmlFor="c-comp">Firma</label><input id="c-comp" name="newCompany" className="input" /></div>
-              <div className="sm:col-span-2"><label className="label" htmlFor="c-skills">Skills (kurz)</label><input id="c-skills" name="newSkills" className="input" /></div>
-              <div className="sm:col-span-2"><label className="label" htmlFor="c-fid">Bestehender Freelancer (ID aus dem Pool)</label><input id="c-fid" name="freelancerId" className="input" placeholder="leer = neu anlegen" /></div>
+              {intern ? (
+                <div className="sm:col-span-2"><label className="label" htmlFor="c-user">Interne Person</label><select id="c-user" name="internalUserId" className="input" required defaultValue=""><option value="" disabled>bitte wählen</option>{d.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+              ) : (
+                <>
+                  <div className="sm:col-span-2"><label className="label" htmlFor="c-name">Neuer Freelancer: Name</label><input id="c-name" name="newName" className="input" placeholder="oder unten eine bestehende ID wählen" /></div>
+                  <div><label className="label" htmlFor="c-mail">E-Mail</label><input id="c-mail" name="newEmail" className="input" /></div>
+                  <div><label className="label" htmlFor="c-comp">Firma</label><input id="c-comp" name="newCompany" className="input" /></div>
+                  <div className="sm:col-span-2"><label className="label" htmlFor="c-skills">Skills (kurz)</label><input id="c-skills" name="newSkills" className="input" /></div>
+                  <div className="sm:col-span-2"><label className="label" htmlFor="c-fid">Bestehender Freelancer (ID aus dem Pool)</label><input id="c-fid" name="freelancerId" className="input" placeholder="leer = neu anlegen" /></div>
+                </>
+              )}
               <div><label className="label" htmlFor="c-from">Verfügbar ab</label><input id="c-from" type="date" name="availableFrom" className="input" /></div>
-              <div><label className="label" htmlFor="c-ek">EK</label><input id="c-ek" name="ekRate" className="input" inputMode="decimal" placeholder="€" /></div>
+              {!intern && <div><label className="label" htmlFor="c-ek">EK</label><input id="c-ek" name="ekRate" className="input" inputMode="decimal" placeholder="€" /></div>}
               <div><label className="label" htmlFor="c-unit">je</label><select id="c-unit" name="rateUnit" className="input" defaultValue="TAG"><option value="TAG">Tag</option><option value="STUNDE">Stunde</option></select></div>
               <div><label className="label" htmlFor="c-origin">Herkunft / Ranking-Referenz</label><input id="c-origin" name="originRef" className="input" /></div>
               <div className="sm:col-span-4"><label className="label" htmlFor="c-notes">Interne Notizen</label><textarea id="c-notes" name="notes" className="input" rows={2} /></div>

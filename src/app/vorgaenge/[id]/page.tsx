@@ -131,6 +131,9 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
             </div>
           )}
           {["OFFEN", "IN_ARBEIT", "BLOCKIERT"].includes(w.status) && !worker && <p className="text-sm muted">In Bearbeitung bei {w.assigneeName ?? w.teamName}.</p>}
+          {["ANGEFRAGT", "OFFEN", "IN_ARBEIT", "BLOCKIERT"].includes(w.status) && !worker && r.requester && (
+            <Btn id={w.id} version={w.version} back={back} resultPlaceholder="z. B. hat sich anders erledigt, Kunde hat intern besetzt" action="ABSCHLIESSEN" label="Selbst als erledigt setzen" secondary result />
+          )}
           {w.status === "ZUR_PRUEFUNG" && r.requester && (
             <div className="flex flex-wrap gap-3 items-end">
               <Btn id={w.id} version={w.version} back={back} resultPlaceholder={resultPlaceholder} action="ABNEHMEN" label="Abnehmen" />

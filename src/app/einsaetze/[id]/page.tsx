@@ -53,7 +53,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         <h1 className="text-2xl font-semibold mt-1">{e.title}</h1>
         <div className="flex flex-wrap gap-x-4 gap-y-1 items-baseline mt-1 text-sm">
           <span className="status">{engagementStatusLabel[e.status] ?? e.status}</span>
-          <span>Freelancer: <Link href={`/besetzung/freelancer/${e.freelancerId}`}>{e.freelancerName}</Link></span>
+          <span>{e.freelancerId ? <>Freelancer: <Link href={`/besetzung/freelancer/${e.freelancerId}`}>{e.freelancerName}</Link></> : <>Besetzt mit: {e.freelancerName}</>}</span>
           <span>Betreuung: {e.careNames.length ? e.careNames.join(", ") : <span style={{ color: RED }}>offen</span>}</span>
           <span>Laufzeit: {fmtDate(e.actualStart ?? e.plannedStart)} – {e.plannedEnd ? `${fmtDate(e.plannedEnd)}${e.daysToEnd !== null ? ` (${e.daysToEnd} Tage)` : ""}` : "offen"}</span>
           {nextDue && <span style={nextDue < new Date().toISOString().slice(0, 10) ? { color: RED, fontWeight: 600 } : undefined}>nächste Frist {fmtDate(nextDue)}</span>}

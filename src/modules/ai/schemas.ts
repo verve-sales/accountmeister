@@ -227,6 +227,27 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("HEBEL"), lever: z.enum(["VERLAENGERN", "AUSWEITEN", "VERTIEFEN", "UEBERTRAGEN", "REAKTIVIEREN"]), title: z.string().min(3).max(300), rationale: z.string().max(1000).optional().default(""), ...q }),
   // Etappe 27: Vorgang – eigene Aufgabe oder Anfrage an Team/Person (Kollaborationskern)
   z.object({ type: z.literal("VORGANG"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), target: z.enum(workTargetCardValues).optional().default("ICH"), personName: z.string().max(200).optional().default(""), serviceKey: z.enum(["AUSSCHREIBUNG", "PROFIL", "UNTERLAGEN", "ANGEBOT", ""]).optional().default(""), dueHint: z.string().max(100).optional().default(""), ...q }),
+  // Etappe 30: Besetzung – zu besetzende Position aus Mail/Notiz; personName nur, wenn die Person im Text feststeht
+  z.object({
+    type: z.literal("BESETZUNG"),
+    title: z.string().min(3).max(200),
+    resourceKind: z.enum(["FREELANCER", "INTERN"]).optional().default("FREELANCER"),
+    /** Name der feststehenden Person (interne Kolleg:in oder Freelancer) – sonst leer */
+    personName: z.string().max(200).optional().default(""),
+    tasks: z.string().max(4000).optional().default(""),
+    mustHave: z.string().max(4000).optional().default(""),
+    niceToHave: z.string().max(4000).optional().default(""),
+    location: z.string().max(200).optional().default(""),
+    language: z.string().max(100).optional().default(""),
+    desiredStart: z.string().max(10).optional().default(""),
+    plannedEnd: z.string().max(10).optional().default(""),
+    endOpen: z.boolean().optional().default(false),
+    scopeAmount: z.number().int().min(0).max(1000).nullable().optional().default(null),
+    scopeUnit: z.enum(["TAGE_PRO_WOCHE", "STUNDEN_PRO_WOCHE", "PROZENT", ""]).optional().default(""),
+    /** Titel einer bestehenden Chance aus dem Kontext, zu der die Position gehört – sonst leer (dann entsteht eine neue Chance) */
+    chanceTitle: z.string().max(200).optional().default(""),
+    ...q,
+  }),
   z.object({ type: z.literal("TEAM"), bdName: z.string().max(200).optional().default(""), ankerNames: z.array(z.string().max(200)).max(5).optional().default([]), principalName: z.string().max(200).optional().default(""), consultantName: z.string().max(200).optional().default(""), ...q }),
   z.object({
     type: z.literal("EINSORTIERUNG"),

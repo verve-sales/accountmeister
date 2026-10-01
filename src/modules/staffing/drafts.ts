@@ -58,7 +58,7 @@ export function ruleBasedStaffingText(i: StaffingTextInput): StaffingTextProposa
   const text = i.text.replace(/\r/g, "");
   const sentences = text.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
   const NUM: Record<string, number> = { ein: 1, eine: 1, einen: 1, zwei: 2, drei: 3, vier: 4, fünf: 5, sechs: 6 };
-  const ROLE = /\b(?:(\d{1,2}|ein|eine|einen|zwei|drei|vier|fünf|sechs)\s+)?((?:[A-ZÄÖÜ][\wäöüß+#./-]*(?:[- ](?:[A-ZÄÖÜ][\wäöüß+#./-]*|und))*\s+)?(?:Entwickler(?:in|innen)?|Developer|Engineer|Architekt(?:in|innen)?|Architect|Tester(?:in|innen)?|Testmanager(?:in|innen)?|Test Manager|Projektleiter(?:in|innen)?|Projektmanager(?:in|innen)?|Project Manager|Scrum Master|Product Owner|Business Analyst(?:in|innen)?|Analyst(?:in|innen)?|Berater(?:in|innen)?|Consultant|Data Scientist|DevOps|Administrator(?:in|innen)?|Designer(?:in|innen)?))\b/g;
+  const ROLE = /\b(?:(\d{1,2}|ein|eine|einen|zwei|drei|vier|fünf|sechs)\s+)?((?:[A-ZÄÖÜ][\wäöüß+#./]*(?:[- ](?:[A-ZÄÖÜ][\wäöüß+#./]*|und))*[\s-]+)?(?:Entwickler(?:in|innen)?|Developer|Engineer|Architekt(?:in|innen)?|Architect|Tester(?:in|innen)?|Testmanager(?:in|innen)?|Test Manager|Projektleiter(?:in|innen)?|Projektmanager(?:in|innen)?|Project Manager|Scrum Master|Product Owner|Business Analyst(?:in|innen)?|Analyst(?:in|innen)?|Berater(?:in|innen)?|Consultant|Data Scientist|DevOps|Administrator(?:in|innen)?|Designer(?:in|innen)?|Testautomatisierer(?:in|innen)?|Automatisierer(?:in|innen)?|Testkoordinator(?:in|innen)?|Koordinator(?:in|innen)?|Manager(?:in|innen)?|Spezialist(?:in|innen)?|Expert(?:e|in|innen)|Ingenieur(?:in|innen)?|Lead|Owner))\b/g;
   const found: { count: number; title: string; quote: string }[] = [];
   for (const s of sentences) {
     for (const m of s.matchAll(ROLE)) {
@@ -70,7 +70,7 @@ export function ruleBasedStaffingText(i: StaffingTextInput): StaffingTextProposa
     }
   }
   const scope = text.match(/\b(\d{1,2})\s*(Tage|Tag)\s*(?:pro|\/|je)\s*Woche|\b(\d{1,3})\s*%|\b(\d{1,2})\s*(?:h|Stunden)\s*(?:pro|\/|je)\s*Woche|\bVollzeit\b|\bTeilzeit\b/i)?.[0] ?? "";
-  const location = text.match(/\b(?:\d{1,3}\s*%\s*)?(?:remote|vor Ort|hybrid|onsite)\b[^.;\n]{0,60}/i)?.[0]?.trim() ?? text.match(/\b(?:in|Standort)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s[A-ZÄÖÜ][a-zäöüß]+)?)/)?.[0] ?? "";
+  const location = text.match(/\b(?:\d{1,3}\s*%\s*)?(?:remote|vor Ort|hybrid|onsite)\b[^.;\n]{0,60}/i)?.[0]?.trim() ?? text.match(/\b(?:Standort|Einsatzort|Büro in|Dienstsitz)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s[A-ZÄÖÜ][a-zäöüß]+)?)/)?.[0] ?? "";
   const language = text.match(/\b(Deutsch|Englisch|German|English)(?:\s*(?:und|\/|,)\s*(Deutsch|Englisch|German|English))?\b[^.;\n]{0,30}/i)?.[0]?.trim() ?? "";
   const start = isoFrom(text);
   const end = text.match(/\b(?:bis|Ende|Laufzeit)\s+([^.;\n]{3,40})/i);

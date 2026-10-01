@@ -531,6 +531,24 @@ export class TestProvider implements AIProvider {
       onDelta?.(out);
       return out;
     }
+    // Besetzung (Etappe 30): eingefügte Mail/Notiz mit zu besetzender Rolle → Karten BESETZUNG (im Kunden-/Setup-Kontext)
+    if (/Kunde:/.test(input.contextText) && lastUser.length > 40 && /\b(such(?:en|t|e)|benötig\w*|brauch\w*|besetz\w*|position|bedarf)\b/i.test(lastUser)) {
+      const prop = ruleBasedStaffingText({ text: lastUser, opportunityTitle: "", accountName: "" });
+      if (prop.positions.length) {
+        const intern = /\bintern\b|kolleg|mitarbeiter|unsere[rn]?\s+(?:berater|consultant)/i.test(lastUser);
+        const person = lastUser.match(/\b(?:mit|durch|übernimmt|macht)\s+(?:unsere[rmn]?\s+(?:Kolleg(?:e|in)|Berater(?:in)?|Mitarbeiter(?:in)?)\s+)?([A-ZÄÖÜ][a-zäöüß]+\s+[A-ZÄÖÜ][a-zäöüß-]+)/)?.[1] ?? "";
+        const known = (input.contextText.split("\n").find((l) => l.startsWith("Chancen:")) ?? "").slice("Chancen:".length).split(";").map((x) => x.split(" [")[0]!.trim()).filter(Boolean);
+        const items: AssistantItem[] = prop.positions.map((x) => {
+          const scopeM = x.scopeText.match(/(\d{1,3})\s*(Tage|Tag|h|Stunden|%)/i);
+          const scopeUnit = scopeM ? (/%/.test(scopeM[2]!) ? "PROZENT" : /tag/i.test(scopeM[2]!) ? "TAGE_PRO_WOCHE" : "STUNDEN_PRO_WOCHE") : "";
+          return { type: "BESETZUNG", title: x.title, resourceKind: intern ? "INTERN" : "FREELANCER", personName: person, tasks: x.tasks, mustHave: x.mustHave, niceToHave: x.niceToHave, location: x.location, language: x.language, desiredStart: x.desiredStart, plannedEnd: x.plannedEnd, endOpen: /\b(open end|ende offen|unbefristet)\b/i.test(lastUser), scopeAmount: scopeM ? Number(scopeM[1]) : null, scopeUnit, chanceTitle: known.find((k) => lastUser.toLowerCase().includes(k.toLowerCase())) ?? "", evidenceQuote: x.evidenceQuote.slice(0, 300) };
+        });
+        const prosa = `Ich habe ${items.length} zu besetzende Position(en) erkannt${person ? ` – ${intern ? "intern" : "Freelancer"} mit ${person}` : ""}. Mit „Übernehmen“ entsteht die Position${person && intern ? " und direkt der Einsatz" : ""}; fehlende Angaben kannst du dort ergänzen.${prop.missing.length ? ` Offen: ${prop.missing[0]}` : ""}`;
+        const out = `${prosa}\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items, missing: prop.missing })}`;
+        onDelta?.(out);
+        return out;
+      }
+    }
     // Delegation (Etappe 27): „Sales Ops soll …“, „frag <Name>, …“, „erinnere mich …“ → Karte VORGANG
     const deleg = lastUser.match(/^(?:bitte\s+)?(?:(sales\s*op(?:eration)?s)\s+(?:soll|möge|bitte)|erinnere\s+mich(?:\s+daran)?,?|frag(?:e)?\s+([A-ZÄÖÜ][\wäöüß]+(?:\s+[A-ZÄÖÜ][\wäöüß]+)?),?)\s+(.{3,250}?)(?:\s+(bis\s+[\wäöüß. ]{2,30}))?[.!]?$/i);
     if (deleg) {

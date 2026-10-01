@@ -29,6 +29,7 @@ import { createAccountGoal } from "@/modules/leadership/service";
 import { upsertAssessment, getBuyingCenter } from "@/modules/people/assessments";
 import { insertSuggestionCard } from "./suggestions";
 import { createWorkItem } from "@/modules/work/service";
+import { changePositionStatus, createPosition, openReadiness, quickFill } from "@/modules/staffing/service";
 import { ensureDefaultTeams } from "@/modules/work/teams";
 import { parseRelativeDue } from "@/modules/work/calendar";
 
@@ -635,6 +636,31 @@ async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$i
       return signal.id;
     });
     return { type: "SIGNAL", id, note: `Beobachtung (neu) angelegt.${purposeNote}` };
+  }
+  // Etappe 30: Besetzung – Position an einer (ggf. neuen) Chance; bei feststehender interner Person direkt Einsatz
+  if (item.type === "BESETZUNG") {
+    if (getConfig().FEATURE_BESETZUNG !== "true") throw new ValidationError("Der Bereich Besetzung ist in dieser Umgebung nicht eingeschaltet.");
+    const intern = item.resourceKind === "INTERN";
+    let opp = item.chanceTitle ? await matchOpportunity(setupId, item.chanceTitle) : null;
+    if (!opp) opp = (await matchOpportunity(setupId, item.title)) ?? null;
+    if (opp && ["BEENDET"].includes(opp.status)) opp = null;
+    const createdOpp = !opp;
+    if (!opp) {
+      opp = await createOpportunity(actor, { setupId, title: item.title, needDescription: [item.mustHave || item.tasks || item.evidenceQuote, `Besetzung: ${item.title}`].join("\n").slice(0, 4000), trigger: origin, kind: intern ? "VERVE_EXPERTE" : "FREELANCER_EXPERTE", roleName: item.title, headcount: 1, horizon: item.desiredStart ? item.desiredStart.slice(0, 7) : "", anticipated: false });
+    }
+    const base = { title: item.title, resourceKind: item.resourceKind, tasks: item.tasks, mustHave: item.mustHave, niceToHave: item.niceToHave, location: item.location, language: item.language, desiredStart: /^\d{4}-\d{2}-\d{2}$/.test(item.desiredStart) ? item.desiredStart : "", plannedEnd: /^\d{4}-\d{2}-\d{2}$/.test(item.plannedEnd) ? item.plannedEnd : "", endOpen: item.endOpen ? "on" : "false", scopeAmount: item.scopeAmount ?? "", scopeUnit: item.scopeUnit };
+    const oppNote = createdOpp ? ` Chance „${opp.title}“ neu angelegt.` : ` An Chance „${opp.title}“.`;
+    // Interne Person steht fest → Schnellbesetzung (Position besetzt, Einsatzakte angelegt)
+    const user = intern && item.personName ? await matchUserByName(actor.workspaceId, item.personName) : null;
+    if (user) {
+      const r = await quickFill(actor, opp.id, { ...base, internalUserId: user.id, reason: `Aus dem Assistenten: „${item.evidenceQuote.slice(0, 200)}“` });
+      return { type: "ENGAGEMENT", id: r.engagement.id, note: `Position „${r.position.title}“ intern mit ${user.displayName} besetzt, Einsatzakte angelegt.${oppNote} /einsaetze/${r.engagement.id}` };
+    }
+    const pos = await createPosition(actor, opp.id, { ...base, internalNotes: `Aus dem Assistenten (${origin}).${item.personName ? ` Genannte Person: ${item.personName}.` : ""}` });
+    const missing = openReadiness(pos);
+    if (!missing.length) await changePositionStatus(actor, pos.id, { version: pos.version, status: "OFFEN" });
+    const personNote = item.personName ? (intern ? ` „${item.personName}“ habe ich nicht eindeutig unter den Zugängen gefunden – bitte an der Position per Schnellbesetzung wählen.` : ` Freelancer „${item.personName}“: an der Position per Schnellbesetzung mit EK besetzen.`) : "";
+    return { type: "POSITION", id: pos.id, note: `Position „${pos.title}“ ${missing.length ? `als Entwurf angelegt (für „offen“ fehlt: ${missing.join(", ")})` : "angelegt und offen"}.${oppNote}${personNote} /besetzung/${pos.id}` };
   }
   if (item.type === "CHANCE") {
     const opp = await createOpportunity(actor, { setupId, title: item.title, needDescription: item.needDescription, trigger: origin, kind: item.kind, roleName: item.roleName, headcount: item.headcount ?? undefined, horizon: item.horizon, anticipated: item.anticipated });

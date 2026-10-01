@@ -1900,6 +1900,8 @@ export const staffingPositions = pgTable(
     accountId: text("account_id").notNull().references(() => accounts.id),
     setupId: text("setup_id").notNull().references(() => projectSetups.id),
     title: text("title").notNull(),
+    /** FREELANCER (Suche, EK, zwei Verträge) oder INTERN (Verve-Kolleg:in; kein EK, VK optional – Moco bleibt führend) */
+    resourceKind: text("resource_kind").notNull().default("FREELANCER"),
     roleId: text("role_id").references(() => standardRoles.id),
     tasks: text("tasks"),
     mustHave: text("must_have"),
@@ -1974,7 +1976,9 @@ export const candidacies = pgTable(
     id: id(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     positionId: text("position_id").notNull().references(() => staffingPositions.id),
-    freelancerId: text("freelancer_id").notNull().references(() => freelancers.id),
+    freelancerId: text("freelancer_id").references(() => freelancers.id),
+    /** interne Besetzung: Verve-Kolleg:in statt Freelancer */
+    internalUserId: text("internal_user_id").references(() => users.id),
     handlerUserId: text("handler_user_id").notNull().references(() => users.id),
     status: text("status").notNull().default("IDENTIFIZIERT"),
     statusReason: text("status_reason"),
@@ -2003,7 +2007,8 @@ export const candidacies = pgTable(
   (t) => [
     index("candidacies_position_idx").on(t.positionId),
     index("candidacies_freelancer_idx").on(t.freelancerId),
-    uniqueIndex("candidacies_active_uq").on(t.positionId, t.freelancerId).where(sql`is_active = true`),
+    uniqueIndex("candidacies_active_uq").on(t.positionId, t.freelancerId).where(sql`is_active = true AND freelancer_id IS NOT NULL`),
+    uniqueIndex("candidacies_active_internal_uq").on(t.positionId, t.internalUserId).where(sql`is_active = true AND internal_user_id IS NOT NULL`),
   ],
 );
 
@@ -2071,7 +2076,8 @@ export const engagements = pgTable(
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     positionId: text("position_id").notNull().references(() => staffingPositions.id),
     candidacyId: text("candidacy_id").notNull().references(() => candidacies.id),
-    freelancerId: text("freelancer_id").notNull().references(() => freelancers.id),
+    freelancerId: text("freelancer_id").references(() => freelancers.id),
+    internalUserId: text("internal_user_id").references(() => users.id),
     opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
     accountId: text("account_id").notNull().references(() => accounts.id),
     setupId: text("setup_id").notNull().references(() => projectSetups.id),

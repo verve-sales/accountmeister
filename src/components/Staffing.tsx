@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Actor } from "@/modules/identity/actor";
-import { canManageStaffingAt, positionStatusLabel, scopeUnitLabel, staffingSummary, type PositionView } from "@/modules/staffing/service";
+import { canManageStaffingAt, freelancerOptions, positionStatusLabel, scopeUnitLabel, staffingSummary, type PositionView } from "@/modules/staffing/service";
 import { createPositionAction, createStaffingIntakeAction } from "@/app/actions";
+import { QuickFillForm } from "./QuickFillForm";
 import { fmtDate } from "@/lib/labels";
 
 const RED = "#c0392b";
@@ -44,6 +45,11 @@ export function PositionForm({ opportunityId, back, users, defaultBdId, roles }:
         <label className="label" htmlFor="pf-title">Titel / Rolle</label>
         <input id="pf-title" name="title" className="input" required minLength={3} maxLength={200} placeholder="z. B. Senior Java-Entwickler:in" />
       </div>
+      <fieldset className="sm:col-span-2 flex flex-wrap gap-4 items-center">
+        <legend className="label">Ressourcenart</legend>
+        <label className="text-sm flex items-center gap-1"><input type="radio" name="resourceKind" value="FREELANCER" defaultChecked /> Freelancer (Suche, Kandidaturen, EK/VK)</label>
+        <label className="text-sm flex items-center gap-1"><input type="radio" name="resourceKind" value="INTERN" /> intern (keine Einkaufskonditionen)</label>
+      </fieldset>
       <div>
         <label className="label" htmlFor="pf-role">Standardrolle (optional)</label>
         <select id="pf-role" name="roleId" className="input" defaultValue="">
@@ -94,7 +100,7 @@ export function PositionForm({ opportunityId, back, users, defaultBdId, roles }:
           <label className="label" htmlFor="pf-rate">je</label>
           <select id="pf-rate" name="rateUnit" className="input" defaultValue="TAG"><option value="TAG">Tag</option><option value="STUNDE">Stunde</option></select>
         </div>
-        <p className="muted text-xs sm:col-span-5">Unbekannt leer lassen – nicht 0. Keine pauschale Tageslänge.</p>
+        <p className="muted text-xs sm:col-span-5">Unbekannt leer lassen – nicht 0. Keine pauschale Tageslänge. Bei „intern“ werden EK-Angaben ignoriert.</p>
       </fieldset>
       <div className="sm:col-span-2"><label className="label" htmlFor="pf-notes">Interne Hinweise</label><textarea id="pf-notes" name="internalNotes" className="input" rows={2} maxLength={4000} /></div>
       <div className="sm:col-span-2"><button className="btn btn-small" type="submit">Position anlegen (Entwurf)</button></div>
@@ -107,11 +113,12 @@ export async function StaffingBlock({ actor, opportunityId, back, users, default
   const manage = await canManageStaffingAt(actor, opportunityId);
   const sum = await staffingSummary(actor, opportunityId);
   if (!manage && sum.total === 0) return null;
+  const freelancers = manage ? await freelancerOptions(actor) : [];
   return (
     <section className="card" id="besetzung">
       <div className="flex flex-wrap items-baseline gap-2 mb-2">
         <h2 className="font-semibold">Besetzung{sum.total ? ` (${sum.filled}/${sum.total} besetzt)` : ""}</h2>
-        <span className="muted text-xs">Je zu besetzendem Platz eine Position: Bedarf erfassen, Suche an Sales Operations geben, Kandidaten prüfen, vorstellen, auswählen.</span>
+        <span className="muted text-xs">Je Platz eine Position. Steht die Person fest: Schnellbesetzung. Sonst Bedarf erfassen, Suche an Sales Operations geben, Kandidaten prüfen, vorstellen, auswählen.</span>
         <Link href="/besetzung" className="text-xs ml-auto">Alle Besetzungen</Link>
       </div>
       <PositionList items={sum.items} empty="Noch keine Position an dieser Chance." showAccount={false} />
@@ -119,8 +126,12 @@ export async function StaffingBlock({ actor, opportunityId, back, users, default
       {sum.filled > 0 && sum.open === 0 && <p className="text-xs mt-2">Alle Positionen besetzt. Weiter im bestehenden Abschluss: <a href="#auftrag">Auftrag anlegen bzw. Beauftragung bestätigen</a>.</p>}
       {manage && !closed && (
         <>
-          <details className="mt-3">
-            <summary>Position anlegen</summary>
+          <details className="mt-3" open={sum.total === 0}>
+            <summary><strong>Schnellbesetzung</strong> – Person steht fest (intern oder Freelancer), kein Suchauftrag nötig</summary>
+            <QuickFillForm opportunityId={opportunityId} back={back} users={users} freelancers={freelancers} />
+          </details>
+          <details className="mt-2">
+            <summary>Position mit Suche anlegen (Bedarf erfassen, Sales Operations sucht)</summary>
             <PositionForm opportunityId={opportunityId} back={back} users={users} defaultBdId={defaultBdId} roles={roles} />
           </details>
           <details className="mt-2">

@@ -24,13 +24,13 @@ type View = {
   ai: { enabled: boolean; description: string };
 };
 
-const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Hebel / Vorhaben", TEAM: "Verve-Team", VORGANG: "Vorgang / Anfrage" };
+const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Hebel / Vorhaben", TEAM: "Verve-Team", VORGANG: "Vorgang / Anfrage", BESETZUNG: "Besetzung (Position)" };
 const INITIATIVE_LABEL: Record<string, string> = { PRIORITAET: "Priorität des Kunden", INITIATIVE: "Schlüssel-Initiative", HERAUSFORDERUNG: "Herausforderung" };
 const LEVER_LABEL: Record<string, string> = { VERLAENGERN: "Verlängern", AUSWEITEN: "Ausweiten", VERTIEFEN: "Vertiefen", UEBERTRAGEN: "Übertragen", REAKTIVIEREN: "Reaktivieren" };
 const RISK_LABEL: Record<string, string> = { UMSTRUKTURIERUNG: "Umstrukturierung", BUDGETKUERZUNG: "Budgetkürzung", WETTBEWERBER: "Wettbewerber aktiv", FUERSPRECHER_WEG: "Fürsprecher geht", INSOURCING: "Insourcing", EINKAUF_VERSCHAERFT: "Einkauf verschärft", NACHBARTEAM: "Nachbarteam stellt sich quer" };
 const PROCUREMENT_LABEL: Record<string, string> = { DIREKT: "direkt", VERMITTLER: "über Vermittler", RAHMENVERTRAG: "über Rahmenvertrag" };
 /** Reihenfolge für „Alle übernehmen“: erst Kunde/Einsortierung (bindet das Gespräch), dann Team, dann der Rest. */
-const APPLY_ORDER = ["KUNDE", "EINSORTIERUNG", "SETUP", "TEAM", "BESCHAFFUNG", "INITIATIVE", "PERSON", "EINSATZ", "CHANCE", "HEBEL", "RISIKO", "SOS", "SIGNAL", "AKTION", "KONTAKT", "FRAGE", "ACCOUNTZIEL", "VORGANG"];
+const APPLY_ORDER = ["KUNDE", "EINSORTIERUNG", "SETUP", "TEAM", "BESCHAFFUNG", "INITIATIVE", "PERSON", "EINSATZ", "CHANCE", "HEBEL", "RISIKO", "SOS", "SIGNAL", "AKTION", "KONTAKT", "FRAGE", "ACCOUNTZIEL", "VORGANG", "BESETZUNG"];
 const ROLE_FAMILY_LABEL: Record<string, string> = { DELIVERY_MANAGEMENT: "Delivery Management", AGILE_LEADERSHIP: "Agile Leadership", BUSINESS_ANALYSE: "Business Analyse & Beratung", SOLUTION_ARCHITEKTUR: "Solution & Architektur", TEST_QS: "Test & Qualitätssicherung" };
 
 function contextFromPath(pathname: string): { type: string; id: string } {
@@ -84,9 +84,17 @@ function cardTitle(item: Item): string {
       const to: Record<string, string> = { ICH: "für mich", SALES_OPS: "an Sales Operations", BD: "an den BD", PRINCIPAL: "an Principal", PERSON: `an ${s("personName") || "Person"}` };
       return `${s("title")} (${to[s("target")] ?? s("target")})`;
     }
+    case "BESETZUNG":
+      return `${s("title")} – ${s("resourceKind") === "INTERN" ? "intern" : "Freelancer"}${s("personName") ? `: ${s("personName")}` : " (Person offen)"}`;
     default:
       return item.type;
   }
+}
+
+/** Übernahme-Hinweis mit anklickbaren Pfaden (z. B. /einsaetze/…). */
+function NoteText({ text }: { text: string }) {
+  const parts = text.split(/(\/(?:einsaetze|besetzung|bedarfe|vorgaenge)\/[\w-]+)/g);
+  return <>{parts.map((p, i) => (/^\/(einsaetze|besetzung|bedarfe|vorgaenge)\//.test(p) ? <a key={i} href={p}>{p.startsWith("/einsaetze") ? "Einsatz öffnen" : p.startsWith("/besetzung") ? "Position öffnen" : p.startsWith("/bedarfe") ? "Chance öffnen" : "Vorgang öffnen"}</a> : <span key={i}>{p}</span>))}</>;
 }
 
 function cardDetail(item: Item): string {
@@ -98,6 +106,11 @@ function cardDetail(item: Item): string {
     }
     case "SIGNAL":
       return s("relevanceHypothesis") ? `Vermutung: ${s("relevanceHypothesis")}` : "";
+    case "BESETZUNG": {
+      const unit: Record<string, string> = { TAGE_PRO_WOCHE: "Tage/Woche", STUNDEN_PRO_WOCHE: "Std/Woche", PROZENT: "%" };
+      const meta = [s("desiredStart") && `Start ${s("desiredStart")}`, item.endOpen ? "Ende offen" : s("plannedEnd") && `Ende ${s("plannedEnd")}`, s("scopeAmount") && s("scopeAmount") !== "null" ? `${s("scopeAmount")} ${unit[s("scopeUnit")] ?? ""}` : "", s("location"), s("language"), s("chanceTitle") && `Chance: ${s("chanceTitle")}`].filter(Boolean).join(" · ");
+      return [meta, s("mustHave") && `Muss: ${s("mustHave")}`, s("tasks") && `Aufgaben: ${s("tasks")}`].filter(Boolean).join("\n");
+    }
     case "CHANCE": {
       const kind: Record<string, string> = { VERVE_EXPERTE: "Verve-Experte", FREELANCER_EXPERTE: "Freelancer-Experte", AUSSCHREIBUNG: "Ausschreibung" };
       const meta = [kind[s("kind")] ?? s("kind"), s("roleName"), s("headcount") && s("headcount") !== "null" ? `${s("headcount")}×` : "", s("horizon"), item.anticipated === false ? "vom Kunden ausgesprochen" : "antizipiert"].filter(Boolean).join(" · ");
@@ -410,7 +423,7 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
                           </div>
                         )}
                         {c.status === "NEU" && view && !view.context.canWrite && <div className="muted text-xs mt-1">Zum Übernehmen fehlt das Bearbeitungsrecht in diesem Kontext.</div>}
-                        {c.status !== "NEU" && <div className="text-xs mt-1">{c.status === "UEBERNOMMEN" ? `Übernommen. ${c.note ?? ""}` : "Verworfen."}</div>}
+                        {c.status !== "NEU" && <div className="text-xs mt-1">{c.status === "UEBERNOMMEN" ? <>Übernommen. <NoteText text={c.note ?? ""} /></> : "Verworfen."}</div>}
                       </li>
                     ))}
                   </ul>

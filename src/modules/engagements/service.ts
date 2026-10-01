@@ -55,7 +55,11 @@ export async function ensureEngagementForSelection(tx: Tx, actor: Actor, candida
   if (!c) throw new NotFoundError("Kandidatur");
   const p = await tx.query.staffingPositions.findFirst({ where: eq(schema.staffingPositions.id, c.positionId) });
   if (!p) throw new NotFoundError("Position");
-  const f = await tx.query.freelancers.findFirst({ where: eq(schema.freelancers.id, c.freelancerId), columns: { displayName: true } });
+  const personName = c.freelancerId
+    ? (await tx.query.freelancers.findFirst({ where: eq(schema.freelancers.id, c.freelancerId), columns: { displayName: true } }))?.displayName ?? "Freelancer"
+    : c.internalUserId
+      ? (await tx.query.users.findFirst({ where: eq(schema.users.id, c.internalUserId), columns: { displayName: true } }))?.displayName ?? "intern"
+      : "?";
   const [e] = await tx
     .insert(schema.engagements)
     .values({
@@ -63,10 +67,11 @@ export async function ensureEngagementForSelection(tx: Tx, actor: Actor, candida
       positionId: p.id,
       candidacyId: c.id,
       freelancerId: c.freelancerId,
+      internalUserId: c.internalUserId,
       opportunityId: p.opportunityId,
       accountId: p.accountId,
       setupId: p.setupId,
-      title: `${p.title} – ${f?.displayName ?? "Freelancer"}`.slice(0, 200),
+      title: `${p.title} – ${personName}`.slice(0, 200),
       plannedStart: p.desiredStart ?? c.availableFrom ?? null,
       plannedEnd: p.endOpen ? null : p.plannedEnd ?? c.availableTo ?? null,
       bdUserId: p.bdUserId,
@@ -147,7 +152,8 @@ export async function procurementCheck(e: EngagementRow): Promise<ProcurementChe
   const prof = await db.query.procurementProfiles.findFirst({ where: eq(schema.procurementProfiles.accountId, e.accountId) });
   const links = await db.query.engagementDocuments.findMany({ where: eq(schema.engagementDocuments.engagementId, e.id) });
   const docs = links.length ? await db.query.contractDocuments.findMany({ where: inArray(schema.contractDocuments.id, links.map((l) => l.documentId)) }) : [];
-  const required = ((prof?.required as { side: string; docType: string }[] | undefined) ?? []).map((r) => ({ ...r, ok: docs.some((d) => d.side === r.side && d.docType === r.docType && d.signedStatus === "UNTERSCHRIEBEN") }));
+  // Interne Besetzung: Freelancer-seitige Unterlagen (Rahmenvertrag, Einzelbeauftragung) entfallen
+  const required = ((prof?.required as { side: string; docType: string }[] | undefined) ?? []).filter((r) => e.freelancerId || r.side !== "FREELANCER").map((r) => ({ ...r, ok: docs.some((d) => d.side === r.side && d.docType === r.docType && d.signedStatus === "UNTERSCHRIEBEN") }));
   return { profile: !!prof && !!prof.approvedAt, required, complete: prof && prof.approvedAt ? required.every((r) => r.ok) : null, exception: e.procurementException };
 }
 
@@ -404,7 +410,7 @@ async function decorate(actor: Actor, rows: EngagementRow[]): Promise<Engagement
   const ids = rows.map((r) => r.id);
   const [accounts, fls, users, cares, cis, rens] = await Promise.all([
     db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(rows.map((r) => r.accountId))]), columns: { id: true, name: true } }),
-    db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(rows.map((r) => r.freelancerId))]), columns: { id: true, displayName: true } }),
+    db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(rows.map((r) => r.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
     db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { id: true, displayName: true } }),
     db.query.careAssignments.findMany({ where: and(inArray(schema.careAssignments.engagementId, ids), isNull(schema.careAssignments.toDate)) }),
     db.query.checkins.findMany({ where: and(inArray(schema.checkins.engagementId, ids), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])) }),
@@ -420,7 +426,7 @@ async function decorate(actor: Actor, rows: EngagementRow[]): Promise<Engagement
     out.push({
       ...r,
       accountName: an.get(r.accountId) ?? "?",
-      freelancerName: fn.get(r.freelancerId) ?? "?",
+      freelancerName: r.freelancerId ? fn.get(r.freelancerId) ?? "?" : r.internalUserId ? `${un.get(r.internalUserId) ?? "?"} (intern)` : "?",
       bdName: un.get(r.bdUserId) ?? "?",
       careNames: cares.filter((c) => c.engagementId === r.id).map((c) => `${un.get(c.userId) ?? "?"} (${careRoleLabel[c.role] ?? c.role})`),
       daysToEnd: r.plannedEnd ? Math.round((new Date(r.plannedEnd).getTime() - new Date(t).getTime()) / 86400000) : null,
@@ -495,7 +501,7 @@ export async function getEngagementDetail(actor: Actor, id: string) {
   const linked = new Set(docsLinks.map((l) => l.documentId));
   const history = await db.query.auditEvents.findMany({ where: and(eq(schema.auditEvents.objectType, "ENGAGEMENT"), eq(schema.auditEvents.objectId, id)), orderBy: asc(schema.auditEvents.at) });
   const profile = await db.query.procurementProfiles.findFirst({ where: eq(schema.procurementProfiles.accountId, e.accountId) });
-  const freelancer = await db.query.freelancers.findFirst({ where: eq(schema.freelancers.id, e.freelancerId) });
+  const freelancer = e.freelancerId ? await db.query.freelancers.findFirst({ where: eq(schema.freelancers.id, e.freelancerId) }) : null;
   return {
     access: a,
     view: view!,
