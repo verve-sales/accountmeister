@@ -7,6 +7,7 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { logoutAction } from "./actions";
 import { roleLabel } from "@/lib/labels";
 import { AssistantPanel } from "@/components/AssistantPanel";
+import { provisionAccess } from "@/modules/provision/access";
 
 export const metadata: Metadata = { title: "Accountmeister – Verve AI", description: "Interne Sales-Arbeitsumgebung von Verve Consulting", icons: { icon: "/verve-ai-lockup.png" } };
 export const dynamic = "force-dynamic";
@@ -61,7 +62,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {actor ? (
                 <>
                   <nav aria-label="Weitere Bereiche" className="flex flex-wrap gap-x-3 text-xs">
-                    {MORE.map((n) => (
+                    {[...MORE.slice(0, 4), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(4)].map((n) => (
                       <Link key={n.href} href={n.href} className="muted">
                         {n.label}
                       </Link>
