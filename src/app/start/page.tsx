@@ -18,6 +18,7 @@ import { HealthBadge } from "@/components/HealthBadge";
 import { ensureInitiativeRemindersSafe } from "@/modules/agenda/service";
 import { listOpenSosForActor } from "@/modules/sos/service";
 import { SosBanner } from "@/components/SosPanel";
+import { ensureOverdueNotificationsSafe, listMyWork } from "@/modules/work/service";
 import { createOpportunityAction, setDashboardViewAction, smartDumpAction } from "../actions";
 
 const DASHBOARD_VIEW_COOKIE = "am_sicht";
@@ -35,6 +36,11 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   // Verlängerungsregel: am Auslösetag das Vorgehen „Verlängerung“ anstoßen (Etappe 23)
   await ensureRenewalRunsSafe(actor);
   await ensureInitiativeRemindersSafe(actor);
+  await ensureOverdueNotificationsSafe(actor);
+  const work = await listMyWork(actor);
+  const wOverdue = work.assigned.filter((w) => w.overdue).length;
+  const wReview = work.requested.filter((w) => w.status === "ZUR_PRUEFUNG").length;
+  const wAsked = work.assigned.filter((w) => w.status === "ANGEFRAGT").length;
   const openSos = await listOpenSosForActor(actor);
   const d = await buildDashboard(actor, requested);
   const focus = await getFocus(actor.workspaceId);
@@ -74,6 +80,16 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <p className="muted text-sm">{viewDescription[d.view]}</p>
       <Feedback params={params} />
       <SosBanner sos={openSos} />
+      {(work.counts.assigned > 0 || work.counts.queue > 0 || wReview > 0) && (
+        <section className="card text-sm flex flex-wrap gap-x-6 gap-y-1 items-baseline">
+          <strong>Vorgänge</strong>
+          <Link href="/meine-arbeit?v=mir#vorgaenge">{work.counts.assigned} bei mir</Link>
+          {wAsked > 0 && <Link href="/meine-arbeit?v=mir#vorgaenge">{wAsked} warten auf meine Annahme</Link>}
+          {wOverdue > 0 && <Link href="/meine-arbeit?v=mir&f=ueberfaellig#vorgaenge" style={{ color: "#c0392b", fontWeight: 600 }}>{wOverdue} überfällig</Link>}
+          {wReview > 0 && <Link href="/meine-arbeit?v=beauftragt#vorgaenge">{wReview} zur Prüfung bei mir</Link>}
+          {work.myTeams.map((t) => <Link key={t.id} href={`/team/${t.id}`}>{work.queue.filter((q) => q.teamId === t.id).length} im Eingang {t.name}</Link>)}
+        </section>
+      )}
 
       {d.empty && <p className="card text-sm">{d.empty}</p>}
 

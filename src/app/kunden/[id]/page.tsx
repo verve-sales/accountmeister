@@ -32,6 +32,7 @@ import { canMaintainAgenda, listInitiatives } from "@/modules/agenda/service";
 import { listSosForAccount } from "@/modules/sos/service";
 import { KundenAgenda, Beschaffung } from "@/components/KundenAgenda";
 import { SosPanel } from "@/components/SosPanel";
+import { Comments, WorkBlock } from "@/components/Work";
 
 export default async function KundePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
@@ -101,6 +102,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
 
       {sosList.some((x) => x.status !== "GELOEST") && <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} />}
       <KundenAgenda accountId={account.id} initiatives={initiatives} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} />
+      <WorkBlock actor={actor} subjectType="KUNDE" subjectId={account.id} back={back} canCreate={account.status !== "ARCHIVED"} />
 
       {health && (
         <section className="card">
@@ -156,6 +158,8 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         users={activeUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
         start={mayStartPlaybook && account.status !== "ARCHIVED" ? { playbooks: accountPlaybooks, hidden: { accountId: account.id }, setups: setups.filter((x) => x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })), defaultNewSetupName: `Reaktivierung ${new Date().getFullYear()}`, defaultOwnerId: account.responsibleBdUserId, salesOps } : null}
       />
+
+      <Comments actor={actor} subjectType="KUNDE" subjectId={account.id} back={back} />
 
       {/* Öffentliche Unternehmensrecherche (Etappe 16): eng begrenzte Ausnahme – nur öffentliche Firmendaten, nie Personennamen */}
       <section className="card">

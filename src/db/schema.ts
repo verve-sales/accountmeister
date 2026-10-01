@@ -1697,6 +1697,192 @@ export const sosReports = pgTable(
   (t) => [index("sos_reports_account_idx").on(t.accountId)],
 );
 
+// ---------------------------------------------------------------------------
+// Kollaborationskern (Etappe 27): Vorgänge, Teams, Kommentare, Benachrichtigungen
+// ---------------------------------------------------------------------------
+
+/** Team mit eigener Warteschlange (z. B. Sales Operations). */
+export const teams = pgTable(
+  "teams",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    key: text("key").notNull(), // SALES_OPS | frei
+    name: text("name").notNull(),
+    description: text("description"),
+    /** Arbeitsraumrolle, deren Inhaber automatisch Mitglied sind (z. B. SALES_OPS) */
+    implicitRole: text("implicit_role"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("teams_key_uq").on(t.workspaceId, t.key)],
+);
+
+export const teamMembers = pgTable(
+  "team_members",
+  {
+    id: id(),
+    teamId: text("team_id").notNull().references(() => teams.id),
+    userId: text("user_id").notNull().references(() => users.id),
+    role: text("role").notNull().default("MITGLIED"), // LEITUNG | MITGLIED
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("team_members_uq").on(t.teamId, t.userId)],
+);
+
+/** Leistungskatalog: Anfragearten je Team mit Pflichtfeldern, Standardfrist und Checkliste. */
+export const serviceTypes = pgTable(
+  "service_types",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    teamId: text("team_id").notNull().references(() => teams.id),
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    /** [{ key, label, required }] */
+    fields: jsonb("fields").notNull().default([]),
+    defaultWorkdays: integer("default_workdays").notNull().default(3),
+    /** string[] */
+    checklist: jsonb("checklist").notNull().default([]),
+    reviewRequired: boolean("review_required").notNull().default(true),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("service_types_key_uq").on(t.teamId, t.key)],
+);
+
+/**
+ * Vorgang: eigene Aufgabe, Anfrage an Person/Team, Prüfung oder Erinnerung – an Kunde, Setup, Chance, SOS oder ohne Bezug.
+ * Auftraggeber:in (requester) und Bearbeiter:in (assignee) sind getrennt; Team-Vorgänge warten ohne Bearbeiter:in in der
+ * Warteschlange, bis jemand übernimmt.
+ */
+export const workItems = pgTable(
+  "work_items",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    kind: text("kind").notNull().default("AKTION"), // AKTION | ANFRAGE | PRUEFUNG | ERINNERUNG
+    subjectType: text("subject_type").notNull().default("OHNE"), // KUNDE | SETUP | CHANCE | SOS | OHNE
+    subjectId: text("subject_id"),
+    accountId: text("account_id").references(() => accounts.id),
+    title: text("title").notNull(),
+    description: text("description"),
+    requesterUserId: text("requester_user_id").notNull().references(() => users.id),
+    assigneeUserId: text("assignee_user_id").references(() => users.id),
+    teamId: text("team_id").references(() => teams.id),
+    serviceTypeId: text("service_type_id").references(() => serviceTypes.id),
+    /** Angaben aus den Pflichtfeldern der Anfrageart */
+    fields: jsonb("fields").notNull().default({}),
+    priority: text("priority").notNull().default("NORMAL"), // NORMAL | HOCH
+    status: text("status").notNull().default("OFFEN"), // ANGEFRAGT | OFFEN | IN_ARBEIT | BLOCKIERT | ZUR_PRUEFUNG | ERLEDIGT | ABGELEHNT | VERWORFEN
+    dueDate: date("due_date"),
+    slaDueDate: date("sla_due_date"),
+    /** [{ text, done }] */
+    checklist: jsonb("checklist").notNull().default([]),
+    reviewRequired: boolean("review_required").notNull().default(false),
+    parentId: text("parent_id").references((): AnyPgColumn => workItems.id),
+    blockedById: text("blocked_by_id").references((): AnyPgColumn => workItems.id),
+    result: text("result"),
+    statusNote: text("status_note"),
+    /** Bei Vertretung: ursprünglich vorgesehene Person */
+    deputyFor: text("deputy_for").references(() => users.id),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    version: version(),
+  },
+  (t) => [
+    index("work_items_assignee_idx").on(t.assigneeUserId),
+    index("work_items_requester_idx").on(t.requesterUserId),
+    index("work_items_team_idx").on(t.teamId),
+    index("work_items_subject_idx").on(t.subjectType, t.subjectId),
+    index("work_items_account_idx").on(t.accountId),
+  ],
+);
+
+export const workWatchers = pgTable(
+  "work_watchers",
+  {
+    id: id(),
+    workItemId: text("work_item_id").notNull().references(() => workItems.id),
+    userId: text("user_id").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("work_watchers_uq").on(t.workItemId, t.userId)],
+);
+
+/** Abwesenheit mit Vertretung: neue Zuweisungen und Benachrichtigungen gehen in diesem Zeitraum an die Vertretung. */
+export const absences = pgTable(
+  "absences",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    userId: text("user_id").notNull().references(() => users.id),
+    fromDate: date("from_date").notNull(),
+    toDate: date("to_date").notNull(),
+    deputyUserId: text("deputy_user_id").references(() => users.id),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("absences_user_idx").on(t.userId)],
+);
+
+/** Kommentar am Objekt (Vorgang, Kunde, Setup, Chance, SOS) mit @-Erwähnungen. */
+export const comments = pgTable(
+  "comments",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    subjectType: text("subject_type").notNull(), // VORGANG | KUNDE | SETUP | CHANCE | SOS
+    subjectId: text("subject_id").notNull(),
+    accountId: text("account_id").references(() => accounts.id),
+    authorUserId: text("author_user_id").notNull().references(() => users.id),
+    body: text("body").notNull(),
+    /** userIds */
+    mentions: jsonb("mentions").notNull().default([]),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("comments_subject_idx").on(t.subjectType, t.subjectId)],
+);
+
+/**
+ * Benachrichtigung (Postfach im Tool) – zugleich Outbox für den E-Mail-Versand: emailState PENDING wird vom Versand-
+ * prozess abgearbeitet. Inhalte aus Quellen gehen nie in E-Mails, nur Titel und Link.
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    userId: text("user_id").notNull().references(() => users.id),
+    kind: text("kind").notNull(), // ZUGEWIESEN | TEAM_EINGANG | ANGENOMMEN | ABGELEHNT | ZUR_PRUEFUNG | ZURUECKGEGEBEN | ERLEDIGT | KOMMENTAR | ERWAEHNT | UEBERFAELLIG | SOS
+    title: text("title").notNull(),
+    link: text("link").notNull(),
+    actorUserId: text("actor_user_id").references(() => users.id),
+    /** Doppelungen vermeiden (z. B. überfällig:<id>:<datum>) */
+    dedupeKey: text("dedupe_key"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    emailState: text("email_state").notNull().default("NONE"), // NONE | PENDING | DIGEST | SENT | FAILED
+    emailAttempts: integer("email_attempts").notNull().default(0),
+    emailedAt: timestamp("emailed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.readAt), uniqueIndex("notifications_dedupe_uq").on(t.userId, t.dedupeKey), index("notifications_email_idx").on(t.emailState)],
+);
+
+/** Kanäle je Ereignisart: { email: { [kind]: boolean }, digest: boolean } */
+export const notificationPrefs = pgTable("notification_prefs", {
+  userId: text("user_id").primaryKey().references(() => users.id),
+  prefs: jsonb("prefs").notNull().default({}),
+  updatedAt: updatedAt(),
+});
+
 export type Role = (typeof roleEnum.enumValues)[number];
 export type PlaybookScope = (typeof playbookScopeEnum.enumValues)[number];
 export type PlaybookRunStatus = (typeof playbookRunStatusEnum.enumValues)[number];

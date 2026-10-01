@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, schema } from "@/db/client";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
+import { notify } from "@/modules/notifications/service";
 import type { Actor } from "@/modules/identity/actor";
 import { canEditSetup, isParty, loadSetupContext } from "@/modules/identity/authz";
 import { assertSignalTransition } from "@/modules/signals/service";
@@ -63,6 +64,7 @@ export async function createHandover(actor: Actor, raw: unknown) {
       .returning();
     if (!h) throw new Error("Übergabe konnte nicht angelegt werden");
     await recordAudit(tx, actor, "handover.requested", "HANDOVER", h.id, { subjectType: input.subjectType, subjectId: input.subjectId, receiver: input.receiverUserId });
+    await notify(tx, { workspaceId: actor.workspaceId, userIds: [input.receiverUserId], kind: "ZUGEWIESEN", title: `Übergabe von ${actor.displayName}: ${input.responsibility}`.slice(0, 300), link: "/meine-arbeit", actorUserId: actor.userId });
     return h;
   });
 }

@@ -85,7 +85,43 @@ Rollen vergibt die Betriebsverwaltung unter Verwaltung → „Rolle zuweisen“ 
     where: "Kunde → „Zuständigkeit“; Setup → Beteiligte; Chance → „Chance bearbeiten“ → Verantwortlich",
     keywords: ["zustaendig", "zustaendigkeit", "umstellen", "stelle", "bd", "delegation", "delegieren", "verantwortlich", "owner", "bd wechseln", "anker", "uebergabe", "uebergeben", "beteiligung"],
     body: `Principal, CEO und der zuständige BD können jederzeit umstellen: auf der Kundenseite unter „Zuständigkeit“ den zuständigen BD, im Setup den Setup-BD und die Anker-Beteiligungen (Beitrag: Kontext, fachliche Rückfragen, Einführung möglich), in der Chance die verantwortliche Person. Der neue BD erhält automatisch die kundenbezogene Rolle.
-Sales-Operations-Zugänge können keine Verantwortung tragen. Für einzelne Beobachtungen gibt es zusätzlich „Übergabe an eine andere Person“ – die Empfängerin nimmt sie unter Meine Arbeit an.`,
+Sales-Operations-Zugänge können keine Verantwortung tragen. Für einzelne Beobachtungen gibt es zusätzlich „Übergabe an eine andere Person“ – die Empfängerin nimmt sie unter Meine Arbeit an.
+Einzelne Aufgaben gibst du als Vorgang weiter (Block „Vorgänge“ am Kunden, Setup oder an der Chance): an eine Person oder an ein Team wie Sales Operations – mit Annahme, Frist und Rückmeldung.`,
+  },
+  {
+    id: "vorgaenge",
+    title: "Vorgänge: Aufgaben und Anfragen an Kolleg:innen",
+    where: "Meine Arbeit → Vorgänge; Block „Vorgänge“ auf Kunden-, Setup- und Chance-Seite; Vorgangsseite",
+    keywords: ["vorgang", "vorgaenge", "aufgabe", "aufgaben", "anfrage", "anfragen", "delegieren", "delegation", "beauftragen", "zuweisen", "annehmen", "ablehnen", "pruefen", "abnehmen", "nacharbeit", "unteraufgabe", "checkliste", "beobachten", "frist", "ueberfaellig", "erinnerung", "todo"],
+    body: `Ein Vorgang ist eine eigene Aufgabe oder eine Anfrage an eine Person oder ein Team. Anlegen: im Block „Vorgänge“ am Kunden, Setup oder an der Chance (dann hängt er dort) oder unter Meine Arbeit → „Neuer Vorgang“. Wähle „Ich selbst“, eine Person oder ein Team; bei Teams eine Anfrageart (Pflichtangaben mit *, Frist in Werktagen).
+Ablauf einer Anfrage: angefragt → angenommen (oder abgelehnt mit Begründung) → in Arbeit / blockiert → Ergebnis zur Prüfung → abgenommen oder zur Nacharbeit zurück. Ohne vereinbarte Prüfung ist der Vorgang mit „Abschließen“ erledigt. Abgelehnte Anfragen kannst du erneut an jemand anderen richten.
+Meine Arbeit zeigt: Mir zugewiesen, Von mir beauftragt (inklusive „zur Prüfung“), Team-Eingang, Beobachtet – filterbar nach heute fällig, überfällig, diese Woche. Unteraufgaben müssen erledigt sein, bevor der Vorgang abgeschlossen wird; Checklisten haken Bearbeiter:in oder Auftraggeber:in ab. „Beobachten“ hält dich ohne Verantwortung auf dem Laufenden.
+Sehen dürfen einen Vorgang die Beteiligten und alle, die das Bezugsobjekt (Kunde, Setup, Chance) sehen. Der Assistent legt Vorgänge an, wenn du z. B. schreibst „Sales Ops soll die Ausschreibung aufbereiten bis Freitag“ oder „Erinnere mich, …“.`,
+  },
+  {
+    id: "teams",
+    title: "Teams, Team-Eingang und Leistungskatalog",
+    where: "Meine Arbeit → „Eingang Sales Operations“; Team-Seite; Verwaltung → Teams (Betriebsverwaltung, Principals, CEO)",
+    keywords: ["team", "teams", "warteschlange", "eingang", "team eingang", "sales ops", "sales operations", "leistung", "leistungskatalog", "anfrageart", "sla", "werktage", "uebernehmen", "verteilen", "leitung"],
+    body: `Teams haben einen eigenen Eingang. Anfragen an ein Team warten dort, bis ein Mitglied „Übernehmen“ klickt; die Team-Leitung (sowie Principals und CEO) kann zuweisen. Wer die Rolle Sales Operations hat, gehört automatisch zum Team Sales Operations.
+Leistungskatalog Sales Operations (Standard): Ausschreibung aufbereiten (5 Werktage, mit Prüfung), Profil anpassen (3, mit Prüfung), Unterlagen zusammenstellen (3), Angebot formatieren (2, mit Prüfung). Jede Anfrageart bringt Pflichtangaben und eine Checkliste mit; die Frist (SLA) zählt Werktage ohne Wochenenden und NRW-Feiertage. Ampel im Eingang: SLA ok, knapp (≤ 1 Werktag), überschritten.
+Teams, Mitglieder, Leitung und Anfragearten pflegen Betriebsverwaltung, Principals und CEO unter Verwaltung → Teams.`,
+  },
+  {
+    id: "kommentare",
+    title: "Kommentare und @-Erwähnungen",
+    where: "Block „Kommentare“ auf Kunden-, Setup-, Chance- und Vorgangsseite",
+    keywords: ["kommentar", "kommentare", "kommentieren", "erwaehnen", "erwaehnung", "mention", "at", "rueckfrage", "nachricht", "diskussion", "absprache"],
+    body: `Rückfragen und Absprachen schreibst du direkt an das Objekt. Mit „@Vorname Nachname“ erwähnst du eine Person; sie wird benachrichtigt – aber nur, wenn sie das Objekt auch sehen darf (sonst erscheint ein Hinweis und die Erwähnung entfällt). Wer an einem Objekt schon kommentiert hat oder verantwortlich ist, erfährt von neuen Kommentaren. Eigene Kommentare lassen sich bearbeiten und löschen.`,
+  },
+  {
+    id: "benachrichtigungen",
+    title: "Benachrichtigungen, E-Mail und Vertretung",
+    where: "Glocke oben rechts → Benachrichtigungen; Einstellungen → Benachrichtigungen und Abwesenheit",
+    keywords: ["benachrichtigung", "benachrichtigungen", "glocke", "hinweis", "mail", "email", "e mail", "digest", "tagesueberblick", "abwesenheit", "urlaub", "vertretung", "krank", "ungelesen"],
+    body: `Die Glocke zeigt neue Hinweise: dir zugewiesen, neu im Team-Eingang, Anfrage angenommen/abgelehnt, Ergebnis zur Prüfung, Nacharbeit, erledigt, Kommentar, Erwähnung, überfällig, SOS. Ein Klick öffnet das Objekt und markiert den Hinweis als gelesen.
+Per E-Mail kommt sofort, was du unter Einstellungen → Benachrichtigungen anhakst; der Rest auf Wunsch einmal täglich im Überblick. E-Mails enthalten nur Titel und Link, nie Inhalte aus Quellen. Solange die Betriebsverwaltung den Versand nicht eingeschaltet hat, gibt es nur die Glocke.
+Abwesenheit (Einstellungen → Abwesenheit und Vertretung): Im Zeitraum gehen neue Anfragen an dich direkt an deine Vertretung, sie erhält auch deine Hinweise; bestehende Vorgänge bleiben bei dir.`,
   },
   {
     id: "vorgehen",
@@ -227,7 +263,8 @@ Principal-/BD-Weeklys und CEO-/Principal-Zielgespräche sind Führungs-Reviews o
     where: "Mehr → Einstellungen; Verwaltung (nur Betriebsverwaltung): Zugänge & Rollen, KI-Konfiguration, Standardrollen, Fristenprüfung",
     keywords: ["einstellung", "einstellungen", "konfiguration", "ki konfiguration", "ki modell", "modell", "anbieter", "langdock", "verbrauch", "standardrollen", "fristen", "fristenpruefung", "aufbewahrung", "loeschen", "archivieren", "profilreferenz", "zugang anlegen"],
     body: `Einstellungen (alle): eigenes Postfach, Status der Anbindungen, freigegebene Profilreferenzen, Hinweise zu Administration und Aufbewahrung.
-Verwaltung (Betriebsverwaltung): Zugänge anlegen und Rollen zuweisen, Protokoll; KI-Konfiguration (Anbieter, Modelle je Aufgabe, Verbrauch der letzten 30 Tage, Nutzungsgrenze je Tag); Standardrollen-Katalog ergänzen; Fristenprüfung (Aufbewahrung von Personen, Quellen, Protokollen).
+Einstellungen enthalten außerdem Benachrichtigungen (E-Mail sofort/Tagesüberblick) und Abwesenheit mit Vertretung.
+Verwaltung (Betriebsverwaltung): Zugänge anlegen und Rollen zuweisen, Protokoll; Teams und Leistungskatalog (auch Principals/CEO); KI-Konfiguration (Anbieter, Modelle je Aufgabe, Verbrauch der letzten 30 Tage, Nutzungsgrenze je Tag); Standardrollen-Katalog ergänzen; Fristenprüfung (Aufbewahrung von Personen, Quellen, Protokollen).
 Einen Kunden löschst du in zwei Schritten: erst archivieren, dann endgültig löschen (Kunde → Löschen).`,
   },
   {

@@ -28,6 +28,9 @@ import { createOpportunity } from "@/modules/opportunities/service";
 import { createAccountGoal } from "@/modules/leadership/service";
 import { upsertAssessment, getBuyingCenter } from "@/modules/people/assessments";
 import { insertSuggestionCard } from "./suggestions";
+import { createWorkItem } from "@/modules/work/service";
+import { ensureDefaultTeams } from "@/modules/work/teams";
+import { parseRelativeDue } from "@/modules/work/calendar";
 
 /**
  * Assistent (Etappe 8, E-041): ein Dialog je Nutzer und Kontext (allgemein, Kunde, Setup). Der Assistent antwortet
@@ -522,6 +525,38 @@ async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$i
       return { type: "SETUP", id: matchedSetup.id, note: `Zuordnung übernommen – das Gespräch bezieht sich jetzt auf „${account.name} · ${matchedSetup.name}“.`, rebind: { type: "SETUP", id: matchedSetup.id, title: "Assistent · Setup" } };
     }
     return { type: "ACCOUNT", id: account.id, note: `Zuordnung übernommen – das Gespräch bezieht sich jetzt auf „${account.name}“. Als Nächstes kannst du z. B. ein Setup vorschlagen lassen.`, rebind: { type: "ACCOUNT", id: account.id, title: "Assistent · Kunde" } };
+  }
+  // Etappe 27: Vorgang – an Kunde/Setup/Chance des Gesprächs, an mich, eine Person oder Sales Operations
+  if (item.type === "VORGANG") {
+    const subject = res.ctx ? { subjectType: "SETUP", subjectId: res.ctx.setup.id } : res.account ? { subjectType: "KUNDE", subjectId: res.account.id } : { subjectType: "OHNE", subjectId: "" };
+    let target = "me";
+    let who = "dich";
+    let serviceTypeId = "";
+    let fields: Record<string, string> = {};
+    if (item.target === "SALES_OPS") {
+      await ensureDefaultTeams(actor.workspaceId);
+      const team = await db.query.teams.findFirst({ where: and(eq(schema.teams.workspaceId, actor.workspaceId), eq(schema.teams.key, "SALES_OPS")) });
+      if (!team) throw new ValidationError("Team Sales Operations nicht gefunden.");
+      target = `team:${team.id}`;
+      who = team.name;
+      const service = item.serviceKey ? await db.query.serviceTypes.findFirst({ where: and(eq(schema.serviceTypes.teamId, team.id), eq(schema.serviceTypes.key, item.serviceKey), eq(schema.serviceTypes.isActive, true)) }) : undefined;
+      // Anfrageart nur, wenn keine Pflichtangabe fehlt – sonst freie Anfrage mit Hinweis im Titel
+      if (service && !(service.fields as { required: boolean }[]).some((f) => f.required)) serviceTypeId = service.id;
+      else if (service) fields = { hinweis: service.name };
+    } else if (item.target === "BD" && res.account?.responsibleBdUserId && res.account.responsibleBdUserId !== actor.userId) {
+      target = res.account.responsibleBdUserId;
+      who = "den zuständigen BD";
+    } else if (item.target === "PERSON" || item.target === "PRINCIPAL" || item.target === "BD") {
+      const u = item.personName ? await matchUserByName(actor.workspaceId, item.personName) : null;
+      if (!u) throw new ValidationError(`Ich finde ${item.personName ? `„${item.personName}“` : "die Person"} nicht eindeutig unter den Zugängen – lege den Vorgang bitte selbst an und wähle die Person aus.`);
+      if (u.id !== actor.userId) {
+        target = u.id;
+        who = u.displayName;
+      }
+    }
+    const title = fields.hinweis ? `${fields.hinweis}: ${item.title}`.slice(0, 300) : item.title;
+    const w = await createWorkItem(actor, { title, description: item.description, ...subject, target, serviceTypeId, dueDate: parseRelativeDue(item.dueHint) ?? parseDueHint(item.dueHint) ?? "", reviewRequired: target !== "me" ? "on" : "false" });
+    return { type: "VORGANG", id: w.id, note: target === "me" ? "Aufgabe für dich angelegt (Meine Arbeit)." : `Anfrage an ${who} gesendet – wartet auf Annahme.` };
   }
   // Etappe 26: Karten auf Kundenebene (Kundenagenda, Beschaffung, Risiko, Hebel, Team, SOS)
   if (item.type === "INITIATIVE" || item.type === "BESCHAFFUNG" || item.type === "RISIKO" || item.type === "HEBEL" || item.type === "TEAM" || item.type === "SOS") {

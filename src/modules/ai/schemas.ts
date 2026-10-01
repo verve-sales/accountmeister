@@ -183,6 +183,7 @@ export const chanceKindLabel: Record<(typeof chanceKindValues)[number], string> 
 export const roleFamilyCardValues = ["DELIVERY_MANAGEMENT", "AGILE_LEADERSHIP", "BUSINESS_ANALYSE", "SOLUTION_ARCHITEKTUR", "TEST_QS"] as const;
 
 export const initiativeKindCardValues = ["PRIORITAET", "INITIATIVE", "HERAUSFORDERUNG"] as const;
+export const workTargetCardValues = ["ICH", "SALES_OPS", "BD", "PRINCIPAL", "PERSON"] as const;
 export const riskCardValues = ["UMSTRUKTURIERUNG", "BUDGETKUERZUNG", "WETTBEWERBER", "FUERSPRECHER_WEG", "INSOURCING", "EINKAUF_VERSCHAERFT", "NACHBARTEAM"] as const;
 
 export const assistantItemSchema = z.discriminatedUnion("type", [
@@ -224,6 +225,8 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("RISIKO"), risk: z.enum(riskCardValues), note: z.string().max(500).optional().default(""), ...q }),
   z.object({ type: z.literal("SOS"), kind: z.enum(["EINSATZ_LAEUFT_AUS", "ANKER_BLOCKIERT", "LAGE_ENG", "SONSTIGES"]), title: z.string().min(3).max(200), situation: z.string().min(10).max(2000), need: z.string().max(500).optional().default(""), ...q }),
   z.object({ type: z.literal("HEBEL"), lever: z.enum(["VERLAENGERN", "AUSWEITEN", "VERTIEFEN", "UEBERTRAGEN", "REAKTIVIEREN"]), title: z.string().min(3).max(300), rationale: z.string().max(1000).optional().default(""), ...q }),
+  // Etappe 27: Vorgang – eigene Aufgabe oder Anfrage an Team/Person (Kollaborationskern)
+  z.object({ type: z.literal("VORGANG"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), target: z.enum(workTargetCardValues).optional().default("ICH"), personName: z.string().max(200).optional().default(""), serviceKey: z.enum(["AUSSCHREIBUNG", "PROFIL", "UNTERLAGEN", "ANGEBOT", ""]).optional().default(""), dueHint: z.string().max(100).optional().default(""), ...q }),
   z.object({ type: z.literal("TEAM"), bdName: z.string().max(200).optional().default(""), ankerNames: z.array(z.string().max(200)).max(5).optional().default([]), principalName: z.string().max(200).optional().default(""), consultantName: z.string().max(200).optional().default(""), ...q }),
   z.object({
     type: z.literal("EINSORTIERUNG"),

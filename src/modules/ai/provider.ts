@@ -5,7 +5,7 @@ import type { IntakeProposal, StructureNoteOutput } from "./schemas";
 export const STRUCTURE_NOTE_PROMPT_VERSION = "structure-note.v1";
 export const ANALYZE_DOCUMENT_PROMPT_VERSION = "analyze-document.v2";
 export const INTERVIEW_NEXT_PROMPT_VERSION = "interview-next.v1";
-export const ASSISTANT_PROMPT_VERSION = "assistant.v3";
+export const ASSISTANT_PROMPT_VERSION = "assistant.v4";
 
 /** Berechtigter Kontext, den der Anbieter erhalten darf – keine Rohquellen außer dem zu strukturierenden Text. */
 export type StructureNoteInput = {

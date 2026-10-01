@@ -29,6 +29,17 @@ const envSchema = z.object({
   OIDC_AUTO_CREATE_USERS: z.enum(["true", "false"]).default("false"),
   /** Name des Arbeitsraums, der beim ersten Admin-Login angelegt wird, falls keiner existiert */
   WORKSPACE_NAME: z.string().default("Verve Consulting"),
+  /** Basis-URL für Links in E-Mails (sonst aus OIDC_REDIRECT_URI abgeleitet) */
+  APP_BASE_URL: z.string().url().optional(),
+  /** E-Mail-Versand der Benachrichtigungen: off (Standard) | file (Entwicklung, schreibt .eml-Dateien) | graph (Microsoft Graph, Mail.Send) */
+  MAIL_TRANSPORT: z.enum(["off", "file", "graph"]).default("off"),
+  /** Absender-Postfach für Graph (UPN, z. B. accountmeister@verveconsulting.de) */
+  MAIL_SENDER: z.string().email().optional(),
+  MAIL_FILE_DIR: z.string().default("./data/mails"),
+  /** Mandant für Graph; Standard: aus OIDC_ISSUER */
+  MAIL_GRAPH_TENANT_ID: z.string().min(1).optional(),
+  /** Uhrzeit (Europe/Berlin) des Tagesdigests */
+  MAIL_DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(7),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

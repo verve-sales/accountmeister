@@ -8,12 +8,14 @@ import { logoutAction } from "./actions";
 import { roleLabel } from "@/lib/labels";
 import { AssistantPanel } from "@/components/AssistantPanel";
 import { provisionAccess } from "@/modules/provision/access";
+import { unreadCount } from "@/modules/notifications/service";
 
 export const metadata: Metadata = { title: "Accountmeister – Verve AI", description: "Interne Sales-Arbeitsumgebung von Verve Consulting", icons: { icon: "/verve-ai-lockup.png" } };
 export const dynamic = "force-dynamic";
 
 const NAV = [
   { href: "/start", label: "Start" },
+  { href: "/meine-arbeit", label: "Meine Arbeit" },
   { href: "/kunden", label: "Kunden" },
   { href: "/weeklys", label: "Weeklys" },
   { href: "/ziele", label: "Ziele & Portfolio" },
@@ -21,7 +23,6 @@ const NAV = [
 
 /** Weitere Bereiche – erreichbar, aber nicht in der ersten Reihe (E-043: fünf Einträge in der Hauptnavigation). */
 const MORE = [
-  { href: "/meine-arbeit", label: "Meine Arbeit" },
   { href: "/eingang", label: "Eingang" },
   { href: "/vorgehen", label: "Vorgehen" },
   { href: "/artefakte", label: "Artefakte" },
@@ -34,6 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const actor = await getCurrentActor();
   const roles = actor ? [...actor.roles].filter((r) => r !== "ADMIN").map((r) => roleLabel[r] ?? r) : [];
   if (actor && actor.accountRoles.size > 0) roles.push("kundenbezogene Rollen");
+  const unread = actor ? await unreadCount(actor).catch(() => 0) : 0;
   return (
     <html lang="de">
       <body className="min-h-screen">
@@ -62,12 +64,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {actor ? (
                 <>
                   <nav aria-label="Weitere Bereiche" className="flex flex-wrap gap-x-3 text-xs">
-                    {[...MORE.slice(0, 4), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(4)].map((n) => (
+                    {[...MORE.slice(0, 3), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(3)].map((n) => (
                       <Link key={n.href} href={n.href} className="muted">
                         {n.label}
                       </Link>
                     ))}
                   </nav>
+                  <Link href="/benachrichtigungen" className="no-underline" aria-label={unread ? `Benachrichtigungen: ${unread} ungelesen` : "Benachrichtigungen"} title="Benachrichtigungen" style={{ color: "var(--text)", position: "relative", display: "inline-flex", alignItems: "center" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+                    </svg>
+                    {unread > 0 && (
+                      <span style={{ position: "absolute", top: -6, right: -10, background: "#c0392b", color: "#fff", borderRadius: 999, fontSize: 10, lineHeight: "15px", minWidth: 15, padding: "0 4px", textAlign: "center", fontWeight: 700 }}>{unread > 99 ? "99+" : unread}</span>
+                    )}
+                  </Link>
                   <span>
                     {actor.displayName} · {roles.join(", ") || "keine Rolle"}
                   </span>

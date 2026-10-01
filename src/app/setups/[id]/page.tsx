@@ -12,6 +12,7 @@ import { canReassignResponsibility, loadSetupContext } from "@/modules/identity/
 import { analyzeSetup } from "@/modules/strategy/analysis";
 import { ChancenUebersicht } from "@/components/ChancenUebersicht";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
+import { Comments, WorkBlock } from "@/components/Work";
 import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { ALTKUNDEN_CODE } from "@/modules/playbooks/defaults";
 import { groupByFamily, listRoles } from "@/modules/roles/catalog";
@@ -146,6 +147,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           } : null}
         />
       )}
+
+      <WorkBlock actor={actor} subjectType="SETUP" subjectId={d.setup.id} back={back} canCreate={d.setup.status !== "ARCHIVIERT"} />
 
       {/* 1. Was läuft hier? */}
       <section className="card">
@@ -655,6 +658,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           </details>
         )}
       </section>
+      <Comments actor={actor} subjectType="SETUP" subjectId={d.setup.id} back={back} />
     </div>
   );
 }

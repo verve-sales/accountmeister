@@ -33,7 +33,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Verwaltung (Betriebsverwaltung)</h1>
-      <p className="muted text-sm">Rollen, Zugänge, Protokoll und Bestandszahlen. Kein Zugriff auf Setup-Inhalte, Quellen, Notizen oder Vorschläge (Briefing 16.2). KI-Anbieter und Modelle je Aufgabe: <Link href="/verwaltung/ki">Verwaltung → KI</Link>. Standardrollenkatalog für Chancen: <Link href="/verwaltung/rollen">Verwaltung → Rollen</Link>. Was laut Löschkonzept fällig ist: <Link href="/verwaltung/fristen">Verwaltung → Fristenprüfung</Link>.</p>
+      <p className="muted text-sm">Rollen, Zugänge, Protokoll und Bestandszahlen. Kein Zugriff auf Setup-Inhalte, Quellen, Notizen oder Vorschläge (Briefing 16.2). KI-Anbieter und Modelle je Aufgabe: <Link href="/verwaltung/ki">Verwaltung → KI</Link>. Standardrollenkatalog für Chancen: <Link href="/verwaltung/rollen">Verwaltung → Rollen</Link>. Teams, Warteschlangen und Leistungskatalog: <Link href="/verwaltung/teams">Verwaltung → Teams</Link>. Was laut Löschkonzept fällig ist: <Link href="/verwaltung/fristen">Verwaltung → Fristenprüfung</Link>.</p>
       <Feedback params={sp} />
 
       <section className="card">

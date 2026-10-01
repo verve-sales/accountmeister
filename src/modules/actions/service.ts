@@ -4,6 +4,7 @@ import { db, schema } from "@/db/client";
 import type { ActionStatus } from "@/db/schema";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
+import { notify } from "@/modules/notifications/service";
 import type { Actor } from "@/modules/identity/actor";
 import { canEditAction, canViewAction, loadSetupContext } from "@/modules/identity/authz";
 import { requireEditableSetup } from "@/modules/setups/service";
@@ -70,6 +71,7 @@ export async function createAction(actor: Actor, raw: unknown) {
       .returning();
     if (!a) throw new Error("Aktion konnte nicht angelegt werden");
     await recordAudit(tx, actor, "action.created", "ACTION", a.id, { status, owner: input.ownerUserId });
+    await notify(tx, { workspaceId: actor.workspaceId, userIds: [input.ownerUserId], kind: "ZUGEWIESEN", title: `Aktion von ${actor.displayName}: ${a.title}`, link: "/meine-arbeit", actorUserId: actor.userId });
     return a;
   });
 }

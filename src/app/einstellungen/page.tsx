@@ -6,10 +6,13 @@ import { getProviderStatus } from "@/modules/suggestions/service";
 import { getMyConnection } from "@/modules/integrations/service";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getConfig } from "@/lib/config";
-import { fmtDateTime, integrationStatusLabel } from "@/lib/labels";
-import { connectMailboxAction, createProfileReferenceAction, revokeMailboxAction } from "../actions";
+import { fmtDate, fmtDateTime, integrationStatusLabel } from "@/lib/labels";
 import { listProfileReferences } from "@/modules/opportunities/service";
 import { hasRole } from "@/modules/identity/actor";
+import { getMyPrefs, notificationKindLabel, notificationKinds } from "@/modules/notifications/service";
+import { listMyAbsences } from "@/modules/work/teams";
+import { workTargets } from "@/modules/work/service";
+import { addAbsenceAction, connectMailboxAction, createProfileReferenceAction, removeAbsenceAction, revokeMailboxAction, saveNotificationPrefsAction } from "../actions";
 
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -19,10 +22,67 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
   const cfg = getConfig();
   const conn = await getMyConnection(actor);
   const profileRefs = await listProfileReferences(actor);
+  const [prefs, absences, targets] = await Promise.all([getMyPrefs(actor), listMyAbsences(actor), workTargets(actor)]);
+  const userName = new Map(targets.users.map((u) => [u.id, u.name]));
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Einstellungen</h1>
       <Feedback params={params} />
+      <section className="card" id="benachrichtigungen">
+        <h2 className="font-semibold mb-1">Benachrichtigungen</h2>
+        <p className="muted text-sm mb-2">
+          Alle Hinweise erscheinen an der Glocke oben. Per E-Mail kommt sofort, was du hier anhakst; der Rest auf Wunsch einmal täglich im Überblick (gegen {cfg.MAIL_DIGEST_HOUR} Uhr).
+          {cfg.MAIL_TRANSPORT === "off" ? " Der E-Mail-Versand ist derzeit noch ausgeschaltet – deine Auswahl gilt, sobald er eingeschaltet wird." : ""}
+        </p>
+        <form action={saveNotificationPrefsAction} className="space-y-2">
+          <input type="hidden" name="back" value="/einstellungen#benachrichtigungen" />
+          <fieldset className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+            <legend className="label">Sofort per E-Mail</legend>
+            {notificationKinds.map((k) => (
+              <label key={k} className="flex items-center gap-2">
+                <input type="checkbox" name={`email_${k}`} defaultChecked={prefs.email[k]} /> {notificationKindLabel[k]}
+              </label>
+            ))}
+          </fieldset>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="digest" defaultChecked={prefs.digest} /> Alles andere im täglichen Überblick per E-Mail
+          </label>
+          <button className="btn btn-small" type="submit">Speichern</button>
+        </form>
+      </section>
+
+      <section className="card" id="abwesenheit">
+        <h2 className="font-semibold mb-1">Abwesenheit und Vertretung</h2>
+        <p className="muted text-sm mb-2">In diesem Zeitraum gehen neue Anfragen an dich direkt an deine Vertretung; sie erhält auch deine Benachrichtigungen. Bestehende Vorgänge bleiben bei dir.</p>
+        {absences.length > 0 && (
+          <ul className="text-sm space-y-1 mb-2">
+            {absences.map((a) => (
+              <li key={a.id} className="flex flex-wrap gap-2 items-center">
+                {fmtDate(a.fromDate)} – {fmtDate(a.toDate)} · Vertretung: {a.deputyUserId ? userName.get(a.deputyUserId) ?? "?" : "keine"}{a.note ? ` · ${a.note}` : ""}
+                <form action={removeAbsenceAction}>
+                  <input type="hidden" name="absenceId" value={a.id} />
+                  <input type="hidden" name="back" value="/einstellungen#abwesenheit" />
+                  <button className="btn btn-secondary btn-small" type="submit">Entfernen</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={addAbsenceAction} className="flex flex-wrap gap-2 items-end">
+          <input type="hidden" name="back" value="/einstellungen#abwesenheit" />
+          <div><label className="label" htmlFor="absFrom">Von</label><input id="absFrom" type="date" name="fromDate" className="input" required /></div>
+          <div><label className="label" htmlFor="absTo">Bis</label><input id="absTo" type="date" name="toDate" className="input" required /></div>
+          <div>
+            <label className="label" htmlFor="absDeputy">Vertretung</label>
+            <select id="absDeputy" name="deputyUserId" className="input" defaultValue="">
+              <option value="">keine</option>
+              {targets.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </div>
+          <div><label className="label" htmlFor="absNote">Notiz (optional)</label><input id="absNote" name="note" className="input" maxLength={300} /></div>
+          <button className="btn btn-small" type="submit">Eintragen</button>
+        </form>
+      </section>
       <section className="card">
         <h2 className="font-semibold mb-2">Mein Postfach (Microsoft 365 / Outlook)</h2>
         <p className="muted text-sm mb-2">Lesender Zugriff mit minimalen Berechtigungen. Es wird nie ein ganzes Postfach eingelesen: Sie wählen im <Link href="/eingang">Eingang</Link> einzelne Mails oder Termine aus. Kein Senden, keine Terminbuchung.</p>

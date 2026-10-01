@@ -14,12 +14,28 @@ import { getProviderStatus, listMySuggestions } from "@/modules/suggestions/serv
 import { SuggestionCard } from "@/components/SuggestionCard";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
-import { Feedback, type SearchParams } from "@/components/Feedback";
+import { Feedback } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { actionStatusLabel, fmtDate, handoverStatusLabel, reviewStatusLabel, setupStatusLabel, supportStatusLabel, opportunityStatusLabel } from "@/lib/labels";
+import { listMyWork, workFilterValues, workTargets, ensureOverdueNotificationsSafe, type WorkFilter } from "@/modules/work/service";
+import { WorkList } from "@/components/Work";
+import { WorkCreateForm } from "@/components/WorkCreateForm";
 import { changeActionStatusAction, respondHandoverAction, respondSupportRequestAction } from "../actions";
 
-export default async function MeineArbeitPage({ searchParams }: { searchParams: SearchParams }) {
+const TABS = [
+  { key: "mir", label: "Mir zugewiesen" },
+  { key: "beauftragt", label: "Von mir beauftragt" },
+  { key: "team", label: "Team-Eingang" },
+  { key: "beobachtet", label: "Beobachtet" },
+] as const;
+const FILTERS = [
+  { key: "alle", label: "alle" },
+  { key: "heute", label: "heute fällig" },
+  { key: "ueberfaellig", label: "überfällig" },
+  { key: "woche", label: "diese Woche" },
+] as const;
+
+export default async function MeineArbeitPage({ searchParams }: { searchParams: Promise<{ fehler?: string; ok?: string; v?: string; f?: string }> }) {
   const params = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
@@ -27,6 +43,12 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
   await ensureStandardTasksSafe(actor);
   await ensureInitiativeRemindersSafe(actor);
   await ensureRenewalRunsSafe(actor);
+  await ensureOverdueNotificationsSafe(actor);
+  const tab = (TABS.find((t) => t.key === params.v)?.key ?? "mir") as (typeof TABS)[number]["key"];
+  const filter = (workFilterValues as readonly string[]).includes(params.f ?? "") ? (params.f as WorkFilter) : "alle";
+  const [work, targets] = await Promise.all([listMyWork(actor, filter), workTargets(actor)]);
+  const tabItems = { mir: work.assigned, beauftragt: work.requested, team: work.queue, beobachtet: work.watched }[tab];
+  const tabCount = { mir: work.counts.assigned, beauftragt: work.counts.requested, team: work.counts.queue, beobachtet: work.counts.watched };
   const [setups, actions, handovers, reviews, support] = await Promise.all([listMySetups(actor), listMyOpenActions(actor), listMyHandovers(actor), listReviews(actor), listMySupportRequests(actor)]);
   const myOpportunities = await listMyOpportunities(actor);
   const openSupport = support.filter((s) => s.status === "ANGEFRAGT" || s.status === "ANGENOMMEN");
@@ -43,6 +65,37 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Meine Arbeit</h1>
       <Feedback params={params} />
+
+      <section className="card" id="vorgaenge">
+        <div className="flex flex-wrap items-baseline gap-2 mb-2">
+          <h2 className="font-semibold">Vorgänge</h2>
+          <span className="muted text-xs">Aufgaben und Anfragen – an mich, von mir, an meine Teams.</span>
+          {work.myTeams.map((t) => (
+            <Link key={t.id} href={`/team/${t.id}`} className="text-xs">
+              Eingang {t.name}
+            </Link>
+          ))}
+        </div>
+        <nav aria-label="Ansicht" className="flex flex-wrap gap-2 text-sm mb-2">
+          {TABS.filter((t) => t.key !== "team" || work.myTeams.length).map((t) => (
+            <Link key={t.key} href={`/meine-arbeit?v=${t.key}&f=${filter}#vorgaenge`} className={`btn btn-small${tab === t.key ? "" : " btn-secondary"}`} aria-current={tab === t.key ? "page" : undefined}>
+              {t.label} ({tabCount[t.key]})
+            </Link>
+          ))}
+        </nav>
+        <nav aria-label="Filter" className="flex flex-wrap gap-3 text-xs mb-3">
+          {FILTERS.map((f) => (
+            <Link key={f.key} href={`/meine-arbeit?v=${tab}&f=${f.key}#vorgaenge`} style={filter === f.key ? { fontWeight: 700 } : undefined}>
+              {f.label}
+            </Link>
+          ))}
+        </nav>
+        <WorkList items={tabItems} empty={filter === "alle" ? "Nichts offen." : "Nichts in diesem Filter."} perspective={tab === "mir" ? "assignee" : tab === "beauftragt" ? "requester" : "queue"} />
+        <details className="mt-3">
+          <summary>Neuer Vorgang</summary>
+          <WorkCreateForm users={targets.users} teams={targets.teams} back="/meine-arbeit?v=beauftragt#vorgaenge" idPrefix="ma" />
+        </details>
+      </section>
 
       <section className="card">
         <h2 className="font-semibold mb-2">Offene Übernahmen an mich ({openIncoming.length})</h2>

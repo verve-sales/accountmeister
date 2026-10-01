@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, schema } from "@/db/client";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
+import { notify } from "@/modules/notifications/service";
 import type { Actor } from "@/modules/identity/actor";
 import { getAccount, listVisibleAccounts } from "@/modules/accounts/service";
 import { canMaintainAgenda } from "@/modules/agenda/service";
@@ -56,6 +57,12 @@ export async function createSos(actor: Actor, raw: unknown) {
       .values({ workspaceId: actor.workspaceId, accountId: account.id, setupId: i.setupId || null, orderId: i.orderId || null, kind: i.kind, title: i.title, situation: i.situation, need: i.need || null, urgency: i.urgency, ownerUserId: account.responsibleBdUserId ?? null, createdBy: actor.userId })
       .returning();
     await recordAudit(tx, actor, "sos.created", "ACCOUNT", account.id, { art: i.kind, titel: i.title });
+    // BD und kundenbezogene Principals sofort benachrichtigen
+    const principals = await tx
+      .select({ userId: schema.roleAssignments.userId })
+      .from(schema.roleAssignments)
+      .where(and(eq(schema.roleAssignments.accountId, account.id), eq(schema.roleAssignments.role, "PRINCIPAL")));
+    await notify(tx, { workspaceId: actor.workspaceId, userIds: [account.responsibleBdUserId, ...principals.map((p) => p.userId)], kind: "SOS", title: `SOS bei ${account.name}: ${i.title}`, link: `/kunden/${account.id}#sos`, actorUserId: actor.userId });
     return row!;
   });
 }

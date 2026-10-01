@@ -41,6 +41,10 @@ import { answerInterview, discardInterview, finishInterview, startInterview } fr
 import { upsertAssessment } from "@/modules/people/assessments";
 import { attachContractDocument, createInitiative, linkChanceToInitiative, setContractLink, setInitiativeStatus, setOrderConsultant, updateProcurement } from "@/modules/agenda/service";
 import { changeSosStatus, createSos } from "@/modules/sos/service";
+import { actOnWorkItem, createWorkItem, reassignWorkItem, setWatching, toggleChecklistItem, updateWorkItem } from "@/modules/work/service";
+import { addAbsence, createTeam, removeAbsence, removeTeamMember, saveServiceType, setTeamMember } from "@/modules/work/teams";
+import { addComment, deleteComment, editComment } from "@/modules/comments/service";
+import { markRead, openNotification, saveMyPrefs } from "@/modules/notifications/service";
 import { addConfidentialNote, addGoalContribution, addLeadershipDecision, changeGoalStatus, confirmLeadershipReview, createGoal, createLeadershipReview, createSupportRequest, respondToSupportRequest, saveLeadershipDraft, updateGoal } from "@/modules/leadership/service";
 
 /**
@@ -1187,4 +1191,144 @@ export async function attachContractAction(fd: FormData) {
   return run(backOf(data, "/kunden"), async (actor) => {
     await attachContractDocument(actor, data.orderId ?? "", fileFrom(fd, "file"));
   }, "Vertrag/Bestellung hochgeladen – sichtbar für das Kundenteam (BD, Principal, Sales Operations, Beteiligte).");
+}
+
+// --- Kollaborationskern (Etappe 27) ------------------------------------------
+
+export async function createWorkItemAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/meine-arbeit"), async (actor) => {
+    const w = await createWorkItem(actor, data);
+    if (data.open === "1") return `/vorgaenge/${w.id}`;
+  }, "Vorgang angelegt.");
+}
+
+export async function workItemAction(fd: FormData) {
+  const data = formToObject(fd);
+  const labels: Record<string, string> = {
+    ANNEHMEN: "Angenommen.",
+    UEBERNEHMEN: "Übernommen – der Vorgang liegt jetzt bei dir.",
+    ABLEHNEN: "Abgelehnt – die Auftraggeber:in ist informiert.",
+    STARTEN: "In Arbeit.",
+    FORTSETZEN: "Weiter in Arbeit.",
+    BLOCKIEREN: "Als blockiert markiert.",
+    ABSCHLIESSEN: "Abgeschlossen.",
+    ABNEHMEN: "Abgenommen – erledigt.",
+    ZURUECKGEBEN: "Zur Nacharbeit zurückgegeben.",
+    VERWERFEN: "Verworfen.",
+    ERNEUT_ANFRAGEN: "Erneut angefragt.",
+  };
+  return run(backOf(data, `/vorgaenge/${data.workItemId ?? ""}`), async (actor) => {
+    const u = await actOnWorkItem(actor, data.workItemId ?? "", data);
+    if (data.action === "ABSCHLIESSEN" && u.status === "ZUR_PRUEFUNG") throw new PendingInfo("Ergebnis übergeben – liegt jetzt zur Prüfung bei der Auftraggeber:in.");
+  }, labels[data.action ?? ""] ?? "Gespeichert.");
+}
+
+export async function reassignWorkItemAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/vorgaenge/${data.workItemId ?? ""}`), async (actor) => {
+    await reassignWorkItem(actor, data.workItemId ?? "", data);
+  }, "Umverteilt.");
+}
+
+export async function updateWorkItemAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/vorgaenge/${data.workItemId ?? ""}`), async (actor) => {
+    await updateWorkItem(actor, data.workItemId ?? "", data);
+  }, "Gespeichert.");
+}
+
+export async function toggleChecklistAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/vorgaenge/${data.workItemId ?? ""}`), async (actor) => {
+    await toggleChecklistItem(actor, data.workItemId ?? "", data);
+  }, "Checkliste aktualisiert.");
+}
+
+export async function watchWorkItemAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/vorgaenge/${data.workItemId ?? ""}`), async (actor) => {
+    await setWatching(actor, data.workItemId ?? "", data.watch === "1");
+  }, data.watch === "1" ? "Du beobachtest diesen Vorgang." : "Du beobachtest diesen Vorgang nicht mehr.");
+}
+
+export async function addCommentAction(fd: FormData) {
+  const data = formToObject(fd);
+  const back = backOf(data, "/start");
+  return run(back, async (actor) => {
+    const r = await addComment(actor, data);
+    if (r.skipped.length) throw new PendingInfo(`Kommentar gespeichert. Nicht erwähnt, weil ohne Zugriff: ${r.skipped.join(", ")}.`);
+  }, "Kommentar gespeichert.");
+}
+
+export async function editCommentAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/start"), async (actor) => {
+    await editComment(actor, data.commentId ?? "", data);
+  }, "Kommentar geändert.");
+}
+
+export async function deleteCommentAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/start"), async (actor) => {
+    await deleteComment(actor, data.commentId ?? "");
+  }, "Kommentar gelöscht.");
+}
+
+export async function openNotificationAction(fd: FormData) {
+  const data = formToObject(fd);
+  const actor = await requireActor();
+  const target = await openNotification(actor, data.notificationId ?? "");
+  revalidatePath("/", "layout");
+  redirect(target);
+}
+
+export async function markNotificationsReadAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/benachrichtigungen"), async (actor) => {
+    await markRead(actor, data.notificationId || null);
+  }, "Als gelesen markiert.");
+}
+
+export async function saveNotificationPrefsAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/einstellungen"), async (actor) => {
+    await saveMyPrefs(actor, data);
+  }, "Benachrichtigungen gespeichert.");
+}
+
+export async function addAbsenceAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/einstellungen"), async (actor) => {
+    await addAbsence(actor, data);
+  }, "Abwesenheit eingetragen – neue Anfragen gehen in dieser Zeit an deine Vertretung.");
+}
+
+export async function removeAbsenceAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/einstellungen"), async (actor) => {
+    await removeAbsence(actor, data.absenceId ?? "");
+  }, "Abwesenheit entfernt.");
+}
+
+export async function createTeamAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/verwaltung/teams"), async (actor) => {
+    await createTeam(actor, data);
+  }, "Team angelegt.");
+}
+
+export async function setTeamMemberAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/verwaltung/teams"), async (actor) => {
+    if (data.remove === "1") await removeTeamMember(actor, data.teamId ?? "", data.userId ?? "");
+    else await setTeamMember(actor, data.teamId ?? "", data);
+  }, "Team aktualisiert.");
+}
+
+export async function saveServiceTypeAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/verwaltung/teams"), async (actor) => {
+    await saveServiceType(actor, data.teamId ?? "", data);
+  }, "Anfrageart gespeichert.");
 }

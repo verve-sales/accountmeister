@@ -94,3 +94,16 @@ Der Verve-Rollenkatalog wird beim ersten Zugriff je Arbeitsraum aus dem Standard
 
 ## Assistent: Kartenformat und Produktionsmodelle
 Der Assistent erwartet Prosa, dann eine Zeile `===KARTEN===` und ein JSON-Objekt. Produktionsmodelle halten das nicht immer ein (Codezäune, Markervarianten, abgeschnittenes JSON, Ankündigungen ohne Karten). Deshalb: Der Marker wird tolerant erkannt, Karten werden je Element geprüft (ein fehlerhaftes Element verwirft nicht alle), und kommen keine Karten zustande, zieht die Anwendung sie in einem zweiten Schritt im JSON-Modus nach (Aufgabe „Assistent“, derselbe Modelleintrag; die Ausgabegrenze wird auf mindestens 6000 Token angehoben). Behauptet die Antwort trotzdem „angelegt“, ohne Karten zu liefern, wird das dem Nutzer ausdrücklich gesagt. Häufen sich Meldungen „nicht schemakonform“ bei einem Modell, hilft unter Verwaltung → KI ein Modell mit besserer Instruktionstreue oder eine niedrigere Temperatur.
+
+## Benachrichtigungen und E-Mail-Versand (Etappe 27)
+
+Glocke und Postfach im Tool funktionieren immer. E-Mails sind standardmäßig aus (`MAIL_TRANSPORT=off`).
+
+Einschalten über Microsoft Graph mit der vorhandenen Entra-App:
+
+1. Entra ID → App-Registrierung des Accountmeisters → API-Berechtigungen → Microsoft Graph → **Anwendungsberechtigung** `Mail.Send` hinzufügen → Administratorzustimmung erteilen.
+2. Empfehlung: Versand auf ein Absender-Postfach beschränken (Exchange Online „Application Access Policy“ bzw. RBAC for Applications), z. B. ein freigegebenes Postfach `accountmeister@verveconsulting.de`.
+3. In `.env.production`: `MAIL_TRANSPORT=graph`, `MAIL_SENDER=accountmeister@verveconsulting.de`, `APP_BASE_URL=https://accountmeister.verveconsulting.ai`, optional `MAIL_DIGEST_HOUR=7`. Mandant und Client-Daten kommen aus `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` (abweichender Mandant: `MAIL_GRAPH_TENANT_ID`).
+4. `docker compose --env-file .env.production up -d app` – der Takt startet mit der App (Sofort-Mails jede Minute, Überfällig-Hinweise stündlich ab 6 Uhr, Tagesüberblick zur `MAIL_DIGEST_HOUR`).
+
+Prüfen ohne Postfach: `MAIL_TRANSPORT=file` schreibt `.eml`-Dateien nach `MAIL_FILE_DIR`. Fehlversuche werden bis zu fünfmal wiederholt (Zustand `FAILED` danach); Mails enthalten nur Titel und Link. Den Takt im App-Prozess schaltet `NOTIFICATION_WORKER=off` ab (z. B. bei mehreren App-Instanzen – dann nur eine Instanz mit Takt betreiben).

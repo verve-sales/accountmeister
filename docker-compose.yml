@@ -36,6 +36,11 @@ services:
       LANGDOCK_API_KEY: ${LANGDOCK_API_KEY:-}
       LANGDOCK_BASE_URL: ${LANGDOCK_BASE_URL:-https://api.langdock.com/openai/eu/v1}
       LANGDOCK_DEFAULT_MODEL: ${LANGDOCK_DEFAULT_MODEL:-gpt-4o-mini}
+      MAIL_TRANSPORT: ${MAIL_TRANSPORT:-off}
+      MAIL_SENDER: ${MAIL_SENDER:-}
+      APP_BASE_URL: ${APP_BASE_URL:-}
+      MAIL_DIGEST_HOUR: ${MAIL_DIGEST_HOUR:-7}
+      MAIL_GRAPH_TENANT_ID: ${MAIL_GRAPH_TENANT_ID:-}
       UPLOAD_DIR: /data/uploads
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET in .env.production setzen}

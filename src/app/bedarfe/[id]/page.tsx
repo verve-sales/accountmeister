@@ -7,6 +7,7 @@ import { getOpportunityDetail, MEDDPICC_KEYS } from "@/modules/opportunities/ser
 import { canReassignResponsibility } from "@/modules/identity/authz";
 import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
+import { Comments, WorkBlock } from "@/components/Work";
 import { getOpportunityAdvice, proposeOpportunityAdvice, ruleBasedOpportunityAdvice, type OpportunityAdviceRow } from "@/modules/opportunities/advisor";
 import { getBuyingCenterAdvice, proposeBuyingCenterAdvice, ruleBasedBuyingCenterAdvice, type BuyingCenterAdviceRow } from "@/modules/opportunities/buyingCenterAdvisor";
 import type { StrategyMove } from "@/modules/strategy/service";
@@ -298,6 +299,8 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
           start={(canEdit || mayReassign) && !closed ? { playbooks: oppPlaybooks, hidden: { opportunityId: opp.id, setupId: ctx.setup.id }, defaultOwnerId: opp.ownerUserId, salesOps, recommendedId: recommended?.id ?? null, recommendation } : null}
         />
       )}
+
+      <WorkBlock actor={actor} subjectType="CHANCE" subjectId={opp.id} back={`/bedarfe/${opp.id}`} canCreate={!closed} />
 
       {/* Buyingcenter (8.3) */}
       <section className="card">
@@ -786,6 +789,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
           </details>
         )}
       </section>
+      <Comments actor={actor} subjectType="CHANCE" subjectId={opp.id} back={`/bedarfe/${opp.id}`} />
     </div>
   );
 }

@@ -521,6 +521,17 @@ export class TestProvider implements AIProvider {
       onDelta?.(out);
       return out;
     }
+    // Delegation (Etappe 27): „Sales Ops soll …“, „frag <Name>, …“, „erinnere mich …“ → Karte VORGANG
+    const deleg = lastUser.match(/^(?:bitte\s+)?(?:(sales\s*op(?:eration)?s)\s+(?:soll|möge|bitte)|erinnere\s+mich(?:\s+daran)?,?|frag(?:e)?\s+([A-ZÄÖÜ][\wäöüß]+(?:\s+[A-ZÄÖÜ][\wäöüß]+)?),?)\s+(.{3,250}?)(?:\s+(bis\s+[\wäöüß. ]{2,30}))?[.!]?$/i);
+    if (deleg) {
+      const [, ops, person, what, due] = deleg;
+      const title = what!.replace(/^(dass|ob)\s+/i, "").trim();
+      const serviceKey = /ausschreibung/i.test(title) ? "AUSSCHREIBUNG" : /profil/i.test(title) ? "PROFIL" : /angebot/i.test(title) ? "ANGEBOT" : /unterlagen|nachweis/i.test(title) ? "UNTERLAGEN" : "";
+      const item: AssistantItem = { type: "VORGANG", title: title.charAt(0).toUpperCase() + title.slice(1), description: "", target: ops ? "SALES_OPS" : person ? "PERSON" : "ICH", personName: person ?? "", serviceKey: ops ? serviceKey : "", dueHint: due ?? "", evidenceQuote: lastUser.slice(0, 200) };
+      const out = `Ich lege dafür einen Vorgang an – ${ops ? "als Anfrage an Sales Operations" : person ? `als Anfrage an ${person}` : "als Aufgabe für dich"}. Mit „Übernehmen“ geht er los.\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items: [item], missing: [] })}`;
+      onDelta?.(out);
+      return out;
+    }
     const allUser = input.history.filter((h) => h.role === "NUTZER").map((h) => h.text).join("\n");
     const p = await this.analyzeDocument({ documentText: lastUser || allUser, fileName: "Dialog", knownAccountNames: [] });
     const items: AssistantItem[] = [];

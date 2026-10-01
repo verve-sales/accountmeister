@@ -24,13 +24,13 @@ type View = {
   ai: { enabled: boolean; description: string };
 };
 
-const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Hebel / Vorhaben", TEAM: "Verve-Team" };
+const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Hebel / Vorhaben", TEAM: "Verve-Team", VORGANG: "Vorgang / Anfrage" };
 const INITIATIVE_LABEL: Record<string, string> = { PRIORITAET: "Priorität des Kunden", INITIATIVE: "Schlüssel-Initiative", HERAUSFORDERUNG: "Herausforderung" };
 const LEVER_LABEL: Record<string, string> = { VERLAENGERN: "Verlängern", AUSWEITEN: "Ausweiten", VERTIEFEN: "Vertiefen", UEBERTRAGEN: "Übertragen", REAKTIVIEREN: "Reaktivieren" };
 const RISK_LABEL: Record<string, string> = { UMSTRUKTURIERUNG: "Umstrukturierung", BUDGETKUERZUNG: "Budgetkürzung", WETTBEWERBER: "Wettbewerber aktiv", FUERSPRECHER_WEG: "Fürsprecher geht", INSOURCING: "Insourcing", EINKAUF_VERSCHAERFT: "Einkauf verschärft", NACHBARTEAM: "Nachbarteam stellt sich quer" };
 const PROCUREMENT_LABEL: Record<string, string> = { DIREKT: "direkt", VERMITTLER: "über Vermittler", RAHMENVERTRAG: "über Rahmenvertrag" };
 /** Reihenfolge für „Alle übernehmen“: erst Kunde/Einsortierung (bindet das Gespräch), dann Team, dann der Rest. */
-const APPLY_ORDER = ["KUNDE", "EINSORTIERUNG", "SETUP", "TEAM", "BESCHAFFUNG", "INITIATIVE", "PERSON", "EINSATZ", "CHANCE", "HEBEL", "RISIKO", "SOS", "SIGNAL", "AKTION", "KONTAKT", "FRAGE", "ACCOUNTZIEL"];
+const APPLY_ORDER = ["KUNDE", "EINSORTIERUNG", "SETUP", "TEAM", "BESCHAFFUNG", "INITIATIVE", "PERSON", "EINSATZ", "CHANCE", "HEBEL", "RISIKO", "SOS", "SIGNAL", "AKTION", "KONTAKT", "FRAGE", "ACCOUNTZIEL", "VORGANG"];
 const ROLE_FAMILY_LABEL: Record<string, string> = { DELIVERY_MANAGEMENT: "Delivery Management", AGILE_LEADERSHIP: "Agile Leadership", BUSINESS_ANALYSE: "Business Analyse & Beratung", SOLUTION_ARCHITEKTUR: "Solution & Architektur", TEST_QS: "Test & Qualitätssicherung" };
 
 function contextFromPath(pathname: string): { type: string; id: string } {
@@ -79,6 +79,10 @@ function cardTitle(item: Item): string {
     case "TEAM": {
       const ank = Array.isArray(item.ankerNames) ? (item.ankerNames as string[]).join(", ") : "";
       return [s("bdName") && `BD ${s("bdName")}`, ank && `Anker ${ank}`, s("principalName") && `Principal ${s("principalName")}`, s("consultantName") && `Berater ${s("consultantName")}`].filter(Boolean).join(" · ") || "Team";
+    }
+    case "VORGANG": {
+      const to: Record<string, string> = { ICH: "für mich", SALES_OPS: "an Sales Operations", BD: "an den BD", PRINCIPAL: "an Principal", PERSON: `an ${s("personName") || "Person"}` };
+      return `${s("title")} (${to[s("target")] ?? s("target")})`;
     }
     default:
       return item.type;
