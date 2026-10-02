@@ -114,7 +114,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         <h1 className="text-2xl font-semibold">{d.setup.name}</h1>
         <Status label={setupStatusLabel[d.setup.status] ?? d.setup.status} />
         <span className="muted text-sm">Sichtbarkeit: {visibilityLabel[d.setup.visibility]}</span>
-        <span className="muted text-sm">BD: {d.setup.bdUserId ? name(d.setup.bdUserId) : "Zuordnung offen"}</span>
+        <span className="muted text-sm">BD: {d.setup.bdUserId ? name(d.setup.bdUserId) : <>Zuordnung offen{mayReassign && <> – <a href="#zustaendigkeit">jetzt zuordnen</a></>}</>}</span>
         {!d.canEdit && <span className="muted text-sm">(nur lesend)</span>}
       </div>
       <SetupTabs setupId={id} active="ueberblick" />
@@ -174,19 +174,19 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           ))}
         </div>
         {mayReassign && (
-          <details className="mt-3" open={!d.canEdit}>
-            <summary className="text-sm">Zuständigkeit umstellen (BD, Anker)</summary>
+          <details className="mt-3" id="zustaendigkeit" open={!d.canEdit || !d.setup.bdUserId}>
+            <summary className="text-sm">{d.setup.bdUserId ? "Zuständigkeit umstellen (BD, Anker)" : "Zuständigen BD zuordnen (und Anker umstellen)"}</summary>
             <form action={reassignSetupBdAction} className="mt-2 flex flex-wrap items-end gap-2">
               <input type="hidden" name="setupId" value={d.setup.id} />
               <input type="hidden" name="version" value={d.setup.version} />
               <div>
-                <label className="label" htmlFor="reassignSetupBd">Zuständigen BD umstellen</label>
+                <label className="label" htmlFor="reassignSetupBd">{d.setup.bdUserId ? "Zuständigen BD umstellen" : "Zuständigen BD zuordnen"}</label>
                 <select id="reassignSetupBd" name="bdUserId" className="select" required defaultValue="">
                   <option value="" disabled>Bitte wählen …</option>
                   {allUsers.filter((u) => u.id !== d.setup.bdUserId).map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
                 </select>
               </div>
-              <button className="btn btn-secondary" type="submit">Umstellen</button>
+              <button className="btn btn-secondary" type="submit">{d.setup.bdUserId ? "Umstellen" : "Zuordnen"}</button>
             </form>
             <form action={addMemberAction} className="mt-3 grid sm:grid-cols-3 gap-3">
               <input type="hidden" name="setupId" value={d.setup.id} />
