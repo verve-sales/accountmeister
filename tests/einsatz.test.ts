@@ -60,18 +60,21 @@ describe("Etappe 29 (E2): Einsatz aus Auswahl, Status, Perioden, Vertragslage", 
     expect(orders).toHaveLength(0);
   });
 
-  it("geplant nur mit Betreuung und Vertragslage (Profil) oder Ausnahme; aktiv nur mit bestätigtem Start; A22 Perioden-Historie", async () => {
+  it("Vertragslage ist Hinweis, kein Blocker; geplant braucht Betreuung; aktiv nur mit bestätigtem Start (auch direkt aus Vorbereitung); A22 Perioden-Historie", async () => {
     const david = await actorFor("david");
     const { engagement: e0 } = await selectedEngagement(david, "Einsatz Nr. 2");
-    // ohne Profil: unbestimmt → nur mit Ausnahme
+    // ohne Profil: unbestimmt – blockiert nicht mehr
     expect((await procurementCheck(e0)).complete).toBeNull();
-    await expect(changeEngagementStatus(david, e0.id, { version: e0.version, status: "GEPLANT" })).rejects.toThrow(/Beschaffungsprofil/);
+    // Betreuung ist Mindestbedingung: ohne Kundenbetreuung kein „geplant“
+    const care0 = await db.query.careAssignments.findFirst({ where: and(eq(schema.careAssignments.engagementId, e0.id), eq(schema.careAssignments.role, "CUSTOMER_CARE")) });
+    await db.update(schema.careAssignments).set({ toDate: todayIso() }).where(eq(schema.careAssignments.id, care0!.id));
+    await expect(changeEngagementStatus(david, e0.id, { version: e0.version, status: "GEPLANT" })).rejects.toThrow(/Kundenbetreuung/);
+    await setCareDirect(david, e0.id, { role: "CUSTOMER_CARE", userId: david.userId });
     // Profil anlegen und freigeben: Kunde Bestellung + Freelancer Einzelbeauftragung
     await saveProcurementProfile(david, e0.accountId, { req_KUNDE_BESTELLUNG: "on", req_FREELANCER_EINZELBEAUFTRAGUNG: "on", approve: "on" });
     const chk = await procurementCheck(e0);
     expect(chk.profile).toBe(true);
     expect(chk.complete).toBe(false);
-    await expect(changeEngagementStatus(david, e0.id, { version: e0.version, status: "GEPLANT" })).rejects.toThrow(/Vertragslage unvollständig/);
     // Unterlagen: unterschrieben braucht Beleg
     await expect(addContractDocument(david, e0.id, { side: "KUNDE", docType: "BESTELLUNG", title: "PO 4711", signedStatus: "UNTERSCHRIEBEN" }, null)).rejects.toThrow(/Beleg/);
     const po = await addContractDocument(david, e0.id, { side: "KUNDE", docType: "BESTELLUNG", title: "PO 4711", signedStatus: "UNTERSCHRIEBEN", link: "https://ablage.example/po-4711", reference: "4711" }, null);
@@ -96,10 +99,18 @@ describe("Etappe 29 (E2): Einsatz aus Auswahl, Status, Perioden, Vertragslage", 
     expect(d.periods.filter((p) => p.kind === "BESTAETIGT")).toHaveLength(2);
     expect(d.periods.find((p) => p.id === p1.id)!.supersededById).toBe(p2.id);
     expect(d.periods.find((p) => p.id === p1.id)!.ek).toBe("820.00");
-    // Ausnahme-Pfad für einen zweiten Einsatz ohne vollständige Unterlagen
+    // Zweiter Einsatz ohne vollständige Unterlagen: direkt aus Vorbereitung aktiv (laufender Einsatz), Ausnahme optional
     const { engagement: e1 } = await selectedEngagement(david, "Einsatz Nr. 3");
-    const ex = await changeEngagementStatus(david, e1.id, { version: e1.version, status: "GEPLANT", exception: "Rahmenvertrag deckt ab; Bestellung folgt laut Einkauf nächste Woche." });
+    expect((await procurementCheck(e1)).complete).toBe(false);
+    const ex = await changeEngagementStatus(david, e1.id, { version: e1.version, status: "AKTIV", actualDate: todayIso(), exception: "Rahmenvertrag deckt ab; Bestellung folgt laut Einkauf nächste Woche." });
+    expect(ex.status).toBe("AKTIV");
     expect(ex.procurementException).toMatch(/Rahmenvertrag/);
+    // Typ-Korrektur einer Unterlage (Bestellung war die Einzelbeauftragung) macht die Vertragslage vollständig
+    const wrong = await addContractDocument(david, e1.id, { side: "FREELANCER", docType: "BESTELLUNG", title: "EB falsch typisiert", signedStatus: "UNTERSCHRIEBEN", link: "https://ablage.example/eb-x" }, null);
+    await addContractDocument(david, e1.id, { side: "KUNDE", docType: "BESTELLUNG", title: "PO 4712", signedStatus: "UNTERSCHRIEBEN", link: "https://ablage.example/po-4712" }, null);
+    expect((await procurementCheck(e1)).complete).toBe(false);
+    await setContractDocumentStatus(david, e1.id, wrong.document.id, { version: wrong.document.version, signedStatus: "UNTERSCHRIEBEN", docType: "EINZELBEAUFTRAGUNG" });
+    expect((await procurementCheck(e1)).complete).toBe(true);
     // A25 veraltete Version
     await expect(updateEngagement(david, e1.id, { version: 99, title: "Titel neu", plannedEnd: "" })).rejects.toBeInstanceOf(ConflictError);
   });

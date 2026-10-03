@@ -43,6 +43,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const final = ["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(e.status);
   const targets = await workTargets(actor);
   const openRenewal = d.renewals.find((r) => ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status));
+  const today = new Date().toISOString().slice(0, 10);
+  const firstMissing = e.procurement.required.find((r) => !r.ok) ?? null;
   const vertrag = e.procurement.complete === true ? "vollständig" : e.procurementException ? `Ausnahme: ${e.procurementException}` : e.procurement.complete === false ? `unvollständig (${e.procurement.required.filter((r) => r.ok).length}/${e.procurement.required.length})` : "kein freigegebenes Beschaffungsprofil – Stand unbestimmt";
   const nextDue = [e.nextCheckin, openRenewal ? e.pingDate : null, e.status === "PAUSIERT" ? e.reviewDate : null].filter((x): x is string => !!x).sort()[0] ?? null;
 
@@ -103,8 +105,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         <section className="card text-sm space-y-3">
           <h2 className="font-semibold">Status</h2>
           <div className="flex flex-wrap gap-4 items-end">
-            {e.status === "VORBEREITUNG" && <Btn id={id} version={e.version} back={back} status="GEPLANT" label="Auf „geplant“ setzen" fields={e.procurement.complete === true ? null : <div><label className="label">Ausnahme vom Beschaffungscheck (Grund)</label><input name="exception" className="input" placeholder="nur wenn Unterlagen bewusst fehlen" style={{ minWidth: 320 }} /></div>} />}
-            {e.status === "GEPLANT" && <Btn id={id} version={e.version} back={back} status="AKTIV" label="Start bestätigen" fields={<div><label className="label">Tatsächlicher Start</label><input type="date" name="actualDate" className="input" required /></div>} />}
+            {["VORBEREITUNG", "GEPLANT"].includes(e.status) && <Btn id={id} version={e.version} back={back} status="AKTIV" label={e.status === "VORBEREITUNG" ? "Start bestätigen → aktiv" : "Start bestätigen"} fields={<div><label className="label">Tatsächlicher Start (heute oder früher)</label><input type="date" name="actualDate" className="input" required defaultValue={e.actualStart ?? (e.plannedStart && e.plannedStart <= today ? e.plannedStart : today)} /></div>} />}
+            {e.status === "VORBEREITUNG" && <Btn id={id} version={e.version} back={back} status="GEPLANT" label="Nur auf „geplant“ setzen (Start liegt in der Zukunft)" secondary />}
             {e.status === "GEPLANT" && <Btn id={id} version={e.version} back={back} status="VORBEREITUNG" label="Zurück in Vorbereitung" secondary />}
             {e.status === "PAUSIERT" && <Btn id={id} version={e.version} back={back} status="AKTIV" label="Fortsetzen" />}
             {(e.status === "AKTIV") && <Btn id={id} version={e.version} back={back} status="PAUSIERT" label="Pausieren" secondary fields={<><input name="reason" className="input" placeholder="Grund" required /><div><label className="label">Prüftermin</label><input type="date" name="reviewDate" className="input" required /></div></>} />}
@@ -113,7 +115,12 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
             {e.status === "ENDET" && <Btn id={id} version={e.version} back={back} status="AKTIV" label="Doch weiter (aktiv)" secondary />}
             {!["ENDET"].includes(e.status) && <Btn id={id} version={e.version} back={back} status="ABGEBROCHEN" label="Abbrechen" secondary fields={<input name="reason" className="input" placeholder="Grund (Pflicht)" required />} />}
           </div>
-          <p className="muted text-xs">„Geplant“ setzt Betreuung und Vertragslage nach Beschaffungsprofil voraus (oder eine begründete Ausnahme). „Aktiv“ ist ein bestätigtes Ereignis, kein Datumsablauf. Verlängerung ist kein Status – der Einsatz bleibt aktiv, während sie geklärt wird.</p>
+          {e.procurement.complete !== true && !e.procurementException && ["VORBEREITUNG", "GEPLANT"].includes(e.status) && (
+            <p className="text-xs" style={{ color: "#b7791f" }}>
+              Hinweis: Vertragslage {e.procurement.profile ? `unvollständig – es fehlt laut Beschaffungsprofil: ${e.procurement.required.filter((r) => !r.ok).map((r) => `${docSideLabel[r.side]} ${docTypeLabel[r.docType]}`).join(", ")}` : "unbestimmt (kein freigegebenes Beschaffungsprofil am Kunden)"}. Das blockiert den Status nicht – es bleibt als Hinweis sichtbar, bis die Unterlagen nachgetragen sind (Typ einer vorhandenen Unterlage unten korrigierbar).
+            </p>
+          )}
+          <p className="muted text-xs">„Aktiv“ ist ein bestätigtes Ereignis (tatsächlicher Start), kein Datumsablauf; „geplant“ ist nur für Einsätze, die noch nicht begonnen haben. Verlängerung ist kein Status – der Einsatz bleibt aktiv, während sie geklärt wird.</p>
         </section>
       )}
 
@@ -179,12 +186,14 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
                 {doc.sourceId && <Link href={`/quellen/${doc.sourceId}`} className="text-xs">Dokument</Link>}
                 {doc.link && <a href={doc.link} target="_blank" rel="noreferrer" className="text-xs">Ablage</a>}
                 {!!doc.suggestion && (doc.suggestion as { docType?: string; extractStatus?: string }).extractStatus === "LEER" && <span className="text-xs" style={{ color: "#b7791f" }}>Scan – nicht ausgewertet</span>}
-                {a.manage && !final && doc.signedStatus !== "UNTERSCHRIEBEN" && (
-                  <form action={setContractDocumentStatusAction} className="inline-flex gap-1 items-center">
+                {a.manage && !final && (
+                  <form action={setContractDocumentStatusAction} className="inline-flex flex-wrap gap-1 items-center">
                     <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="documentId" value={doc.id} /><input type="hidden" name="version" value={doc.version} /><input type="hidden" name="back" value={`${back}#vertraege`} />
+                    <select name="side" className="input" defaultValue={doc.side} aria-label="Seite"><option value="KUNDE">Kunde ↔ Verve</option>{e.freelancerId && <option value="FREELANCER">Verve ↔ Freelancer</option>}</select>
+                    <select name="docType" className="input" defaultValue={doc.docType} aria-label="Typ">{docTypeValues.map((t) => <option key={t} value={t}>{docTypeLabel[t]}</option>)}</select>
                     <select name="signedStatus" className="input" defaultValue={doc.signedStatus} aria-label="Status"><option value="ENTWURF">Entwurf</option><option value="VERSENDET">versendet</option><option value="UNTERSCHRIEBEN">unterschrieben</option><option value="GEKUENDIGT">gekündigt</option></select>
                     {!doc.sourceId && !doc.link && <input name="link" className="input" placeholder="Link zum Beleg" />}
-                    <button className="btn btn-secondary btn-small" type="submit">Setzen</button>
+                    <button className="btn btn-secondary btn-small" type="submit">Korrigieren</button>
                   </form>
                 )}
               </li>
@@ -197,8 +206,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
               <summary>Unterlage hinzufügen (Datei oder Link)</summary>
               <form action={addContractDocumentAction} className="grid sm:grid-cols-3 gap-2 mt-2" encType="multipart/form-data">
                 <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="back" value={`${back}#vertraege`} />
-                <div><label className="label">Seite</label><select name="side" className="input" defaultValue="KUNDE"><option value="KUNDE">Kunde ↔ Verve</option><option value="FREELANCER">Verve ↔ Freelancer</option></select></div>
-                <div><label className="label">Typ</label><select name="docType" className="input" defaultValue="BESTELLUNG">{docTypeValues.map((t) => <option key={t} value={t}>{docTypeLabel[t]}</option>)}</select></div>
+                <div><label className="label">Seite</label><select name="side" className="input" defaultValue={firstMissing?.side ?? "KUNDE"}><option value="KUNDE">Kunde ↔ Verve</option>{e.freelancerId && <option value="FREELANCER">Verve ↔ Freelancer</option>}</select></div>
+                <div><label className="label">Typ {firstMissing ? "(vorbelegt: nächste fehlende Pflichtunterlage)" : ""}</label><select name="docType" className="input" defaultValue={firstMissing?.docType ?? "BESTELLUNG"}>{docTypeValues.map((t) => <option key={t} value={t}>{docTypeLabel[t]}</option>)}</select></div>
                 <div><label className="label">Status</label><select name="signedStatus" className="input" defaultValue="ENTWURF"><option value="ENTWURF">Entwurf</option><option value="VERSENDET">versendet</option><option value="UNTERSCHRIEBEN">unterschrieben (Beleg nötig)</option></select></div>
                 <div className="sm:col-span-2"><label className="label">Titel</label><input name="title" className="input" required /></div>
                 <div><label className="label">Version / Stand</label><input name="versionLabel" className="input" /></div>

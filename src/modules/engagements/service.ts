@@ -19,7 +19,7 @@ export const engagementStatusValues = ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUS
 export type EngStatus = (typeof engagementStatusValues)[number];
 export const engagementStatusLabel: Record<string, string> = { VORBEREITUNG: "in Vorbereitung", GEPLANT: "geplant", AKTIV: "aktiv", PAUSIERT: "pausiert", ENDET: "endet", ABGESCHLOSSEN: "abgeschlossen", ABGEBROCHEN: "abgebrochen" };
 const ENG_TRANSITIONS: Record<EngStatus, EngStatus[]> = {
-  VORBEREITUNG: ["GEPLANT", "ABGEBROCHEN"],
+  VORBEREITUNG: ["GEPLANT", "AKTIV", "ABGEBROCHEN"],
   GEPLANT: ["AKTIV", "VORBEREITUNG", "ABGEBROCHEN"],
   AKTIV: ["PAUSIERT", "ENDET", "ABGEBROCHEN"],
   PAUSIERT: ["AKTIV", "ENDET", "ABGEBROCHEN"],
@@ -176,12 +176,12 @@ export async function changeEngagementStatus(actor: Actor, id: string, raw: unkn
   assertEngagementTransition(e.status, i.status);
   if (!a.manage) throw new ForbiddenError("Den Einsatzstatus setzt der verantwortliche BD, Principal oder CEO.");
   const patch: Partial<typeof schema.engagements.$inferInsert> = { status: i.status, statusReason: i.reason || null, reviewDate: null };
-  if (i.status === "GEPLANT") {
+  if (i.status === "GEPLANT" || (i.status === "AKTIV" && e.status === "VORBEREITUNG")) {
+    // Kundenbetreuung ist Mindestbedingung (steht standardmäßig beim BD). Die Vertragslage blockiert NICHT mehr –
+    // sie bleibt als Hinweis sichtbar (Ampel am Einsatz und in der Liste); eine Ausnahme kann optional begründet werden.
     const care = await db.query.careAssignments.findFirst({ where: and(eq(schema.careAssignments.engagementId, e.id), eq(schema.careAssignments.role, "CUSTOMER_CARE"), isNull(schema.careAssignments.toDate)) });
-    if (!care) throw new ValidationError("Für „geplant“ muss die Kundenbetreuung zugeordnet sein.");
-    const chk = await procurementCheck(e);
-    if (chk.complete !== true && !e.procurementException) {
-      if (!i.exception || i.exception.length < 5) throw new ValidationError(chk.profile ? `Vertragslage unvollständig (${chk.required.filter((r) => !r.ok).map((r) => `${docSideLabel[r.side]}: ${docTypeLabel[r.docType]}`).join(", ")}). Entweder Unterlagen nachtragen oder eine begründete Ausnahme eintragen.` : "Für diesen Kunden ist kein freigegebenes Beschaffungsprofil hinterlegt – „geplant“ nur mit begründeter Ausnahme (Kunde → Beschaffungsprofil pflegen).");
+    if (!care) throw new ValidationError("Bitte zuerst die Kundenbetreuung zuordnen (Abschnitt „Betreuung“).");
+    if (i.exception && i.exception.length >= 5) {
       patch.procurementException = i.exception;
       patch.procurementExceptionBy = actor.userId;
       patch.procurementExceptionAt = new Date();
@@ -365,7 +365,15 @@ export async function addContractDocument(actor: Actor, engagementId: string, ra
   });
 }
 
-export const docStatusInput = z.object({ version: z.coerce.number().int().positive(), signedStatus: z.enum(["ENTWURF", "VERSENDET", "UNTERSCHRIEBEN", "GEKUENDIGT"]), reviewNote: opt(1000), link: opt(500) });
+export const docStatusInput = z.object({
+  version: z.coerce.number().int().positive(),
+  signedStatus: z.enum(["ENTWURF", "VERSENDET", "UNTERSCHRIEBEN", "GEKUENDIGT"]),
+  reviewNote: opt(1000),
+  link: opt(500),
+  /** Korrektur von Seite/Typ (z. B. „Bestellung“ war eigentlich die Einzelbeauftragung) */
+  side: z.enum(["KUNDE", "FREELANCER", ""]).optional(),
+  docType: z.enum([...docTypeValues, ""]).optional(),
+});
 
 export async function setContractDocumentStatus(actor: Actor, engagementId: string, documentId: string, raw: unknown) {
   const p = docStatusInput.safeParse(raw);
@@ -378,7 +386,7 @@ export async function setContractDocumentStatus(actor: Actor, engagementId: stri
   return db.transaction(async (tx) => {
     const [u] = await tx
       .update(schema.contractDocuments)
-      .set({ signedStatus: p.data.signedStatus, reviewNote: p.data.reviewNote || d.reviewNote, link: p.data.link || d.link, reviewedBy: actor.userId, reviewedAt: new Date(), version: p.data.version + 1, updatedAt: new Date() })
+      .set({ signedStatus: p.data.signedStatus, side: p.data.side || d.side, docType: p.data.docType || d.docType, freelancerId: (p.data.side || d.side) === "FREELANCER" ? (d.freelancerId ?? a.engagement.freelancerId) : null, reviewNote: p.data.reviewNote || d.reviewNote, link: p.data.link || d.link, reviewedBy: actor.userId, reviewedAt: new Date(), version: p.data.version + 1, updatedAt: new Date() })
       .where(and(eq(schema.contractDocuments.id, documentId), eq(schema.contractDocuments.version, p.data.version)))
       .returning();
     if (!u) throw new ConflictError();
