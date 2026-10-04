@@ -676,25 +676,20 @@ export async function removeDuplicateEngagements(actor: Actor, engagementIds: st
     const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, id) });
     if (!e) continue;
     await db.transaction(async (tx) => {
-      await tx.delete(schema.checkins).where(eq(schema.checkins.engagementId, id));
-      await tx.delete(schema.engagementPeriods).where(eq(schema.engagementPeriods.engagementId, id));
-      await tx.delete(schema.careAssignments).where(eq(schema.careAssignments.engagementId, id));
-      await tx.delete(schema.engagementDocuments).where(eq(schema.engagementDocuments.engagementId, id));
-      await tx.delete(schema.renewalDecisions).where(eq(schema.renewalDecisions.engagementId, id));
+      const { Cascade, loadForeignKeys } = await import("@/modules/accounts/deletion");
+      const { OPP_DETACH, cascadeOpportunity } = await import("@/modules/deletion/objects");
+      const cascade = new Cascade(tx, await loadForeignKeys(tx), OPP_DETACH);
       await tx.delete(schema.mocoHints).where(and(eq(schema.mocoHints.subjectType, "ENGAGEMENT"), eq(schema.mocoHints.subjectId, id)));
-      await tx.delete(schema.engagements).where(eq(schema.engagements.id, id));
+      await cascade.deleteRows("engagements", [id]);
       await tx.update(schema.staffingPositions).set({ filledCandidacyId: null }).where(eq(schema.staffingPositions.id, e.positionId));
-      await tx.delete(schema.candidacyEvents).where(eq(schema.candidacyEvents.candidacyId, e.candidacyId));
-      await tx.delete(schema.candidacies).where(eq(schema.candidacies.id, e.candidacyId));
+      await cascade.deleteRows("candidacies", [e.candidacyId]);
       const otherCands = await tx.query.candidacies.findMany({ where: eq(schema.candidacies.positionId, e.positionId), columns: { id: true } });
-      if (!otherCands.length) await tx.delete(schema.staffingPositions).where(eq(schema.staffingPositions.id, e.positionId));
+      if (!otherCands.length) await cascade.deleteRows("staffing_positions", [e.positionId]);
       if (e.orderId) {
         const otherEng = await tx.query.engagements.findMany({ where: eq(schema.engagements.orderId, e.orderId), columns: { id: true } });
-        if (!otherEng.length) {
-          await tx.delete(schema.startRequirements).where(eq(schema.startRequirements.orderId, e.orderId)).catch(() => undefined);
-          await tx.delete(schema.orders).where(eq(schema.orders.id, e.orderId));
-        }
+        if (!otherEng.length) await cascade.deleteRows("orders", [e.orderId]);
       }
+      // Import-Chance ohne weitere Inhalte geht mit (inkl. Verlängerungs-Vorgehen und daraus erzeugter Aktionen)
       const opp = await tx.query.opportunities.findFirst({ where: eq(schema.opportunities.id, e.opportunityId) });
       if (opp?.mocoProjectId) {
         const [engs, poss, ords, offs] = await Promise.all([
@@ -703,7 +698,7 @@ export async function removeDuplicateEngagements(actor: Actor, engagementIds: st
           tx.query.orders.findMany({ where: eq(schema.orders.opportunityId, opp.id), columns: { id: true } }),
           tx.query.offers.findMany({ where: eq(schema.offers.opportunityId, opp.id), columns: { id: true } }),
         ]);
-        if (!engs.length && !poss.length && !ords.length && !offs.length) await tx.delete(schema.opportunities).where(eq(schema.opportunities.id, opp.id)).catch(() => undefined);
+        if (!engs.length && !poss.length && !ords.length && !offs.length) await cascadeOpportunity(tx, cascade, opp.id);
       }
       await recordAudit(tx, actor, "engagement.duplicate_removed", "ENGAGEMENT", id, { contract: e.mocoContractId, titel: e.title });
     });

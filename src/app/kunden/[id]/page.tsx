@@ -200,24 +200,41 @@ export default async function KundePage({ params, searchParams }: { params: Prom
 
       {/* Wofür (E-045): worauf die Arbeit bei diesem Kunden hinausläuft – zuerst */}
       <section className="card">
-        <h2 className="font-semibold mb-2">Wofür – Chancen ({opportunities.filter((o) => o.status !== "BEENDET" && o.status !== "ZURUECKGESTELLT").length} aktiv)</h2>
+        <h2 className="font-semibold mb-2">Wofür – Chancen ({opportunities.filter((o) => o.status !== "BEENDET" && o.status !== "ZURUECKGESTELLT" && o.status !== "BEAUFTRAGT").length} in Arbeit, {opportunities.filter((o) => o.status === "BEAUFTRAGT").length} beauftragt)</h2>
         {opportunities.length === 0 ? (
           <p className="text-sm" style={{ color: "#8a6d1f" }}>Noch keine Chance benannt. Worauf läuft es bei diesem Kunden hinaus – Verve-Experte in einer Standardrolle, Freelancer-Experte oder Ausschreibung? Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten.</p>
         ) : (
-          <table className="list">
-            <thead><tr><th>Chance</th><th>Wofür</th><th>Setup</th><th>Reifegrad</th><th>Horizont</th></tr></thead>
-            <tbody>
-              {opportunities.filter((o) => o.status !== "BEENDET").map((o) => (
-                <tr key={o.id}>
-                  <td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link></td>
-                  <td className="text-sm">{chanceKindLabel[o.kind]}{o.roleId && roleNames.get(o.roleId) ? ` · ${roleNames.get(o.roleId)}` : ""}{o.headcount ? ` · ${o.headcount}×` : ""}</td>
-                  <td><Link href={`/setups/${o.setupId}`}>{o.setupName}</Link></td>
-                  <td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td>
-                  <td>{o.horizon ?? <span className="muted">–</span>}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <>
+            {opportunities.some((o) => o.status !== "BEENDET" && o.status !== "BEAUFTRAGT") ? (
+              <table className="list">
+                <thead><tr><th>Chance</th><th>Wofür</th><th>Setup</th><th>Reifegrad</th><th>Horizont</th></tr></thead>
+                <tbody>
+                  {opportunities.filter((o) => o.status !== "BEENDET" && o.status !== "BEAUFTRAGT").map((o) => (
+                    <tr key={o.id}>
+                      <td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link></td>
+                      <td className="text-sm">{chanceKindLabel[o.kind]}{o.roleId && roleNames.get(o.roleId) ? ` · ${roleNames.get(o.roleId)}` : ""}{o.headcount ? ` · ${o.headcount}×` : ""}</td>
+                      <td><Link href={`/setups/${o.setupId}`}>{o.setupName}</Link></td>
+                      <td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td>
+                      <td>{o.horizon ?? <span className="muted">–</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : <p className="text-sm muted">Keine Chance in Arbeit.</p>}
+            {opportunities.some((o) => o.status === "BEAUFTRAGT") && (
+              <details className="mt-2">
+                <summary className="text-sm muted">Beauftragte Chancen ({opportunities.filter((o) => o.status === "BEAUFTRAGT").length}) – Einsätze dazu unter <Link href="/einsaetze">Einsätze</Link></summary>
+                <table className="list mt-2">
+                  <thead><tr><th>Chance</th><th>Wofür</th><th>Setup</th></tr></thead>
+                  <tbody>
+                    {opportunities.filter((o) => o.status === "BEAUFTRAGT").map((o) => (
+                      <tr key={o.id}><td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link></td><td className="text-sm">{chanceKindLabel[o.kind]}</td><td><Link href={`/setups/${o.setupId}`}>{o.setupName}</Link></td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            )}
+          </>
         )}
         <p className="muted text-xs mt-2">Jede Chance hat einen eigenen Reifegrad; es gibt keinen zusammengefassten Pipelinestatus je Kunde. Beobachtungen, Fragen und Aktionen zahlen auf Chancen ein.</p>
       </section>

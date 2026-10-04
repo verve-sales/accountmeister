@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema, type Tx } from "@/db/client";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
@@ -39,6 +39,30 @@ async function deleteSoftReferences(tx: Tx, cascade: Cascade, subjects: { type: 
   }
 }
 
+/** Vorgehen (Playbook-Läufe) zu Chancen samt der daraus erzeugten Aktionen entfernen – andere Aktionen werden nur gelöst. */
+async function deletePlaybookRunsFor(tx: Tx, cascade: Cascade, opportunityIds: string[]) {
+  if (!opportunityIds.length) return;
+  const runs = await tx.query.playbookRuns.findMany({ where: inArray(schema.playbookRuns.opportunityId, opportunityIds), columns: { id: true } });
+  if (!runs.length) return;
+  const steps = await tx.query.playbookRunSteps.findMany({ where: inArray(schema.playbookRunSteps.runId, runs.map((r) => r.id)), columns: { actionId: true } });
+  const actionIds = [...new Set(steps.map((x) => x.actionId).filter((x): x is string => !!x))];
+  await cascade.deleteRows("playbook_runs", runs.map((r) => r.id));
+  await cascade.deleteRows("actions", actionIds);
+}
+
+export const OPP_DETACH = ["signals.opportunity_id", "actions.opportunity_id"];
+
+/** Chance mit allem darunter löschen (für Löschen und Dubletten-Bereinigung). */
+export async function cascadeOpportunity(tx: Tx, cascade: Cascade, opportunityId: string) {
+  const [positions, engagements] = await Promise.all([
+    tx.query.staffingPositions.findMany({ where: eq(schema.staffingPositions.opportunityId, opportunityId), columns: { id: true } }),
+    tx.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opportunityId), columns: { id: true } }),
+  ]);
+  await deleteSoftReferences(tx, cascade, [{ type: "CHANCE", id: opportunityId }, ...positions.map((p) => ({ type: "POSITION", id: p.id })), ...engagements.map((e) => ({ type: "EINSATZ", id: e.id }))]);
+  await deletePlaybookRunsFor(tx, cascade, [opportunityId]);
+  await cascade.deleteRows("opportunities", [opportunityId]);
+}
+
 // ---------------------------------------------------------------------------
 // Einsatz
 // ---------------------------------------------------------------------------
@@ -50,7 +74,7 @@ export async function deleteEngagementPermanently(actor: Actor, engagementId: st
   if (!a.manage) throw new ForbiddenError("Einen Einsatz löscht der verantwortliche BD, Principal oder CEO.");
   const e = a.engagement;
   return db.transaction(async (tx) => {
-    const cascade = new Cascade(tx, await loadForeignKeys(tx), ["signals.opportunity_id"]);
+    const cascade = new Cascade(tx, await loadForeignKeys(tx), OPP_DETACH);
     await deleteSoftReferences(tx, cascade, [{ type: "EINSATZ", id: e.id }]);
     await cascade.deleteRows("engagements", [e.id]);
     // Kandidatur und (wenn leer) Position gehen mit; Auftrag nur, wenn kein anderer Einsatz daran hängt
@@ -99,13 +123,8 @@ export async function deleteOpportunityPermanently(actor: Actor, opportunityId: 
   const input = parse(raw);
   const { opp } = await requireOpportunityDeletable(actor, opportunityId);
   return db.transaction(async (tx) => {
-    const cascade = new Cascade(tx, await loadForeignKeys(tx), ["signals.opportunity_id"]);
-    const [positions, engagements] = await Promise.all([
-      tx.query.staffingPositions.findMany({ where: eq(schema.staffingPositions.opportunityId, opp.id), columns: { id: true } }),
-      tx.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id), columns: { id: true } }),
-    ]);
-    await deleteSoftReferences(tx, cascade, [{ type: "CHANCE", id: opp.id }, ...positions.map((p) => ({ type: "POSITION", id: p.id })), ...engagements.map((e) => ({ type: "EINSATZ", id: e.id }))]);
-    await cascade.deleteRows("opportunities", [opp.id]);
+    const cascade = new Cascade(tx, await loadForeignKeys(tx), OPP_DETACH);
+    await cascadeOpportunity(tx, cascade, opp.id);
     await recordAudit(tx, actor, "opportunity.deleted", "OPPORTUNITY", opp.id, { titel: opp.title, begruendung: input.reason, geloescht: cascade.report.deleted, geloest: cascade.report.detached });
     return { ...cascade.report, title: opp.title };
   });
