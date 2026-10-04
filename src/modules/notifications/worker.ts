@@ -50,6 +50,14 @@ export function startNotificationWorker(): void {
           const { ensureCatchups, notifyDueCheckins, ensureRenewalDecisions } = await import("@/modules/engagements/care");
           return { catchups: await ensureCatchups(), checkinHinweise: await notifyDueCheckins(), verlaengerungen: await ensureRenewalDecisions() };
         });
+        // Moco-Abgleich (Etappe 31): stündlich als Rückfallebene zu den Webhooks; nur wenn eingeschaltet
+        const { mocoEnabled } = await import("@/modules/moco/client");
+        if (mocoEnabled()) {
+          await runJob("moco-sync", async () => {
+            const { runMocoSync } = await import("@/modules/moco/sync");
+            return (await runMocoSync()) as unknown as Record<string, number>;
+          });
+        }
       }
       await dispatchPendingEmails(cfg);
       if (hour >= cfg.MAIL_DIGEST_HOUR && lastDigestDate !== date) {

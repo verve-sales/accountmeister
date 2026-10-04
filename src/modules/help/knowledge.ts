@@ -309,6 +309,17 @@ Verwaltung (Betriebsverwaltung): Zugänge anlegen und Rollen zuweisen, Protokoll
 Einen Kunden löschst du in zwei Schritten: erst archivieren, dann endgültig löschen (Kunde → Löschen).`,
   },
   {
+    id: "moco",
+    title: "Moco-Anbindung: Startimport, Abgleich, Hinweise, Teams",
+    where: "Mehr → Moco (CEO, Principal); Hinweise auch am Einsatz; Start → „Mein Team“ (Teamleiter)",
+    keywords: ["moco", "import", "startimport", "pruefliste", "sync", "abgleich", "synchronisieren", "projektgruppe", "projektgruppen", "contract", "zuweisung", "webhook", "hinweis aus moco", "team", "teams", "teamleiter", "mein team", "aktivitaetsindex", "stundensatz", "einheit stunde"],
+    body: `Moco führt Stammdaten: Kunden (Companies), Bereiche (Projektgruppen = Setups), Projekte, Zuweisungen (Contracts), Personen und Teams. Der Accountmeister führt Vertrieb, Besetzung, Betreuung, EK und Vertragslage. Der Abgleich läuft nur Moco → Accountmeister und nie stillschweigend.
+Startimport: Mehr → Moco → „Vorschau aus Moco laden“ erzeugt eine Prüfliste. Je Zeile steht ein Vorschlag (verknüpfen mit einem bestehenden Kunden/Setup/Einsatz, neu anlegen, überspringen), den du änderst oder bestätigst. Verknüpfte Kunden und Setups bekommen den Moco-Namen. BD und Principal setzt du je Setup in der Prüfliste – Sales-Rollen kommen nie aus Moco (der Moco-Projektleiter wird ignoriert). Laufende Zuweisungen werden Einsätze im Status „aktiv“ (Start = Projektstart, Ende = Projektende, Moco-Stundensatz als VK in €/Stunde, EK leer). Freelancer (Moco-Team „Freelancer“) landen im Freelancer-Pool und bekommen Check-ins mit Kunde und Freelancer alle sechs Wochen; interne Einsätze bekommen keine automatischen Check-ins. Alle anderen Moco-Nutzer werden Zugänge mit Rolle Anker; Personen mit Moco-Rolle „Teamleiter“ werden Leitung ihres Teams.
+Abgleich: stündlich und per Webhook (/api/moco/webhook). Abweichungen erscheinen als Hinweis am Einsatz und unter Mehr → Moco: Projektende geändert, Projekt beendet, Zuweisung inaktiv, Projekt in andere Gruppe verschoben, neues Projekt/neue Zuweisung (per Importlauf übernehmen), Nutzer in Moco deaktiviert. „Übernehmen“ führt die Änderung aus (z. B. Einsatz beendet, Check-ins entfallen), „Verwerfen“ lässt den Stand im Accountmeister. Neue Moco-Nutzer werden automatisch als Anker angelegt.
+Mein Team: Teamleiter sehen auf der Startseite den Aktivitätsindex ihrer Teammitglieder (Beobachtungen, Aktionen, Kontakte, Weeklys, Check-ins der letzten 28 Tage, Vergleich zur Vorperiode, zuletzt aktiv) – nur Zahlen, keine Inhalte; Kundensichtbarkeit bleibt unverändert.
+Einrichtung (Betrieb): MOCO_MODE=http, MOCO_SUBDOMAIN, MOCO_API_KEY (technischer Nutzer, nur lesen), MOCO_WEBHOOK_SECRET; Webhooks in Moco für Project, Company, User anlegen.`,
+  },
+  {
     id: "regeln",
     title: "Regeln, die das Tool durchsetzt",
     where: "überall",

@@ -9,6 +9,8 @@ import { scopeUnitLabel, rateUnitLabel } from "@/modules/staffing/service";
 import { workTargets } from "@/modules/work/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Comments } from "@/components/Work";
+import { MocoHintList } from "@/components/MocoHints";
+import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { addContractDocumentAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction } from "../../actions";
 
@@ -43,6 +45,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const final = ["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(e.status);
   const targets = await workTargets(actor);
   const openRenewal = d.renewals.find((r) => ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status));
+  const mocoHints = a.manage ? await listHints(actor, { subjectType: "ENGAGEMENT", subjectId: e.id, status: "OFFEN" }) : [];
   const today = new Date().toISOString().slice(0, 10);
   const firstMissing = e.procurement.required.find((r) => !r.ok) ?? null;
   const vertrag = e.procurement.complete === true ? "vollständig" : e.procurementException ? `Ausnahme: ${e.procurementException}` : e.procurement.complete === false ? `unvollständig (${e.procurement.required.filter((r) => r.ok).length}/${e.procurement.required.length})` : "kein freigegebenes Beschaffungsprofil – Stand unbestimmt";
@@ -57,6 +60,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           <span className="status">{engagementStatusLabel[e.status] ?? e.status}</span>
           <span>{e.freelancerId ? <>Freelancer: <Link href={`/besetzung/freelancer/${e.freelancerId}`}>{e.freelancerName}</Link></> : <>Besetzt mit: {e.freelancerName}</>}</span>
           <span>Betreuung: {e.careNames.length ? e.careNames.join(", ") : <span style={{ color: RED }}>offen</span>}</span>
+          {e.mocoProjectId && <span className="muted text-xs">aus Moco (Projekt {e.mocoProjectId}{e.externalRef ? <> · <a href={e.externalRef} target="_blank" rel="noreferrer">in Moco öffnen</a></> : null}) – Laufzeit und Zuweisung führt Moco</span>}
           <span>Laufzeit: {fmtDate(e.actualStart ?? e.plannedStart)} – {e.plannedEnd ? `${fmtDate(e.plannedEnd)}${e.daysToEnd !== null ? ` (${e.daysToEnd} Tage)` : ""}` : "offen"}</span>
           {nextDue && <span style={nextDue < new Date().toISOString().slice(0, 10) ? { color: RED, fontWeight: 600 } : undefined}>nächste Frist {fmtDate(nextDue)}</span>}
           <span className="muted text-xs ml-auto">{a.manage ? "BD-Kontext" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
@@ -99,6 +103,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           </details>
         )}
       </section>
+
+      <MocoHintList hints={mocoHints} back={back} />
 
       {/* Status */}
       {a.manage && !final && (

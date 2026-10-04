@@ -7,7 +7,7 @@ import { canViewAccount, canViewSetup, isResponsibleBd, loadSetupContext, type S
 import { analyzeSetup, type SetupAnalysis, type Stage, STAGES } from "@/modules/strategy/analysis";
 import { listVisibleAccounts } from "@/modules/accounts/service";
 import { listGoals } from "@/modules/leadership/service";
-import { buildActivityOverview, buildBdPerformance, type AccountActivity, type BdPerformance } from "@/modules/activity/service";
+import { buildActivityOverview, buildBdPerformance, buildTeamActivity, type AccountActivity, type BdPerformance, type TeamActivity } from "@/modules/activity/service";
 import { buildChanceOverview, MATURITY, type ChanceRow } from "@/modules/strategy/chancen";
 
 /**
@@ -91,6 +91,8 @@ export type Dashboard = {
   opportunityHints: { text: string; detail: string; href: string; accountName: string }[];
   /** Nur für die BD-Sicht befüllt: eigene Performance (Aktivität, eigene Chancen) – Etappe 15. */
   bdPerformance: BdPerformance | null;
+  /** Für Teamleiter (Rolle Leitung in einem Linien-Team, Etappe 31): Aktivitätsindex der Mitglieder – in jeder Sicht. */
+  teamActivity: TeamActivity[];
   note: string;
   empty: string | null;
 };
@@ -286,6 +288,13 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
     }
   }
 
+  let teamActivity: TeamActivity[] = [];
+  try {
+    teamActivity = await buildTeamActivity(actor, { days: 28 });
+  } catch {
+    teamActivity = [];
+  }
+
   return {
     view,
     available,
@@ -297,6 +306,7 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
     topOpportunities,
     opportunityHints,
     bdPerformance,
+    teamActivity,
     note: "Alle Angaben sind Zählungen und Regeln über dokumentierte Objekte; keine Umsatz-, Forecast- oder Wahrscheinlichkeitswerte. Die Sicht ändert keine Rechte.",
     empty,
   };

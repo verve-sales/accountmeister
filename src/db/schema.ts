@@ -43,6 +43,7 @@ export const membershipContributionEnum = pgEnum("membership_contribution", [
   "ANKER_EINFUEHRUNG", // ist bereit, passende Vorstellungen zu vermitteln
   "BD_ZUSTAENDIG", // operativ zuständiger BD
   "BEOBACHTER", // lesend beteiligt (z. B. Principal-Sparring)
+  "PRINCIPAL_ZUSTAENDIG", // für dieses Setup zuständiger Principal (Zuständigkeit, keine Rechteänderung)
 ]);
 
 export const relationshipStateEnum = pgEnum("relationship_state", [
@@ -126,6 +127,7 @@ export const users = pgTable(
     status: userStatusEnum("status").notNull().default("ACTIVE"),
     timezone: text("timezone").notNull().default("Europe/Berlin"),
     externalSubject: text("external_subject"), // stabile Kennung des Identitätsanbieters (OIDC sub/oid)
+    mocoUserId: integer("moco_user_id"), // Moco-Anbindung (Etappe 31): Moco-User-ID
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -158,6 +160,7 @@ export const accounts = pgTable("accounts", {
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
   name: text("name").notNull(),
   orgType: orgTypeEnum("org_type").notNull().default("SONSTIGE"),
+  mocoCompanyId: integer("moco_company_id"), // Moco-Company (Stammdaten führend in Moco)
   parentAccountId: text("parent_account_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => accounts.id),
   status: accountStatusEnum("status").notNull().default("ACTIVE"),
   responsibleBdUserId: text("responsible_bd_user_id").references(() => users.id),
@@ -187,6 +190,7 @@ export const projectSetups = pgTable(
   {
     id: id(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    mocoProjectGroupId: integer("moco_project_group_id"), // Moco-Projektgruppe ↔ Setup
     accountId: text("account_id").notNull().references(() => accounts.id),
     name: text("name").notNull(),
     contextNote: text("context_note"), // kurzer Kontextsatz; darf leer sein (bewusster Entwurf)
@@ -1130,6 +1134,8 @@ export const opportunities = pgTable(
   {
     id: id(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    mocoProjectId: integer("moco_project_id"), // Moco-Projekt (beauftragte Chance)
+    mocoDealId: integer("moco_deal_id"), // Moco-Lead/Deal (aus dem AM gepusht)
     accountId: text("account_id").notNull().references(() => accounts.id),
     setupId: text("setup_id").notNull().references(() => projectSetups.id),
     /** Kundeninitiative, auf die die Chance einzahlt (Etappe 26) – kein FK, damit die Tabelle unten stehen darf */
@@ -1714,6 +1720,7 @@ export const teams = pgTable(
     /** Arbeitsraumrolle, deren Inhaber automatisch Mitglied sind (z. B. SALES_OPS) */
     implicitRole: text("implicit_role"),
     isActive: boolean("is_active").notNull().default(true),
+    mocoUnitId: integer("moco_unit_id"), // Moco-Team (Unit)
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -1952,6 +1959,7 @@ export const freelancers = pgTable(
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     displayName: text("display_name").notNull(),
     email: text("email"),
+    mocoUserId: integer("moco_user_id"), // Moco-User im Team „Freelancer“
     phone: text("phone"),
     company: text("company"),
     skills: text("skills"),
@@ -2098,6 +2106,8 @@ export const engagements = pgTable(
     procurementExceptionBy: text("procurement_exception_by").references(() => users.id),
     procurementExceptionAt: timestamp("procurement_exception_at", { withTimezone: true }),
     externalRef: text("external_ref"), // z. B. Moco-Projekt-Link (nur Referenz)
+    mocoProjectId: integer("moco_project_id"),
+    mocoContractId: integer("moco_contract_id"),
     createdBy: text("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -2261,6 +2271,62 @@ export const renewalDecisions = pgTable(
   },
   (t) => [index("renewal_decisions_eng_idx").on(t.engagementId)],
 );
+
+
+// ---------------------------------------------------------------------------
+// Moco-Anbindung (Etappe 31): Startimport mit Prüfliste, Sync-Hinweise, Webhook-Ereignisse
+// ---------------------------------------------------------------------------
+
+export const mocoImportStatusEnum = pgEnum("moco_import_status", ["ENTWURF", "UEBERNOMMEN", "VERWORFEN"]);
+
+/** Ein Importlauf: Momentaufnahme aus Moco, Vorschläge je Zeile, Entscheidungen der prüfenden Person, Ergebnis. */
+export const mocoImports = pgTable("moco_imports", {
+  id: id(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  status: mocoImportStatusEnum("status").notNull().default("ENTWURF"),
+  /** Vorschlagsliste (Items mit Vorschlag und Kandidaten) – keine Rohdaten über das Nötige hinaus */
+  items: jsonb("items").notNull().$type<unknown[]>(),
+  decisions: jsonb("decisions").notNull().default({}).$type<Record<string, unknown>>(),
+  result: jsonb("result").$type<Record<string, unknown>>(),
+  summary: text("summary"),
+  createdBy: text("created_by").notNull().references(() => users.id),
+  createdAt: createdAt(),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+});
+
+export const mocoHintStatusEnum = pgEnum("moco_hint_status", ["OFFEN", "UEBERNOMMEN", "VERWORFEN"]);
+
+/** Abweichung zwischen Moco und AM – wird nie still übernommen, sondern mit einem Klick bestätigt oder verworfen. */
+export const mocoHints = pgTable(
+  "moco_hints",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    subjectType: text("subject_type").notNull(), // ENGAGEMENT | SETUP | USER | PROJECT
+    subjectId: text("subject_id"),
+    kind: text("kind").notNull(), // ENDE_GEAENDERT | PROJEKT_BEENDET | CONTRACT_INAKTIV | NEUER_CONTRACT | GRUPPE_GEWECHSELT | NUTZER_INAKTIV | NEUES_PROJEKT
+    title: text("title").notNull(),
+    payload: jsonb("payload").notNull().default({}).$type<Record<string, unknown>>(),
+    status: mocoHintStatusEnum("status").notNull().default("OFFEN"),
+    dedupeKey: text("dedupe_key").notNull(),
+    createdAt: createdAt(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedBy: text("resolved_by").references(() => users.id),
+  },
+  (t) => [uniqueIndex("moco_hints_dedupe_uq").on(t.dedupeKey), index("moco_hints_subject_idx").on(t.subjectType, t.subjectId, t.status)],
+);
+
+/** Eingegangene Webhook-Ereignisse (nur Kopfdaten, keine Nutzlast). */
+export const mocoEvents = pgTable("moco_events", {
+  id: id(),
+  target: text("target").notNull(),
+  event: text("event").notNull(),
+  mocoId: integer("moco_id"),
+  signatureOk: boolean("signature_ok").notNull(),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+  error: text("error"),
+});
 
 /** Hintergrundläufe (Heartbeat, Ergebnis, Fehler) – sichtbar in der Verwaltung. */
 export const jobRuns = pgTable(

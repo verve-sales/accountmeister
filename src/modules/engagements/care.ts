@@ -222,9 +222,11 @@ export async function actOnCheckin(actor: Actor, checkinId: string, raw: unknown
       .returning();
     if (!u) throw new ConflictError();
     await recordAudit(tx, actor, "checkin.updated", "ENGAGEMENT", c.engagementId, { aktion: i.action, status: u.status });
-    if (next && c.side === "KUNDE" && ["AKTIV", "GEPLANT", "ENDET"].includes(a.engagement.status)) {
-      const owner = await careOwner(c.engagementId, "KUNDE", a.engagement.bdUserId, tx);
-      await tx.insert(schema.checkins).values({ workspaceId: actor.workspaceId, engagementId: c.engagementId, side: "KUNDE", ownerUserId: owner, dueDate: next, ruleKey: `catchup:${c.engagementId}:${next}`, createdBy: actor.userId }).onConflictDoNothing();
+    // Folgetermin im 6-Wochen-Rhythmus – nur für Freelancer-Einsätze (Kunde und Freelancer), nicht für interne
+    if (next && a.engagement.freelancerId && ["AKTIV", "GEPLANT", "ENDET"].includes(a.engagement.status)) {
+      const side = c.side === "KUNDE" ? "KUNDE" : "FREELANCER";
+      const owner = await careOwner(c.engagementId, side, a.engagement.bdUserId, tx);
+      await tx.insert(schema.checkins).values({ workspaceId: actor.workspaceId, engagementId: c.engagementId, side, ownerUserId: owner, dueDate: next, ruleKey: `catchup:${c.engagementId}:${side === "KUNDE" ? "" : "FREELANCER:"}${next}`, createdBy: actor.userId }).onConflictDoNothing();
     }
     if (signalId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [a.engagement.bdUserId], kind: "KOMMENTAR", title: `Sales-Hinweis aus Check-in (${a.engagement.title}) – bitte prüfen`, link: `/setups/${a.engagement.setupId}`, actorUserId: actor.userId });
     if (i.salesHint && !signalId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [a.engagement.bdUserId], kind: "KOMMENTAR", title: `Sales-Hinweis aus Check-in (${a.engagement.title}): ${i.salesHint.slice(0, 100)}`, link: `/einsaetze/${c.engagementId}#checkins`, actorUserId: actor.userId });
@@ -234,17 +236,20 @@ export async function actOnCheckin(actor: Actor, checkinId: string, raw: unknown
 
 /** Regel: je aktivem Einsatz genau ein offener Kunden-Check-in; Fälligkeit = letztes erfolgtes Gespräch + 42 Tage, sonst Start + 42. */
 export async function ensureCatchups(workspaceId?: string): Promise<number> {
-  const rows = await db.query.engagements.findMany({ where: and(workspaceId ? eq(schema.engagements.workspaceId, workspaceId) : undefined, inArray(schema.engagements.status, ["AKTIV"])) });
+  // Nur Freelancer-Einsätze bekommen automatische Rhythmen (Kunde UND Freelancer, alle 6 Wochen); interne Einsätze nicht.
+  const rows = (await db.query.engagements.findMany({ where: and(workspaceId ? eq(schema.engagements.workspaceId, workspaceId) : undefined, inArray(schema.engagements.status, ["AKTIV"])) })).filter((e) => !!e.freelancerId);
   let n = 0;
   for (const e of rows) {
-    const open = await db.query.checkins.findFirst({ where: and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.side, "KUNDE"), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])) });
-    if (open) continue;
-    const last = await db.query.checkins.findFirst({ where: and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.side, "KUNDE"), eq(schema.checkins.status, "ERLEDIGT")), orderBy: desc(schema.checkins.heldAt) });
-    const base = last?.heldAt ? last.heldAt.toISOString().slice(0, 10) : e.actualStart ?? e.plannedStart ?? todayIso();
-    const due = plusDaysIso(base, CATCHUP_DAYS);
-    const owner = await careOwner(e.id, "KUNDE", e.bdUserId);
-    const ins = await db.insert(schema.checkins).values({ workspaceId: e.workspaceId, engagementId: e.id, side: "KUNDE", ownerUserId: owner, dueDate: due, ruleKey: `catchup:${e.id}:${due}`, createdBy: e.bdUserId }).onConflictDoNothing().returning({ id: schema.checkins.id });
-    n += ins.length;
+    for (const side of ["KUNDE", "FREELANCER"] as const) {
+      const open = await db.query.checkins.findFirst({ where: and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.side, side), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])) });
+      if (open) continue;
+      const last = await db.query.checkins.findFirst({ where: and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.side, side), eq(schema.checkins.status, "ERLEDIGT")), orderBy: desc(schema.checkins.heldAt) });
+      const base = last?.heldAt ? last.heldAt.toISOString().slice(0, 10) : e.actualStart ?? e.plannedStart ?? todayIso();
+      const due = plusDaysIso(base, CATCHUP_DAYS);
+      const owner = await careOwner(e.id, side, e.bdUserId);
+      const ins = await db.insert(schema.checkins).values({ workspaceId: e.workspaceId, engagementId: e.id, side, ownerUserId: owner, dueDate: due, ruleKey: `catchup:${e.id}:${side === "KUNDE" ? "" : "FREELANCER:"}${due}`, createdBy: e.bdUserId }).onConflictDoNothing().returning({ id: schema.checkins.id });
+      n += ins.length;
+    }
   }
   return n;
 }

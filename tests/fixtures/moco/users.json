@@ -1,0 +1,8 @@
+[
+  { "id": 501, "firstname": "David", "lastname": "Demo", "email": "david.demo@verve.example", "active": true, "extern": false, "unit": { "id": 31, "name": "Team Nord" }, "role": { "id": 2, "name": "Berater" } },
+  { "id": 502, "firstname": "Anna", "lastname": "Anker (fiktiv)", "email": "anna.anker@verve.example", "active": true, "extern": false, "unit": { "id": 31, "name": "Team Nord" }, "role": { "id": 3, "name": "Teamleiter" } },
+  { "id": 503, "firstname": "Ben", "lastname": "Berater (fiktiv)", "email": "ben.berater@verve.example", "active": true, "extern": false, "unit": { "id": 31, "name": "Team Nord" }, "role": { "id": 2, "name": "Berater" } },
+  { "id": 601, "firstname": "Finn", "lastname": "Freier (fiktiv)", "email": "finn.freier@example.org", "active": true, "extern": true, "unit": { "id": 40, "name": "Freelancer" }, "role": { "id": 9, "name": "Extern" } },
+  { "id": 602, "firstname": "Greta", "lastname": "Gast (fiktiv)", "email": null, "active": true, "extern": true, "unit": { "id": 40, "name": "Freelancer" }, "role": { "id": 9, "name": "Extern" } },
+  { "id": 701, "firstname": "Olaf", "lastname": "Out (fiktiv)", "email": "olaf.out@verve.example", "active": false, "extern": false, "unit": { "id": 31, "name": "Team Nord" }, "role": { "id": 2, "name": "Berater" } }
+]

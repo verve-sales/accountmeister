@@ -107,3 +107,7 @@ Einschalten über Microsoft Graph mit der vorhandenen Entra-App:
 4. `docker compose --env-file .env.production up -d app` – der Takt startet mit der App (Sofort-Mails jede Minute, Überfällig-Hinweise stündlich ab 6 Uhr, Tagesüberblick zur `MAIL_DIGEST_HOUR`).
 
 Prüfen ohne Postfach: `MAIL_TRANSPORT=file` schreibt `.eml`-Dateien nach `MAIL_FILE_DIR`. Fehlversuche werden bis zu fünfmal wiederholt (Zustand `FAILED` danach); Mails enthalten nur Titel und Link. Den Takt im App-Prozess schaltet `NOTIFICATION_WORKER=off` ab (z. B. bei mehreren App-Instanzen – dann nur eine Instanz mit Takt betreiben).
+
+## Moco-Anbindung (Etappe 31)
+
+Einbahnstraße Moco → Accountmeister: Startimport mit Prüfliste (Mehr → Moco, CEO/Principal), stündlicher Abgleich `moco-sync` und Webhook `/api/moco/webhook` (HMAC-SHA256). Variablen: `MOCO_MODE` (off | http | fixture), `MOCO_SUBDOMAIN`, `MOCO_API_KEY` (technischer Nutzer mit Leserechten – nie ein persönlicher Key), `MOCO_WEBHOOK_SECRET`, optional `MOCO_FREELANCER_UNIT`, `MOCO_TEAMLEAD_ROLE`. Es werden nur die benötigten Felder übernommen (keine IBAN, Adresse, Geburtstag). Protokoll: `job_runs` (`moco-sync`), `moco_events` (Webhook-Kopfdaten), Audit `moco.*`. Details und Arbeitsregeln: `docs/moco-anbindung.md`.

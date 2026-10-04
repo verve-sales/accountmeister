@@ -254,3 +254,46 @@ export async function buildBdPerformance(actor: Actor, opts: { days?: number } =
 
   return { userId: actor.userId, sinceDays: days, since: since.toISOString(), myActivities: total, totalMyActivities, opportunities: { active, converted, createdRecently, byMaturity }, accounts: accountRows, note };
 }
+
+// ---------------------------------------------------------------------------
+// Mein Team (Etappe 31): Aktivitätsindex der Teammitglieder für Teamleiter – Zahlen, keine Inhalte
+// ---------------------------------------------------------------------------
+
+export type TeamMemberActivity = { userId: string; name: string; current: ActivityCounts; total: number; previousTotal: number; checkinsErledigt: number; lastActivityDays: number | null };
+export type TeamActivity = { teamId: string; teamName: string; days: number; members: TeamMemberActivity[] };
+
+/** Teams, die der Akteur leitet (Rolle LEITUNG) – ohne Sales-Operations-Warteschlange. */
+export async function buildTeamActivity(actor: Actor, opts: { days?: number } = {}): Promise<TeamActivity[]> {
+  const days = opts.days ?? 28;
+  const leads = await db.query.teamMembers.findMany({ where: and(eq(schema.teamMembers.userId, actor.userId), eq(schema.teamMembers.role, "LEITUNG")) });
+  if (!leads.length) return [];
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const before = new Date(since);
+  before.setDate(before.getDate() - days);
+  const setupIds = (await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.workspaceId, actor.workspaceId), columns: { id: true } })).map((s) => s.id);
+  const out: TeamActivity[] = [];
+  for (const l of leads) {
+    const team = await db.query.teams.findFirst({ where: and(eq(schema.teams.id, l.teamId), eq(schema.teams.isActive, true)) });
+    if (!team || team.key === "SALES_OPS") continue;
+    const members = await db.query.teamMembers.findMany({ where: eq(schema.teamMembers.teamId, team.id) });
+    const users = await db.query.users.findMany({ where: and(inArray(schema.users.id, members.map((m) => m.userId).concat("-")), eq(schema.users.status, "ACTIVE")) });
+    const rows: TeamMemberActivity[] = [];
+    for (const u of users) {
+      const [current, previous, checkins, lastSignal, lastAction] = await Promise.all([
+        personalActivityCounts(u.id, setupIds, since),
+        personalActivityCounts(u.id, setupIds, before),
+        db.query.checkins.findMany({ where: and(eq(schema.checkins.ownerUserId, u.id), eq(schema.checkins.status, "ERLEDIGT"), gte(schema.checkins.updatedAt, since)), columns: { id: true } }),
+        db.query.signals.findFirst({ where: eq(schema.signals.createdBy, u.id), orderBy: (s, { desc }) => [desc(s.createdAt)], columns: { createdAt: true } }),
+        db.query.actions.findFirst({ where: eq(schema.actions.ownerUserId, u.id), orderBy: (a, { desc }) => [desc(a.updatedAt)], columns: { updatedAt: true } }),
+      ]);
+      const last = [lastSignal?.createdAt, lastAction?.updatedAt].filter((x): x is Date => !!x).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+      const total = totalOf(current) + checkins.length;
+      // `previous` zählt ab Vorperiodenbeginn (beide Perioden) – Vorperiode = Differenz zur aktuellen
+      rows.push({ userId: u.id, name: u.displayName, current, total, previousTotal: Math.max(0, totalOf(previous) - totalOf(current)), checkinsErledigt: checkins.length, lastActivityDays: last ? Math.floor((Date.now() - last.getTime()) / 86400000) : null });
+    }
+    rows.sort((a, b) => a.total - b.total);
+    out.push({ teamId: team.id, teamName: team.name, days, members: rows });
+  }
+  return out;
+}

@@ -1594,3 +1594,60 @@ export async function renewalDecisionAction(fd: FormData) {
     await upsertRenewalDecision(actor, data.engagementId ?? "", data);
   }, data.status === "BESTAETIGT" ? "Verlängerung bestätigt – neue Periode angelegt, Einsatzende angepasst." : "Verlängerungsstand gespeichert.");
 }
+
+// --- Moco-Anbindung (Etappe 31) -----------------------------------------------
+
+export async function mocoPreviewAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/moco"), async (actor) => {
+    const { buildImportPreview } = await import("@/modules/moco/import");
+    const imp = await buildImportPreview(actor);
+    return `/moco/import/${imp.id}`;
+  }, "Vorschau aus Moco geladen – bitte Zeile für Zeile prüfen und dann übernehmen.");
+}
+
+export async function mocoSaveDecisionsAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/moco/import/${data.importId ?? ""}`), async (actor) => {
+    const { decisionsFromForm, saveDecisions } = await import("@/modules/moco/import");
+    await saveDecisions(actor, data.importId ?? "", decisionsFromForm(data));
+  }, "Entscheidungen gespeichert.");
+}
+
+export async function mocoApplyImportAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/moco/import/${data.importId ?? ""}`), async (actor) => {
+    const { applyImport, decisionsFromForm } = await import("@/modules/moco/import");
+    const r = await applyImport(actor, data.importId ?? "", decisionsFromForm(data));
+    if (r.errors.length) throw new PendingInfo(`Übernommen: ${r.created.einsaetze} Einsätze, ${r.created.setups} Setups, ${r.created.kunden} Kunden, ${r.created.nutzer} Zugänge, ${r.created.freelancer} Freelancer, ${r.created.verknuepft} Verknüpfungen – ${r.errors.length} Zeile(n) mit Fehler (siehe Ergebnis).`);
+  }, "Import übernommen.");
+}
+
+export async function mocoDiscardImportAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/moco"), async (actor) => {
+    const { discardImport } = await import("@/modules/moco/import");
+    await discardImport(actor, data.importId ?? "");
+  }, "Vorschau verworfen.");
+}
+
+export async function mocoSyncNowAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/moco"), async (actor) => {
+    const { canRunMocoImport } = await import("@/modules/moco/import");
+    if (!canRunMocoImport(actor)) throw new DomainError("FORBIDDEN", "Den Abgleich stoßen CEO oder Principal an.", 403);
+    const { runJob } = await import("@/modules/notifications/worker");
+    const { runMocoSync } = await import("@/modules/moco/sync");
+    let counts: Record<string, number> = {};
+    await runJob("moco-sync", async () => (counts = (await runMocoSync({ since: data.since || undefined })) as unknown as Record<string, number>));
+    throw new PendingInfo(`Abgleich gelaufen: ${counts.projekteGeprueft ?? 0} Projekte geprüft, ${counts.hinweise ?? 0} neue Hinweise, ${counts.neueNutzer ?? 0} neue Zugänge, ${counts.neueFreelancer ?? 0} neue Freelancer.`);
+  }, "Abgleich gelaufen.");
+}
+
+export async function mocoHintAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/moco"), async (actor) => {
+    const { resolveHint } = await import("@/modules/moco/sync");
+    await resolveHint(actor, data.hintId ?? "", data.decision === "VERWERFEN" ? "VERWERFEN" : "UEBERNEHMEN");
+  }, data.decision === "VERWERFEN" ? "Hinweis verworfen." : "Hinweis übernommen.");
+}

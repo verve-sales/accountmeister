@@ -115,6 +115,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         <Status label={setupStatusLabel[d.setup.status] ?? d.setup.status} />
         <span className="muted text-sm">Sichtbarkeit: {visibilityLabel[d.setup.visibility]}</span>
         <span className="muted text-sm">BD: {d.setup.bdUserId ? name(d.setup.bdUserId) : <>Zuordnung offen{mayReassign && <> – <a href="#zustaendigkeit">jetzt zuordnen</a></>}</>}</span>
+        {d.members.filter((m) => m.contribution === "PRINCIPAL_ZUSTAENDIG").map((m) => <span key={m.userId} className="muted text-sm">Principal: {m.displayName}</span>)}
+        {d.setup.mocoProjectGroupId && <span className="muted text-xs">Moco-Projektgruppe {d.setup.mocoProjectGroupId}</span>}
         {!d.canEdit && <span className="muted text-sm">(nur lesend)</span>}
       </div>
       <SetupTabs setupId={id} active="ueberblick" />

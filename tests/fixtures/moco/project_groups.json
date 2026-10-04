@@ -1,0 +1,4 @@
+[
+  { "id": 11, "name": "Plattformteam", "company": { "id": 101, "name": "Beispielkonzern AG (fiktiv)" }, "user": { "id": 502, "firstname": "Anna", "lastname": "Anker (fiktiv)" }, "projects": [{ "id": 1001, "name": "Datenplattform Ausbau" }] },
+  { "id": 12, "name": "Agent Platforms (fiktiv)", "company": { "id": 101, "name": "Beispielkonzern AG (fiktiv)" }, "user": null, "projects": [{ "id": 1002, "name": "Agentenplattform Betrieb" }] }
+]

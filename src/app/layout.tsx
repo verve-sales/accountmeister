@@ -44,6 +44,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const roles = actor ? [...actor.roles].filter((r) => r !== "ADMIN").map((r) => roleLabel[r] ?? r) : [];
   if (actor && actor.accountRoles.size > 0) roles.push("kundenbezogene Rollen");
   const unread = actor ? await unreadCount(actor).catch(() => 0) : 0;
+  // Moco (Etappe 31): Link für Importberechtigte, wenn die Anbindung an ist, oder bei offenen Hinweisen für die Person
+  const mocoLink = actor && cfg.MOCO_MODE !== "off" && (actor.roles.has("CEO") || actor.roles.has("PRINCIPAL") || (await (await import("@/modules/moco/sync")).openHintCount(actor).catch(() => 0)) > 0);
   return (
     <html lang="de">
       <body className="min-h-screen">
@@ -72,7 +74,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {actor ? (
                 <>
                   <nav aria-label="Weitere Bereiche" className="flex flex-wrap gap-x-3 text-xs">
-                    {[...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/besetzung", label: "Besetzung" }, { href: "/einsaetze", label: "Einsätze" }] : []), ...MORE.slice(0, 3), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(3)].map((n) => (
+                    {[...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/besetzung", label: "Besetzung" }, { href: "/einsaetze", label: "Einsätze" }] : []), ...MORE.slice(0, 3), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(3)].map((n) => (
                       <Link key={n.href} href={n.href} className="muted">
                         {n.label}
                       </Link>

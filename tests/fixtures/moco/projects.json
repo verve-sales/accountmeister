@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1001, "identifier": "P-1001", "name": "Datenplattform Ausbau", "active": true, "billable": true,
+    "start_date": "2026-07-01", "finish_date": "2026-12-31", "hourly_rate": 110, "currency": "EUR",
+    "customer": { "id": 101, "name": "Beispielkonzern AG (fiktiv)" }, "leader": { "id": 501, "firstname": "David", "lastname": "Demo" },
+    "project_group": { "id": 11, "name": "Plattformteam" }, "deal": null, "tags": [],
+    "contracts": [
+      { "id": 9001, "user_id": 601, "firstname": "Finn", "lastname": "Freier (fiktiv)", "billable": true, "active": true, "budget": null, "hourly_rate": 95 },
+      { "id": 9002, "user_id": 501, "firstname": "David", "lastname": "Demo", "billable": true, "active": true, "budget": null, "hourly_rate": 120 }
+    ],
+    "updated_at": "2026-09-30T10:00:00Z"
+  },
+  {
+    "id": 1002, "identifier": "P-1002", "name": "Agentenplattform Betrieb", "active": true, "billable": true,
+    "start_date": "2026-03-01", "finish_date": null, "hourly_rate": 130, "currency": "EUR",
+    "customer": { "id": 101, "name": "Beispielkonzern AG (fiktiv)" }, "leader": null,
+    "project_group": { "id": 12, "name": "Agent Platforms (fiktiv)" }, "deal": null, "tags": [],
+    "contracts": [
+      { "id": 9003, "user_id": 502, "firstname": "Anna", "lastname": "Anker (fiktiv)", "billable": true, "active": true, "budget": null, "hourly_rate": 130 }
+    ],
+    "updated_at": "2026-09-30T10:00:00Z"
+  },
+  {
+    "id": 1003, "identifier": "P-1003", "name": "Testautomatisierung Bestand", "active": true, "billable": true,
+    "start_date": "2026-05-01", "finish_date": "2027-03-31", "hourly_rate": 100, "currency": "EUR",
+    "customer": { "id": 102, "name": "Nordlicht Versicherung AG (fiktiv)" }, "leader": null,
+    "project_group": null, "deal": null, "tags": [],
+    "contracts": [
+      { "id": 9004, "user_id": 601, "firstname": "Finn", "lastname": "Freier (fiktiv)", "billable": true, "active": true, "budget": null, "hourly_rate": 100 },
+      { "id": 9005, "user_id": 503, "firstname": "Ben", "lastname": "Berater (fiktiv)", "billable": true, "active": false, "budget": null, "hourly_rate": 100 }
+    ],
+    "updated_at": "2026-09-30T10:00:00Z"
+  },
+  {
+    "id": 1004, "identifier": "P-1004", "name": "Altprojekt (archiviert)", "active": false, "billable": true,
+    "start_date": "2025-01-01", "finish_date": "2025-12-31", "hourly_rate": 90, "currency": "EUR",
+    "customer": { "id": 102, "name": "Nordlicht Versicherung AG (fiktiv)" }, "leader": null,
+    "project_group": null, "deal": null, "tags": [],
+    "contracts": [{ "id": 9006, "user_id": 601, "firstname": "Finn", "lastname": "Freier (fiktiv)", "billable": true, "active": false, "budget": null, "hourly_rate": 90 }],
+    "updated_at": "2026-01-10T10:00:00Z"
+  }
+]

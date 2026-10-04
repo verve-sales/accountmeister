@@ -30,6 +30,7 @@ export const contributionLabel: Record<string, string> = {
   ANKER_EINFUEHRUNG: "Anker – Einführung möglich",
   BD_ZUSTAENDIG: "BD – zuständig",
   BEOBACHTER: "Beobachter",
+  PRINCIPAL_ZUSTAENDIG: "Principal – zuständig",
 };
 export const accessClassLabel: Record<string, string> = {
   PERSOENLICH: "Persönlich (nur Quelleninhaber)",

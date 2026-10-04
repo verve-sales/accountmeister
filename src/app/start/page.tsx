@@ -393,6 +393,30 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         </section>
       )}
 
+      {d.teamActivity.map((t) => (
+        <section className="card" key={t.teamId}>
+          <h2 className="font-semibold mb-1">Mein Team: {t.teamName}</h2>
+          <p className="muted text-xs mb-2">Aktivitätsindex der letzten {t.days} Tage je Mitglied – Zählungen dokumentierter Ereignisse (Beobachtungen, Aktionen, Vorschläge, Weeklys, Kontakte, Check-ins). Nur Zahlen, keine Inhalte; die Sichtbarkeit von Kunden und Setups bleibt unverändert.</p>
+          <table className="list text-sm">
+            <thead><tr><th>Mitglied</th><th>Index</th><th>Vorperiode</th><th>Beobachtungen</th><th>Aktionen</th><th>Kontakte</th><th>Check-ins</th><th>Zuletzt aktiv</th></tr></thead>
+            <tbody>
+              {t.members.map((m) => (
+                <tr key={m.userId} style={m.total === 0 ? { color: "#c0392b" } : undefined}>
+                  <td>{m.name}</td>
+                  <td><strong>{m.total}</strong></td>
+                  <td>{m.previousTotal}{m.total > m.previousTotal ? " ↑" : m.total < m.previousTotal ? " ↓" : ""}</td>
+                  <td>{m.current.beobachtungenErfasst}</td>
+                  <td>{m.current.aktionenErfasstOderErledigt}</td>
+                  <td>{m.current.kontakteGepflegt}</td>
+                  <td>{m.checkinsErledigt}</td>
+                  <td>{m.lastActivityDays === null ? "noch nie" : m.lastActivityDays === 0 ? "heute" : `vor ${m.lastActivityDays} Tagen`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ))}
+
       {d.view === "ANKER" && (
         <section className="card">
           <h2 className="font-semibold mb-2">Smart-Dump: Text einfügen</h2>

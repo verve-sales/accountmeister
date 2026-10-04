@@ -1,0 +1,6 @@
+[
+  { "id": 101, "type": "customer", "name": "Beispielkonzern AG (fiktiv)", "identifier": "K-101", "active": true },
+  { "id": 102, "type": "customer", "name": "Nordlicht Versicherung AG (fiktiv)", "identifier": "K-102", "active": true },
+  { "id": 103, "type": "customer", "name": "Ohne Projekte GmbH (fiktiv)", "identifier": "K-103", "active": true },
+  { "id": 201, "type": "supplier", "name": "Finn Freier IT (fiktiv)", "identifier": "L-201", "active": true }
+]

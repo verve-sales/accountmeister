@@ -42,6 +42,20 @@ const envSchema = z.object({
   FEATURE_BESETZUNG: z.enum(["true", "false"]).default("true"),
   /** Uhrzeit (Europe/Berlin) des Tagesdigests */
   MAIL_DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(7),
+  /** Moco-Anbindung (Etappe 31): off (Standard) | http (echte Moco-API) | fixture (Testdaten aus tests/fixtures/moco, nur Entwicklung/Tests) */
+  MOCO_MODE: z.enum(["off", "http", "fixture"]).default("off"),
+  /** Subdomain der Moco-Instanz (https://<subdomain>.mocoapp.com) */
+  MOCO_SUBDOMAIN: z.string().min(1).optional(),
+  /** API-Key eines technischen Moco-Nutzers mit Leserechten (nie persönlicher Key) */
+  MOCO_API_KEY: z.string().min(1).optional(),
+  /** Schlüssel (32 Hex-Zeichen) aus der Moco-Webhook-Übersicht zur Signaturprüfung */
+  MOCO_WEBHOOK_SECRET: z.string().min(1).optional(),
+  /** Name des Moco-Teams, dessen Mitglieder Freelancer sind */
+  MOCO_FREELANCER_UNIT: z.string().default("Freelancer"),
+  /** Name der Moco-Rolle, die Teamleiter kennzeichnet */
+  MOCO_TEAMLEAD_ROLE: z.string().default("Teamleiter"),
+  /** Verzeichnis der Fixture-Dateien im Modus fixture */
+  MOCO_FIXTURE_DIR: z.string().default("./tests/fixtures/moco"),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
