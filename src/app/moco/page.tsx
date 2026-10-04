@@ -3,10 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { canRunMocoImport } from "@/modules/moco/import";
 import { hintKindLabel, listHints, mocoStatus, type HintKind } from "@/modules/moco/sync";
-import { findMisclassifiedFreelancers, listImports } from "@/modules/moco/import";
+import { findDuplicateEngagements, findMisclassifiedFreelancers, listImports } from "@/modules/moco/import";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDateTime } from "@/lib/labels";
-import { mocoDiscardImportAction, mocoPreviewAction, mocoRepairFreelancersAction, mocoSyncNowAction } from "../actions";
+import { mocoDiscardImportAction, mocoPreviewAction, mocoRemoveDuplicatesAction, mocoRepairFreelancersAction, mocoSyncNowAction } from "../actions";
 import { HintButtons } from "@/components/MocoHints";
 
 const STATUS_LABEL: Record<string, string> = { ENTWURF: "Vorschau (offen)", UEBERNOMMEN: "übernommen", VERWORFEN: "verworfen" };
@@ -19,6 +19,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
   const [status, hints, imports] = await Promise.all([mocoStatus(actor), listHints(actor, { status: "OFFEN" }), importer ? listImports(actor) : Promise.resolve([])]);
   if (!importer && hints.length === 0) notFound();
   const repair = importer && status.enabled ? await findMisclassifiedFreelancers(actor).catch(() => []) : [];
+  const dupes = importer ? await findDuplicateEngagements(actor).catch(() => []) : [];
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
@@ -49,6 +50,27 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
             </div>
           )}
           {status.events.length > 0 && <p className="muted text-xs">Letzte Webhook-Ereignisse: {status.events.map((e) => `${e.target}/${e.event}${e.signatureOk ? "" : " (Signatur!)"}${e.error ? " ✗" : ""}`).join(" · ")}</p>}
+        </section>
+      )}
+
+      {dupes.length > 0 && (
+        <section className="card" id="dubletten" style={{ borderColor: "#c0392b" }}>
+          <h2 className="font-semibold mb-1">Dubletten aus Mehrfach-Import ({dupes.reduce((n, g) => n + g.remove.length, 0)})</h2>
+          <p className="text-sm muted mb-2">Mehrere Einsätze zeigen auf dieselbe Moco-Zuweisung. Behalten wird je Zuweisung der Einsatz mit Unterlagen/bestätigten Perioden/erledigten Check-ins, sonst der älteste; die übrigen werden samt Position, Kandidatur, Auftrag und (wenn sonst leer) Chance entfernt.</p>
+          <form action={mocoRemoveDuplicatesAction} className="space-y-2 text-sm">
+            <input type="hidden" name="back" value="/moco" />
+            <ul className="space-y-1">
+              {dupes.map((g) => (
+                <li key={g.mocoContractId}>
+                  <span className="muted text-xs">Contract {g.mocoContractId} · behalten: </span><Link href={`/einsaetze/${g.keep.id}`}>{g.keep.title}</Link>
+                  {g.remove.map((r) => (
+                    <label key={r.id} className="ml-3 inline-flex items-center gap-1"><input type="checkbox" name="engagementId" value={r.id} defaultChecked /> entfernen: <Link href={`/einsaetze/${r.id}`}>{r.title}</Link> <span className="muted text-xs">({fmtDateTime(r.createdAt)})</span></label>
+                  ))}
+                </li>
+              ))}
+            </ul>
+            <button className="btn btn-small" type="submit">Ausgewählte Dubletten entfernen</button>
+          </form>
         </section>
       )}
 

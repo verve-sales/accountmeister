@@ -1662,3 +1662,14 @@ export async function mocoRepairFreelancersAction(fd: FormData) {
     throw new PendingInfo(`${r.converted} Person(en) in den Freelancer-Pool überführt, ${r.movedEngagements} Einsatz/Einsätze umgehängt.`);
   }, "Korrektur ausgeführt.");
 }
+
+export async function mocoRemoveDuplicatesAction(fd: FormData) {
+  const data = formToObject(fd);
+  const ids = fd.getAll("engagementId").map(String).filter(Boolean);
+  return run(backOf(data, "/moco"), async (actor) => {
+    const { removeDuplicateEngagements } = await import("@/modules/moco/import");
+    if (!ids.length) throw new DomainError("VALIDATION", "Keine Dublette ausgewählt.", 400);
+    const r = await removeDuplicateEngagements(actor, ids);
+    throw new PendingInfo(`${r.removed} Dublette(n) entfernt.`);
+  }, "Dubletten entfernt.");
+}

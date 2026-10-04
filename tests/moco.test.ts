@@ -5,7 +5,7 @@ import { db, schema } from "@/db/client";
 import { resetConfigCacheForTests } from "@/lib/config";
 import { ForbiddenError } from "@/lib/errors";
 import { FixtureMocoClient, pickProject, pickUser, type MocoClient, type MocoProject, type MocoUser } from "@/modules/moco/client";
-import { applyImport, buildImportPreview, decisionsFromForm, findMisclassifiedFreelancers, getImport, nameSimilarity, normName, repairFreelancers, type ImportItem } from "@/modules/moco/import";
+import { applyImport, buildImportPreview, decisionsFromForm, findDuplicateEngagements, findMisclassifiedFreelancers, getImport, nameSimilarity, normName, removeDuplicateEngagements, repairFreelancers, type ImportItem } from "@/modules/moco/import";
 import { isFreelancerMocoUser } from "@/modules/moco/client";
 import { createOpportunity } from "@/modules/opportunities/service";
 import { quickFill } from "@/modules/staffing/service";
@@ -246,5 +246,37 @@ describe("Etappe 31: Moco-Anbindung", () => {
     const u = await db.query.users.findFirst({ where: eq(schema.users.id, userId) });
     expect(u?.status).toBe("INACTIVE");
     expect((await findMisclassifiedFreelancers(petra)).some((c) => c.userId === userId)).toBe(false);
+  });
+
+  it("M06: Zwei Vorschauen vor der Übernahme → keine Dubletten mehr; vorhandene Dubletten werden gefunden und bereinigt", async () => {
+    setMocoEnv();
+    const s = await ensureSeed();
+    const petra = await actorFor("petra");
+    const before = (await db.query.engagements.findMany({ where: eq(schema.engagements.mocoProjectId, 1002) })).length;
+    // Zwei Vorschauen nacheinander, beide schlagen (falls noch nichts importiert) „neu“ vor – die zweite darf trotzdem nichts doppelt anlegen
+    const a = await buildImportPreview(petra);
+    const b = await buildImportPreview(petra);
+    const form: Record<string, string> = {};
+    for (const k of (a.items as ImportItem[]).filter((i) => i.type === "SETUP").map((i) => i.key)) form[`d.${k}.bdUserId`] = s.users.david;
+    await applyImport(petra, a.id, decisionsFromForm(form));
+    // b wurde durch a verworfen – ein Apply darauf ist nicht mehr möglich
+    await expect(applyImport(petra, b.id, decisionsFromForm(form))).rejects.toThrow(/abgeschlossen/);
+    expect((await db.query.engagements.findMany({ where: eq(schema.engagements.mocoProjectId, 1002) })).length).toBe(Math.max(before, 1));
+    // Dublette künstlich erzeugen (wie beim Doppel-Import vor der Korrektur) und bereinigen
+    const orig = (await db.query.engagements.findFirst({ where: eq(schema.engagements.mocoContractId, 9003) }))!;
+    const { quickFill } = await import("@/modules/staffing/service");
+    const opp = await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, orig.opportunityId) });
+    const dup = await quickFill(petra, opp!.id, { title: "Dublette", resourceKind: "INTERN", internalUserId: orig.internalUserId!, desiredStart: "2026-03-01", endOpen: "on" });
+    await db.update(schema.engagements).set({ mocoProjectId: 1002, mocoContractId: 9003, status: "AKTIV" }).where(eq(schema.engagements.id, dup.engagement.id));
+    const groups = await findDuplicateEngagements(petra);
+    const g = groups.find((x) => x.mocoContractId === 9003)!;
+    expect(g.keep.id).toBe(orig.id);
+    expect(g.remove.map((r) => r.id)).toContain(dup.engagement.id);
+    const r = await removeDuplicateEngagements(petra, [dup.engagement.id]);
+    expect(r.removed).toBe(1);
+    expect(await db.query.engagements.findFirst({ where: eq(schema.engagements.id, dup.engagement.id) })).toBeUndefined();
+    expect(await db.query.staffingPositions.findFirst({ where: eq(schema.staffingPositions.id, dup.position.id) })).toBeUndefined();
+    expect(await db.query.engagements.findFirst({ where: eq(schema.engagements.id, orig.id) })).toBeTruthy();
+    expect((await findDuplicateEngagements(petra)).some((x) => x.mocoContractId === 9003)).toBe(false);
   });
 });

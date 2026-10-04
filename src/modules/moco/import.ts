@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
 import { getConfig } from "@/lib/config";
@@ -412,7 +412,8 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
         res.skipped.push(it.key);
         continue;
       }
-      let aid = action === "LINK" ? targetOf(it) : null;
+      const existingAccount = await db.query.accounts.findFirst({ where: and(eq(schema.accounts.workspaceId, ws), eq(schema.accounts.mocoCompanyId, it.mocoId)), columns: { id: true } });
+      let aid = existingAccount?.id ?? (action === "LINK" ? targetOf(it) : null);
       if (!aid) {
         const [a] = await db.insert(schema.accounts).values({ workspaceId: ws, name: it.name, orgType: "SONSTIGE", mocoCompanyId: it.mocoId, createdBy: actor.userId }).returning({ id: schema.accounts.id });
         aid = a!.id;
@@ -449,7 +450,8 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
         const r = await db.query.roleAssignments.findMany({ where: and(eq(schema.roleAssignments.userId, cand), isNull(schema.roleAssignments.validTo)) });
         if (r.some((x) => x.role === "PRINCIPAL" || x.role === "CEO")) principalUserId = cand;
       }
-      let sid = action === "LINK" ? targetOf(it) : null;
+      const existingSetup = it.mocoId ? await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.accountId, accountId), eq(schema.projectSetups.mocoProjectGroupId, it.mocoId)), columns: { id: true } }) : null;
+      let sid = existingSetup?.id ?? (action === "LINK" ? targetOf(it) : null);
       if (!sid) {
         const [s] = await db.insert(schema.projectSetups).values({ workspaceId: ws, accountId, name: it.name, bdUserId, mocoProjectGroupId: it.mocoId, createdBy: actor.userId, visibility: "MITGLIEDER" }).returning({ id: schema.projectSetups.id });
         sid = s!.id;
@@ -486,7 +488,9 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
       if (!personId) throw new ValidationError("Person wurde nicht übernommen");
       const start = it.start && it.start <= todayIso() ? it.start : todayIso();
       const rate = it.hourlyRate != null && it.hourlyRate > 0 ? String(it.hourlyRate) : "";
-      let engagementId = action === "LINK" ? targetOf(it) : null;
+      // Schutz vor Dubletten: Ist dieser Contract seit der Vorschau bereits verknüpft worden (zweite Prüfliste, Doppelklick), nur verknüpfen
+      const already = await db.query.engagements.findFirst({ where: and(eq(schema.engagements.workspaceId, ws), eq(schema.engagements.mocoContractId, it.mocoContractId)), columns: { id: true } });
+      let engagementId = already?.id ?? (action === "LINK" ? targetOf(it) : null);
       if (engagementId) {
         const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, engagementId) });
         if (!e) throw new NotFoundError("Einsatz");
@@ -550,6 +554,8 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
   }
 
   await db.update(schema.mocoImports).set({ status: "UEBERNOMMEN", decisions, result: res as unknown as Record<string, unknown>, appliedAt: new Date() }).where(eq(schema.mocoImports.id, id));
+  // Andere offene Vorschauen sind jetzt veraltet (ihre Vorschläge kennen die neuen Verknüpfungen nicht) → verwerfen
+  await db.update(schema.mocoImports).set({ status: "VERWORFEN", summary: sql`coalesce(summary, '') || ' – verworfen: durch neueren Import überholt'` }).where(and(eq(schema.mocoImports.workspaceId, ws), eq(schema.mocoImports.status, "ENTWURF")));
   await recordAudit(db, actor, "moco.import_applied", "MOCO_IMPORT", id, { ...res.created, fehler: res.errors.length, uebersprungen: res.skipped.length });
   return res;
 }
@@ -630,4 +636,78 @@ export async function repairFreelancers(actor: Actor, userIds: string[], client:
     converted++;
   }
   return { converted, movedEngagements };
+}
+
+
+// ---------------------------------------------------------------------------
+// Dubletten aus Mehrfach-Import bereinigen
+// ---------------------------------------------------------------------------
+
+export type DuplicateGroup = { mocoContractId: number; keep: { id: string; title: string; createdAt: Date }; remove: { id: string; title: string; createdAt: Date }[] };
+
+/** Einsätze mit demselben Moco-Contract: der älteste bleibt (er trägt ggf. Unterlagen/Check-ins), die jüngeren werden gelistet. */
+export async function findDuplicateEngagements(actor: Actor): Promise<DuplicateGroup[]> {
+  requireImporter(actor);
+  const rows = await db.query.engagements.findMany({ where: eq(schema.engagements.workspaceId, actor.workspaceId), orderBy: (e, { asc }) => [asc(e.createdAt)] });
+  const byContract = new Map<number, typeof rows>();
+  for (const e of rows) {
+    if (e.mocoContractId == null) continue;
+    byContract.set(e.mocoContractId, [...(byContract.get(e.mocoContractId) ?? []), e]);
+  }
+  const out: DuplicateGroup[] = [];
+  for (const [cid, list] of byContract) {
+    if (list.length < 2) continue;
+    // Behalten: der mit den meisten Anhängseln (Unterlagen, bestätigte Perioden), sonst der älteste
+    const scored = await Promise.all(list.map(async (e) => ({ e, score: (await db.query.engagementDocuments.findMany({ where: eq(schema.engagementDocuments.engagementId, e.id) })).length * 10 + (await db.query.engagementPeriods.findMany({ where: and(eq(schema.engagementPeriods.engagementId, e.id), eq(schema.engagementPeriods.kind, "BESTAETIGT")) })).length * 5 + (await db.query.checkins.findMany({ where: and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.status, "ERLEDIGT")) })).length })));
+    scored.sort((a, b) => b.score - a.score || a.e.createdAt.getTime() - b.e.createdAt.getTime());
+    const keep = scored[0]!.e;
+    out.push({ mocoContractId: cid, keep: { id: keep.id, title: keep.title, createdAt: keep.createdAt }, remove: scored.slice(1).map((x) => ({ id: x.e.id, title: x.e.title, createdAt: x.e.createdAt })) });
+  }
+  return out;
+}
+
+/** Entfernt die genannten Dubletten samt Anhang (Check-ins, Perioden, Betreuung, Verknüpfungen, Kandidatur, Position, Auftrag,
+ *  Chance – letztere nur, wenn sie aus dem Import stammen und sonst nichts an ihnen hängt). */
+export async function removeDuplicateEngagements(actor: Actor, engagementIds: string[]) {
+  const groups = await findDuplicateEngagements(actor);
+  const allowed = new Set(groups.flatMap((g) => g.remove.map((r) => r.id)));
+  let removed = 0;
+  for (const id of engagementIds.filter((x) => allowed.has(x))) {
+    const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, id) });
+    if (!e) continue;
+    await db.transaction(async (tx) => {
+      await tx.delete(schema.checkins).where(eq(schema.checkins.engagementId, id));
+      await tx.delete(schema.engagementPeriods).where(eq(schema.engagementPeriods.engagementId, id));
+      await tx.delete(schema.careAssignments).where(eq(schema.careAssignments.engagementId, id));
+      await tx.delete(schema.engagementDocuments).where(eq(schema.engagementDocuments.engagementId, id));
+      await tx.delete(schema.renewalDecisions).where(eq(schema.renewalDecisions.engagementId, id));
+      await tx.delete(schema.mocoHints).where(and(eq(schema.mocoHints.subjectType, "ENGAGEMENT"), eq(schema.mocoHints.subjectId, id)));
+      await tx.delete(schema.engagements).where(eq(schema.engagements.id, id));
+      await tx.update(schema.staffingPositions).set({ filledCandidacyId: null }).where(eq(schema.staffingPositions.id, e.positionId));
+      await tx.delete(schema.candidacyEvents).where(eq(schema.candidacyEvents.candidacyId, e.candidacyId));
+      await tx.delete(schema.candidacies).where(eq(schema.candidacies.id, e.candidacyId));
+      const otherCands = await tx.query.candidacies.findMany({ where: eq(schema.candidacies.positionId, e.positionId), columns: { id: true } });
+      if (!otherCands.length) await tx.delete(schema.staffingPositions).where(eq(schema.staffingPositions.id, e.positionId));
+      if (e.orderId) {
+        const otherEng = await tx.query.engagements.findMany({ where: eq(schema.engagements.orderId, e.orderId), columns: { id: true } });
+        if (!otherEng.length) {
+          await tx.delete(schema.startRequirements).where(eq(schema.startRequirements.orderId, e.orderId)).catch(() => undefined);
+          await tx.delete(schema.orders).where(eq(schema.orders.id, e.orderId));
+        }
+      }
+      const opp = await tx.query.opportunities.findFirst({ where: eq(schema.opportunities.id, e.opportunityId) });
+      if (opp?.mocoProjectId) {
+        const [engs, poss, ords, offs] = await Promise.all([
+          tx.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id), columns: { id: true } }),
+          tx.query.staffingPositions.findMany({ where: eq(schema.staffingPositions.opportunityId, opp.id), columns: { id: true } }),
+          tx.query.orders.findMany({ where: eq(schema.orders.opportunityId, opp.id), columns: { id: true } }),
+          tx.query.offers.findMany({ where: eq(schema.offers.opportunityId, opp.id), columns: { id: true } }),
+        ]);
+        if (!engs.length && !poss.length && !ords.length && !offs.length) await tx.delete(schema.opportunities).where(eq(schema.opportunities.id, opp.id)).catch(() => undefined);
+      }
+      await recordAudit(tx, actor, "engagement.duplicate_removed", "ENGAGEMENT", id, { contract: e.mocoContractId, titel: e.title });
+    });
+    removed++;
+  }
+  return { removed };
 }
