@@ -624,7 +624,7 @@ export async function repairFreelancers(actor: Actor, userIds: string[], client:
     }
     // Team-Mitgliedschaften und Rollen beenden, Zugang deaktivieren (bleibt für das Protokoll erhalten)
     await db.delete(schema.teamMembers).where(eq(schema.teamMembers.userId, u.id));
-    await db.update(schema.roleAssignments).set({ validTo: todayIso() }).where(and(eq(schema.roleAssignments.userId, u.id), isNull(schema.roleAssignments.validTo)));
+    await db.delete(schema.roleAssignments).where(eq(schema.roleAssignments.userId, u.id));
     await db.update(schema.users).set({ status: "INACTIVE", mocoUserId: null, updatedAt: new Date() }).where(eq(schema.users.id, u.id));
     await recordAudit(db, actor, "user.converted_to_freelancer", "USER", u.id, { freelancer: fl.id, einsaetze: engs.length });
     converted++;

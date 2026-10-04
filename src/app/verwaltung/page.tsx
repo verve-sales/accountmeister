@@ -83,14 +83,14 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
       </section>
 
       <section className="card">
-        <h2 className="font-semibold mb-2">Zugänge und Rollen ({users.length})</h2>
+        <h2 className="font-semibold mb-2">Zugänge und Rollen ({users.filter((u) => u.status === "ACTIVE").length} aktiv{users.some((u) => u.status !== "ACTIVE") ? `, ${users.filter((u) => u.status !== "ACTIVE").length} deaktiviert – unten` : ""})</h2>
         <table className="list text-sm">
           <thead><tr><th>Person</th><th>Status</th><th>Rollen</th><th></th></tr></thead>
           <tbody>
-            {users.map((u) => (
+            {[...users.filter((u) => u.status === "ACTIVE"), ...users.filter((u) => u.status !== "ACTIVE")].map((u) => (
               <tr key={u.id}>
                 <td>{u.displayName}<div className="muted">{u.email}</div></td>
-                <td><Status label={u.status === "ACTIVE" ? "Aktiv" : "Deaktiviert"} /></td>
+                <td><Status label={u.status === "ACTIVE" ? "Aktiv" : "Deaktiviert"} />{u.status !== "ACTIVE" && <div className="muted text-xs">keine Rollen, keine Anmeldung</div>}</td>
                 <td>
                   <ul className="space-y-1">
                     {u.roles.map((r) => (

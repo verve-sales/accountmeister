@@ -266,9 +266,11 @@ export async function listUsersWithRoles(actor: Actor) {
     db.query.accounts.findMany({ where: eq(schema.accounts.workspaceId, actor.workspaceId) }),
   ]);
   const an = new Map(accounts.map((a) => [a.id, a.name]));
+  const today = new Date().toISOString().slice(0, 10);
+  // Beendete Rollen (validTo in der Vergangenheit) und Rollen deaktivierter Zugänge werden nicht mehr gezeigt
   return users.map((u) => ({
     ...u,
-    roles: roles.filter((r) => r.userId === u.id).map((r) => ({ id: r.id, role: r.role, scope: r.scope, accountName: r.accountId ? an.get(r.accountId) ?? "?" : null, accountId: r.accountId })),
+    roles: u.status === "ACTIVE" ? roles.filter((r) => r.userId === u.id && (!r.validTo || r.validTo >= today)).map((r) => ({ id: r.id, role: r.role, scope: r.scope, accountName: r.accountId ? an.get(r.accountId) ?? "?" : null, accountId: r.accountId })) : [],
   }));
 }
 
