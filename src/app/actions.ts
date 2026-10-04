@@ -1651,3 +1651,14 @@ export async function mocoHintAction(fd: FormData) {
     await resolveHint(actor, data.hintId ?? "", data.decision === "VERWERFEN" ? "VERWERFEN" : "UEBERNEHMEN");
   }, data.decision === "VERWERFEN" ? "Hinweis verworfen." : "Hinweis übernommen.");
 }
+
+export async function mocoRepairFreelancersAction(fd: FormData) {
+  const data = formToObject(fd);
+  const ids = fd.getAll("userId").map(String).filter(Boolean);
+  return run(backOf(data, "/moco"), async (actor) => {
+    const { repairFreelancers } = await import("@/modules/moco/import");
+    if (!ids.length) throw new DomainError("VALIDATION", "Keine Person ausgewählt.", 400);
+    const r = await repairFreelancers(actor, ids);
+    throw new PendingInfo(`${r.converted} Person(en) in den Freelancer-Pool überführt, ${r.movedEngagements} Einsatz/Einsätze umgehängt.`);
+  }, "Korrektur ausgeführt.");
+}

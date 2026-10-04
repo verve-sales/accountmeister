@@ -7,7 +7,7 @@ import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
 import { notify } from "@/modules/notifications/service";
 import { todayIso } from "@/modules/work/calendar";
-import { getMocoClient, isIgnoredMocoUser, mocoEnabled, type MocoClient, type MocoProject } from "./client";
+import { getMocoClient, isFreelancerMocoUser, isIgnoredMocoUser, mocoEnabled, type MocoClient, type MocoProject } from "./client";
 import { canRunMocoImport } from "./import";
 
 /**
@@ -59,12 +59,12 @@ export async function runMocoSync(opts: { since?: string; client?: MocoClient; w
   const mUsers = await client.users({ includeArchived: true });
   const users = await db.query.users.findMany({ where: eq(schema.users.workspaceId, ws) });
   const freelancers = await db.query.freelancers.findMany({ where: and(eq(schema.freelancers.workspaceId, ws), isNull(schema.freelancers.mergedIntoId)) });
-  const isFreelancerUnit = (name: string | undefined) => (name ?? "").trim().toLowerCase() === cfg.MOCO_FREELANCER_UNIT.trim().toLowerCase();
+  const isFreelancerUnit = (u: { unit: { name: string } | null; external: boolean }) => isFreelancerMocoUser(u);
   const systemActor = users.find((u) => u.status === "ACTIVE");
   for (const u of mUsers) {
     if (isIgnoredMocoUser(u)) continue;
     const name = `${u.firstname} ${u.lastname}`.trim();
-    if (isFreelancerUnit(u.unit?.name)) {
+    if (isFreelancerUnit(u)) {
       if (!u.active) continue;
       const known = freelancers.find((f) => f.mocoUserId === u.id) ?? (u.email ? freelancers.find((f) => (f.email ?? "").toLowerCase() === u.email) : undefined);
       if (known) {

@@ -247,6 +247,16 @@ export class FixtureMocoClient implements MocoClient {
   }
 }
 
+/** Freelancer in Moco: Mitglied des Freelancer-Teams (Name konfigurierbar; zusätzlich alles, was nach „Freelancer/Extern/Freiberufler“
+ *  klingt) oder in Moco als extern (`extern`/`external`) markiert. */
+export function isFreelancerMocoUser(u: { unit: { name: string } | null; external: boolean }): boolean {
+  const configured = getConfig().MOCO_FREELANCER_UNIT.trim().toLowerCase();
+  const unit = (u.unit?.name ?? "").trim().toLowerCase();
+  if (unit && unit === configured) return true;
+  if (/freelanc|extern|freiberuf|subunternehm|partner/.test(unit)) return true;
+  return u.external === true;
+}
+
 /** Technische Konten (z. B. der Key-Inhaber) werden nicht als Personen übernommen. */
 export function isIgnoredMocoUser(u: { email: string | null; firstname: string; lastname: string }): boolean {
   const ignore = getConfig().MOCO_IGNORE_EMAILS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);

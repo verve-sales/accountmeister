@@ -3,10 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { canRunMocoImport } from "@/modules/moco/import";
 import { hintKindLabel, listHints, mocoStatus, type HintKind } from "@/modules/moco/sync";
-import { listImports } from "@/modules/moco/import";
+import { findMisclassifiedFreelancers, listImports } from "@/modules/moco/import";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDateTime } from "@/lib/labels";
-import { mocoDiscardImportAction, mocoPreviewAction, mocoSyncNowAction } from "../actions";
+import { mocoDiscardImportAction, mocoPreviewAction, mocoRepairFreelancersAction, mocoSyncNowAction } from "../actions";
 import { HintButtons } from "@/components/MocoHints";
 
 const STATUS_LABEL: Record<string, string> = { ENTWURF: "Vorschau (offen)", UEBERNOMMEN: "übernommen", VERWORFEN: "verworfen" };
@@ -18,6 +18,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
   const importer = canRunMocoImport(actor);
   const [status, hints, imports] = await Promise.all([mocoStatus(actor), listHints(actor, { status: "OFFEN" }), importer ? listImports(actor) : Promise.resolve([])]);
   if (!importer && hints.length === 0) notFound();
+  const repair = importer && status.enabled ? await findMisclassifiedFreelancers(actor).catch(() => []) : [];
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
@@ -48,6 +49,22 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
             </div>
           )}
           {status.events.length > 0 && <p className="muted text-xs">Letzte Webhook-Ereignisse: {status.events.map((e) => `${e.target}/${e.event}${e.signatureOk ? "" : " (Signatur!)"}${e.error ? " ✗" : ""}`).join(" · ")}</p>}
+        </section>
+      )}
+
+      {repair.length > 0 && (
+        <section className="card" id="freelancer-korrektur" style={{ borderColor: "#b7791f" }}>
+          <h2 className="font-semibold mb-1">Freelancer-Korrektur ({repair.length})</h2>
+          <p className="text-sm muted mb-2">Diese Personen sind laut Moco Freelancer (Team bzw. Extern-Kennzeichen), wurden aber als interne Zugänge angelegt. Die Korrektur legt sie im Freelancer-Pool an, hängt ihre Einsätze um (intern → Freelancer, EK leer, Check-ins Kunde + Freelancer) und deaktiviert den Zugang.</p>
+          <form action={mocoRepairFreelancersAction} className="space-y-2 text-sm">
+            <input type="hidden" name="back" value="/moco" />
+            <ul className="space-y-1">
+              {repair.map((r) => (
+                <li key={r.userId}><label className="flex items-center gap-2"><input type="checkbox" name="userId" value={r.userId} defaultChecked /> <strong>{r.name}</strong> <span className="muted text-xs">{r.email}{r.unit ? ` · Moco-Team ${r.unit}` : ""} · {r.engagements} Einsatz/Einsätze</span></label></li>
+              ))}
+            </ul>
+            <button className="btn btn-small" type="submit">Ausgewählte in den Freelancer-Pool überführen</button>
+          </form>
         </section>
       )}
 

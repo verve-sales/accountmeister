@@ -6,7 +6,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
-import { getMocoClient, isIgnoredMocoUser, mocoProjectUrl, type MocoClient, type MocoCompany, type MocoProject, type MocoProjectGroup, type MocoUser } from "./client";
+import { getMocoClient, isFreelancerMocoUser, isIgnoredMocoUser, mocoProjectUrl, type MocoClient, type MocoCompany, type MocoProject, type MocoProjectGroup, type MocoUser } from "./client";
 
 /**
  * Moco-Startimport mit Prüfliste (Etappe 31).
@@ -44,7 +44,7 @@ export type ImportItem =
       note: string;
     };
 
-export type ImportDecision = { action?: ImportAction; targetId?: string; bdUserId?: string; principalUserId?: string };
+export type ImportDecision = { action?: ImportAction; targetId?: string; bdUserId?: string; principalUserId?: string; personKind?: "NUTZER" | "FREELANCER" };
 export type ImportDecisions = Record<string, ImportDecision>;
 
 export function canRunMocoImport(actor: Actor): boolean {
@@ -114,7 +114,7 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
     db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, ws), notInArray(schema.engagements.status, ["ABGESCHLOSSEN", "ABGEBROCHEN"])) }),
   ]);
   const items: ImportItem[] = [];
-  const isFreelancerUnit = (u: MocoUser) => (u.unit?.name ?? "").trim().toLowerCase() === cfg.MOCO_FREELANCER_UNIT.trim().toLowerCase();
+  const isFreelancerUnit = (u: MocoUser) => isFreelancerMocoUser(u);
   const isTeamlead = (u: MocoUser) => (u.role?.name ?? "").trim().toLowerCase() === cfg.MOCO_TEAMLEAD_ROLE.trim().toLowerCase();
 
   // Personen
@@ -269,13 +269,13 @@ export async function listImports(actor: Actor) {
   return db.query.mocoImports.findMany({ where: eq(schema.mocoImports.workspaceId, actor.workspaceId), orderBy: (t, { desc }) => [desc(t.createdAt)], limit: 10 });
 }
 
-const decisionsInput = z.record(z.string(), z.object({ action: z.enum(["LINK", "NEW", "SKIP"]).optional(), targetId: z.string().optional(), bdUserId: z.string().optional(), principalUserId: z.string().optional() }));
+const decisionsInput = z.record(z.string(), z.object({ action: z.enum(["LINK", "NEW", "SKIP"]).optional(), targetId: z.string().optional(), bdUserId: z.string().optional(), principalUserId: z.string().optional(), personKind: z.enum(["NUTZER", "FREELANCER"]).optional() }));
 
 /** Entscheidungen aus dem Formular: Felder `d.<key>.action|targetId|bdUserId|principalUserId`. */
 export function decisionsFromForm(raw: Record<string, string | undefined>): ImportDecisions {
   const out: Record<string, ImportDecision> = {};
   for (const [k, v] of Object.entries(raw)) {
-    const m = k.match(/^d\.(.+)\.(action|targetId|bdUserId|principalUserId)$/);
+    const m = k.match(/^d\.(.+)\.(action|targetId|bdUserId|principalUserId|personKind)$/);
     if (!m || v === undefined) continue;
     const key = m[1]!;
     out[key] = { ...(out[key] ?? {}), [m[2]!]: v };
@@ -315,6 +315,8 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
   const actionOf = (it: ImportItem) => d(it.key).action ?? it.proposal;
   const targetOf = (it: ImportItem) => d(it.key).targetId || it.targetId;
   const items = imp.items;
+  // Personenart kann in der Prüfliste überstimmt werden (z. B. Freelancer, der in Moco nicht im Freelancer-Team steht)
+  const kindOf = (mocoId: number, fallback: "NUTZER" | "FREELANCER") => d(`person:${mocoId}`).personKind ?? fallback;
   // Auflösung Moco-ID → AM-ID im Laufe der Übernahme
   const userByMoco = new Map<number, string>();
   const freelancerByMoco = new Map<number, string>();
@@ -324,8 +326,9 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
   await ensureDefaultTeams(ws);
 
   // 1) Personen
-  for (const it of items.filter((x): x is Extract<ImportItem, { type: "PERSON" }> => x.type === "PERSON")) {
-    const action = actionOf(it);
+  for (const it0 of items.filter((x): x is Extract<ImportItem, { type: "PERSON" }> => x.type === "PERSON")) {
+    const it = { ...it0, personKind: kindOf(it0.mocoId, it0.personKind) };
+    const action = it.personKind !== it0.personKind && actionOf(it0) === "LINK" ? "NEW" : actionOf(it0); // Art geändert → Verknüpfung passt nicht mehr
     try {
       if (action === "SKIP") {
         res.skipped.push(it.key);
@@ -391,7 +394,7 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
       }
       for (const m of it.memberMocoIds) {
         const uid = userByMoco.get(m);
-        if (!uid) continue;
+        if (!uid || kindOf(m, "NUTZER") === "FREELANCER") continue;
         const role = it.leadMocoIds.includes(m) ? "LEITUNG" : "MITGLIED";
         await db.insert(schema.teamMembers).values({ teamId: tid, userId: uid, role }).onConflictDoUpdate({ target: [schema.teamMembers.teamId, schema.teamMembers.userId], set: { role } });
       }
@@ -471,8 +474,9 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
   // 5) Einsätze
   const { quickFill } = await import("@/modules/staffing/service");
   let stagger = 0;
-  for (const it of items.filter((x): x is Extract<ImportItem, { type: "EINSATZ" }> => x.type === "EINSATZ")) {
-    const action = actionOf(it);
+  for (const it0 of items.filter((x): x is Extract<ImportItem, { type: "EINSATZ" }> => x.type === "EINSATZ")) {
+    const it = { ...it0, personKind: kindOf(it0.personMocoId, it0.personKind) };
+    const action = actionOf(it0);
     try {
       if (action === "SKIP") {
         res.skipped.push(it.key);
@@ -556,4 +560,74 @@ export async function importerChoices(actor: Actor) {
   const roles = await db.query.roleAssignments.findMany({ where: and(inArray(schema.roleAssignments.userId, users.map((u) => u.id).concat("-")), isNull(schema.roleAssignments.validTo)) });
   const withRole = (r: string[]) => users.filter((u) => roles.some((x) => x.userId === u.id && r.includes(x.role))).map((u) => ({ id: u.id, name: u.displayName }));
   return { bds: withRole(["BD", "PRINCIPAL", "CEO"]), principals: withRole(["PRINCIPAL", "CEO"]) };
+}
+
+
+// ---------------------------------------------------------------------------
+// Korrektur: als interne Zugänge angelegte Freelancer in den Pool überführen
+// ---------------------------------------------------------------------------
+
+export type FreelancerRepairCandidate = { userId: string; name: string; email: string; mocoUserId: number | null; unit: string | null; engagements: number };
+
+/** Zugänge, die laut Moco (Team/extern-Kennzeichen) Freelancer sind, aber als Nutzer angelegt wurden. */
+export async function findMisclassifiedFreelancers(actor: Actor, client: MocoClient = getMocoClient()): Promise<FreelancerRepairCandidate[]> {
+  requireImporter(actor);
+  const mUsers = (await client.users({ includeArchived: true })).filter((u) => isFreelancerMocoUser(u) && !isIgnoredMocoUser(u));
+  const users = await db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId) });
+  const out: FreelancerRepairCandidate[] = [];
+  for (const u of mUsers) {
+    const hit = users.find((x) => x.mocoUserId === u.id) ?? (u.email ? users.find((x) => x.email.toLowerCase() === u.email) : undefined);
+    if (!hit || hit.status !== "ACTIVE") continue;
+    const n = await db.query.engagements.findMany({ where: eq(schema.engagements.internalUserId, hit.id), columns: { id: true } });
+    out.push({ userId: hit.id, name: hit.displayName, email: hit.email, mocoUserId: u.id, unit: u.unit?.name ?? null, engagements: n.length });
+  }
+  return out;
+}
+
+/**
+ * Überführt die genannten Zugänge in den Freelancer-Pool: Freelancer anlegen (oder per Moco-ID/E-Mail finden), Einsätze,
+ * Kandidaturen, Positionen und Aufträge umhängen (intern → Freelancer, EK leer), Check-ins Kunde + Freelancer anlegen,
+ * Rollen beenden, Zugang deaktivieren. Alles mit Protokoll.
+ */
+export async function repairFreelancers(actor: Actor, userIds: string[], client: MocoClient = getMocoClient()) {
+  const candidates = (await findMisclassifiedFreelancers(actor, client)).filter((c) => userIds.includes(c.userId));
+  let converted = 0;
+  let movedEngagements = 0;
+  for (const c of candidates) {
+    const u = (await db.query.users.findFirst({ where: eq(schema.users.id, c.userId) }))!;
+    const existing = (c.mocoUserId ? await db.query.freelancers.findFirst({ where: and(eq(schema.freelancers.workspaceId, actor.workspaceId), eq(schema.freelancers.mocoUserId, c.mocoUserId)) }) : null) ?? (await db.query.freelancers.findFirst({ where: and(eq(schema.freelancers.workspaceId, actor.workspaceId), eq(schema.freelancers.email, u.email)) })) ?? null;
+    let fl: { id: string; displayName: string };
+    if (!existing) {
+      const [created] = await db.insert(schema.freelancers).values({ workspaceId: actor.workspaceId, displayName: u.displayName, email: u.email, mocoUserId: c.mocoUserId, createdBy: actor.userId, availabilitySource: "Moco (Korrektur)" }).returning();
+      fl = created!;
+      await recordAudit(db, actor, "freelancer.created", "FREELANCER", fl.id, { name: u.displayName, quelle: "Moco-Korrektur" });
+    } else {
+      fl = existing;
+      if (!existing.mocoUserId && c.mocoUserId) await db.update(schema.freelancers).set({ mocoUserId: c.mocoUserId }).where(eq(schema.freelancers.id, existing.id));
+    }
+    const engs = await db.query.engagements.findMany({ where: eq(schema.engagements.internalUserId, u.id) });
+    let stagger = 0;
+    for (const e of engs) {
+      await db.update(schema.engagements).set({ freelancerId: fl.id, internalUserId: null, title: e.title.replace(u.displayName, fl.displayName), updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
+      await db.update(schema.candidacies).set({ freelancerId: fl.id, internalUserId: null, updatedAt: new Date() }).where(eq(schema.candidacies.id, e.candidacyId));
+      await db.update(schema.staffingPositions).set({ resourceKind: "FREELANCER", updatedAt: new Date() }).where(eq(schema.staffingPositions.id, e.positionId));
+      await db.update(schema.opportunities).set({ kind: "FREELANCER_EXPERTE", updatedAt: new Date() }).where(eq(schema.opportunities.id, e.opportunityId));
+      if (e.orderId) await db.update(schema.orders).set({ consultantUserId: null, consultantName: fl.displayName, updatedAt: new Date() }).where(eq(schema.orders.id, e.orderId));
+      if (e.status === "AKTIV") {
+        const due = plusDaysIso(todayIso(), 7 + (stagger++ % (CATCHUP_DAYS - 7)));
+        for (const side of ["KUNDE", "FREELANCER"] as const) {
+          await db.insert(schema.checkins).values({ workspaceId: actor.workspaceId, engagementId: e.id, side, ownerUserId: e.bdUserId, dueDate: due, ruleKey: `catchup:${e.id}:${side}:${due}`, note: "Korrektur intern → Freelancer – erster Check-in", createdBy: actor.userId }).onConflictDoNothing();
+        }
+      }
+      await recordAudit(db, actor, "engagement.person_corrected", "ENGAGEMENT", e.id, { von: `intern:${u.id}`, nach: `freelancer:${fl.id}` });
+      movedEngagements++;
+    }
+    // Team-Mitgliedschaften und Rollen beenden, Zugang deaktivieren (bleibt für das Protokoll erhalten)
+    await db.delete(schema.teamMembers).where(eq(schema.teamMembers.userId, u.id));
+    await db.update(schema.roleAssignments).set({ validTo: todayIso() }).where(and(eq(schema.roleAssignments.userId, u.id), isNull(schema.roleAssignments.validTo)));
+    await db.update(schema.users).set({ status: "INACTIVE", mocoUserId: null, updatedAt: new Date() }).where(eq(schema.users.id, u.id));
+    await recordAudit(db, actor, "user.converted_to_freelancer", "USER", u.id, { freelancer: fl.id, einsaetze: engs.length });
+    converted++;
+  }
+  return { converted, movedEngagements };
 }

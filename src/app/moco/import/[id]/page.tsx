@@ -130,13 +130,23 @@ export default async function MocoImportPage({ params, searchParams }: { params:
           <h2 className="font-semibold mb-2">Personen ({persons.length}) und Teams ({teams.length})</h2>
           <ul className="space-y-1 text-sm">
             {persons.map((p) => (
-              <li key={p.key} className="flex flex-wrap items-center gap-2"><strong>{p.name}</strong><span className="status">{p.personKind === "FREELANCER" ? "Freelancer" : p.teamlead ? "Teamleiter → Anker" : "Anker"}</span><span className="muted text-xs">{p.email ?? "ohne E-Mail"}{p.unit ? ` · ${p.unit}` : ""} · {p.note}</span>{editable ? <ActionSelect item={p} decisions={decisions} /> : <span className="status">{ACTION_LABEL[(decisions[p.key]?.action ?? p.proposal) as keyof typeof ACTION_LABEL]}</span>}</li>
+              <li key={p.key} className="flex flex-wrap items-center gap-2">
+                <strong>{p.name}</strong>
+                {editable ? (
+                  <select name={`d.${p.key}.personKind`} className="input" style={{ width: "auto" }} defaultValue={decisions[p.key]?.personKind ?? p.personKind} aria-label="Personenart">
+                    <option value="NUTZER">{p.teamlead ? "Teamleiter → Anker" : "intern (Anker)"}</option>
+                    <option value="FREELANCER">Freelancer</option>
+                  </select>
+                ) : <span className="status">{(decisions[p.key]?.personKind ?? p.personKind) === "FREELANCER" ? "Freelancer" : p.teamlead ? "Teamleiter → Anker" : "Anker"}</span>}
+                <span className="muted text-xs">{p.email ?? "ohne E-Mail"}{p.unit ? ` · Moco-Team ${p.unit}` : " · ohne Moco-Team"} · {p.note}</span>
+                {editable ? <ActionSelect item={p} decisions={decisions} /> : <span className="status">{ACTION_LABEL[(decisions[p.key]?.action ?? p.proposal) as keyof typeof ACTION_LABEL]}</span>}
+              </li>
             ))}
             {teams.map((t) => (
               <li key={t.key} className="flex flex-wrap items-center gap-2"><strong>{/^team\b/i.test(t.name) ? t.name : `Team ${t.name}`}</strong><span className="muted text-xs">{t.note}</span>{editable ? <ActionSelect item={t} decisions={decisions} /> : <span className="status">{ACTION_LABEL[(decisions[t.key]?.action ?? t.proposal) as keyof typeof ACTION_LABEL]}</span>}</li>
             ))}
           </ul>
-          <p className="muted text-xs mt-2">Neue Zugänge erhalten die Rolle Anker; BD, Principal und Sales Operations vergibt die Verwaltung. Teamleiter werden Leitung ihres Teams (Dashboard „Mein Team“), bleiben fachlich Anker.</p>
+          <p className="muted text-xs mt-2">Freelancer erkennt der Import am Moco-Team (Standard „Freelancer“, sonst alles mit „Freelancer/Extern/Freiberufler“ im Namen) oder am Extern-Kennzeichen in Moco – hier je Person korrigierbar; die Einsätze dieser Person folgen der Auswahl. Neue Zugänge erhalten die Rolle Anker; BD, Principal und Sales Operations vergibt die Verwaltung. Teamleiter werden Leitung ihres Teams (Dashboard „Mein Team“), bleiben fachlich Anker.</p>
         </section>
 
         {editable && (
