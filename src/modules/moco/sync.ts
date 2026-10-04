@@ -16,7 +16,7 @@ import { canRunMocoImport } from "./import";
  * Neue Nutzer kommen automatisch als Anker, neue Freelancer in den Pool (Entscheidung vom Oktober 2026).
  */
 
-export type HintKind = "ENDE_GEAENDERT" | "PROJEKT_BEENDET" | "CONTRACT_INAKTIV" | "NEUER_CONTRACT" | "NEUES_PROJEKT" | "GRUPPE_GEWECHSELT" | "NUTZER_INAKTIV";
+export type HintKind = "ENDE_GEAENDERT" | "PROJEKT_BEENDET" | "CONTRACT_INAKTIV" | "NEUER_CONTRACT" | "NEUES_PROJEKT" | "GRUPPE_GEWECHSELT" | "NUTZER_INAKTIV" | "ENDE_UEBERSCHRITTEN";
 export const hintKindLabel: Record<HintKind, string> = {
   ENDE_GEAENDERT: "Projektende in Moco geändert",
   PROJEKT_BEENDET: "Projekt in Moco beendet/archiviert",
@@ -25,6 +25,7 @@ export const hintKindLabel: Record<HintKind, string> = {
   NEUES_PROJEKT: "Neues Projekt in Moco",
   GRUPPE_GEWECHSELT: "Projekt in andere Projektgruppe verschoben",
   NUTZER_INAKTIV: "Nutzer in Moco deaktiviert",
+  ENDE_UEBERSCHRITTEN: "Geplantes Ende liegt zurück, Einsatz noch aktiv",
 };
 
 async function upsertHint(workspaceId: string, h: { subjectType: string; subjectId: string | null; kind: HintKind; title: string; payload: Record<string, unknown>; dedupeKey: string; notifyUserIds?: string[]; link?: string }) {
@@ -96,6 +97,13 @@ export async function runMocoSync(opts: { since?: string; client?: MocoClient; w
         if (team) await db.insert(schema.teamMembers).values({ teamId: team.id, userId: created.id, role: (u.role?.name ?? "").trim().toLowerCase() === cfg.MOCO_TEAMLEAD_ROLE.trim().toLowerCase() ? "LEITUNG" : "MITGLIED" }).onConflictDoNothing();
       }
     }
+  }
+
+  // --- Aktive Einsätze mit überschrittenem Ende (unabhängig von Moco-Änderungen) --------------------------------
+  const today = todayIso();
+  const overdueEnd = await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, ws), inArray(schema.engagements.status, ["AKTIV", "PAUSIERT"])) });
+  for (const e of overdueEnd.filter((x) => x.plannedEnd && x.plannedEnd < today)) {
+    counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "ENDE_UEBERSCHRITTEN", title: `„${e.title}“: geplantes Ende ${e.plannedEnd} liegt zurück – beenden oder Ende verlängern?`, payload: { finishDate: e.plannedEnd }, dedupeKey: `end-passed:${e.id}:${e.plannedEnd}`, notifyUserIds: await careUserIds(e.id, e.bdUserId), link: `/einsaetze/${e.id}` });
   }
 
   // --- Projekte -----------------------------------------------------------------------------------------------
@@ -181,10 +189,10 @@ export async function resolveHint(actor: Actor, hintId: string, decision: "UEBER
         await db.update(schema.engagements).set({ plannedEnd: String(payload.finishDate), version: e.version + 1, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
         if (e.orderId) await db.update(schema.orders).set({ plannedEnd: String(payload.finishDate), updatedAt: new Date() }).where(eq(schema.orders.id, e.orderId));
         await recordAudit(db, actor, "engagement.updated", "ENGAGEMENT", e.id, { ende: payload.finishDate, quelle: "Moco" });
-      } else if (h.kind === "PROJEKT_BEENDET" || h.kind === "CONTRACT_INAKTIV") {
+      } else if (h.kind === "PROJEKT_BEENDET" || h.kind === "CONTRACT_INAKTIV" || h.kind === "ENDE_UEBERSCHRITTEN") {
         const end = typeof payload.finishDate === "string" && payload.finishDate <= todayIso() ? payload.finishDate : todayIso();
         const to = e.status === "ENDET" ? "ABGESCHLOSSEN" : ["AKTIV", "PAUSIERT"].includes(e.status) ? "ENDET" : "ABGEBROCHEN";
-        await db.update(schema.engagements).set({ status: to, actualEnd: to === "ENDET" ? end : e.actualEnd, statusReason: `Laut Moco ${h.kind === "PROJEKT_BEENDET" ? "Projekt beendet" : "Zuweisung inaktiv"}.`, version: e.version + 1, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
+        await db.update(schema.engagements).set({ status: to, actualEnd: to === "ENDET" ? end : e.actualEnd, statusReason: h.kind === "ENDE_UEBERSCHRITTEN" ? "Geplantes Ende erreicht (bestätigt)." : `Laut Moco ${h.kind === "PROJEKT_BEENDET" ? "Projekt beendet" : "Zuweisung inaktiv"}.`, version: e.version + 1, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
         const open = await db.query.checkins.findMany({ where: and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.status, "FAELLIG")) });
         for (const c of open) await db.update(schema.checkins).set({ status: "ABGESAGT", note: `${c.note ?? ""}\nEntfallen: Einsatz laut Moco beendet.`.trim(), version: c.version + 1, updatedAt: new Date() }).where(eq(schema.checkins.id, c.id));
         if (e.orderId) await db.update(schema.orders).set({ engagementStatus: "BEENDET", updatedAt: new Date() }).where(eq(schema.orders.id, e.orderId));
@@ -264,3 +272,19 @@ export async function mocoStatus(actor: Actor) {
 }
 
 export type { MocoProject };
+
+
+/** Alle offenen Hinweise einer Art auf einmal bearbeiten (z. B. „Ende überschritten“ → alle beenden). */
+export async function resolveHintsBulk(actor: Actor, kind: HintKind, decision: "UEBERNEHMEN" | "VERWERFEN"): Promise<number> {
+  const open = (await listHints(actor, { status: "OFFEN" })).filter((h) => h.kind === kind);
+  let n = 0;
+  for (const h of open) {
+    try {
+      await resolveHint(actor, h.id, decision);
+      n++;
+    } catch {
+      /* einzelne Hinweise ohne Recht/Status bleiben offen */
+    }
+  }
+  return n;
+}

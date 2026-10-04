@@ -6,7 +6,7 @@ import { hintKindLabel, listHints, mocoStatus, type HintKind } from "@/modules/m
 import { findDuplicateEngagements, findMisclassifiedFreelancers, listImports } from "@/modules/moco/import";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDateTime } from "@/lib/labels";
-import { mocoDiscardImportAction, mocoPreviewAction, mocoRemoveDuplicatesAction, mocoRepairFreelancersAction, mocoSyncNowAction } from "../actions";
+import { mocoDiscardImportAction, mocoHintsBulkAction, mocoPreviewAction, mocoRemoveDuplicatesAction, mocoRepairFreelancersAction, mocoSyncNowAction } from "../actions";
 import { HintButtons } from "@/components/MocoHints";
 
 const STATUS_LABEL: Record<string, string> = { ENTWURF: "Vorschau (offen)", UEBERNOMMEN: "übernommen", VERWORFEN: "verworfen" };
@@ -92,6 +92,13 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
 
       <section className="card" id="hinweise">
         <h2 className="font-semibold mb-2">Offene Hinweise aus Moco ({hints.length})</h2>
+        {hints.filter((h) => h.kind === "ENDE_UEBERSCHRITTEN").length > 1 && (
+          <form action={mocoHintsBulkAction} className="mb-2 flex flex-wrap gap-2 items-center text-sm">
+            <input type="hidden" name="back" value="/moco" /><input type="hidden" name="kind" value="ENDE_UEBERSCHRITTEN" /><input type="hidden" name="decision" value="UEBERNEHMEN" />
+            <span>{hints.filter((h) => h.kind === "ENDE_UEBERSCHRITTEN").length} Einsätze sind über ihr geplantes Ende hinaus aktiv.</span>
+            <button className="btn btn-small" type="submit">Alle zum geplanten Ende beenden</button>
+          </form>
+        )}
         {hints.length === 0 ? (
           <p className="muted text-sm">Keine Abweichungen. Hinweise entstehen, wenn Moco ein Projektende ändert, ein Projekt beendet, eine Zuweisung inaktiv setzt oder etwas Neues anlegt.</p>
         ) : (

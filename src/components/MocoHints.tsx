@@ -4,7 +4,7 @@ import { hintKindLabel, type HintKind } from "@/modules/moco/sync";
 import { fmtDateTime } from "@/lib/labels";
 
 export function HintButtons({ id, kind, back = "/moco" }: { id: string; kind: HintKind; back?: string }) {
-  const applyLabel: Record<HintKind, string> = { ENDE_GEAENDERT: "Ende übernehmen", PROJEKT_BEENDET: "Einsatz beenden", CONTRACT_INAKTIV: "Einsatz beenden", NEUER_CONTRACT: "Erledigt (per Import übernommen)", NEUES_PROJEKT: "Erledigt (per Import übernommen)", GRUPPE_GEWECHSELT: "In das Setup verschieben", NUTZER_INAKTIV: "Zugang deaktivieren" };
+  const applyLabel: Record<HintKind, string> = { ENDE_GEAENDERT: "Ende übernehmen", PROJEKT_BEENDET: "Einsatz beenden", CONTRACT_INAKTIV: "Einsatz beenden", NEUER_CONTRACT: "Erledigt (per Import übernommen)", NEUES_PROJEKT: "Erledigt (per Import übernommen)", GRUPPE_GEWECHSELT: "In das Setup verschieben", NUTZER_INAKTIV: "Zugang deaktivieren", ENDE_UEBERSCHRITTEN: "Einsatz beenden (zum geplanten Ende)" };
   return (
     <span className="inline-flex gap-1">
       <form action={mocoHintAction} className="inline"><input type="hidden" name="hintId" value={id} /><input type="hidden" name="decision" value="UEBERNEHMEN" /><input type="hidden" name="back" value={back} /><button className="btn btn-small" type="submit">{applyLabel[kind]}</button></form>

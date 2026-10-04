@@ -224,7 +224,8 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
       const accountItem = items.find((x) => x.type === "KUNDE" && x.mocoId === p.customer!.id);
       const sameAccount = samePerson.filter((e) => e.accountId === accountItem?.targetId);
       const hit = byContract ?? (sameAccount.length === 1 ? sameAccount[0]! : null);
-      const note = byContract ? "bereits verknüpft" : hit ? "Vorschlag: bestehender Einsatz derselben Person beim Kunden → verknüpfen" : !personKind.has(c.user_id) ? "Person in Moco inaktiv – prüfen" : "neuer Einsatz (aktiv)";
+      const ended = !!p.finish_date && p.finish_date < todayIso();
+      const note = byContract ? "bereits verknüpft" : hit ? "Vorschlag: bestehender Einsatz derselben Person beim Kunden → verknüpfen" : !personKind.has(c.user_id) ? "Person in Moco inaktiv – prüfen" : ended ? "Projektende liegt zurück → wird als beendet übernommen" : "neuer Einsatz (aktiv)";
       items.push({
         key: `einsatz:${c.id}`,
         type: "EINSATZ",
@@ -495,7 +496,7 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
         const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, engagementId) });
         if (!e) throw new NotFoundError("Einsatz");
         const patch: Partial<typeof schema.engagements.$inferInsert> = { mocoProjectId: it.mocoProjectId, mocoContractId: it.mocoContractId, externalRef: e.externalRef ?? mocoProjectUrl(it.mocoProjectId), updatedAt: new Date() };
-        if (["VORBEREITUNG", "GEPLANT"].includes(e.status)) Object.assign(patch, { status: "AKTIV", actualStart: e.actualStart ?? start });
+        if (["VORBEREITUNG", "GEPLANT"].includes(e.status)) Object.assign(patch, it.end && it.end < todayIso() ? { status: "ENDET", actualStart: e.actualStart ?? start, actualEnd: it.end } : { status: "AKTIV", actualStart: e.actualStart ?? start });
         if (it.end && !e.plannedEnd) patch.plannedEnd = it.end;
         await db.update(schema.engagements).set(patch).where(eq(schema.engagements.id, engagementId));
         await db.update(schema.opportunities).set({ mocoProjectId: it.mocoProjectId }).where(eq(schema.opportunities.id, e.opportunityId));
@@ -533,14 +534,17 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
           await db.update(schema.candidacies).set({ ekRate: null, ekAsOf: null }).where(eq(schema.candidacies.id, r.candidacy.id));
           await db.update(schema.engagementPeriods).set({ ek: null, source: "Moco (Stundensatz = VK)" }).where(eq(schema.engagementPeriods.engagementId, engagementId));
         }
+        // Projektende bereits überschritten → Einsatz direkt als beendet übernehmen (kein aktiver Einsatz, keine Check-ins)
+        const alreadyEnded = !!it.end && it.end < todayIso();
         await db
           .update(schema.engagements)
-          .set({ status: "AKTIV", actualStart: start, orderId: order!.id, mocoProjectId: it.mocoProjectId, mocoContractId: it.mocoContractId, externalRef: mocoProjectUrl(it.mocoProjectId), updatedAt: new Date() })
+          .set({ status: alreadyEnded ? "ENDET" : "AKTIV", actualStart: start, actualEnd: alreadyEnded ? it.end : null, statusReason: alreadyEnded ? "Laut Moco bereits beendet (Startimport)." : null, orderId: order!.id, mocoProjectId: it.mocoProjectId, mocoContractId: it.mocoContractId, externalRef: mocoProjectUrl(it.mocoProjectId), updatedAt: new Date() })
           .where(eq(schema.engagements.id, engagementId));
-        await recordAudit(db, actor, "engagement.moco_imported", "ENGAGEMENT", engagementId, { projekt: it.mocoProjectId, contract: it.mocoContractId });
+        if (alreadyEnded) await db.update(schema.orders).set({ engagementStatus: "BEENDET", updatedAt: new Date() }).where(eq(schema.orders.id, order!.id));
+        await recordAudit(db, actor, "engagement.moco_imported", "ENGAGEMENT", engagementId, { projekt: it.mocoProjectId, contract: it.mocoContractId, beendet: alreadyEnded });
         res.created.einsaetze++;
         // Check-ins nur für Freelancer: Kunde + Freelancer alle 6 Wochen, erste Termine gestaffelt
-        if (it.personKind === "FREELANCER") {
+        if (it.personKind === "FREELANCER" && !alreadyEnded) {
           const due = plusDaysIso(todayIso(), 7 + (stagger++ % (CATCHUP_DAYS - 7)));
           for (const side of ["KUNDE", "FREELANCER"] as const) {
             await db.insert(schema.checkins).values({ workspaceId: ws, engagementId, side, ownerUserId: owner, dueDate: due, ruleKey: `catchup:${engagementId}:${side}:${due}`, note: "Startimport aus Moco – erster Check-in", createdBy: actor.userId }).onConflictDoNothing();

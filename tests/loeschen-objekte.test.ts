@@ -25,6 +25,16 @@ describe("Endgültiges Löschen: Einsatz, Chance, Setup (rekursiv)", () => {
     const ended = await changeEngagementStatus(david, e.id, { version: e.version, status: "ENDET", actualDate: "2026-10-01" });
     expect(ended.status).toBe("ENDET");
     expect((await db.query.orders.findFirst({ where: eq(schema.orders.id, order!.id) }))?.engagementStatus).toBe("BEENDET");
+    // umgekehrt: Auftrag beenden/stornieren beendet den Einsatz
+    const opp2 = await createOpportunity(david, { setupId: s.setupId, title: "Löschfall Auftrag", needDescription: "Bedarf für den Auftrags-Löschfall.", kind: "VERVE_EXPERTE", ownerUserId: david.userId });
+    const r2 = await quickFill(david, opp2.id, { title: "Löschfall 2", resourceKind: "INTERN", internalUserId: s.users.nina, desiredStart: "2026-09-01", plannedEnd: "2026-09-30" });
+    const [order2] = await db.insert(schema.orders).values({ workspaceId: s.workspaceId, opportunityId: opp2.id, status: "BEAUFTRAGUNG_BESTAETIGT", confirmedAt: new Date(), confirmedBy: david.userId, engagementStatus: "GESTARTET", startedAt: new Date(), createdBy: david.userId }).returning();
+    await db.update(schema.engagements).set({ orderId: order2!.id, status: "AKTIV", actualStart: "2026-09-01" }).where(eq(schema.engagements.id, r2.engagement.id));
+    const { cancelOrder } = await import("@/modules/opportunities/service");
+    await cancelOrder(david, order2!.id, { version: order2!.version, reason: "Projekt beendet" });
+    const e2 = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, r2.engagement.id) }))!;
+    expect(e2.status).toBe("ENDET");
+    expect(e2.actualEnd).toBe("2026-09-30");
     // Rechte und Pflichtangaben
     await expect(deleteEngagementPermanently(await actorFor("nina"), e.id, { reason: "Testfall Löschen", confirm: "on" })).rejects.toThrow();
     await expect(deleteEngagementPermanently(david, e.id, { reason: "kurz", confirm: "on" })).rejects.toBeInstanceOf(ValidationError);

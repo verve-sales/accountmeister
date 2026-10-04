@@ -580,6 +580,15 @@ export async function cancelOrder(actor: Actor, orderId: string, raw: { version:
     .returning();
   if (!u) throw new ConflictError();
   await recordAudit(db, actor, "order.cancelled", "ORDER", orderId);
+  // Einsatzakten zu diesem Auftrag enden mit (Etappe 29/31) – Routine-Check-ins entfallen
+  const today = new Date().toISOString().slice(0, 10);
+  const linked = await db.query.engagements.findMany({ where: and(eq(schema.engagements.orderId, orderId), inArray(schema.engagements.status, ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT"])) });
+  for (const e of linked) {
+    const to = ["AKTIV", "PAUSIERT"].includes(e.status) ? "ENDET" : "ABGEBROCHEN";
+    await db.update(schema.engagements).set({ status: to, actualEnd: to === "ENDET" ? (e.plannedEnd && e.plannedEnd <= today ? e.plannedEnd : today) : e.actualEnd, statusReason: `Auftrag beendet/storniert: ${reason}`, version: e.version + 1, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
+    await db.update(schema.checkins).set({ status: "ABGESAGT", updatedAt: new Date() }).where(and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.status, "FAELLIG")));
+    await recordAudit(db, actor, "engagement.status", "ENGAGEMENT", e.id, { von: e.status, nach: to, grund: "Auftrag beendet" });
+  }
   return u;
 }
 

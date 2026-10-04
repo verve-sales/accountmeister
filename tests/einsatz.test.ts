@@ -178,13 +178,15 @@ describe("Etappe 29 (E2): Betreuung, Check-ins, Verlängerung, Sales-Signal", ()
     let mine = await listMyCheckins(david);
     expect(mine.filter((c) => c.engagementId === e0.id).map((c) => c.side).sort()).toEqual(["FREELANCER", "KUNDE"]);
     const ci = mine.find((c) => c.engagementId === e0.id && c.side === "KUNDE")!;
-    expect(ci.dueDate).toBe(plusDaysIso(active.actualStart!, 42));
-    expect(ci.overdue).toBe(true);
+    // Start lag 50 Tage zurück → rechnerischer Termin wäre in der Vergangenheit; die Regel terminiert nie rückwirkend (heute + 7)
+    expect(ci.dueDate).toBe(plusDaysIso(todayIso(), 7));
+    expect(ci.overdue).toBe(false);
+    void active;
     // Hinweis einmal je Tag
-    const before = (await listNotifications(david)).filter((n) => n.kind === "UEBERFAELLIG" && n.link.includes(e0.id)).length;
+    const before = (await listNotifications(david)).filter((n) => (n.kind === "UEBERFAELLIG" || n.kind === "ZUGEWIESEN") && n.link.includes(e0.id)).length;
     await notifyDueCheckins(david.workspaceId);
     await notifyDueCheckins(david.workspaceId);
-    expect((await listNotifications(david)).filter((n) => n.kind === "UEBERFAELLIG" && n.link.includes(e0.id)).length).toBe(before + 2);
+    expect((await listNotifications(david)).filter((n) => (n.kind === "UEBERFAELLIG" || n.kind === "ZUGEWIESEN") && n.link.includes(e0.id)).length).toBe(before + 2);
     // Verschieben ändert nur die Fälligkeit
     const moved = await actOnCheckin(david, ci.id, { version: ci.version, action: "VERSCHIEBEN", newDueDate: plusDaysIso(todayIso(), 3), reason: "Kunde im Urlaub" });
     expect(moved.status).toBe("FAELLIG");

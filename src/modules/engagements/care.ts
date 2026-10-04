@@ -245,7 +245,9 @@ export async function ensureCatchups(workspaceId?: string): Promise<number> {
       if (open) continue;
       const last = await db.query.checkins.findFirst({ where: and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.side, side), eq(schema.checkins.status, "ERLEDIGT")), orderBy: desc(schema.checkins.heldAt) });
       const base = last?.heldAt ? last.heldAt.toISOString().slice(0, 10) : e.actualStart ?? e.plannedStart ?? todayIso();
-      const due = plusDaysIso(base, CATCHUP_DAYS);
+      // Nie rückwirkend terminieren: liegt der rechnerische Termin in der Vergangenheit, kommt der erste Check-in in einer Woche
+      const computed = plusDaysIso(base, CATCHUP_DAYS);
+      const due = computed < todayIso() ? plusDaysIso(todayIso(), 7) : computed;
       const owner = await careOwner(e.id, side, e.bdUserId);
       const ins = await db.insert(schema.checkins).values({ workspaceId: e.workspaceId, engagementId: e.id, side, ownerUserId: owner, dueDate: due, ruleKey: `catchup:${e.id}:${side === "KUNDE" ? "" : "FREELANCER:"}${due}`, createdBy: e.bdUserId }).onConflictDoNothing().returning({ id: schema.checkins.id });
       n += ins.length;

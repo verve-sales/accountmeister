@@ -9,7 +9,7 @@ import { applyImport, buildImportPreview, decisionsFromForm, findDuplicateEngage
 import { isFreelancerMocoUser } from "@/modules/moco/client";
 import { createOpportunity } from "@/modules/opportunities/service";
 import { quickFill } from "@/modules/staffing/service";
-import { handleMocoWebhook, listHints, resolveHint, runMocoSync, verifyMocoSignature } from "@/modules/moco/sync";
+import { handleMocoWebhook, listHints, resolveHint, resolveHintsBulk, runMocoSync, verifyMocoSignature } from "@/modules/moco/sync";
 import { ensureCatchups } from "@/modules/engagements/care";
 import { buildTeamActivity } from "@/modules/activity/service";
 import { loadActor } from "@/modules/identity/actor";
@@ -278,5 +278,36 @@ describe("Etappe 31: Moco-Anbindung", () => {
     expect(await db.query.staffingPositions.findFirst({ where: eq(schema.staffingPositions.id, dup.position.id) })).toBeUndefined();
     expect(await db.query.engagements.findFirst({ where: eq(schema.engagements.id, orig.id) })).toBeTruthy();
     expect((await findDuplicateEngagements(petra)).some((x) => x.mocoContractId === 9003)).toBe(false);
+  });
+
+  it("M07: Projekt mit zurückliegendem Ende wird als beendet übernommen; aktive Einsätze über dem Ende bekommen einen Hinweis mit Sammel-Beenden", async () => {
+    setMocoEnv();
+    const s = await ensureSeed();
+    const petra = await actorFor("petra");
+    const client = new MemoryMocoClient();
+    const base = await client.projects({ includeArchived: true });
+    const p1001 = base.find((p) => p.id === 1001)!;
+    client.projectsOverride = [...base, { ...p1001, id: 1005, name: "Altes Vorhaben (Ende zurück)", start_date: "2026-01-01", finish_date: "2026-06-30", project_group: null, contracts: [{ ...p1001.contracts[1]!, id: 9105, user_id: 503, firstname: "Ben", lastname: "Berater (fiktiv)" }] }];
+    const imp = await buildImportPreview(petra, client);
+    const item = (imp.items as ImportItem[]).find((i): i is Extract<ImportItem, { type: "EINSATZ" }> => i.type === "EINSATZ" && i.mocoContractId === 9105)!;
+    expect(item.note).toMatch(/beendet/);
+    const form: Record<string, string> = {};
+    for (const k of (imp.items as ImportItem[]).filter((i) => i.type === "SETUP").map((i) => i.key)) form[`d.${k}.bdUserId`] = s.users.david;
+    await applyImport(petra, imp.id, decisionsFromForm(form));
+    const e = (await db.query.engagements.findFirst({ where: eq(schema.engagements.mocoContractId, 9105) }))!;
+    expect(e.status).toBe("ENDET");
+    expect(e.actualEnd).toBe("2026-06-30");
+    expect((await db.query.orders.findFirst({ where: eq(schema.orders.id, e.orderId!) }))?.engagementStatus).toBe("BEENDET");
+    expect(await db.query.checkins.findMany({ where: eq(schema.checkins.engagementId, e.id) })).toHaveLength(0);
+    // Aktiver Einsatz mit zurückliegendem Ende (z. B. vor dieser Regel importiert) → Hinweis, Sammel-Beenden
+    await db.update(schema.engagements).set({ status: "AKTIV", actualEnd: null, plannedEnd: "2026-06-30" }).where(eq(schema.engagements.id, e.id));
+    await runMocoSync({ client, workspaceId: petra.workspaceId });
+    const hint = (await listHints(petra, { status: "OFFEN" })).find((h) => h.kind === "ENDE_UEBERSCHRITTEN" && h.subjectId === e.id);
+    expect(hint).toBeTruthy();
+    const n = await resolveHintsBulk(petra, "ENDE_UEBERSCHRITTEN", "UEBERNEHMEN");
+    expect(n).toBeGreaterThanOrEqual(1);
+    const after = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, e.id) }))!;
+    expect(after.status).toBe("ENDET");
+    expect(after.actualEnd).toBe("2026-06-30");
   });
 });

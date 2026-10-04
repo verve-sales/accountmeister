@@ -1708,3 +1708,12 @@ export async function deleteSetupAction(fd: FormData) {
     return setup ? `/kunden/${setup.accountId}?ok=${encodeURIComponent(`Setup „${r.name}“ mit allem Inhalt gelöscht.`)}` : "/kunden";
   }, "Setup gelöscht.");
 }
+
+export async function mocoHintsBulkAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/moco"), async (actor) => {
+    const { resolveHintsBulk } = await import("@/modules/moco/sync");
+    const n = await resolveHintsBulk(actor, (data.kind ?? "") as never, data.decision === "VERWERFEN" ? "VERWERFEN" : "UEBERNEHMEN");
+    throw new PendingInfo(`${n} Hinweis(e) bearbeitet.`);
+  }, "Hinweise bearbeitet.");
+}
