@@ -6,7 +6,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
-import { getMocoClient, mocoProjectUrl, type MocoClient, type MocoCompany, type MocoProject, type MocoProjectGroup, type MocoUser } from "./client";
+import { getMocoClient, isIgnoredMocoUser, mocoProjectUrl, type MocoClient, type MocoCompany, type MocoProject, type MocoProjectGroup, type MocoUser } from "./client";
 
 /**
  * Moco-Startimport mit Prüfliste (Etappe 31).
@@ -119,7 +119,7 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
 
   // Personen
   const personKind = new Map<number, "NUTZER" | "FREELANCER">();
-  for (const u of mUsers.filter((x) => x.active)) {
+  for (const u of mUsers.filter((x) => x.active && !isIgnoredMocoUser(x))) {
     const kind: "NUTZER" | "FREELANCER" = isFreelancerUnit(u) ? "FREELANCER" : "NUTZER";
     personKind.set(u.id, kind);
     const name = fullName(u);
@@ -141,7 +141,7 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
 
   // Teams (Moco-Units außer Freelancer-Team)
   const units = new Map<number, { name: string; members: number[]; leads: number[] }>();
-  for (const u of mUsers.filter((x) => x.active && x.unit && !isFreelancerUnit(x))) {
+  for (const u of mUsers.filter((x) => x.active && x.unit && !isFreelancerUnit(x) && !isIgnoredMocoUser(x))) {
     const e = units.get(u.unit!.id) ?? { name: u.unit!.name, members: [], leads: [] };
     e.members.push(u.id);
     if (isTeamlead(u)) e.leads.push(u.id);

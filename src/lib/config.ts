@@ -54,6 +54,8 @@ const envSchema = z.object({
   MOCO_FREELANCER_UNIT: z.string().default("Freelancer"),
   /** Name der Moco-Rolle, die Teamleiter kennzeichnet */
   MOCO_TEAMLEAD_ROLE: z.string().default("Teamleiter"),
+  /** Moco-Nutzer, die beim Personen-Import/Sync ignoriert werden (technische Konten), kommagetrennt */
+  MOCO_IGNORE_EMAILS: z.string().default("salesagent@verveconsulting.de"),
   /** Verzeichnis der Fixture-Dateien im Modus fixture */
   MOCO_FIXTURE_DIR: z.string().default("./tests/fixtures/moco"),
 });

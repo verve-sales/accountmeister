@@ -7,7 +7,7 @@ import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
 import { notify } from "@/modules/notifications/service";
 import { todayIso } from "@/modules/work/calendar";
-import { getMocoClient, mocoEnabled, type MocoClient, type MocoProject } from "./client";
+import { getMocoClient, isIgnoredMocoUser, mocoEnabled, type MocoClient, type MocoProject } from "./client";
 import { canRunMocoImport } from "./import";
 
 /**
@@ -62,6 +62,7 @@ export async function runMocoSync(opts: { since?: string; client?: MocoClient; w
   const isFreelancerUnit = (name: string | undefined) => (name ?? "").trim().toLowerCase() === cfg.MOCO_FREELANCER_UNIT.trim().toLowerCase();
   const systemActor = users.find((u) => u.status === "ACTIVE");
   for (const u of mUsers) {
+    if (isIgnoredMocoUser(u)) continue;
     const name = `${u.firstname} ${u.lastname}`.trim();
     if (isFreelancerUnit(u.unit?.name)) {
       if (!u.active) continue;

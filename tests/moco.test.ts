@@ -81,6 +81,8 @@ describe("Etappe 31: Moco-Anbindung", () => {
     expect(items.filter((i) => i.type === "EINSATZ")).toHaveLength(4); // 9005 inaktiv, 1004 archiviert
     expect(items.find((i) => i.type === "TEAM")!.name).toBe("Team Nord");
     expect(items.find((i) => i.type === "PERSON" && i.mocoId === 701)).toBeUndefined(); // inaktiv
+    expect(items.find((i) => i.type === "PERSON" && i.mocoId === 999)).toBeUndefined(); // technisches Konto (Key-Inhaber)
+    expect((items.find((i) => i.type === "TEAM") as Extract<ImportItem, { type: "TEAM" }>).memberMocoIds).not.toContain(999);
   });
 
   it("M02: Übernahme – Zugänge als Anker, Teamleitung, Freelancer-Pool, Setups mit BD, Einsätze aktiv mit Check-ins nur für Freelancer; idempotent", async () => {

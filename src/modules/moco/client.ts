@@ -158,6 +158,12 @@ export class HttpMocoClient implements MocoClient {
   readonly kind = "http" as const;
   constructor(private readonly subdomain: string, private readonly apiKey: string, private readonly fetchImpl: typeof fetch = fetch) {}
 
+  /** Einzige Stelle, an der Moco aufgerufen wird: ausschließlich GET. Schreibende Methoden gibt es in dieser Etappe nicht
+   *  (Lead-Push folgt in Etappe 32 mit eigener, ausdrücklicher Freigabe) – auch ein Vollzugriffs-Key ändert damit nichts in Moco. */
+  private async get(url: URL | string): Promise<Response> {
+    return this.fetchImpl(url, { method: "GET", headers: { Authorization: `Token token=${this.apiKey}`, Accept: "application/json" } });
+  }
+
   private async getAll(pathname: string, params: Record<string, string | undefined> = {}): Promise<Record<string, unknown>[]> {
     const out: Record<string, unknown>[] = [];
     for (let page = 1; page <= 50; page++) {
@@ -165,7 +171,7 @@ export class HttpMocoClient implements MocoClient {
       for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") url.searchParams.set(k, v);
       url.searchParams.set("page", String(page));
       url.searchParams.set("per_page", "100");
-      const res = await this.fetchImpl(url, { headers: { Authorization: `Token token=${this.apiKey}`, Accept: "application/json" } });
+      const res = await this.get(url);
       if (res.status === 429) {
         // Ratenbegrenzung: kurz warten und dieselbe Seite erneut holen
         await new Promise((r) => setTimeout(r, 5000));
@@ -196,7 +202,7 @@ export class HttpMocoClient implements MocoClient {
   }
   async project(id: number) {
     const url = `https://${this.subdomain}.mocoapp.com/api/v1/projects/${id}`;
-    const res = await this.fetchImpl(url, { headers: { Authorization: `Token token=${this.apiKey}`, Accept: "application/json" } });
+    const res = await this.get(url);
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Moco projects/${id}: HTTP ${res.status}`);
     return pickProject((await res.json()) as Record<string, unknown>);
@@ -239,6 +245,13 @@ export class FixtureMocoClient implements MocoClient {
   async project(id: number) {
     return (await this.load("projects")).map(pickProject).find((p) => p.id === id) ?? null;
   }
+}
+
+/** Technische Konten (z. B. der Key-Inhaber) werden nicht als Personen übernommen. */
+export function isIgnoredMocoUser(u: { email: string | null; firstname: string; lastname: string }): boolean {
+  const ignore = getConfig().MOCO_IGNORE_EMAILS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (u.email && ignore.includes(u.email.toLowerCase())) return true;
+  return /accountmeister|salesagent/i.test(`${u.firstname} ${u.lastname}`);
 }
 
 export function mocoEnabled(): boolean {

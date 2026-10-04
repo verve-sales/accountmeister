@@ -41,7 +41,7 @@ Stand: Oktober 2026. Entscheidungen aus dem Gespräch mit Ivo Seifert (Verve), R
 
 - Projekte in Moco immer einer Projektgruppe zuordnen (sonst „Ohne Bereich“) und – ab Etappe 32 – mit dem Deal verknüpfen.
 - Freelancer in Moco im Team „Freelancer“ führen; Teamleiter mit der Rolle „Teamleiter“.
-- Technischer Moco-Nutzer „Accountmeister“ mit Leserechten (plus Deals schreiben ab Etappe 32); kein persönlicher API-Key.
+- API-Key des technischen Moco-Nutzers `salesagent@verveconsulting.de` (Moco kennt keinen Lesezugriff, daher Vollzugriff; der Client ruft ausschließlich GET auf, Schreiben kommt erst mit Etappe 32). Dieses Konto wird nicht als Person übernommen (`MOCO_IGNORE_EMAILS`).
 - Dokumente liegen weder im AM noch in Moco, sondern in der Ablage; beide halten nur Links.
 
 ## 5. Betrieb
