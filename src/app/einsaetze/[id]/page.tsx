@@ -10,6 +10,7 @@ import { workTargets } from "@/modules/work/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Comments } from "@/components/Work";
 import { MocoHintList } from "@/components/MocoHints";
+import { DeleteBlock } from "@/components/DeleteBlock";
 import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { addContractDocumentAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction } from "../../actions";
@@ -373,6 +374,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
       </section>
 
       <Comments actor={actor} subjectType="CHANCE" subjectId={e.opportunityId} back={back} />
+      {a.manage && <DeleteBlock kind="EINSATZ" id={e.id} label={e.title} scope="samt Check-ins, Perioden, Betreuung, Unterlagen-Verknüpfungen, Kandidatur, Position (wenn leer) und Auftrag (wenn kein anderer Einsatz daran hängt); die Chance bleibt" back={back} />}
 
       <section className="card">
         <details>

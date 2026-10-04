@@ -213,6 +213,11 @@ export async function changeEngagementStatus(actor: Actor, id: string, raw: unkn
       .returning();
     if (!u) throw new ConflictError();
     await recordAudit(tx, actor, "engagement.status", "ENGAGEMENT", id, { von: e.status, nach: i.status, grund: i.reason || null, ausnahme: patch.procurementException ?? null });
+    // Auftrag (Chance → Auftrag) mitführen, damit Startseite/Verlängerungsregel denselben Stand zeigen
+    if (e.orderId) {
+      const orderStatus = ["ENDET", "ABGESCHLOSSEN", "ABGEBROCHEN"].includes(i.status) ? "BEENDET" : i.status === "AKTIV" || i.status === "PAUSIERT" ? "GESTARTET" : "GEPLANT";
+      await tx.update(schema.orders).set({ engagementStatus: orderStatus, startedAt: i.status === "AKTIV" && patch.actualStart ? new Date(patch.actualStart) : undefined, updatedAt: new Date() }).where(eq(schema.orders.id, e.orderId));
+    }
     if (["PAUSIERT", "ENDET", "ABGESCHLOSSEN", "ABGEBROCHEN"].includes(i.status)) {
       // Routine-Check-ins beenden; vertragliche Fristen und offene Zusagen bleiben
       const open = await tx.query.checkins.findMany({ where: and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.status, "FAELLIG"), isNull(schema.checkins.heldAt)) });

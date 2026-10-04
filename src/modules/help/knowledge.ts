@@ -323,8 +323,9 @@ Einrichtung (Betrieb): MOCO_MODE=http, MOCO_SUBDOMAIN, MOCO_API_KEY (technischer
     id: "regeln",
     title: "Regeln, die das Tool durchsetzt",
     where: "überall",
-    keywords: ["regel", "regeln", "warum", "geht nicht", "nicht moeglich", "fehler", "beleg", "nachweis", "version", "konflikt", "gleichzeitig"],
-    body: `Bestätigen, Vorstellen und Beauftragen sind eigene, bewusste Schritte; Belege und Nachweise sind optional (ohne Beleg steht „ohne Beleg“ dabei). KI-Ergebnisse sind immer Vorschläge; jede Karte braucht eine wörtliche Textstelle. Beendete Chancen werden nicht mehr geändert. Hat jemand anderes denselben Datensatz gerade gespeichert, meldet das Tool einen Konflikt – Seite neu laden und erneut speichern. Persönliche Notizen und vertrauliche Führungsnotizen bleiben privat.`,
+    keywords: ["loeschen", "entfernen", "setup loeschen", "chance loeschen", "einsatz loeschen", "regel", "regeln", "warum", "geht nicht", "nicht moeglich", "fehler", "beleg", "nachweis", "version", "konflikt", "gleichzeitig"],
+    body: `Löschen: Kunden werden archiviert und dann endgültig gelöscht (Kundenseite). Setups, Chancen und Einsätze löschst du am Seitenende des jeweiligen Objekts („… endgültig löschen“) mit Begründung und Bestätigung – rekursiv mit allem, was daran hängt (Setup: Chancen, Positionen, Einsätze, Beobachtungen, Aktionen, Weeklys, Quellen; Chance: Positionen, Kandidaturen, Einsätze, Angebote, Aufträge; Einsatz: Check-ins, Perioden, Betreuung, Kandidatur, leere Position, Auftrag). Beobachtungen, die nur auf eine gelöschte Chance verweisen, bleiben erhalten. Dürfen: zuständiger BD, Principal, CEO, Betriebsverwaltung (bei Chancen auch die verantwortliche Person).
+Bestätigen, Vorstellen und Beauftragen sind eigene, bewusste Schritte; Belege und Nachweise sind optional (ohne Beleg steht „ohne Beleg“ dabei). KI-Ergebnisse sind immer Vorschläge; jede Karte braucht eine wörtliche Textstelle. Beendete Chancen werden nicht mehr geändert. Hat jemand anderes denselben Datensatz gerade gespeichert, meldet das Tool einen Konflikt – Seite neu laden und erneut speichern. Persönliche Notizen und vertrauliche Führungsnotizen bleiben privat.`,
   },
 ];
 

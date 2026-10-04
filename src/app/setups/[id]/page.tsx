@@ -13,6 +13,7 @@ import { analyzeSetup } from "@/modules/strategy/analysis";
 import { ChancenUebersicht } from "@/components/ChancenUebersicht";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
 import { Comments, WorkBlock } from "@/components/Work";
+import { DeleteBlock } from "@/components/DeleteBlock";
 import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { ALTKUNDEN_CODE } from "@/modules/playbooks/defaults";
 import { groupByFamily, listRoles } from "@/modules/roles/catalog";
@@ -661,6 +662,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
       </section>
       <Comments actor={actor} subjectType="SETUP" subjectId={d.setup.id} back={back} />
+      {(mayReassign || actor.roles.has("ADMIN")) && <DeleteBlock kind="SETUP" id={d.setup.id} label={`${d.account.name} · ${d.setup.name}`} scope="rekursiv mit allen Chancen, Positionen, Einsätzen, Beobachtungen, Aktionen, Weeklys, Quellen, Vorgängen und Beteiligungen" back={back} />}
     </div>
   );
 }

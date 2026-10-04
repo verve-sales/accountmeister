@@ -50,7 +50,7 @@ const PROTECTED: ReadonlySet<string> = new Set(["users", "workspaces", "audit_ev
 
 type Fk = { table: string; column: string; refTable: string };
 
-async function loadForeignKeys(tx: Tx): Promise<Fk[]> {
+export async function loadForeignKeys(tx: Tx): Promise<Fk[]> {
   const rows = await tx.execute(sql`
     select tc.table_name as "table", kcu.column_name as "column", ccu.table_name as "refTable"
     from information_schema.table_constraints tc
@@ -68,14 +68,18 @@ async function hasIdColumn(tx: Tx, table: string): Promise<boolean> {
 
 export type DeletionReport = { deleted: Record<string, number>; detached: Record<string, number>; files: number };
 
-class Cascade {
+export class Cascade {
   private readonly visited = new Set<string>();
   readonly report: DeletionReport = { deleted: {}, detached: {}, files: 0 };
   private readonly idCache = new Map<string, boolean>();
+  private readonly detach: ReadonlySet<string>;
   constructor(
     private readonly tx: Tx,
     private readonly fks: Fk[],
-  ) {}
+    extraDetach: Iterable<string> = [],
+  ) {
+    this.detach = new Set([...DETACH, ...extraDetach]);
+  }
 
   private async tableHasId(table: string): Promise<boolean> {
     if (!this.idCache.has(table)) this.idCache.set(table, await hasIdColumn(this.tx, table));
@@ -90,7 +94,7 @@ class Cascade {
     for (const id of fresh) this.visited.add(`${table}:${id}`);
     for (const fk of this.fks.filter((f) => f.refTable === table)) {
       const key = `${fk.table}.${fk.column}`;
-      if (DETACH.has(key)) {
+      if (this.detach.has(key)) {
         const r = await this.tx.execute(sql`update ${sql.identifier(fk.table)} set ${sql.identifier(fk.column)} = null where ${sql.identifier(fk.column)} in ${sqlList(fresh)}`);
         const n = rowCount(r);
         if (n > 0) this.report.detached[key] = (this.report.detached[key] ?? 0) + n;
@@ -128,7 +132,7 @@ class Cascade {
   }
 }
 
-function sqlList(ids: string[]) {
+export function sqlList(ids: string[]) {
   return sql`(${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`;
 }
 
@@ -137,7 +141,7 @@ function rowsOf<T = Record<string, unknown>>(r: unknown): T[] {
   return Array.isArray(x.rows) ? x.rows : Array.isArray(r) ? (r as T[]) : [];
 }
 
-function rowCount(r: unknown): number {
+export function rowCount(r: unknown): number {
   const x = r as { rowCount?: number | null; count?: number };
   return Number(x.rowCount ?? x.count ?? 0);
 }

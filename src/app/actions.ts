@@ -1673,3 +1673,38 @@ export async function mocoRemoveDuplicatesAction(fd: FormData) {
     throw new PendingInfo(`${r.removed} Dublette(n) entfernt.`);
   }, "Dubletten entfernt.");
 }
+
+// --- Endgültiges Löschen unterhalb des Kunden (Setup, Chance, Einsatz) ----------
+
+export async function deleteEngagementAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}`), async (actor) => {
+    const { deleteEngagementPermanently } = await import("@/modules/deletion/objects");
+    const r = await deleteEngagementPermanently(actor, data.engagementId ?? "", data);
+    return `/einsaetze?ok=${encodeURIComponent(`Einsatz „${r.title}“ gelöscht.`)}`;
+  }, "Einsatz gelöscht.");
+}
+
+export async function deleteOpportunityAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/bedarfe/${data.opportunityId ?? ""}`), async (actor) => {
+    const { deleteOpportunityPermanently } = await import("@/modules/deletion/objects");
+    const { db, schema } = await import("@/db/client");
+    const { eq } = await import("drizzle-orm");
+    const opp = await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, data.opportunityId ?? ""), columns: { setupId: true } });
+    const r = await deleteOpportunityPermanently(actor, data.opportunityId ?? "", data);
+    return opp ? `/setups/${opp.setupId}?ok=${encodeURIComponent(`Chance „${r.title}“ gelöscht.`)}` : "/kunden";
+  }, "Chance gelöscht.");
+}
+
+export async function deleteSetupAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/setups/${data.setupId ?? ""}`), async (actor) => {
+    const { deleteSetupPermanently } = await import("@/modules/deletion/objects");
+    const { db, schema } = await import("@/db/client");
+    const { eq } = await import("drizzle-orm");
+    const setup = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, data.setupId ?? ""), columns: { accountId: true } });
+    const r = await deleteSetupPermanently(actor, data.setupId ?? "", data);
+    return setup ? `/kunden/${setup.accountId}?ok=${encodeURIComponent(`Setup „${r.name}“ mit allem Inhalt gelöscht.`)}` : "/kunden";
+  }, "Setup gelöscht.");
+}

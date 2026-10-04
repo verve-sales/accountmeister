@@ -187,6 +187,7 @@ export async function resolveHint(actor: Actor, hintId: string, decision: "UEBER
         await db.update(schema.engagements).set({ status: to, actualEnd: to === "ENDET" ? end : e.actualEnd, statusReason: `Laut Moco ${h.kind === "PROJEKT_BEENDET" ? "Projekt beendet" : "Zuweisung inaktiv"}.`, version: e.version + 1, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
         const open = await db.query.checkins.findMany({ where: and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.status, "FAELLIG")) });
         for (const c of open) await db.update(schema.checkins).set({ status: "ABGESAGT", note: `${c.note ?? ""}\nEntfallen: Einsatz laut Moco beendet.`.trim(), version: c.version + 1, updatedAt: new Date() }).where(eq(schema.checkins.id, c.id));
+        if (e.orderId) await db.update(schema.orders).set({ engagementStatus: "BEENDET", updatedAt: new Date() }).where(eq(schema.orders.id, e.orderId));
         await recordAudit(db, actor, "engagement.status", "ENGAGEMENT", e.id, { von: e.status, nach: to, quelle: "Moco" });
       } else if (h.kind === "GRUPPE_GEWECHSELT") {
         const target = await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.accountId, e.accountId), eq(schema.projectSetups.mocoProjectGroupId, Number(payload.groupId))) });

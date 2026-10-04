@@ -24,6 +24,7 @@ import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { groupByFamily } from "@/modules/roles/catalog";
 import { decisionRoleLabel, engagementStatusLabel, epistemicLabel, fmtDate, fmtDateTime, offerStatusLabel, opportunityStatusLabel, orderStatusLabel, requirementStatusLabel, sourceTypeLabel } from "@/lib/labels";
 import { linkedinSearchUrl } from "@/lib/linkedin";
+import { DeleteBlock } from "@/components/DeleteBlock";
 import {
   addParticipationAction, addStartRequirementAction, cancelOrderAction, changeOfferStatusAction, changeOpportunityStatusAction, confirmOpportunityAction, confirmOrderAction, createOfferAction,
   createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, reassignOpportunityOwnerAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction, linkChanceInitiativeAction,
@@ -60,6 +61,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
     throw e;
   }
   const { opp, ctx, canEdit } = d;
+  const canDeleteHere = canEdit || opp.ownerUserId === actor.userId || ctx.setup.bdUserId === actor.userId || actor.roles.has("CEO") || actor.roles.has("ADMIN");
   const initiatives = (await listInitiatives(actor, opp.accountId)).filter((x) => x.status === "OFFEN" || x.id === opp.initiativeId);
   const linkedInitiative = initiatives.find((x) => x.id === opp.initiativeId) ?? null;
   const name = (uid: string | null | undefined) => (uid ? d.userNames.get(uid) ?? "?" : "–");
@@ -795,6 +797,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         )}
       </section>
       <Comments actor={actor} subjectType="CHANCE" subjectId={opp.id} back={`/bedarfe/${opp.id}`} />
+      {canDeleteHere && <DeleteBlock kind="CHANCE" id={opp.id} label={opp.title} scope="samt Positionen, Kandidaturen, Einsätzen, Angeboten, Aufträgen und Vorgängen" back={`/bedarfe/${opp.id}`} />}
     </div>
   );
 }
