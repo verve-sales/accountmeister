@@ -8,7 +8,7 @@ Stand: Oktober 2026. Entscheidungen aus dem Gespräch mit Ivo Seifert (Verve), R
 |---|---|---|
 | Kunde (Stammdaten) | Moco (Company) | AM spiegelt Name + `moco_company_id`; neue Kunden entstehen im AM in der Lead-Phase, Moco-Company folgt beim ersten Lead-Push (Etappe 32) |
 | Bereich / Setup | Moco-Projektgruppe (eine Company, mehrere Projekte) | AM-Setup mit `moco_project_group_id`; Setups ohne Gruppe bleiben AM-eigene (Lead-Phase) |
-| Chance / Lead | **AM** | Moco-Deal automatisch aus dem AM (Etappe 32), in Moco nur lesen |
+| Chance / Lead | **AM** | Moco-Deal per Lead-Push aus dem AM (Mehr → Moco → Leads, seit Etappe 32a), in Moco nur lesen |
 | Angebot, Auftrag, Beschaffungsweg, Vertragslage, EK | AM | – |
 | Projekt, Zuweisung (Contract), Stundensatz (VK), Zeiten, Rechnung | **Moco** | AM-Einsatz mit `moco_project_id`/`moco_contract_id`; Laufzeit/Person im AM schreibgeschützt gedacht, Änderungen kommen als Hinweis |
 | Betreuung, Check-ins, Verlängerungsentscheidung, Sales-Signale | AM | Projektende nach Verlängerung → Moco (Etappe 32, einzige Schreibrichtung) |
@@ -29,9 +29,16 @@ Stand: Oktober 2026. Entscheidungen aus dem Gespräch mit Ivo Seifert (Verve), R
 - **Teamleiter-Kachel** „Mein Team“ auf der Startseite: Aktivitätsindex je Mitglied (28 Tage, Vorperiode, zuletzt aktiv) – nur Zahlen.
 - Konfiguration: `MOCO_MODE`, `MOCO_SUBDOMAIN`, `MOCO_API_KEY`, `MOCO_WEBHOOK_SECRET`, `MOCO_FREELANCER_UNIT` (Standard „Freelancer“), `MOCO_TEAMLEAD_ROLE` (Standard „Teamleiter“). Migration 0031.
 
+## 2a. Lead-Push AM → Moco (Etappe 32a, umgesetzt)
+
+- `src/modules/moco/leads.ts`: `listLeadCandidates` (offene Chancen ohne `moco_deal_id`, Status antizipiert … Auswahl/Bestellung, zurückgestellt) und `pushLeads`. Nur CEO/Principal, ausgelöst von Hand unter Mehr → Moco → „Chancen als Leads nach Moco übertragen“ (Tabelle mit Auswahl, Phase je Chance).
+- Abbildung: `name` = Titel der Chance, `company_id` = `accounts.moco_company_id` (fehlt die Verknüpfung, wird eine Moco-Firma gleichen Namens vorgeschlagen und beim Push am Kunden gespeichert), `user_id` = Moco-Nutzer der/des Verantwortlichen, sonst der übertragenden Person, `deal_category_id` = Phase mit der zum AM-Status passendsten Wahrscheinlichkeit (5/15/40/65/90 %, änderbar), `money` = 0 (keine erfundenen Beträge), `currency` EUR, `reminder_date` = heute + 14, `status` potential (zurückgestellt: pending), `info` mit Rückverweis `/bedarfe/<id>`, Setup, Status, Verantwortliche/r, Anzahl, Zeithorizont, Bedarfsbeschreibung; Tag „Accountmeister“.
+- Dubletten: existiert bei der Firma ein Lead gleichen (normalisierten) Namens, der weder lost noch dropped ist, wird nur verknüpft. Jede Chance wird höchstens einmal übertragen (`moco_deal_id`), Audit `opportunity.moco_lead_created|linked`.
+- `POST /deals` ist der einzige schreibende Aufruf des Clients (`HttpMocoClient.createDeal`); der Fixture-Client hält angelegte Leads im Prozess.
+
 ## 3. Noch offen (Etappe 32)
 
-1. **Lead-Push AM → Moco**: Deal anlegen, wenn eine Chance „in Klärung“ wird (Pflichtfelder in Moco: `money`, `reminder_date`, `user_id`, `deal_category_id` → Volumenabfrage im AM, Kategorie je Chancenart, Verantwortlicher per E-Mail). Statusspiegel potential/pending/won/lost. Antizipierte Chancen bleiben im AM. Einmaliger Erstimport bestehender Moco-Leads.
+1. **Lead-Statusspiegel**: potential/pending/won/lost nach Moco, wenn sich der AM-Status ändert; automatischer Push beim Übergang „in Klärung“; einmaliger Erstimport bestehender Moco-Leads nach AM.
 2. **Vorgang „Projekt in Moco anlegen“** bei „Auftrag bestätigt“ an Sales Operations/Backoffice mit allen Daten; Sync verknüpft das neue Projekt über `deal_id` mit dem bestehenden Einsatz statt zu duplizieren.
 3. **Projektende nach bestätigter Verlängerung nach Moco schreiben** (einzige Schreib-Ausnahme, protokolliert).
 4. Lieferanten-Verweise: `moco_supplier_id` am Freelancer (Rechnungsstelle) und am Vermittler des Kunden.
@@ -41,7 +48,7 @@ Stand: Oktober 2026. Entscheidungen aus dem Gespräch mit Ivo Seifert (Verve), R
 
 - Projekte in Moco immer einer Projektgruppe zuordnen (sonst „Ohne Bereich“) und – ab Etappe 32 – mit dem Deal verknüpfen.
 - Freelancer in Moco im Team „Freelancer“ führen; Teamleiter mit der Rolle „Teamleiter“.
-- API-Key des technischen Moco-Nutzers `salesagent@verveconsulting.de` (Moco kennt keinen Lesezugriff, daher Vollzugriff; der Client ruft ausschließlich GET auf, Schreiben kommt erst mit Etappe 32). Dieses Konto wird nicht als Person übernommen (`MOCO_IGNORE_EMAILS`).
+- API-Key des technischen Moco-Nutzers `salesagent@verveconsulting.de` (Moco kennt keinen Lesezugriff, daher Vollzugriff; der Client schreibt ausschließlich Leads (`POST /deals`), alles andere nur GET). Dieses Konto wird nicht als Person übernommen (`MOCO_IGNORE_EMAILS`).
 - Dokumente liegen weder im AM noch in Moco, sondern in der Ablage; beide halten nur Links.
 
 ## 5. Betrieb

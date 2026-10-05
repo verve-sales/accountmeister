@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { mocoDealUrl } from "@/modules/moco/client";
 import { initiativeKindLabel, listInitiatives, type InitiativeKind } from "@/modules/agenda/service";
 import { notFound, redirect } from "next/navigation";
 import { DomainError } from "@/lib/errors";
@@ -148,6 +149,8 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         {opp.fastTrack && <Status label="Direkte Anfrage (Fast-Track)" />}
         <span className="muted text-sm">Verantwortlich: {name(opp.ownerUserId)} · angelegt {fmtDateTime(opp.createdAt)}{opp.requestedAt && <> · Anfrage eingegangen {fmtDateTime(opp.requestedAt)}</>}</span>
         {!canEdit && <span className="muted text-sm">(nur lesend)</span>}
+        {opp.mocoDealId && <span className="muted text-xs">Lead in Moco (#{opp.mocoDealId}){mocoDealUrl(opp.mocoDealId) ? <> · <a href={mocoDealUrl(opp.mocoDealId)!} target="_blank" rel="noreferrer">in Moco öffnen</a></> : null}</span>}
+        {!opp.mocoDealId && opp.mocoProjectId && <span className="muted text-xs">Projekt in Moco (#{opp.mocoProjectId})</span>}
       </div>
       {mayReassign && !closed && (
         <form action={reassignOpportunityOwnerAction} className="flex flex-wrap items-end gap-2 text-sm">

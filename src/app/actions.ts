@@ -1674,6 +1674,24 @@ export async function mocoRemoveDuplicatesAction(fd: FormData) {
   }, "Dubletten entfernt.");
 }
 
+export async function mocoPushLeadsAction(fd: FormData) {
+  const data = formToObject(fd);
+  const ids = fd.getAll("opportunityId").map(String).filter(Boolean);
+  return run(backOf(data, "/moco#leads"), async (actor) => {
+    const { pushLeads } = await import("@/modules/moco/leads");
+    if (!ids.length) throw new DomainError("VALIDATION", "Keine Chance ausgewählt.", 400);
+    const items = ids.map((id) => {
+      const cat = String(fd.get(`cat.${id}`) ?? "").trim();
+      return { opportunityId: id, dealCategoryId: cat ? Number(cat) : null };
+    });
+    const r = await pushLeads(actor, items);
+    const parts = [`${r.created.length} Lead(s) in Moco angelegt`];
+    if (r.linked.length) parts.push(`${r.linked.length} mit vorhandenem Lead verknüpft`);
+    if (r.skipped.length) parts.push(`${r.skipped.length} übersprungen: ${r.skipped.map((x) => `${x.title} (${x.reason})`).join("; ")}`);
+    throw new PendingInfo(parts.join(" · "));
+  }, "Leads übertragen.");
+}
+
 // --- Endgültiges Löschen unterhalb des Kunden (Setup, Chance, Einsatz) ----------
 
 export async function deleteEngagementAction(fd: FormData) {

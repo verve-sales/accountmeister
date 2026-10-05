@@ -70,6 +70,37 @@ export type MocoProject = {
   updated_at?: string;
 };
 
+/** Lead-Phase in Moco (Akquise → Phasen), mit Wahrscheinlichkeit in Prozent. */
+export type MocoDealCategory = { id: number; name: string; probability: number };
+
+export type MocoDeal = {
+  id: number;
+  name: string;
+  status: "potential" | "pending" | "won" | "lost" | "dropped";
+  money: number;
+  currency: string;
+  reminder_date: string | null;
+  company: { id: number; name: string } | null;
+  user: { id: number; firstname: string; lastname: string } | null;
+  category: { id: number; name: string } | null;
+  info: string | null;
+  tags: string[];
+};
+
+/** Felder, die der Accountmeister beim Anlegen eines Leads an Moco schickt (POST /deals). */
+export type MocoDealCreate = {
+  name: string;
+  currency: string;
+  money: number;
+  reminder_date: string;
+  user_id: number;
+  deal_category_id: number;
+  company_id?: number;
+  info?: string;
+  status?: MocoDeal["status"];
+  tags?: string[];
+};
+
 export interface MocoClient {
   readonly kind: "http" | "fixture";
   users(opts?: { includeArchived?: boolean }): Promise<MocoUser[]>;
@@ -77,6 +108,12 @@ export interface MocoClient {
   projectGroups(): Promise<MocoProjectGroup[]>;
   projects(opts?: { includeArchived?: boolean; updatedFrom?: string }): Promise<MocoProject[]>;
   project(id: number): Promise<MocoProject | null>;
+  /** Lead-Phasen (Akquise-Pipeline) */
+  dealCategories(): Promise<MocoDealCategory[]>;
+  /** Alle Leads (zur Dublettenprüfung vor dem Push) */
+  deals(): Promise<MocoDeal[]>;
+  /** Einziger schreibender Aufruf: Lead anlegen (Etappe 32, Lead-Push AM → Moco). */
+  createDeal(payload: MocoDealCreate): Promise<MocoDeal>;
 }
 
 export class MocoConfigError extends Error {}
@@ -138,6 +175,30 @@ function pickCompany(raw: Record<string, unknown>): MocoCompany {
   return { id: Number(raw.id), type: (raw.type as MocoCompany["type"]) ?? "customer", name: String(raw.name ?? ""), identifier: raw.identifier ? String(raw.identifier) : null, active: raw.active !== false, updated_at: raw.updated_at ? String(raw.updated_at) : undefined };
 }
 
+export function pickDeal(raw: Record<string, unknown>): MocoDeal {
+  const rel = (k: string) => (raw[k] && typeof raw[k] === "object" ? (raw[k] as Record<string, unknown>) : null);
+  const company = rel("company");
+  const user = rel("user");
+  const cat = rel("category") ?? rel("deal_category");
+  return {
+    id: Number(raw.id),
+    name: String(raw.name ?? ""),
+    status: (String(raw.status ?? "potential") as MocoDeal["status"]),
+    money: raw.money == null ? 0 : Number(raw.money),
+    currency: String(raw.currency ?? "EUR"),
+    reminder_date: raw.reminder_date ? String(raw.reminder_date) : null,
+    company: company ? { id: Number(company.id), name: String(company.name ?? "") } : null,
+    user: user ? { id: Number(user.id), firstname: String(user.firstname ?? ""), lastname: String(user.lastname ?? "") } : null,
+    category: cat ? { id: Number(cat.id), name: String(cat.name ?? "") } : null,
+    info: raw.info ? String(raw.info) : null,
+    tags: Array.isArray(raw.tags) ? (raw.tags as unknown[]).map(String) : [],
+  };
+}
+
+function pickDealCategory(raw: Record<string, unknown>): MocoDealCategory {
+  return { id: Number(raw.id), name: String(raw.name ?? ""), probability: raw.probability == null ? 0 : Number(raw.probability) };
+}
+
 function pickGroup(raw: Record<string, unknown>): MocoProjectGroup {
   const company = raw.company && typeof raw.company === "object" ? (raw.company as Record<string, unknown>) : null;
   const user = raw.user && typeof raw.user === "object" ? (raw.user as Record<string, unknown>) : null;
@@ -158,10 +219,19 @@ export class HttpMocoClient implements MocoClient {
   readonly kind = "http" as const;
   constructor(private readonly subdomain: string, private readonly apiKey: string, private readonly fetchImpl: typeof fetch = fetch) {}
 
-  /** Einzige Stelle, an der Moco aufgerufen wird: ausschließlich GET. Schreibende Methoden gibt es in dieser Etappe nicht
-   *  (Lead-Push folgt in Etappe 32 mit eigener, ausdrücklicher Freigabe) – auch ein Vollzugriffs-Key ändert damit nichts in Moco. */
+  /** Lesende Aufrufe: ausschließlich GET. */
   private async get(url: URL | string): Promise<Response> {
     return this.fetchImpl(url, { method: "GET", headers: { Authorization: `Token token=${this.apiKey}`, Accept: "application/json" } });
+  }
+
+  /** Der einzige schreibende Aufruf nach Moco: Leads anlegen (`createDeal`). Alles andere – Projekte, Firmen, Personen,
+   *  Zuweisungen – bleibt in Moco führend und wird vom Accountmeister nie verändert. */
+  private async post(pathname: string, body: unknown): Promise<Response> {
+    return this.fetchImpl(`https://${this.subdomain}.mocoapp.com/api/v1/${pathname}`, {
+      method: "POST",
+      headers: { Authorization: `Token token=${this.apiKey}`, Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
   }
 
   private async getAll(pathname: string, params: Record<string, string | undefined> = {}): Promise<Record<string, unknown>[]> {
@@ -207,6 +277,25 @@ export class HttpMocoClient implements MocoClient {
     if (!res.ok) throw new Error(`Moco projects/${id}: HTTP ${res.status}`);
     return pickProject((await res.json()) as Record<string, unknown>);
   }
+  async dealCategories() {
+    return (await this.getAll("deal_categories")).map(pickDealCategory);
+  }
+  async deals() {
+    return (await this.getAll("deals")).map(pickDeal);
+  }
+  async createDeal(payload: MocoDealCreate) {
+    const res = await this.post("deals", payload);
+    if (!res.ok) {
+      let detail = "";
+      try {
+        detail = JSON.stringify(await res.json()).slice(0, 300);
+      } catch {
+        /* keine Details */
+      }
+      throw new Error(`Moco deals (anlegen): HTTP ${res.status}${detail ? ` – ${detail}` : ""}`);
+    }
+    return pickDeal((await res.json()) as Record<string, unknown>);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -245,6 +334,37 @@ export class FixtureMocoClient implements MocoClient {
   async project(id: number) {
     return (await this.load("projects")).map(pickProject).find((p) => p.id === id) ?? null;
   }
+  /** Angelegte Leads bleiben nur im Prozess (Tests, Entwicklung); neue IDs ab 90001. */
+  private static createdDeals: MocoDeal[] = [];
+  async dealCategories() {
+    const rows = (await this.load("deal_categories")).map(pickDealCategory);
+    return rows.length ? rows : [{ id: 1, name: "Kontakt", probability: 10 }, { id: 2, name: "Qualifiziert", probability: 40 }, { id: 3, name: "Angebot", probability: 70 }];
+  }
+  async deals() {
+    return [...(await this.load("deals")).map(pickDeal), ...FixtureMocoClient.createdDeals];
+  }
+  async createDeal(payload: MocoDealCreate) {
+    const cats = await this.dealCategories();
+    const cat = cats.find((c) => c.id === payload.deal_category_id) ?? null;
+    const companies = await this.companies();
+    const company = companies.find((c) => c.id === payload.company_id) ?? null;
+    const user = (await this.users({ includeArchived: true })).find((u) => u.id === payload.user_id) ?? null;
+    const deal: MocoDeal = {
+      id: 90001 + FixtureMocoClient.createdDeals.length,
+      name: payload.name,
+      status: payload.status ?? "potential",
+      money: payload.money,
+      currency: payload.currency,
+      reminder_date: payload.reminder_date,
+      company: company ? { id: company.id, name: company.name } : null,
+      user: user ? { id: user.id, firstname: user.firstname, lastname: user.lastname } : null,
+      category: cat ? { id: cat.id, name: cat.name } : null,
+      info: payload.info ?? null,
+      tags: payload.tags ?? [],
+    };
+    FixtureMocoClient.createdDeals.push(deal);
+    return deal;
+  }
 }
 
 /** Freelancer in Moco: Mitglied des Freelancer-Teams (Name konfigurierbar; zusätzlich alles, was nach „Freelancer/Extern/Freiberufler“
@@ -277,6 +397,11 @@ export function getMocoClient(): MocoClient {
     return new HttpMocoClient(c.MOCO_SUBDOMAIN, c.MOCO_API_KEY);
   }
   throw new MocoConfigError("Die Moco-Anbindung ist nicht eingeschaltet (MOCO_MODE=off).");
+}
+
+export function mocoDealUrl(dealId: number): string | null {
+  const c = getConfig();
+  return c.MOCO_SUBDOMAIN ? `https://${c.MOCO_SUBDOMAIN}.mocoapp.com/deals/${dealId}` : null;
 }
 
 export function mocoProjectUrl(projectId: number): string | null {

@@ -6,7 +6,10 @@ import { hintKindLabel, listHints, mocoStatus, type HintKind } from "@/modules/m
 import { findDuplicateEngagements, findMisclassifiedFreelancers, listImports } from "@/modules/moco/import";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDateTime } from "@/lib/labels";
-import { mocoDiscardImportAction, mocoHintsBulkAction, mocoPreviewAction, mocoRemoveDuplicatesAction, mocoRepairFreelancersAction, mocoSyncNowAction } from "../actions";
+import { mocoDiscardImportAction, mocoHintsBulkAction, mocoPreviewAction, mocoPushLeadsAction, mocoRemoveDuplicatesAction, mocoRepairFreelancersAction, mocoSyncNowAction } from "../actions";
+import { listLeadCandidates, type LeadOverview } from "@/modules/moco/leads";
+import { opportunityStatusLabel } from "@/lib/labels";
+import { Status } from "@/components/Status";
 import { HintButtons } from "@/components/MocoHints";
 
 const STATUS_LABEL: Record<string, string> = { ENTWURF: "Vorschau (offen)", UEBERNOMMEN: "übernommen", VERWORFEN: "verworfen" };
@@ -20,6 +23,15 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
   if (!importer && hints.length === 0) notFound();
   const repair = importer && status.enabled ? await findMisclassifiedFreelancers(actor).catch(() => []) : [];
   const dupes = importer ? await findDuplicateEngagements(actor).catch(() => []) : [];
+  let leads: LeadOverview | null = null;
+  let leadsError: string | null = null;
+  if (importer && status.enabled) {
+    try {
+      leads = await listLeadCandidates(actor);
+    } catch (e) {
+      leadsError = e instanceof Error ? e.message : String(e);
+    }
+  }
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
@@ -35,7 +47,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
             Modus: <strong>{status.mode}</strong>
             {status.subdomain ? ` · ${status.subdomain}.mocoapp.com` : ""} · Webhook-Signatur {status.webhookConfigured ? "hinterlegt" : "fehlt (MOCO_WEBHOOK_SECRET)"} · letzter Abgleich: {status.lastRun ? `${fmtDateTime(status.lastRun.startedAt)} (${status.lastRun.ok ? "ok" : `Fehler: ${status.lastRun.error}`})` : "noch keiner"}
           </p>
-          {!status.enabled && <p className="muted">Die Anbindung ist aus. In <code>.env.production</code> setzen: <code>MOCO_MODE=http</code>, <code>MOCO_SUBDOMAIN</code>, <code>MOCO_API_KEY</code> (technischer Nutzer, nur lesen), optional <code>MOCO_WEBHOOK_SECRET</code>. Webhook-Ziel: <code>/api/moco/webhook</code> (Targets Project, Company, User; Events create/update/delete).</p>}
+          {!status.enabled && <p className="muted">Die Anbindung ist aus. In <code>.env.production</code> setzen: <code>MOCO_MODE=http</code>, <code>MOCO_SUBDOMAIN</code>, <code>MOCO_API_KEY</code> (technischer Nutzer; schreibt nur Leads), optional <code>MOCO_WEBHOOK_SECRET</code>. Webhook-Ziel: <code>/api/moco/webhook</code> (Targets Project, Company, User; Events create/update/delete).</p>}
           {status.enabled && (
             <div className="flex flex-wrap gap-3 items-end">
               <form action={mocoPreviewAction}>
@@ -87,6 +99,44 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
             </ul>
             <button className="btn btn-small" type="submit">Ausgewählte in den Freelancer-Pool überführen</button>
           </form>
+        </section>
+      )}
+
+      {importer && status.enabled && (
+        <section className="card" id="leads">
+          <details>
+            <summary className="font-semibold">Chancen als Leads nach Moco übertragen ({leads ? leads.candidates.filter((c) => c.ready).length : "–"} bereit{leads && leads.candidates.some((c) => !c.ready) ? `, ${leads.candidates.filter((c) => !c.ready).length} blockiert` : ""})</summary>
+            <p className="text-sm muted mt-1 mb-2">Offene Chancen (antizipiert bis Auswahl/Bestellung, zurückgestellt) werden einmalig als Lead in der Moco-Akquise angelegt – mit Firma, Verantwortlicher/m als Lead-Inhaber, der vorgeschlagenen Phase und einem Verweis zurück auf die Chance. Beträge werden nicht erfunden (0 €, in Moco nachtragen). Gibt es bei der Firma schon einen Lead gleichen Namens, wird nur verknüpft. Die Chance bleibt im Accountmeister führend.</p>
+            {leadsError && <p className="text-sm" style={{ color: "#c0392b" }}>Moco nicht erreichbar: {leadsError}</p>}
+            {leads && leads.candidates.length === 0 && <p className="muted text-sm">Keine offene Chance ohne Moco-Lead.</p>}
+            {leads && leads.candidates.length > 0 && (
+              <form action={mocoPushLeadsAction} className="space-y-2 text-sm">
+                <input type="hidden" name="back" value="/moco#leads" />
+                <table className="list text-sm">
+                  <thead><tr><th></th><th>Chance</th><th>Kunde → Moco-Firma</th><th>Status</th><th>Lead-Phase in Moco</th><th>Hinweis</th></tr></thead>
+                  <tbody>
+                    {leads.candidates.map((c) => (
+                      <tr key={c.opportunityId}>
+                        <td><input type="checkbox" name="opportunityId" value={c.opportunityId} defaultChecked={c.ready && c.status !== "ZURUECKGESTELLT"} disabled={!c.ready} aria-label={`${c.title} übertragen`} /></td>
+                        <td><Link href={`/bedarfe/${c.opportunityId}`}>{c.title}</Link><div className="muted text-xs">{c.setupTitle} · {c.ownerName}</div></td>
+                        <td>{c.accountName}{c.company ? <div className="muted text-xs">→ {c.company.name}{c.company.source === "VORSCHLAG" ? " (Namensgleichheit, wird verknüpft)" : ""}</div> : <div className="text-xs" style={{ color: "#c0392b" }}>keine Moco-Firma</div>}</td>
+                        <td><Status label={opportunityStatusLabel[c.status] ?? c.status} /></td>
+                        <td>
+                          {c.existingDeal ? <span className="muted text-xs">vorhanden: {c.existingDeal.name} (#{c.existingDeal.id}) – nur verknüpfen</span> : (
+                            <select name={`cat.${c.opportunityId}`} className="input" defaultValue={c.suggestedCategoryId ?? ""} aria-label="Lead-Phase" disabled={!c.ready}>
+                              {leads!.categories.map((k) => <option key={k.id} value={k.id}>{k.name} ({k.probability} %)</option>)}
+                            </select>
+                          )}
+                        </td>
+                        <td className="text-xs">{c.blocker ? <span style={{ color: "#c0392b" }}>{c.blocker}</span> : c.mocoUserId && leads!.actorMocoUserId === c.mocoUserId && c.ownerName !== actor.displayName ? <span className="muted">Inhaber in Moco: Sie (Verantwortliche/r ohne Moco-Nutzer)</span> : null}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <button className="btn btn-small" type="submit">Ausgewählte Chancen nach Moco übertragen</button>
+              </form>
+            )}
+          </details>
         </section>
       )}
 

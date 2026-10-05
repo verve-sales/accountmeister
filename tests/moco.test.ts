@@ -11,6 +11,7 @@ import { createOpportunity } from "@/modules/opportunities/service";
 import { quickFill } from "@/modules/staffing/service";
 import { handleMocoWebhook, listHints, resolveHint, resolveHintsBulk, runMocoSync, verifyMocoSignature } from "@/modules/moco/sync";
 import { ensureCatchups } from "@/modules/engagements/care";
+import { listLeadCandidates, pushLeads, suggestCategory } from "@/modules/moco/leads";
 import { buildTeamActivity } from "@/modules/activity/service";
 import { loadActor } from "@/modules/identity/actor";
 import { actorFor, ensureSeed } from "./helpers";
@@ -31,6 +32,9 @@ class MemoryMocoClient implements MocoClient {
     return rows.filter((p) => o.includeArchived || p.active);
   };
   project = async (id: number) => (await this.projects({ includeArchived: true })).find((p) => p.id === id) ?? null;
+  dealCategories = () => this.base.dealCategories();
+  deals = () => this.base.deals();
+  createDeal = (payload: Parameters<MocoClient["createDeal"]>[0]) => this.base.createDeal(payload);
 }
 
 function setMocoEnv() {
@@ -309,5 +313,45 @@ describe("Etappe 31: Moco-Anbindung", () => {
     const after = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, e.id) }))!;
     expect(after.status).toBe("ENDET");
     expect(after.actualEnd).toBe("2026-06-30");
+  });
+
+  it("M08: Lead-Push – offene Chance wird als Lead in Moco angelegt (Firma, Inhaber, Phase, Rückverweis), einmalig; Namensgleicher Lead wird nur verknüpft; nur CEO/Principal", async () => {
+    setMocoEnv();
+    const s = await ensureSeed();
+    const petra = await actorFor("petra");
+    const david = await actorFor("david");
+    const client = new MemoryMocoClient();
+    await db.update(schema.accounts).set({ mocoCompanyId: 101 }).where(eq(schema.accounts.id, s.accountId));
+    await db.update(schema.users).set({ mocoUserId: 502 }).where(eq(schema.users.id, david.userId));
+    const cats = await client.dealCategories();
+    expect(suggestCategory("IN_KLAERUNG", cats)!.probability).toBeLessThan(suggestCategory("AUSWAHL_BESTELLUNG", cats)!.probability);
+    const opp = await createOpportunity(david, { setupId: s.setupId, title: `Lead-Push Testchance ${Date.now()}`, needDescription: "Zwei Testautomatisierer ab Q1.", kind: "FREELANCER_EXPERTE", ownerUserId: david.userId, headcount: 2, horizon: "Q1 2027" });
+    await expect(listLeadCandidates(await actorFor("nina"), client)).rejects.toBeInstanceOf(ForbiddenError);
+    const before = await listLeadCandidates(petra, client, [opp.id]);
+    const cand = before.candidates.find((c) => c.opportunityId === opp.id)!;
+    expect(cand.ready).toBe(true);
+    expect(cand.company).toEqual({ id: 101, name: expect.any(String), source: "VERKNUEPFT" });
+    expect(cand.mocoUserId).toBe(502);
+    const r = await pushLeads(petra, [{ opportunityId: opp.id, dealCategoryId: cand.suggestedCategoryId }], client);
+    expect(r.created).toHaveLength(1);
+    const deal = (await client.deals()).find((d) => d.id === r.created[0]!.dealId)!;
+    expect(deal.company?.id).toBe(101);
+    expect(deal.user?.id).toBe(502);
+    expect(deal.category?.id).toBe(cand.suggestedCategoryId);
+    expect(deal.info).toMatch(new RegExp(`/bedarfe/${opp.id}`));
+    expect(deal.info).toMatch(/Testautomatisierer/);
+    expect(deal.tags).toContain("Accountmeister");
+    expect((await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, opp.id) }))?.mocoDealId).toBe(deal.id);
+    // Einmalig: nicht mehr in der Kandidatenliste; erneuter Push wird übersprungen
+    expect((await listLeadCandidates(petra, client, [opp.id])).candidates).toHaveLength(0);
+    const again = await pushLeads(petra, [{ opportunityId: opp.id }], client);
+    expect(again.created).toHaveLength(0);
+    expect(again.skipped).toHaveLength(1);
+    // Namensgleiche Chance bei derselben Firma → nur verknüpfen, kein zweiter Lead
+    const twin = await createOpportunity(david, { setupId: s.setupId, title: opp.title, needDescription: "Dieselbe Chance, anders erfasst.", kind: "FREELANCER_EXPERTE", ownerUserId: david.userId });
+    const dealsBefore = (await client.deals()).length;
+    const r2 = await pushLeads(petra, [{ opportunityId: twin.id }], client);
+    expect(r2.linked).toEqual([{ opportunityId: twin.id, title: opp.title, dealId: deal.id }]);
+    expect((await client.deals()).length).toBe(dealsBefore);
   });
 });
