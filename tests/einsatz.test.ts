@@ -205,6 +205,13 @@ describe("Etappe 29 (E2): Betreuung, Check-ins, Verlängerung, Sales-Signal", ()
     // Freelancer-Check-in zusätzlich manuell möglich
     const fcl = await createCheckin(david, e0.id, { side: "FREELANCER", dueDate: plusDaysIso(todayIso(), 7) });
     expect(fcl.side).toBe("FREELANCER");
+    // Schnellerfassung: nur Stimmung → heute geführt, Notiz "Stimmung: …", Folge-Check-in gleicher Seite
+    const quick = await actOnCheckin(david, fcl.id, { version: fcl.version, action: "ERLEDIGEN", mood: "POSITIV" });
+    expect(quick.status).toBe("ERLEDIGT");
+    expect(quick.heldAt).toBeTruthy();
+    expect(quick.note).toMatch(/Stimmung: positiv/i);
+    mine = await listMyCheckins(david);
+    expect(mine.some((c) => c.engagementId === e0.id && c.status === "FAELLIG" && c.side === "FREELANCER" && c.dueDate === plusDaysIso(todayIso(), 42))).toBe(true);
     // Pause: fällige Routine-Check-ins entfallen, Fristen bleiben
     const cur = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, e0.id) }))!;
     await changeEngagementStatus(david, e0.id, { version: cur.version, status: "PAUSIERT", reason: "Projektstopp", reviewDate: plusDaysIso(todayIso(), 30) });

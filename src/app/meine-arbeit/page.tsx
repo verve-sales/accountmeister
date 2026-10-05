@@ -20,6 +20,7 @@ import { actionStatusLabel, fmtDate, handoverStatusLabel, reviewStatusLabel, set
 import { listMyWork, workFilterValues, workTargets, ensureOverdueNotificationsSafe, type WorkFilter } from "@/modules/work/service";
 import { WorkList } from "@/components/Work";
 import { listMyCheckins } from "@/modules/engagements/care";
+import { plusDaysIso } from "@/modules/work/calendar";
 import { getConfig } from "@/lib/config";
 import { checkinAction } from "../actions";
 import { WorkCreateForm } from "@/components/WorkCreateForm";
@@ -37,6 +38,35 @@ const FILTERS = [
   { key: "ueberfaellig", label: "überfällig" },
   { key: "woche", label: "diese Woche" },
 ] as const;
+
+type CheckinItem = Awaited<ReturnType<typeof listMyCheckins>>[number];
+
+function CheckinRow({ c, soon }: { c: CheckinItem; soon: boolean }) {
+  return (
+    <li className="flex flex-wrap items-center gap-2" style={{ borderLeft: `3px solid ${c.overdue ? "#c0392b" : soon ? "#b7791f" : "var(--border)"}`, paddingLeft: ".6rem" }}>
+      <div style={{ minWidth: "16rem", flex: "1 1 16rem" }}>
+        <Link href={`/einsaetze/${c.engagementId}#checkins`}><strong>{c.engagementTitle}</strong></Link>
+        <div className="muted text-xs">{c.accountName} · {c.side === "KUNDE" ? "Kunde" : "Freelancer"} · fällig {fmtDate(c.dueDate)}{c.overdue ? " (überfällig)" : ""}</div>
+      </div>
+      <form action={checkinAction} className="flex flex-wrap gap-1 items-center">
+        <input type="hidden" name="checkinId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="back" value="/meine-arbeit#checkins" /><input type="hidden" name="action" value="ERLEDIGEN" />
+        <span className="muted text-xs">heute geführt, Stimmung:</span>
+        <button className="btn btn-small" type="submit" name="mood" value="POSITIV" style={{ background: "#2f7d32" }}>positiv</button>
+        <button className="btn btn-small" type="submit" name="mood" value="MITTEL" style={{ background: "#b7791f" }}>mittel</button>
+        <button className="btn btn-small" type="submit" name="mood" value="NEGATIV" style={{ background: "#c0392b" }}>negativ</button>
+        <details className="inline">
+          <summary className="text-xs muted" style={{ cursor: "pointer" }}>mehr</summary>
+          <div className="flex flex-wrap gap-1 items-center mt-1">
+            <input type="datetime-local" name="heldAt" className="input" aria-label="Gesprächstermin" />
+            <input name="note" className="input" placeholder="Ergebnis" aria-label="Ergebnis" style={{ minWidth: 200 }} />
+            <input name="salesHint" className="input" placeholder="Sales-Hinweis (optional)" aria-label="Sales-Hinweis" />
+            <button className="btn btn-secondary btn-small" type="submit">Mit Details erledigen</button>
+          </div>
+        </details>
+      </form>
+    </li>
+  );
+}
 
 export default async function MeineArbeitPage({ searchParams }: { searchParams: Promise<{ fehler?: string; ok?: string; v?: string; f?: string }> }) {
   const params = await searchParams;
@@ -101,26 +131,26 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         </details>
       </section>
 
-      {checkins.length > 0 && (
-        <section className="card" id="checkins">
-          <h2 className="font-semibold mb-2">Meine Check-ins ({checkins.length})</h2>
-          <ul className="space-y-2 text-sm">
-            {checkins.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-baseline gap-2" style={{ borderLeft: `3px solid ${c.overdue ? "#c0392b" : "var(--border)"}`, paddingLeft: ".6rem" }}>
-                <Link href={`/einsaetze/${c.engagementId}#checkins`}><strong>{c.engagementTitle}</strong></Link>
-                <span className="muted text-xs">{c.accountName} · {c.side === "KUNDE" ? "Kunde" : "Freelancer"} · fällig {fmtDate(c.dueDate)}{c.overdue ? " (überfällig)" : ""} · {c.status.toLowerCase()}</span>
-                <form action={checkinAction} className="flex flex-wrap gap-1 items-center ml-auto">
-                  <input type="hidden" name="checkinId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="back" value="/meine-arbeit#checkins" /><input type="hidden" name="action" value="ERLEDIGEN" />
-                  <input type="datetime-local" name="heldAt" className="input" aria-label="Gesprächstermin" required />
-                  <input name="note" className="input" placeholder="Ergebnis" aria-label="Ergebnis" required style={{ minWidth: 200 }} />
-                  <input name="salesHint" className="input" placeholder="Sales-Hinweis (optional)" aria-label="Sales-Hinweis" />
-                  <button className="btn btn-small" type="submit">Geführt</button>
-                </form>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {checkins.length > 0 && (() => {
+        const today = new Date().toISOString().slice(0, 10);
+        const soon = checkins.filter((c) => c.overdue || c.dueDate <= plusDaysIso(today, 7));
+        const later = checkins.filter((c) => !soon.includes(c));
+        return (
+          <section className="card" id="checkins">
+            <details open={soon.length > 0}>
+              <summary className="font-semibold">Meine Check-ins ({checkins.length}){soon.length ? ` – ${soon.length} fällig bis ${fmtDate(plusDaysIso(today, 7))}` : " – nichts in den nächsten 7 Tagen"}</summary>
+              <p className="muted text-xs mt-1 mb-2">Ein Klick auf die Stimmung erledigt den Check-in mit heutigem Datum; der nächste wird automatisch in 6 Wochen fällig. Details (Termin, Ergebnis, Sales-Hinweis) über „mehr“.</p>
+              <ul className="space-y-2 text-sm">{soon.map((c) => <CheckinRow key={c.id} c={c} soon />)}</ul>
+              {later.length > 0 && (
+                <details className="mt-2">
+                  <summary className="text-sm muted">Später fällig ({later.length})</summary>
+                  <ul className="space-y-2 text-sm mt-2">{later.map((c) => <CheckinRow key={c.id} c={c} soon={false} />)}</ul>
+                </details>
+              )}
+            </details>
+          </section>
+        );
+      })()}
 
       <section className="card">
         <h2 className="font-semibold mb-2">Offene Übernahmen an mich ({openIncoming.length})</h2>
@@ -218,12 +248,12 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         )}
       </section>
 
-      {myOpportunities.length > 0 && (
+      {myOpportunities.filter((o) => o.status !== "BEAUFTRAGT").length > 0 && (
         <section className="card">
-          <h2 className="font-semibold mb-2">Meine offenen Chancen ({myOpportunities.length})</h2>
+          <h2 className="font-semibold mb-2">Meine Chancen in Arbeit ({myOpportunities.filter((o) => o.status !== "BEAUFTRAGT").length}){myOpportunities.some((o) => o.status === "BEAUFTRAGT") ? <span className="muted text-sm font-normal"> · {myOpportunities.filter((o) => o.status === "BEAUFTRAGT").length} beauftragt – siehe <Link href="/einsaetze">Einsätze</Link></span> : null}</h2>
           <table className="list">
             <thead><tr><th>Chance</th><th>Kunde</th><th>Status</th><th>Geändert</th></tr></thead>
-            <tbody>{myOpportunities.map((o) => <tr key={o.id}><td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link>{o.fastTrack && <span className="muted text-sm"> · direkte Anfrage</span>}</td><td>{o.accountName}</td><td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td><td>{fmtDate(o.updatedAt)}</td></tr>)}</tbody>
+            <tbody>{myOpportunities.filter((o) => o.status !== "BEAUFTRAGT").map((o) => <tr key={o.id}><td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link>{o.fastTrack && <span className="muted text-sm"> · direkte Anfrage</span>}</td><td>{o.accountName}</td><td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td><td>{fmtDate(o.updatedAt)}</td></tr>)}</tbody>
           </table>
         </section>
       )}
@@ -238,7 +268,8 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
       </section>
 
       <section className="card">
-        <h2 className="font-semibold mb-2">Meine Setups ({setups.length})</h2>
+        <details>
+        <summary className="font-semibold mb-2">Meine Setups ({setups.length})</summary>
         {setups.length === 0 ? (
           <p className="muted text-sm">
             Noch keine Setups. <Link href="/kunden">Zu den Kunden</Link>, um ein Setup anzulegen.
@@ -259,6 +290,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
             </tbody>
           </table>
         )}
+        </details>
       </section>
 
       {outgoing.length > 0 && (
@@ -276,7 +308,8 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
       )}
 
       <section className="card">
-        <h2 className="font-semibold mb-1">Vorschläge ({mySuggestions.length})</h2>
+        <details open={mySuggestions.length > 0 && mySuggestions.length <= 3}>
+        <summary className="font-semibold mb-1">Vorschläge ({mySuggestions.length})</summary>
         {!ai.enabled ? (
           <p className="muted text-sm">KI-Anbieter ist deaktiviert. Es werden keine automatischen Vorschläge erzeugt; manuelle Dokumentation funktioniert vollständig (Briefing 17.5).</p>
         ) : mySuggestions.length === 0 ? (
@@ -284,6 +317,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         ) : (
           <ul className="space-y-3">{mySuggestions.map((x) => <SuggestionCard key={x.id} s={x} ownerName={x.proposedOwnerUserId ? userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide back={back} users={allUsers} />)}</ul>
         )}
+        </details>
       </section>
     </div>
   );

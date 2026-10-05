@@ -149,7 +149,10 @@ export const checkinUpdateInput = z.object({
   nextStep: opt(500),
   salesHint: opt(2000),
   reason: opt(500),
+  /** Schnellerfassung: Stimmung statt ausformuliertem Ergebnis; Termin = jetzt, wenn keiner angegeben */
+  mood: z.enum(["POSITIV", "MITTEL", "NEGATIV", ""]).optional(),
 });
+export const moodLabel: Record<string, string> = { POSITIV: "positiv", MITTEL: "mittel", NEGATIV: "negativ" };
 
 /**
  * Check-in führen. ERLEDIGEN verlangt tatsächlichen Termin und Ergebnis, aktualisiert den letzten Kontakt und erzeugt den
@@ -178,19 +181,23 @@ export async function actOnCheckin(actor: Actor, checkinId: string, raw: unknown
       patch.scheduledAt = new Date(`${i.scheduledAt}:00+02:00`);
       patch.participants = i.participants || c.participants;
       break;
-    case "ERLEDIGEN":
+    case "ERLEDIGEN": {
+      // Schnellerfassung (Meine Arbeit): Stimmung genügt, Termin ist dann „jetzt“
+      if (i.mood && !i.heldAt) i.heldAt = new Date(Date.now() + 2 * 3600000).toISOString().slice(0, 16);
+      if (i.mood && (!i.note || i.note.length < 5)) i.note = `Stimmung: ${moodLabel[i.mood]}${i.note ? ` – ${i.note}` : ""}`;
       if (!i.heldAt) throw new ValidationError("Bitte den tatsächlichen Gesprächstermin angeben.");
-      if (!i.note || i.note.length < 5) throw new ValidationError("Bitte ein kurzes Ergebnis festhalten.");
+      if (!i.note || i.note.length < 5) throw new ValidationError("Bitte ein kurzes Ergebnis festhalten oder die Stimmung wählen.");
       patch.status = "ERLEDIGT";
       patch.heldAt = new Date(`${i.heldAt}:00+02:00`);
       patch.participants = i.participants || c.participants;
-      patch.note = i.note;
+      patch.note = i.mood && !i.note.startsWith("Stimmung:") ? `Stimmung: ${moodLabel[i.mood]} – ${i.note}` : i.note;
       patch.risks = i.risks || null;
       patch.openPoints = i.openPoints || null;
       patch.nextStep = i.nextStep || null;
       patch.salesHint = i.salesHint || null;
       next = plusDaysIso(i.heldAt.slice(0, 10), CATCHUP_DAYS);
       break;
+    }
     case "VERSCHIEBEN":
       if (!i.newDueDate) throw new ValidationError("Bitte das neue Datum angeben.");
       if (!i.reason) throw new ValidationError("Bitte den Grund der Verschiebung festhalten.");
