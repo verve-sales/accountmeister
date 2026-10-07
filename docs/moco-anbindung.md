@@ -34,13 +34,13 @@ Stand: Oktober 2026. Entscheidungen aus dem Gespräch mit Ivo Seifert (Verve), R
 - `src/modules/moco/leads.ts`: `listLeadCandidates` (offene Chancen ohne `moco_deal_id`, Status antizipiert … Auswahl/Bestellung, zurückgestellt) und `pushLeads`. Nur CEO/Principal, ausgelöst von Hand unter Mehr → Moco → „Chancen als Leads nach Moco übertragen“ (Tabelle mit Auswahl, Phase je Chance).
 - Abbildung: `name` = Titel der Chance, `company_id` = `accounts.moco_company_id` (fehlt die Verknüpfung, wird eine Moco-Firma gleichen Namens vorgeschlagen und beim Push am Kunden gespeichert), `user_id` = Moco-Nutzer der/des Verantwortlichen, sonst der übertragenden Person, `deal_category_id` = Phase mit der zum AM-Status passendsten Wahrscheinlichkeit (5/15/40/65/90 %, änderbar), `money` = 0 (keine erfundenen Beträge), `currency` EUR, `reminder_date` = heute + 14, `status` potential (zurückgestellt: pending), `info` mit Rückverweis `/bedarfe/<id>`, Setup, Status, Verantwortliche/r, Anzahl, Zeithorizont, Bedarfsbeschreibung; Tag „Accountmeister“.
 - Dubletten: existiert bei der Firma ein Lead gleichen (normalisierten) Namens, der weder lost noch dropped ist, wird nur verknüpft. Jede Chance wird höchstens einmal übertragen (`moco_deal_id`), Audit `opportunity.moco_lead_created|linked`.
-- `POST /deals` ist der einzige schreibende Aufruf des Clients (`HttpMocoClient.createDeal`); der Fixture-Client hält angelegte Leads im Prozess.
+- `POST /deals` (`createDeal`) und – seit Etappe 33a – `PUT /projects/:id` mit `finish_date` (`updateProjectFinishDate`, nach bestätigter Verlängerung, Audit `engagement.moco_finish_date`) sind die einzigen schreibenden Aufrufe des Clients; der Fixture-Client hält beides im Prozess.
 
 ## 3. Noch offen (Etappe 32)
 
 1. **Lead-Statusspiegel**: potential/pending/won/lost nach Moco, wenn sich der AM-Status ändert; automatischer Push beim Übergang „in Klärung“; einmaliger Erstimport bestehender Moco-Leads nach AM.
 2. **Vorgang „Projekt in Moco anlegen“** bei „Auftrag bestätigt“ an Sales Operations/Backoffice mit allen Daten; Sync verknüpft das neue Projekt über `deal_id` mit dem bestehenden Einsatz statt zu duplizieren.
-3. **Projektende nach bestätigter Verlängerung nach Moco schreiben** (einzige Schreib-Ausnahme, protokolliert).
+3. ~~Projektende nach bestätigter Verlängerung nach Moco schreiben~~ – umgesetzt in Etappe 33a (`decideRenewal`).
 4. Lieferanten-Verweise: `moco_supplier_id` am Freelancer (Rechnungsstelle) und am Vermittler des Kunden.
 5. Aus Moco stammende Felder im AM als „aus Moco“ schreibgeschützt kennzeichnen (Laufzeit, Person, VK) – heute nur Hinweis im Kopf des Einsatzes.
 

@@ -35,6 +35,7 @@ class MemoryMocoClient implements MocoClient {
   dealCategories = () => this.base.dealCategories();
   deals = () => this.base.deals();
   createDeal = (payload: Parameters<MocoClient["createDeal"]>[0]) => this.base.createDeal(payload);
+  updateProjectFinishDate = (id: number, finishDate: string) => this.base.updateProjectFinishDate(id, finishDate);
 }
 
 function setMocoEnv() {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { resetConfigCacheForTests } from "@/lib/config";
-import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
+import { ConflictError, ForbiddenError, TransitionError, ValidationError } from "@/lib/errors";
 import { loadActor, type Actor } from "@/modules/identity/actor";
 import { assignRole } from "@/modules/governance/service";
 import { createOpportunity } from "@/modules/opportunities/service";
@@ -138,7 +138,8 @@ describe("Etappe 29 (E2): Betreuung, Check-ins, Verlängerung, Sales-Signal", ()
     const ops2 = await makeSalesOps("Otto Ops (Sales Operations)");
     const { engagement: e } = await selectedEngagement(david, "Einsatz Betreuung");
     // Sales Ops ohne Zuordnung sieht nichts
-    await expect(getEngagementDetail(ops, e.id)).rejects.toBeInstanceOf(NotFoundError);
+    // Etappe 33: Sales Operations sieht alle Einsätze (ops), ohne Zuordnung aber nicht als Betreuung
+    expect((await getEngagementDetail(ops, e.id)).access).toMatchObject({ ops: true, care: false, commercial: false });
     const w = await requestCareHandover(david, e.id, { target: ops.userId, reason: "Account wächst, Betreuung an Sales Ops", contacts: "Frau Keller", commitments: "Verlängerung bis März klären" });
     expect(w.kind).toBe("BETREUUNG");
     await expect(requestCareHandover(david, e.id, { target: ops2.userId, reason: "noch eine" })).rejects.toBeInstanceOf(ConflictError);
@@ -146,18 +147,19 @@ describe("Etappe 29 (E2): Betreuung, Check-ins, Verlängerung, Sales-Signal", ()
     expect(acc.status).toBe("OFFEN");
     const d = await getEngagementDetail(ops, e.id);
     expect(d.access.care).toBe(true);
-    expect(d.access.manage).toBe(false);
+    expect(d.access.commercial).toBe(false);
     expect(d.cares.filter((c) => !c.toDate).map((c) => c.userId)).toEqual([ops.userId]);
     expect(d.cares.find((c) => c.userId === david.userId)!.toDate).toBeTruthy();
     // Sales Ops hat keine Account-/Statusrechte
-    await expect(changeEngagementStatus(ops, e.id, { version: d.view.version, status: "GEPLANT", exception: "x" })).rejects.toBeInstanceOf(ForbiddenError);
+    // Statuswechsel darf Sales Operations (Prozessinhaberin); kommerziell entscheiden nicht
+    await expect(upsertRenewalDecision(ops, e.id, { status: "ABGELEHNT" })).rejects.toBeInstanceOf(ForbiddenError);
     // Vorgang abschließen → Betreuung bleibt
     const done = await actOnWorkItem(ops, w.id, { version: acc.version, action: "ABSCHLIESSEN", result: "Übernommen." });
     expect(done.status).toBe("ERLEDIGT");
     expect((await getEngagementDetail(ops, e.id)).access.care).toBe(true);
     // Wechsel: direkte Umstellung auf Otto entzieht Olga, Davids BD-Rechte bleiben
     await setCareDirect(david, e.id, { role: "CUSTOMER_CARE", userId: ops2.userId, reason: "Urlaubsvertretung dauerhaft" });
-    await expect(getEngagementDetail(ops, e.id)).rejects.toBeInstanceOf(NotFoundError);
+    expect((await getEngagementDetail(ops, e.id)).access.care).toBe(false);
     expect((await getEngagementDetail(ops2, e.id)).access.care).toBe(true);
     expect((await getEngagementDetail(david, e.id)).access.manage).toBe(true);
     // Liste: Betreuungsfilter

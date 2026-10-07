@@ -416,7 +416,19 @@ export async function linkContractDocument(actor: Actor, engagementId: string, d
 // Listen und Detail
 // ---------------------------------------------------------------------------
 
-export type EngagementView = EngagementRow & { accountName: string; freelancerName: string; bdName: string; careNames: string[]; daysToEnd: number | null; nextCheckin: string | null; checkinOverdue: boolean; procurement: ProcurementCheck; renewalStatus: string | null; pingDate: string | null; triggerDate: string | null };
+export type MoodMark = { mood: "POSITIV" | "MITTEL" | "NEGATIV"; at: string; note: string | null };
+export type EngagementView = EngagementRow & { accountName: string; freelancerName: string; personName: string; bdName: string; careNames: string[]; daysToEnd: number | null; nextCheckin: string | null; checkinOverdue: boolean; procurement: ProcurementCheck; renewalStatus: string | null; renewalTo: string | null; pingDate: string | null; triggerDate: string | null; moodKunde: MoodMark | null; moodFreelancer: MoodMark | null };
+
+/** Letzte Stimmung je Seite aus erledigten Check-ins (Schnellerfassung „Stimmung: …“ oder Notiz). */
+function moodOf(rows: { side: string; status: string; heldAt: Date | null; note: string | null; dueDate: string }[], side: "KUNDE" | "FREELANCER"): MoodMark | null {
+  const done = rows.filter((c) => c.side === side && c.status === "ERLEDIGT").sort((a, b) => (b.heldAt?.getTime() ?? 0) - (a.heldAt?.getTime() ?? 0));
+  const last = done[0];
+  if (!last) return null;
+  const m = /Stimmung:\s*(positiv|mittel|negativ)/i.exec(last.note ?? "");
+  const mood = m ? (m[1]!.toUpperCase() as MoodMark["mood"]) : null;
+  if (!mood) return null;
+  return { mood, at: (last.heldAt ?? new Date(last.dueDate)).toISOString().slice(0, 10), note: last.note };
+}
 
 async function decorate(actor: Actor, rows: EngagementRow[]): Promise<EngagementView[]> {
   if (!rows.length) return [];
@@ -426,7 +438,7 @@ async function decorate(actor: Actor, rows: EngagementRow[]): Promise<Engagement
     db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(rows.map((r) => r.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
     db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { id: true, displayName: true } }),
     db.query.careAssignments.findMany({ where: and(inArray(schema.careAssignments.engagementId, ids), isNull(schema.careAssignments.toDate)) }),
-    db.query.checkins.findMany({ where: and(inArray(schema.checkins.engagementId, ids), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])) }),
+    db.query.checkins.findMany({ where: and(inArray(schema.checkins.engagementId, ids), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT", "ERLEDIGT"])) }),
     db.query.renewalDecisions.findMany({ where: inArray(schema.renewalDecisions.engagementId, ids), orderBy: desc(schema.renewalDecisions.createdAt) }),
   ]);
   const an = new Map(accounts.map((a) => [a.id, a.name]));
@@ -435,18 +447,24 @@ async function decorate(actor: Actor, rows: EngagementRow[]): Promise<Engagement
   const t = todayIso();
   const out: EngagementView[] = [];
   for (const r of rows) {
-    const next = cis.filter((c) => c.engagementId === r.id).map((c) => c.dueDate).sort()[0] ?? null;
+    const mine = cis.filter((c) => c.engagementId === r.id);
+    const next = mine.filter((c) => c.status !== "ERLEDIGT").map((c) => c.dueDate).sort()[0] ?? null;
+    const ren = rens.find((x) => x.engagementId === r.id);
     out.push({
       ...r,
       accountName: an.get(r.accountId) ?? "?",
       freelancerName: r.freelancerId ? fn.get(r.freelancerId) ?? "?" : r.internalUserId ? `${un.get(r.internalUserId) ?? "?"} (intern)` : "?",
+      personName: r.freelancerId ? fn.get(r.freelancerId) ?? "?" : r.internalUserId ? un.get(r.internalUserId) ?? "?" : "?",
+      moodKunde: moodOf(mine, "KUNDE"),
+      moodFreelancer: moodOf(mine, "FREELANCER"),
+      renewalTo: ren?.proposedTo ?? null,
       bdName: un.get(r.bdUserId) ?? "?",
       careNames: cares.filter((c) => c.engagementId === r.id).map((c) => `${un.get(c.userId) ?? "?"} (${careRoleLabel[c.role] ?? c.role})`),
       daysToEnd: r.plannedEnd ? Math.round((new Date(r.plannedEnd).getTime() - new Date(t).getTime()) / 86400000) : null,
       nextCheckin: next,
       checkinOverdue: !!next && next < t,
       procurement: await procurementCheck(r),
-      renewalStatus: rens.find((x) => x.engagementId === r.id)?.status ?? null,
+      renewalStatus: ren?.status ?? null,
       pingDate: renewalPingDate(r),
       triggerDate: renewalTriggerDate(r),
     });
@@ -457,7 +475,7 @@ async function decorate(actor: Actor, rows: EngagementRow[]): Promise<Engagement
 export const engagementFilterValues = ["alle", "aktiv", "vertrag_offen", "enden_30", "enden_60", "enden_90", "checkin_ueberfaellig", "betreuung", "abgeschlossen"] as const;
 export type EngagementFilter = (typeof engagementFilterValues)[number];
 
-export async function listEngagements(actor: Actor, filter: EngagementFilter = "alle") {
+export async function listEngagements(actor: Actor, filter: EngagementFilter = "alle", q = "") {
   const rows = await db.query.engagements.findMany({ where: eq(schema.engagements.workspaceId, actor.workspaceId), orderBy: [asc(schema.engagements.plannedEnd), desc(schema.engagements.createdAt)] });
   const visible: EngagementRow[] = [];
   const mine = new Set<string>();
@@ -467,7 +485,9 @@ export async function listEngagements(actor: Actor, filter: EngagementFilter = "
     visible.push(r);
     if (a.care) mine.add(r.id);
   }
-  const v = await decorate(actor, visible);
+  let v = await decorate(actor, visible);
+  const needle = q.trim().toLowerCase();
+  if (needle) v = v.filter((x) => [x.personName, x.accountName, x.title, x.bdName, String(x.mocoProjectId ?? "")].some((f) => f.toLowerCase().includes(needle)));
   const active = (x: EngagementView) => ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET", "VORBEREITUNG"].includes(x.status);
   const counts = {
     alle: v.length,

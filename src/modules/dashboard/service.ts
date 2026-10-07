@@ -170,7 +170,14 @@ async function buildWeek(actor: Actor, view: DashboardView, ctxs: SetupContext[]
   }
 
   items.sort((a, b) => Number(b.overdue) - Number(a.overdue) || Number(b.today) - Number(a.today) || (a.due ?? "9").localeCompare(b.due ?? "9"));
-  return items.slice(0, 15);
+  // Gleichlautende Einträge (z. B. zwei Aufträge derselben Chance aus Mehrfach-Import) nur einmal
+  const seen = new Set<string>();
+  return items.filter((w) => {
+    const k = `${w.kind}|${w.text}|${w.due ?? ""}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).slice(0, 15);
 }
 
 export async function buildDashboard(actor: Actor, requested: string | null | undefined): Promise<Dashboard | null> {

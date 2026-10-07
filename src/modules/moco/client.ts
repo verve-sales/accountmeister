@@ -112,8 +112,10 @@ export interface MocoClient {
   dealCategories(): Promise<MocoDealCategory[]>;
   /** Alle Leads (zur Dublettenprüfung vor dem Push) */
   deals(): Promise<MocoDeal[]>;
-  /** Einziger schreibender Aufruf: Lead anlegen (Etappe 32, Lead-Push AM → Moco). */
+  /** Schreibend: Lead anlegen (Etappe 32, Lead-Push AM → Moco). */
   createDeal(payload: MocoDealCreate): Promise<MocoDeal>;
+  /** Schreibend: Projektende nach bestätigter Verlängerung (Etappe 33, Use Case 1). Einziges Projektfeld, das der AM schreibt. */
+  updateProjectFinishDate(projectId: number, finishDate: string): Promise<MocoProject>;
 }
 
 export class MocoConfigError extends Error {}
@@ -224,11 +226,12 @@ export class HttpMocoClient implements MocoClient {
     return this.fetchImpl(url, { method: "GET", headers: { Authorization: `Token token=${this.apiKey}`, Accept: "application/json" } });
   }
 
-  /** Der einzige schreibende Aufruf nach Moco: Leads anlegen (`createDeal`). Alles andere – Projekte, Firmen, Personen,
-   *  Zuweisungen – bleibt in Moco führend und wird vom Accountmeister nie verändert. */
-  private async post(pathname: string, body: unknown): Promise<Response> {
+  /** Schreibende Aufrufe nach Moco gibt es genau zwei: Leads anlegen (`createDeal`) und das Projektende nach bestätigter
+   *  Verlängerung (`updateProjectFinishDate`). Alles andere – Firmen, Personen, Zuweisungen, Zeiten – bleibt in Moco
+   *  führend und wird vom Accountmeister nie verändert. */
+  private async post(pathname: string, body: unknown, method: "POST" | "PUT" = "POST"): Promise<Response> {
     return this.fetchImpl(`https://${this.subdomain}.mocoapp.com/api/v1/${pathname}`, {
-      method: "POST",
+      method,
       headers: { Authorization: `Token token=${this.apiKey}`, Accept: "application/json", "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -296,6 +299,19 @@ export class HttpMocoClient implements MocoClient {
     }
     return pickDeal((await res.json()) as Record<string, unknown>);
   }
+  async updateProjectFinishDate(projectId: number, finishDate: string) {
+    const res = await this.post(`projects/${projectId}`, { finish_date: finishDate }, "PUT");
+    if (!res.ok) {
+      let detail = "";
+      try {
+        detail = JSON.stringify(await res.json()).slice(0, 300);
+      } catch {
+        /* keine Details */
+      }
+      throw new Error(`Moco projects/${projectId} (Ende setzen): HTTP ${res.status}${detail ? ` – ${detail}` : ""}`);
+    }
+    return pickProject((await res.json()) as Record<string, unknown>);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -325,14 +341,25 @@ export class FixtureMocoClient implements MocoClient {
   async projectGroups() {
     return (await this.load("project_groups")).map(pickGroup);
   }
+  /** Im Prozess gesetzte Projektenden (Tests, Entwicklung) */
+  private static finishDates = new Map<number, string>();
+  private withOverrides(rows: MocoProject[]): MocoProject[] {
+    return rows.map((p) => (FixtureMocoClient.finishDates.has(p.id) ? { ...p, finish_date: FixtureMocoClient.finishDates.get(p.id)! } : p));
+  }
   async projects(opts: { includeArchived?: boolean; updatedFrom?: string } = {}) {
-    let rows = (await this.load("projects")).map(pickProject);
+    let rows = this.withOverrides((await this.load("projects")).map(pickProject));
     if (!opts.includeArchived) rows = rows.filter((p) => p.active);
     if (opts.updatedFrom) rows = rows.filter((p) => !p.updated_at || p.updated_at.slice(0, 10) >= opts.updatedFrom!);
     return rows;
   }
   async project(id: number) {
-    return (await this.load("projects")).map(pickProject).find((p) => p.id === id) ?? null;
+    return this.withOverrides((await this.load("projects")).map(pickProject)).find((p) => p.id === id) ?? null;
+  }
+  async updateProjectFinishDate(projectId: number, finishDate: string) {
+    const p = await this.project(projectId);
+    if (!p) throw new Error(`Moco projects/${projectId} (Ende setzen): HTTP 404`);
+    FixtureMocoClient.finishDates.set(projectId, finishDate);
+    return { ...p, finish_date: finishDate };
   }
   /** Angelegte Leads bleiben nur im Prozess (Tests, Entwicklung); neue IDs ab 90001. */
   private static createdDeals: MocoDeal[] = [];

@@ -73,6 +73,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="ml-auto text-sm muted flex flex-wrap items-center gap-3">
               {actor ? (
                 <>
+                  <form method="get" action="/suche" role="search" className="flex items-center">
+                    <input name="q" className="input" placeholder="Suchen: Kunde, Person, Einsatz …" aria-label="Suchen" style={{ minWidth: 220, padding: "2px 8px", fontSize: 13 }} />
+                  </form>
                   <nav aria-label="Weitere Bereiche" className="flex flex-wrap gap-x-3 text-xs">
                     {[...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/besetzung", label: "Besetzung" }, { href: "/einsaetze", label: "Einsätze" }] : []), ...MORE.slice(0, 3), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(3)].map((n) => (
                       <Link key={n.href} href={n.href} className="muted">

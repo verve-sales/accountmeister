@@ -1,4 +1,4 @@
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
@@ -13,13 +13,29 @@ import { DAY, renewalPingDate, renewalTriggerDate } from "./service";
  * Berechnet beim Öffnen von Start/Meine Arbeit für die Einsätze, die der Akteur verantwortet.
  */
 export async function ensureRenewalRuns(actor: Actor, now = new Date()): Promise<number> {
-  const rows = await db
+  let rows = await db
     .select({ o: schema.orders, opp: schema.opportunities, bd: schema.accounts.responsibleBdUserId })
     .from(schema.orders)
     .innerJoin(schema.opportunities, eq(schema.opportunities.id, schema.orders.opportunityId))
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.opportunities.accountId))
     .where(and(eq(schema.orders.workspaceId, actor.workspaceId), eq(schema.orders.status, "BEAUFTRAGUNG_BESTAETIGT"), eq(schema.orders.engagementStatus, "GESTARTET"), or(eq(schema.opportunities.ownerUserId, actor.userId), eq(schema.accounts.responsibleBdUserId, actor.userId))));
   const t = now.toISOString().slice(0, 10);
+  // Etappe 33: Die Einsatzakte führt die Verlängerung. Läuft dort schon eine Entscheidung (angestoßen, bestätigt, abgelehnt),
+  // erzeugt die Auftragsschicht weder Ping noch Vorgehen; dasselbe gilt je Chance nur einmal (Dubletten aus Mehrfach-Import).
+  const handled = new Set(
+    (await db
+      .select({ orderId: schema.engagements.orderId })
+      .from(schema.renewalDecisions)
+      .innerJoin(schema.engagements, eq(schema.engagements.id, schema.renewalDecisions.engagementId))
+      .where(and(eq(schema.renewalDecisions.workspaceId, actor.workspaceId), inArray(schema.renewalDecisions.status, ["IN_ABSTIMMUNG", "ANGEBOTEN", "BESTAETIGT", "ABGELEHNT"])))).map((x) => x.orderId).filter((x): x is string => !!x),
+  );
+  const seenOpp = new Set<string>();
+  rows = rows.filter((r) => {
+    if (handled.has(r.o.id)) return false;
+    if (seenOpp.has(r.opp.id)) return false;
+    seenOpp.add(r.opp.id);
+    return true;
+  });
   // Fahrplan Schritt 1 (Feedback Pilot): ab 3 Monaten Restlaufzeit ein Ping an den BD – „Verlängerung ansprechen“
   const pingDue = rows.filter((r) => {
     const ping = renewalPingDate(r.o);
@@ -84,7 +100,7 @@ export async function ensureRenewalRunsSafe(actor: Actor): Promise<number> {
   }
 }
 
-export type RenewalRow = { accountId: string; accountName: string; orderId: string; opportunityId: string; title: string; plannedEnd: string | null; renewalDeadline: string | null; daysToEnd: number | null; runStatus: "OHNE_VORGEHEN" | "LAEUFT" | "ABGESCHLOSSEN"; currentStep: string | null; escalate: boolean };
+export type RenewalRow = { accountId: string; accountName: string; orderId: string; opportunityId: string; engagementId: string | null; person: string | null; title: string; plannedEnd: string | null; renewalDeadline: string | null; daysToEnd: number | null; runStatus: "OHNE_VORGEHEN" | "LAEUFT" | "ABGESCHLOSSEN"; currentStep: string | null; /** Stand aus der Einsatzakte (führend), sonst null */ decisionStatus: string | null; decisionTo: string | null; escalate: boolean };
 
 /** Auslaufende Einsätze (≤ 3 Monate) für die Kunden einer Sicht – mit Stand der Verlängerung und Eskalation (≤ 4 Wochen ohne Fortschritt). */
 export async function listRenewals(accountIds: string[], now = new Date()): Promise<RenewalRow[]> {
@@ -100,8 +116,25 @@ export async function listRenewals(accountIds: string[], now = new Date()): Prom
   if (soon.length === 0) return [];
   const runs = await db.query.playbookRuns.findMany({ where: inArray(schema.playbookRuns.opportunityId, soon.map((r) => r.opp.id)) });
   const runSteps = runs.length ? await db.query.playbookRunSteps.findMany({ where: inArray(schema.playbookRunSteps.runId, runs.map((r) => r.id)) }) : [];
+  const engs = await db.query.engagements.findMany({ where: inArray(schema.engagements.orderId, soon.map((r) => r.o.id)) });
+  const decisions = engs.length ? await db.query.renewalDecisions.findMany({ where: inArray(schema.renewalDecisions.engagementId, engs.map((e) => e.id)), orderBy: desc(schema.renewalDecisions.createdAt) }) : [];
+  const fls = await db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(engs.map((e) => e.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } });
+  const us = await db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(engs.map((e) => e.internalUserId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } });
+  const fn = new Map(fls.map((f) => [f.id, f.displayName]));
+  const un = new Map(us.map((u) => [u.id, u.displayName]));
+  const seen = new Set<string>();
   return soon
+    .filter((r) => {
+      // Dubletten (mehrere Aufträge derselben Chance mit gleichem Ende) nur einmal zeigen
+      const k = `${r.opp.id}:${r.o.plannedEnd}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
     .map((r) => {
+      const eng = engs.find((e) => e.orderId === r.o.id) ?? null;
+      const dec = eng ? decisions.find((x) => x.engagementId === eng.id) ?? null : null;
+      const person = eng ? (eng.freelancerId ? fn.get(eng.freelancerId) ?? null : eng.internalUserId ? un.get(eng.internalUserId) ?? null : null) : null;
       const run = runs.filter((x) => x.opportunityId === r.opp.id).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
       const steps = run ? runSteps.filter((s) => s.runId === run.id) : [];
       const cur = steps.find((s) => s.status === "OFFEN");
@@ -112,13 +145,17 @@ export async function listRenewals(accountIds: string[], now = new Date()): Prom
         accountName: r.accountName,
         orderId: r.o.id,
         opportunityId: r.opp.id,
-        title: r.opp.title,
-        plannedEnd: r.o.plannedEnd,
+        engagementId: eng?.id ?? null,
+        person,
+        title: eng?.title ?? r.opp.title,
+        plannedEnd: eng?.plannedEnd ?? r.o.plannedEnd,
         renewalDeadline: r.o.renewalDeadline,
         daysToEnd,
         runStatus: !run ? ("OHNE_VORGEHEN" as const) : run.status === "AKTIV" ? ("LAEUFT" as const) : ("ABGESCHLOSSEN" as const),
         currentStep: cur ? cur.title : null,
-        escalate: daysToEnd <= 28 && (!run || (run.status === "AKTIV" && !progressed)),
+        decisionStatus: dec?.status ?? null,
+        decisionTo: dec?.proposedTo ?? null,
+        escalate: daysToEnd <= 28 && !(dec && dec.status !== "ZU_KLAEREN") && (!run || (run.status === "AKTIV" && !progressed)),
       };
     })
     .sort((a, b) => (a.daysToEnd ?? 999) - (b.daysToEnd ?? 999));

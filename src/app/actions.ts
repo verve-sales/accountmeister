@@ -1595,6 +1595,28 @@ export async function renewalDecisionAction(fd: FormData) {
   }, data.status === "BESTAETIGT" ? "Verlängerung bestätigt – neue Periode angelegt, Einsatzende angepasst." : "Verlängerungsstand gespeichert.");
 }
 
+export async function startRenewalAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#verlaengerung`), async (actor) => {
+    requireStaffingFlag();
+    const { startRenewal } = await import("@/modules/engagements/care");
+    const r = await startRenewal(actor, data.engagementId ?? "", data);
+    throw new PendingInfo(`Verlängerung bis ${r.proposedTo} angestoßen – die Entscheidung liegt jetzt beim BD (und Principal) auf der Startseite.`);
+  }, "Verlängerung angestoßen.");
+}
+
+export async function decideRenewalAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/start#entscheidungen"), async (actor) => {
+    requireStaffingFlag();
+    const { decideRenewal } = await import("@/modules/engagements/care");
+    const r = await decideRenewal(actor, data.engagementId ?? "", data);
+    if (data.decision === "BESTAETIGEN") throw new PendingInfo(`Verlängerung bestätigt bis ${r.decision.proposedTo} – Periode, Einsatz- und Auftragsende gesetzt${r.mocoWritten ? ", Projektende in Moco aktualisiert" : r.mocoError ? `; Moco konnte nicht geschrieben werden (${r.mocoError.slice(0, 120)}) – Aufgabe an Sales Operations` : ""}.`);
+    if (data.decision === "ABLEHNEN") throw new PendingInfo("Verlängerung abgelehnt – Rückmeldung geht an die anstoßende Person.");
+    throw new PendingInfo("Entscheidung weitergegeben.");
+  }, "Entschieden.");
+}
+
 // --- Moco-Anbindung (Etappe 31) -----------------------------------------------
 
 export async function mocoPreviewAction(fd: FormData) {

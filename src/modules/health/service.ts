@@ -155,7 +155,18 @@ async function loadEngagements(accountIds: string[]): Promise<Map<string, Engage
     .innerJoin(schema.projectSetups, eq(schema.projectSetups.id, schema.opportunities.setupId))
     .where(and(inArray(schema.opportunities.accountId, accountIds), eq(schema.orders.status, "BEAUFTRAGUNG_BESTAETIGT"), ne(schema.orders.engagementStatus, "BEENDET")));
   const t = today();
+  // Etappe 33: Die Einsatzakte führt Laufzeit und Status – der Health-Check fragt nicht nach Enden, die dort (oder in Moco) bekannt sind.
+  const engs = rows.length ? await db.query.engagements.findMany({ where: inArray(schema.engagements.orderId, rows.map((r) => r.o.id)), columns: { orderId: true, plannedEnd: true, status: true } }) : [];
+  const endByOrder = new Map(engs.filter((e) => e.orderId).map((e) => [e.orderId!, e]));
+  const seen = new Set<string>();
   for (const r of rows) {
+    const akte = endByOrder.get(r.o.id);
+    if (akte && ["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(akte.status)) continue;
+    const plannedEnd = akte?.plannedEnd ?? r.o.plannedEnd;
+    // Dubletten derselben Chance mit gleichem Ende nur einmal
+    const dupKey = `${r.o.opportunityId}:${plannedEnd ?? ""}`;
+    if (seen.has(dupKey)) continue;
+    seen.add(dupKey);
     const e: Engagement = {
       orderId: r.o.id,
       version: r.o.version,
@@ -165,10 +176,10 @@ async function loadEngagements(accountIds: string[]): Promise<Map<string, Engage
       setupName: r.setupName,
       status: r.o.engagementStatus,
       plannedStart: r.o.plannedStart,
-      plannedEnd: r.o.plannedEnd,
+      plannedEnd,
       renewalDeadline: r.o.renewalDeadline,
-      daysToEnd: r.o.plannedEnd ? daysBetween(t, r.o.plannedEnd) : null,
-      triggerDate: renewalTriggerDate(r.o),
+      daysToEnd: plannedEnd ? daysBetween(t, plannedEnd) : null,
+      triggerDate: renewalTriggerDate({ ...r.o, plannedEnd }),
       consultantUserId: r.o.consultantUserId,
       consultantName: r.o.consultantName,
       contractSourceId: r.o.contractSourceId,

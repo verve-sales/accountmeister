@@ -19,7 +19,8 @@ import { Status } from "@/components/Status";
 import { actionStatusLabel, fmtDate, handoverStatusLabel, reviewStatusLabel, setupStatusLabel, supportStatusLabel, opportunityStatusLabel } from "@/lib/labels";
 import { listMyWork, workFilterValues, workTargets, ensureOverdueNotificationsSafe, type WorkFilter } from "@/modules/work/service";
 import { WorkList } from "@/components/Work";
-import { listMyCheckins } from "@/modules/engagements/care";
+import { listMyCheckins, listRenewalCards } from "@/modules/engagements/care";
+import { RenewalCards } from "@/components/Renewal";
 import { plusDaysIso } from "@/modules/work/calendar";
 import { getConfig } from "@/lib/config";
 import { checkinAction } from "../actions";
@@ -94,11 +95,13 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
   const openIncoming = handovers.filter((h) => h.receiverUserId === actor.userId && h.status === "ANGEFRAGT");
   const outgoing = handovers.filter((h) => h.senderUserId === actor.userId && (h.status === "ANGEFRAGT" || h.status === "ANGENOMMEN"));
   const back = "/meine-arbeit";
+  const renewalCards = getConfig().FEATURE_BESETZUNG === "true" ? await listRenewalCards(actor).catch(() => []) : [];
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Meine Arbeit</h1>
       <Feedback params={params} />
+      <RenewalCards cards={renewalCards} back="/meine-arbeit#entscheidungen" />
 
       <section className="card" id="vorgaenge">
         <div className="flex flex-wrap items-baseline gap-2 mb-2">

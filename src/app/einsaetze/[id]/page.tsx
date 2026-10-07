@@ -4,7 +4,8 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { DomainError } from "@/lib/errors";
 import { getConfig } from "@/lib/config";
 import { docSideLabel, docTypeLabel, docTypeValues, engagementStatusLabel, getEngagementDetail, signedStatusLabel, careRoleLabel } from "@/modules/engagements/service";
-import { checkinStatusLabel, renewalStatusLabel } from "@/modules/engagements/care";
+import { checkinStatusLabel, listRenewalCards, renewalStatusLabel } from "@/modules/engagements/care";
+import { RenewalDecisionCard, RenewalStartForm } from "@/components/Renewal";
 import { scopeUnitLabel, rateUnitLabel } from "@/modules/staffing/service";
 import { workTargets } from "@/modules/work/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
@@ -47,6 +48,9 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const targets = await workTargets(actor);
   const openRenewal = d.renewals.find((r) => ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status));
   const mocoHints = a.manage ? await listHints(actor, { subjectType: "ENGAGEMENT", subjectId: e.id, status: "OFFEN" }) : [];
+  const renewalCard = (await listRenewalCards(actor)).find((c) => c.engagementId === e.id) ?? null;
+  const lastPeriod = [...d.periods].reverse().find((x) => x.kind === "BESTAETIGT") ?? d.periods[d.periods.length - 1] ?? null;
+  const personName = e.freelancerName.replace(/ \(intern\)$/, "");
   const today = new Date().toISOString().slice(0, 10);
   const firstMissing = e.procurement.required.find((r) => !r.ok) ?? null;
   const vertrag = e.procurement.complete === true ? "vollständig" : e.procurementException ? `Ausnahme: ${e.procurementException}` : e.procurement.complete === false ? `unvollständig (${e.procurement.required.filter((r) => r.ok).length}/${e.procurement.required.length})` : "kein freigegebenes Beschaffungsprofil – Stand unbestimmt";
@@ -56,7 +60,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
     <div className="space-y-5">
       <div>
         <p className="text-sm"><Link href="/einsaetze">Einsätze</Link> · <Link href={`/kunden/${e.accountId}`}>{e.accountName}</Link> · <Link href={`/besetzung/${e.positionId}`}>Position</Link> · <Link href={`/bedarfe/${e.opportunityId}#auftrag`}>Chance / Auftrag</Link></p>
-        <h1 className="text-2xl font-semibold mt-1">{e.title}</h1>
+        <h1 className="text-2xl font-semibold mt-1">{personName} <span className="muted font-normal">bei</span> {e.accountName}</h1>
+        <p className="text-sm muted">{e.title}{e.mocoProjectId ? ` · Moco-Projekt ${e.mocoProjectId}` : ""}</p>
         <div className="flex flex-wrap gap-x-4 gap-y-1 items-baseline mt-1 text-sm">
           <span className="status">{engagementStatusLabel[e.status] ?? e.status}</span>
           <span>{e.freelancerId ? <>Freelancer: <Link href={`/besetzung/freelancer/${e.freelancerId}`}>{e.freelancerName}</Link></> : <>Besetzt mit: {e.freelancerName}</>}</span>
@@ -64,8 +69,16 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           {e.mocoProjectId && <span className="muted text-xs">aus Moco (Projekt {e.mocoProjectId}{e.externalRef ? <> · <a href={e.externalRef} target="_blank" rel="noreferrer">in Moco öffnen</a></> : null}) – Laufzeit und Zuweisung führt Moco</span>}
           <span>Laufzeit: {fmtDate(e.actualStart ?? e.plannedStart)} – {e.plannedEnd ? `${fmtDate(e.plannedEnd)}${e.daysToEnd !== null ? ` (${e.daysToEnd} Tage)` : ""}` : "offen"}</span>
           {nextDue && <span style={nextDue < new Date().toISOString().slice(0, 10) ? { color: RED, fontWeight: 600 } : undefined}>nächste Frist {fmtDate(nextDue)}</span>}
-          <span className="muted text-xs ml-auto">{a.manage ? "BD-Kontext" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
+          <span className="muted text-xs ml-auto">{a.commercial ? "BD-Kontext" : a.ops ? "Sales Operations" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
         </div>
+        {!final && !(openRenewal && openRenewal.proposedTo) && (
+          <details className="mt-2">
+            <summary className="btn btn-small" style={{ display: "inline-block" }}>Verlängerung anstoßen</summary>
+            <div className="card mt-2"><RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} /></div>
+          </details>
+        )}
+        {renewalCard && renewalCard.mode === "ENTSCHEIDEN" && <ul className="mt-2 list-none p-0"><RenewalDecisionCard c={renewalCard} back={`${back}#verlaengerung`} /></ul>}
+        {openRenewal && openRenewal.proposedTo && !(renewalCard && renewalCard.mode === "ENTSCHEIDEN") && <p className="text-sm mt-2" style={{ color: "#b7791f" }}>Verlängerung bis {fmtDate(openRenewal.proposedTo)} angestoßen – Entscheidung liegt beim BD{openRenewal.ownerName ? ` (${openRenewal.ownerName})` : ""}.</p>}
       </div>
       <Feedback params={sp} />
 
@@ -352,8 +365,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           </ul>
         )}
         {!final && (a.manage || a.care) && (
-          <details className="mt-2" open={!!openRenewal && openRenewal.triggerDate! <= new Date().toISOString().slice(0, 10)}>
-            <summary>Stand fortschreiben</summary>
+          <details className="mt-2">
+            <summary className="muted text-sm">Erweitert: Stand von Hand fortschreiben</summary>
             <form action={renewalDecisionAction} className="grid sm:grid-cols-3 gap-2 mt-2">
               <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="back" value={`${back}#verlaengerung`} />
               {openRenewal && <input type="hidden" name="version" value={openRenewal.version} />}

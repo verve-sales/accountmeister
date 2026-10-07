@@ -14,6 +14,9 @@ import { ensureStandardTasksSafe, freelancerStats } from "@/modules/focus/standa
 import { getFocus } from "@/modules/focus/service";
 import { computeHealthFor } from "@/modules/health/service";
 import { ensureRenewalRunsSafe, listRenewals } from "@/modules/health/renewal";
+import { listRenewalCards, renewalStatusLabel } from "@/modules/engagements/care";
+import { RenewalCards } from "@/components/Renewal";
+import { getConfig } from "@/lib/config";
 import { HealthBadge } from "@/components/HealthBadge";
 import { ensureInitiativeRemindersSafe } from "@/modules/agenda/service";
 import { listOpenSosForActor } from "@/modules/sos/service";
@@ -51,11 +54,19 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const renewals = d ? await listRenewals(d.accounts.map((c) => c.accountId)) : [];
   const healthBy = new Map(healthAll.map((h) => [h.accountId, h]));
   const chanceCounts = d ? await countChancesByStatus(d.accounts.map((c) => c.accountId)) : {};
+  const renewalCards = getConfig().FEATURE_BESETZUNG === "true" ? await listRenewalCards(actor).catch(() => []) : [];
   if (!d) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold">Start</h1>
-        <p className="muted text-sm">Für dein Konto ist keine fachliche Rolle hinterlegt. {actor.roles.has("ADMIN") ? <Link href="/verwaltung">Zur Verwaltung</Link> : "Bitte an die Betriebsverwaltung wenden."}</p>
+        <Feedback params={params} />
+      <RenewalCards cards={renewalCards} back="/start#entscheidungen" />
+        <RenewalCards cards={renewalCards} back="/start#entscheidungen" />
+        {actor.roles.has("SALES_OPS") ? (
+          <p className="text-sm">Sales Operations: <Link href="/einsaetze">alle Einsätze</Link> (Person, Kunde, Ende, Stimmung, Verlängerung) · <Link href="/besetzung">Besetzungen</Link> · <Link href="/meine-arbeit">Meine Arbeit</Link>.</p>
+        ) : (
+          <p className="muted text-sm">Für dein Konto ist keine fachliche Rolle hinterlegt. {actor.roles.has("ADMIN") ? <Link href="/verwaltung">Zur Verwaltung</Link> : "Bitte an die Betriebsverwaltung wenden."}</p>
+        )}
       </div>
     );
   }
@@ -134,20 +145,22 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         <section className="card">
           <h2 className="font-semibold mb-2">Auslaufende Einsätze (nächste 3 Monate)</h2>
           <table className="list">
-            <thead><tr><th>Kunde · Einsatz</th><th>Ende</th><th>Verlängerung</th></tr></thead>
+            <thead><tr><th>Person · Kunde</th><th>Einsatz</th><th>Ende</th><th>Verlängerung</th></tr></thead>
             <tbody>
               {renewals.map((r) => (
                 <tr key={r.orderId}>
-                  <td><Link href={`/bedarfe/${r.opportunityId}`}>{r.accountName} · {r.title}</Link></td>
+                  <td>{r.engagementId ? <Link href={`/einsaetze/${r.engagementId}`}><strong>{r.person ?? "?"}</strong></Link> : <strong>{r.person ?? "?"}</strong>} · {r.accountName}</td>
+                  <td className="text-sm muted"><Link href={r.engagementId ? `/einsaetze/${r.engagementId}` : `/bedarfe/${r.opportunityId}`}>{r.title}</Link></td>
                   <td className="text-sm" style={{ fontVariantNumeric: "tabular-nums" }}>{fmtDate(r.plannedEnd)} (noch {r.daysToEnd} Tage)</td>
                   <td className="text-sm">
-                    {r.escalate && <Status label="Eskalation: ohne Fortschritt" />} {r.runStatus === "LAEUFT" ? `läuft – ${r.currentStep ?? "Schritt offen"}` : r.runStatus === "ABGESCHLOSSEN" ? "Vorgehen abgeschlossen" : "noch nicht gestartet"}
+                    {r.escalate && <Status label="Eskalation: ohne Fortschritt" />} {r.decisionStatus ? `${renewalStatusLabel[r.decisionStatus] ?? r.decisionStatus}${r.decisionTo ? ` bis ${fmtDate(r.decisionTo)}` : ""}` : r.runStatus === "LAEUFT" ? `Vorgehen läuft – ${r.currentStep ?? "Schritt offen"}` : r.runStatus === "ABGESCHLOSSEN" ? "Vorgehen abgeschlossen" : "offen"}
+                    {r.engagementId && (!r.decisionStatus || r.decisionStatus === "ZU_KLAEREN") && <> · <Link href={`/einsaetze/${r.engagementId}#verlaengerung`}>anstoßen</Link></>}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="muted text-xs mt-2">Eskalation: weniger als 4 Wochen bis zum Ende und im Verlängerungsvorgehen noch kein Schritt erledigt.</p>
+          <p className="muted text-xs mt-2">Stand aus der Einsatzakte. Eskalation: weniger als 4 Wochen bis zum Ende und noch nichts angestoßen.</p>
         </section>
       )}
 
