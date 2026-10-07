@@ -180,6 +180,16 @@ async function buildWeek(actor: Actor, view: DashboardView, ctxs: SetupContext[]
   }).slice(0, 15);
 }
 
+/** Anzahl Kunden je verfügbarer Sicht – für den Umschalter bei den Übersichten (Etappe 33). */
+export async function viewAccountCounts(actor: Actor): Promise<{ view: DashboardView; accounts: number }[]> {
+  const out: { view: DashboardView; accounts: number }[] = [];
+  for (const view of await availableViews(actor)) {
+    const ctxs = await scopedContexts(actor, view);
+    out.push({ view, accounts: new Set(ctxs.map((c) => c.account.id)).size });
+  }
+  return out;
+}
+
 export async function buildDashboard(actor: Actor, requested: string | null | undefined): Promise<Dashboard | null> {
   const { view, available } = await resolveView(actor, requested);
   if (!view) return null;

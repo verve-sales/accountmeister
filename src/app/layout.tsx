@@ -8,6 +8,7 @@ import { logoutAction } from "./actions";
 import { roleLabel } from "@/lib/labels";
 import { AssistantPanel } from "@/components/AssistantPanel";
 import { provisionAccess } from "@/modules/provision/access";
+import { canBrowsePortfolio } from "@/modules/portfolio/service";
 import { unreadCount } from "@/modules/notifications/service";
 import type { Actor } from "@/modules/identity/actor";
 
@@ -64,7 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </Link>
             {actor && (
               <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm items-center">
-                {[...NAV, ...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/einsaetze", label: "Einsätze" }, { href: "/besetzung", label: "Besetzung" }] : [])].map((n) => (
+                {[...NAV, ...(canBrowsePortfolio(actor) ? [{ href: "/meine-bds", label: "Meine BDs" }] : []), ...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/einsaetze", label: "Einsätze" }, { href: "/besetzung", label: "Besetzung" }] : [])].map((n) => (
                   <Link key={n.href} href={n.href}>
                     {n.label}
                   </Link>

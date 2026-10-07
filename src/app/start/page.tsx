@@ -2,7 +2,8 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
-import { buildDashboard, viewLabel, type DashboardView } from "@/modules/dashboard/service";
+import { buildDashboard, viewAccountCounts, viewLabel, type DashboardView } from "@/modules/dashboard/service";
+import { canBrowsePortfolio } from "@/modules/portfolio/service";
 import { MATURITY, maturityLabel } from "@/modules/strategy/chancen";
 import { CHANCE_STEPS } from "@/lib/chanceStages";
 import { countChancesByStatus } from "@/modules/opportunities/service";
@@ -53,6 +54,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const work = await listMyWork(actor);
   const openSos = await listOpenSosForActor(actor);
   const d = await buildDashboard(actor, requested);
+  const viewCounts = d && d.available.length > 1 ? await viewAccountCounts(actor).catch(() => []) : [];
   const focus = await getFocus(actor.workspaceId);
   const fl = d && focus.freelancerLever ? await freelancerStats(actor, d.accounts.map((c) => c.accountId)) : null;
   const healthAll = d ? await computeHealthFor(d.accounts.map((c) => ({ id: c.accountId, name: c.accountName }))) : [];
@@ -130,16 +132,6 @@ export default async function StartPage({ searchParams }: { searchParams: Search
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-4">
         <h1 className="text-2xl font-semibold">Start</h1>
-        {d.available.length > 1 && (
-          <form action={setDashboardViewAction} className="flex flex-wrap items-center gap-2 text-sm" aria-label="Sicht wählen">
-            <span className="muted">Sicht:</span>
-            {d.available.map((v: DashboardView) => (
-              <button key={v} name="view" value={v} type="submit" className={v === d.view ? "btn btn-small" : "btn btn-secondary btn-small"} aria-pressed={v === d.view}>
-                {viewLabel[v]}
-              </button>
-            ))}
-          </form>
-        )}
         <Link href="/meine-arbeit" className="muted text-sm ml-auto">Alle Listen (Meine Arbeit)</Link>
       </div>
       <Feedback params={params} />
@@ -150,7 +142,23 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         <p className="text-sm muted">{work.myTeams.map((t) => <Link key={t.id} href={`/team/${t.id}`} className="mr-3">{work.queue.filter((q) => q.teamId === t.id).length} im Eingang {t.name}</Link>)}</p>
       )}
 
-      <h2 className="font-semibold text-lg pt-2" id="uebersichten">Übersichten <span className="muted text-sm font-normal">– zum Aufklappen; Sicht {viewLabel[d.view]}</span></h2>
+      <div className="pt-2" id="uebersichten">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <h2 className="font-semibold text-lg">Übersichten</h2>
+          <span className="muted text-sm">zum Aufklappen</span>
+          {d.available.length > 1 && (
+            <form action={setDashboardViewAction} className="flex flex-wrap items-center gap-2 text-sm ml-auto" aria-label="Sicht wählen">
+              <span className="muted">Sicht:</span>
+              {d.available.map((v: DashboardView) => (
+                <button key={v} name="view" value={v} type="submit" className={v === d.view ? "btn btn-small" : "btn btn-secondary btn-small"} aria-pressed={v === d.view}>
+                  {viewLabel[v]} ({viewCounts.find((c) => c.view === v)?.accounts ?? 0})
+                </button>
+              ))}
+            </form>
+          )}
+        </div>
+        <p className="muted text-xs mt-1">Die Sicht bestimmt nur, welche Kunden in den Übersichten gezählt werden ({viewLabel[d.view]}: {d.accounts.length} Kunden) – Entscheidungen, Aufgaben und Vorschläge oben hängen an dir als Person und ändern sich nicht.{canBrowsePortfolio(actor) ? <> Zum Durchgehen der Kunden je BD: <Link href="/meine-bds">Meine BDs</Link>.</> : null}</p>
+      </div>
       {d.empty && <p className="card text-sm">{d.empty}</p>}
 
       {d.accounts.length > 0 && (

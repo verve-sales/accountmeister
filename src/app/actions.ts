@@ -1628,6 +1628,14 @@ export async function decideRenewalAction(fd: FormData) {
   }, "Entschieden.");
 }
 
+export async function portfolioDecisionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/meine-bds/${data.accountId ?? ""}`), async (actor) => {
+    const { leaveDecision } = await import("@/modules/portfolio/service");
+    await leaveDecision(actor, data.accountId ?? "", data);
+  }, "Beim BD als Vorgang hinterlegt – steht bei ihm oben auf Start.");
+}
+
 // --- Moco-Anbindung (Etappe 31) -----------------------------------------------
 
 export async function mocoPreviewAction(fd: FormData) {
