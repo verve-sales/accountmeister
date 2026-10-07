@@ -7,7 +7,7 @@ import { fmtDate } from "@/lib/labels";
 
 const RED = "#c0392b";
 
-type Row = Pick<PositionView, "id" | "title" | "status" | "progress" | "bdName" | "nextDue" | "overdue" | "accountName" | "opportunityTitle"> & Partial<Pick<PositionView, "searcherName" | "candidacyCount" | "presentedCount" | "searchStatus">>;
+type Row = Pick<PositionView, "id" | "title" | "status" | "progress" | "bdName" | "nextDue" | "overdue" | "accountName" | "opportunityTitle"> & Partial<Pick<PositionView, "searcherName" | "candidacyCount" | "presentedCount" | "searchStatus" | "filledBy">>;
 
 export function PositionList({ items, empty, showAccount = true }: { items: Row[]; empty: string; showAccount?: boolean }) {
   if (!items.length) return <p className="muted text-sm">{empty}</p>;
@@ -20,7 +20,7 @@ export function PositionList({ items, empty, showAccount = true }: { items: Row[
               <strong>{p.title}</strong>
             </Link>
             <span className="status">{positionStatusLabel[p.status] ?? p.status}</span>
-            <span className="muted text-xs">{p.progress}</span>
+            {p.filledBy ? <span className="text-xs">besetzt mit <strong>{p.filledBy.name}</strong> ({p.filledBy.kind === "INTERN" ? "intern, Verve" : "Freelancer"})</span> : <span className="muted text-xs">{p.progress}</span>}
           </div>
           <div className="muted text-xs">
             {showAccount ? `${p.accountName} · ${p.opportunityTitle} · ` : ""}BD {p.bdName}

@@ -31,14 +31,14 @@ Das Tool rechnet keine Umsätze, Wahrscheinlichkeiten oder Forecasts; es zählt,
     id: "chance-status",
     title: "Chancen-Status und wie man weiterkommt",
     where: "Kunden → Kunde → Chance öffnen (oder Start → „Wo stehen wir? – je Chance“ → Button „Nächster Schritt“)",
-    keywords: ["status", "stufe", "antizipiert", "in klaerung", "klaerung", "bestaetigt", "bestaetigen", "beleg", "angebot", "vorgestellt", "auswahl", "bestellung", "beauftragt", "auftrag", "zurueckstellen", "beenden", "weiterklicken", "naechster schritt", "fortschritt", "stepper"],
+    keywords: ["status", "stufe", "antizipiert", "in klaerung", "klaerung", "bestaetigt", "bestaetigen", "beleg", "angebot", "vorgestellt", "auswahl", "bestellung", "beauftragt", "auftrag", "zurueckstellen", "beenden", "konvertiert", "konvertieren", "besetzt", "weiterklicken", "naechster schritt", "fortschritt", "stepper"],
     body: `Der Status hängt immer an der einzelnen Chance – nicht am Setup und nicht am Kunden. Kunden- und Setup-Seite zeigen deshalb unter „Wo stehen wir? – je Chance“ eine Zeile je offener Chance mit eigenem Fortschrittsbalken und dem Button „Nächster Schritt“.
-Stufen: Antizipiert → In Klärung → Bestätigt → Profil/Angebot vorgestellt → Auswahl/Bestellung → Beauftragt. Daneben: Zurückgestellt und Beendet.
+Stufen: Antizipiert → In Klärung → Bestätigt → Profil/Angebot vorgestellt → Auswahl/Bestellung → Konvertiert (beauftragt und besetzt; die Arbeit läuft dann im Einsatz weiter). Daneben: Zurückgestellt und Beendet.
 So kommt man weiter (alles auf der Chance-Seite, Block „Chance“):
 - Antizipiert → In Klärung: Button „In Klärung nehmen“.
 - → Bestätigt: Aufklapper „Chance bestätigen (Beleg optional)“. Ein Beleg (vorhandene Quelle oder kurze Notiz, z. B. „Bestätigung durch den Kunden“) ist hilfreich, aber keine Pflicht – Bestellnummern und Verträge liegen oft in anderen Systemen. Bestätigen geht aus Antizipiert, In Klärung oder Zurückgestellt.
 - → Profil/Angebot vorgestellt: im Block „Angebote / Profilvorstellungen“ ein Angebot anlegen (Entwurf), auf „Geprüft“ setzen und dann „Vorstellungsereignis bestätigen“. Ein Entwurf gilt nie als vorgestellt.
-- → Beauftragt: im Block „Auftrag und Einsatz“ einen Auftrag anlegen und „Beauftragung bestätigen (Nachweis optional)“.
+- → Konvertiert: im Block „Auftrag und Einsatz“ einen Auftrag anlegen und „Beauftragung bestätigen (Nachweis optional)“.
 - Zurückstellen oder Beenden: Aufklapper „Zurückstellen / Beenden (mit Begründung)“; von dort auch „Wieder in Klärung“.
 Wer darf: die verantwortliche Person der Chance, Setup-Beteiligte, der zuständige BD, Principals und Sales Operations (Sales Operations bereitet vor, bestätigen/entscheiden bleibt beim BD). Fehlt ein Button, fehlt meist die Bearbeitungsberechtigung – oder die Chance ist beendet.`,
   },

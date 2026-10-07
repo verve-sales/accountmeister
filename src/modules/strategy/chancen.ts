@@ -14,7 +14,7 @@ import { chanceKindLabel } from "@/modules/ai/schemas";
 
 export const MATURITY = ["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT", "IM_ANGEBOT", "BEAUFTRAGT"] as const;
 export type Maturity = (typeof MATURITY)[number];
-export const maturityLabel: Record<Maturity, string> = { ANTIZIPIERT: "antizipiert", IN_KLAERUNG: "in Klärung", BESTAETIGT: "bestätigt", IM_ANGEBOT: "im Angebot / Auswahl", BEAUFTRAGT: "beauftragt" };
+export const maturityLabel: Record<Maturity, string> = { ANTIZIPIERT: "antizipiert", IN_KLAERUNG: "in Klärung", BESTAETIGT: "bestätigt", IM_ANGEBOT: "im Angebot / Auswahl", BEAUFTRAGT: "konvertiert" };
 
 export function maturityOf(status: string): Maturity | null {
   if (status === "ANTIZIPIERT") return "ANTIZIPIERT";

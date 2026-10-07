@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { topCandidatesForOpportunities } from "@/modules/staffing/service";
 import { mocoDealUrl } from "@/modules/moco/client";
 import { initiativeKindLabel, listInitiatives, type InitiativeKind } from "@/modules/agenda/service";
 import { notFound, redirect } from "next/navigation";
@@ -138,6 +139,8 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
     : null;
   const activeUsers = d.users.filter((u) => u.status === "ACTIVE").map((u) => ({ id: u.id, displayName: u.displayName }));
 
+  const staffedBy = (await topCandidatesForOpportunities([opp.id]).catch(() => new Map<string, { name: string; status: string }>())).get(opp.id);
+  const staffedByText = staffedBy ? (staffedBy.status === "BESETZT" ? staffedBy.name : null) : null;
   return (
     <div className="space-y-6">
       <p className="text-sm">
@@ -147,7 +150,8 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         <h1 className="text-2xl font-semibold">{opp.title}</h1>
         <Status label={opportunityStatusLabel[opp.status] ?? opp.status} />
         {opp.fastTrack && <Status label="Direkte Anfrage (Fast-Track)" />}
-        <span className="muted text-sm">Verantwortlich: {name(opp.ownerUserId)} · angelegt {fmtDateTime(opp.createdAt)}{opp.requestedAt && <> · Anfrage eingegangen {fmtDateTime(opp.requestedAt)}</>}</span>
+        {staffedByText && <span className="text-sm">Besetzt mit: <strong>{staffedByText}</strong></span>}
+        <span className="muted text-sm">Vertrieblich verantwortlich: {name(opp.ownerUserId)} · angelegt {fmtDateTime(opp.createdAt)}{opp.requestedAt && <> · Anfrage eingegangen {fmtDateTime(opp.requestedAt)}</>}</span>
         {!canEdit && <span className="muted text-sm">(nur lesend)</span>}
         {opp.mocoDealId && <span className="muted text-xs">Lead in Moco (#{opp.mocoDealId}){mocoDealUrl(opp.mocoDealId) ? <> · <a href={mocoDealUrl(opp.mocoDealId)!} target="_blank" rel="noreferrer">in Moco öffnen</a></> : null}</span>}
         {!opp.mocoDealId && opp.mocoProjectId && <span className="muted text-xs">Projekt in Moco (#{opp.mocoProjectId})</span>}

@@ -440,7 +440,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
           </div>
           {d.bdPerformance.accounts.length > 0 && (
             <table className="list text-sm mt-3">
-              <thead><tr><th>Kunde</th><th>Eigene Aktivität</th><th>Aktive Chancen</th><th>Beauftragt</th></tr></thead>
+              <thead><tr><th>Kunde</th><th>Eigene Aktivität</th><th>Aktive Chancen</th><th>Konvertiert</th></tr></thead>
               <tbody>
                 {d.bdPerformance.accounts.map((a) => (
                   <tr key={a.accountId}>

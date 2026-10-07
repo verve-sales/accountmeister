@@ -875,6 +875,8 @@ export type PositionView = PositionRow & {
   nextDue: string | null;
   overdue: boolean;
   progress: string;
+  /** Wer die Position besetzt (bestätigte Auswahl) – intern oder Freelancer */
+  filledBy: { name: string; kind: "INTERN" | "FREELANCER" } | null;
   access: "full" | "preview";
 };
 
@@ -885,14 +887,19 @@ async function decoratePositions(actor: Actor, rows: PositionRow[], accessOf: (p
     db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(rows.map((r) => r.accountId))]), columns: { id: true, name: true } }),
     db.query.opportunities.findMany({ where: inArray(schema.opportunities.id, [...new Set(rows.map((r) => r.opportunityId))]), columns: { id: true, title: true } }),
     db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { id: true, displayName: true } }),
-    db.query.candidacies.findMany({ where: inArray(schema.candidacies.positionId, ids), columns: { positionId: true, status: true, isActive: true, nextStepDue: true } }),
+    db.query.candidacies.findMany({ where: inArray(schema.candidacies.positionId, ids), columns: { positionId: true, status: true, isActive: true, nextStepDue: true, freelancerId: true, internalUserId: true } }),
     db.query.workItems.findMany({ where: and(eq(schema.workItems.subjectType, "POSITION"), inArray(schema.workItems.subjectId, ids), eq(schema.workItems.kind, "SUCHE")), orderBy: desc(schema.workItems.createdAt) }),
   ]);
   const an = new Map(accounts.map((a) => [a.id, a.name]));
   const on = new Map(opps.map((o) => [o.id, o.title]));
   const un = new Map(users.map((u) => [u.id, u.displayName]));
+  const chosen = cands.filter((c) => c.status === "AUSGEWAEHLT");
+  const fls = await db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(chosen.map((c) => c.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } });
+  const fn = new Map(fls.map((f) => [f.id, f.displayName]));
   const today = todayIso();
   return rows.map((r) => {
+    const pick = chosen.find((c) => c.positionId === r.id) ?? null;
+    const filledBy = pick ? (pick.internalUserId ? { name: un.get(pick.internalUserId) ?? "?", kind: "INTERN" as const } : { name: pick.freelancerId ? fn.get(pick.freelancerId) ?? "?" : "?", kind: "FREELANCER" as const }) : null;
     const cs = cands.filter((c) => c.positionId === r.id && c.isActive);
     const w = works.find((x) => x.subjectId === r.id && !WORK_FINAL.includes(x.status as (typeof WORK_FINAL)[number])) ?? works.find((x) => x.subjectId === r.id) ?? null;
     const presented = cs.filter((c) => ["VORGESTELLT", "INTERVIEW", "AUSGEWAEHLT"].includes(c.status)).length;
@@ -913,6 +920,7 @@ async function decoratePositions(actor: Actor, rows: PositionRow[], accessOf: (p
       nextDue,
       overdue: !!nextDue && nextDue < today,
       progress,
+      filledBy,
       access: accessOf(r),
     };
   });
@@ -1021,10 +1029,26 @@ export async function staffingSummary(actor: Actor, opportunityId: string) {
 
 
 
-/** Aussichtsreichste Kandidatur je Chance (für Übersichten): Name und Stand, oder null. */
+/** Aussichtsreichste Kandidatur je Chance (für Übersichten): Name und Stand, oder null. Besetzte Chancen zeigen die Person(en)
+ *  aus der Einsatzakte (intern oder Freelancer), die führend ist. */
 export async function topCandidatesForOpportunities(opportunityIds: string[]): Promise<Map<string, { name: string; status: string }>> {
   const out = new Map<string, { name: string; status: string }>();
   if (!opportunityIds.length) return out;
+  const engs = await db.query.engagements.findMany({ where: and(inArray(schema.engagements.opportunityId, opportunityIds), notInArray(schema.engagements.status, ["ABGEBROCHEN"])), columns: { opportunityId: true, freelancerId: true, internalUserId: true, status: true } });
+  if (engs.length) {
+    const [efl, eus] = await Promise.all([
+      db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(engs.map((e) => e.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+      db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(engs.map((e) => e.internalUserId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+    ]);
+    const efn = new Map(efl.map((f) => [f.id, f.displayName]));
+    const eun = new Map(eus.map((u) => [u.id, u.displayName]));
+    const byOpp = new Map<string, string[]>();
+    for (const e of engs) {
+      const n = e.internalUserId ? `${eun.get(e.internalUserId) ?? "?"} (intern)` : e.freelancerId ? efn.get(e.freelancerId) ?? "?" : "?";
+      byOpp.set(e.opportunityId, [...new Set([...(byOpp.get(e.opportunityId) ?? []), n])]);
+    }
+    for (const [oppId, names] of byOpp) out.set(oppId, { name: names.join(", "), status: "BESETZT" });
+  }
   const positions = await db.query.staffingPositions.findMany({ where: inArray(schema.staffingPositions.opportunityId, opportunityIds), columns: { id: true, opportunityId: true } });
   if (!positions.length) return out;
   const cands = await db.query.candidacies.findMany({ where: and(inArray(schema.candidacies.positionId, positions.map((p) => p.id)), inArray(schema.candidacies.status, [...CANDIDACY_FLOW])) });
@@ -1040,6 +1064,7 @@ export async function topCandidatesForOpportunities(opportunityIds: string[]): P
   for (const c of cands) {
     const oppId = posOpp.get(c.positionId)!;
     const cur = out.get(oppId);
+    if (cur?.status === "BESETZT") continue;
     const name = c.freelancerId ? fn.get(c.freelancerId) ?? "?" : c.internalUserId ? un.get(c.internalUserId) ?? "?" : "?";
     if (!cur || rank(c.status) > rank(cur.status)) out.set(oppId, { name, status: c.status });
   }

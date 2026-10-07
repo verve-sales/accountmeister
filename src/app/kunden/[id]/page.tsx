@@ -225,7 +225,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             ) : <p className="text-sm muted">Keine Chance in Arbeit.</p>}
             {opportunities.some((o) => o.status === "BEAUFTRAGT") && (
               <details className="mt-2">
-                <summary className="text-sm muted">Beauftragte Chancen ({opportunities.filter((o) => o.status === "BEAUFTRAGT").length}) – Einsätze dazu unter <Link href="/einsaetze">Einsätze</Link></summary>
+                <summary className="text-sm muted">Konvertierte Chancen ({opportunities.filter((o) => o.status === "BEAUFTRAGT").length}) – Einsätze dazu unter <Link href="/einsaetze">Einsätze</Link></summary>
                 <table className="list mt-2">
                   <thead><tr><th>Chance</th><th>Wofür</th><th>Setup</th></tr></thead>
                   <tbody>

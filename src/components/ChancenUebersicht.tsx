@@ -34,6 +34,7 @@ function QuickActions({ c, back }: { c: ChanceRow; back: string }) {
 
 function CandidateHint({ c }: { c: ChanceRow }) {
   if (!c.candidate) return null;
+  if (c.candidate.status === "BESETZT") return <span> · besetzt mit <strong>{c.candidate.name}</strong></span>;
   return <span> · Kandidat: <strong>{c.candidate.name}</strong> ({candidacyStatusLabel[c.candidate.status] ?? c.candidate.status})</span>;
 }
 
@@ -50,7 +51,7 @@ export function ChancenUebersicht({ chances, emptyText, showSetup = false, back 
   const order = (s: string) => (s === "ZURUECKGESTELLT" ? 99 : CHANCE_STEPS.indexOf(s as (typeof CHANCE_STEPS)[number]));
   return (
     <>
-    {open.length === 0 && <p className="text-sm muted">Keine Chance in Arbeit – {done.length} beauftragt (unten eingeklappt).</p>}
+    {open.length === 0 && <p className="text-sm muted">Keine Chance in Arbeit – {done.length} konvertiert (unten eingeklappt).</p>}
     <ul className="space-y-3">
       {[...open].sort((a, b) => order(b.status) - order(a.status)).map((c) => {
         const next = NEXT_CHANCE_STEP[c.status];
@@ -74,7 +75,7 @@ export function ChancenUebersicht({ chances, emptyText, showSetup = false, back 
     </ul>
     {done.length > 0 && (
       <details className="mt-3">
-        <summary className="text-sm muted">Beauftragt ({done.length}) – laufende Arbeit siehe <Link href="/einsaetze">Einsätze</Link></summary>
+        <summary className="text-sm muted">Konvertiert ({done.length}) – in Einsätze überführt, siehe <Link href="/einsaetze">Einsätze</Link></summary>
         <ul className="mt-2 text-sm space-y-1">
           {done.map((c) => (
             <li key={c.id} className="flex flex-wrap gap-x-2"><Link href={`/bedarfe/${c.id}`}>{c.title}</Link><span className="muted text-xs">{chanceKindLabel[c.kind as keyof typeof chanceKindLabel] ?? c.kind}<CandidateHint c={c} />{showSetup && c.setupName ? ` · ${c.setupName}` : ""} <QuickActions c={c} back={back} /></span></li>
