@@ -1019,3 +1019,29 @@ export async function staffingSummary(actor: Actor, opportunityId: string) {
   return { total: list.length, open: list.filter((p) => ["ENTWURF", "OFFEN", "PAUSIERT"].includes(p.status)).length, filled: list.filter((p) => p.status === "BESETZT").length, items: list };
 }
 
+
+
+/** Aussichtsreichste Kandidatur je Chance (für Übersichten): Name und Stand, oder null. */
+export async function topCandidatesForOpportunities(opportunityIds: string[]): Promise<Map<string, { name: string; status: string }>> {
+  const out = new Map<string, { name: string; status: string }>();
+  if (!opportunityIds.length) return out;
+  const positions = await db.query.staffingPositions.findMany({ where: inArray(schema.staffingPositions.opportunityId, opportunityIds), columns: { id: true, opportunityId: true } });
+  if (!positions.length) return out;
+  const cands = await db.query.candidacies.findMany({ where: and(inArray(schema.candidacies.positionId, positions.map((p) => p.id)), inArray(schema.candidacies.status, [...CANDIDACY_FLOW])) });
+  if (!cands.length) return out;
+  const [fls, us] = await Promise.all([
+    db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(cands.map((c) => c.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+    db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(cands.map((c) => c.internalUserId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+  ]);
+  const fn = new Map(fls.map((f) => [f.id, f.displayName]));
+  const un = new Map(us.map((u) => [u.id, u.displayName]));
+  const posOpp = new Map(positions.map((p) => [p.id, p.opportunityId]));
+  const rank = (st: string) => CANDIDACY_FLOW.indexOf(st as CandidacyStatus);
+  for (const c of cands) {
+    const oppId = posOpp.get(c.positionId)!;
+    const cur = out.get(oppId);
+    const name = c.freelancerId ? fn.get(c.freelancerId) ?? "?" : c.internalUserId ? un.get(c.internalUserId) ?? "?" : "?";
+    if (!cur || rank(c.status) > rank(cur.status)) out.set(oppId, { name, status: c.status });
+  }
+  return out;
+}

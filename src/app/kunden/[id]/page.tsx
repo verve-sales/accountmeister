@@ -7,6 +7,7 @@ import { listOpportunitiesForAccount } from "@/modules/opportunities/service";
 import { canCreateSetup, canReassignResponsibility } from "@/modules/identity/authz";
 import { isSalesOps } from "@/modules/identity/actor";
 import { ChancenUebersicht } from "@/components/ChancenUebersicht";
+import { topCandidatesForOpportunities } from "@/modules/staffing/service";
 import { canDeleteAccount } from "@/modules/accounts/deletion";
 import { DomainError } from "@/lib/errors";
 import { Feedback, type SearchParams } from "@/components/Feedback";
@@ -65,7 +66,8 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   // „Wo stehen wir?“ je Chance (Etappe 24): der Status gehört zur Chance, nicht zu Setup oder Kunde
   const ownerIds = [...new Set(opportunities.map((o) => o.ownerUserId))];
   const ownerNames = new Map(ownerIds.length ? (await db.query.users.findMany({ where: inArray(schema.users.id, ownerIds) })).map((u) => [u.id, u.displayName]) : []);
-  const chanceRows = opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: ownerNames.get(o.ownerUserId) ?? "?", setupName: o.setupName }));
+  const topCandidates = await topCandidatesForOpportunities(opportunities.map((o) => o.id)).catch(() => new Map());
+  const chanceRows = opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: ownerNames.get(o.ownerUserId) ?? "?", setupName: o.setupName, version: o.version, candidate: topCandidates.get(o.id) ?? null }));
   const [runs, accountPlaybooks, salesOps, activeUsers] = await Promise.all([
     listRuns(actor, { accountId: id }),
     listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true }),
@@ -93,7 +95,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       {account.status === "ARCHIVED" && <p className="text-sm" style={{ background: "#fdf6ec", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ist archiviert. Alles bleibt erhalten; <Link href={`/kunden/${account.id}/loeschen`}>wiederherstellen oder endgültig löschen</Link>.</p>}
       <section className="card">
         <h2 className="font-semibold mb-2">Wo stehen wir? – je Chance</h2>
-        <ChancenUebersicht chances={chanceRows} showSetup={setups.length > 1} emptyText="Noch keine Chance benannt. Worauf läuft es bei diesem Kunden hinaus? Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten." />
+        <ChancenUebersicht chances={chanceRows} showSetup={setups.length > 1} emptyText="Noch keine Chance benannt. Worauf läuft es bei diesem Kunden hinaus? Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten." back={`/kunden/${id}`} />
         {runs.filter((r) => r.status === "AKTIV").map((r) => {
           const cur = r.steps.find((x) => x.status === "OFFEN");
           return cur ? <p key={r.id} className="text-sm mt-2">Laufendes Vorgehen <a href="#vorgehen">{r.playbookName}</a> ({r.setupName}): Schritt {cur.position}/{r.steps.length} – {cur.title}</p> : null;

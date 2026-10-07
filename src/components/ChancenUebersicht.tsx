@@ -3,14 +3,45 @@ import { ProcessStepper } from "@/components/ProcessStepper";
 import { CHANCE_STEPS, NEXT_CHANCE_STEP } from "@/lib/chanceStages";
 import { opportunityStatusLabel } from "@/lib/labels";
 import { chanceKindLabel } from "@/modules/ai/schemas";
+import { candidacyStatusLabel } from "@/modules/staffing/service";
+import { changeOpportunityStatusAction, deleteOpportunityAction } from "@/app/actions";
 
-export type ChanceRow = { id: string; title: string; status: string; kind: string; ownerName: string; setupName?: string | null };
+export type ChanceRow = { id: string; title: string; status: string; kind: string; ownerName: string; setupName?: string | null; version?: number; candidate?: { name: string; status: string } | null };
+
+/** Schnell beenden oder löschen – direkt in der Übersicht (Etappe 33, Rückmeldung: große Übersichten brauchen einen Knopf). */
+function QuickActions({ c, back }: { c: ChanceRow; back: string }) {
+  if (c.version === undefined) return null;
+  return (
+    <details className="inline text-xs">
+      <summary className="muted" style={{ cursor: "pointer" }} title="Beenden oder löschen">⋯</summary>
+      <div className="flex flex-wrap gap-2 items-end mt-1 p-2" style={{ border: "1px solid var(--border)", borderRadius: 8 }}>
+        {c.status !== "BEAUFTRAGT" && (
+          <form action={changeOpportunityStatusAction} className="flex gap-1 items-end">
+            <input type="hidden" name="opportunityId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="status" value="BEENDET" /><input type="hidden" name="back" value={back} />
+            <input name="reason" className="input" defaultValue="Nicht weiterverfolgt" aria-label="Grund" style={{ width: "12rem" }} />
+            <button className="btn btn-secondary btn-small" type="submit">Beenden</button>
+          </form>
+        )}
+        <form action={deleteOpportunityAction} className="flex gap-1 items-end">
+          <input type="hidden" name="opportunityId" value={c.id} /><input type="hidden" name="confirm" value="on" /><input type="hidden" name="back" value={back} />
+          <input name="reason" className="input" defaultValue="Aus der Übersicht gelöscht (Dublette oder gegenstandslos)" aria-label="Begründung" style={{ width: "16rem" }} />
+          <button className="btn btn-small" type="submit" style={{ background: "#c0392b" }}>Endgültig löschen</button>
+        </form>
+      </div>
+    </details>
+  );
+}
+
+function CandidateHint({ c }: { c: ChanceRow }) {
+  if (!c.candidate) return null;
+  return <span> · Kandidat: <strong>{c.candidate.name}</strong> ({candidacyStatusLabel[c.candidate.status] ?? c.candidate.status})</span>;
+}
 
 /**
  * „Wo stehen wir?“ auf Setup- und Kundenebene (Etappe 24): eine Zeile je Chance mit eigener Fortschrittsleiste
  * und dem nächsten Schritt als Knopf – statt eines verdichteten Setup-/Kundenstatus.
  */
-export function ChancenUebersicht({ chances, emptyText, showSetup = false }: { chances: ChanceRow[]; emptyText: string; showSetup?: boolean }) {
+export function ChancenUebersicht({ chances, emptyText, showSetup = false, back = "" }: { chances: ChanceRow[]; emptyText: string; showSetup?: boolean; back?: string }) {
   const all = chances.filter((c) => c.status !== "BEENDET");
   // Beauftragte Chancen sind erledigt – hier ist nichts mehr zu tun; sie stehen eingeklappt darunter (Arbeit läuft unter „Einsätze“)
   const done = all.filter((c) => c.status === "BEAUFTRAGT");
@@ -28,7 +59,7 @@ export function ChancenUebersicht({ chances, emptyText, showSetup = false }: { c
           <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <div style={{ minWidth: "14rem", flex: "1 1 14rem" }}>
               <Link href={`/bedarfe/${c.id}`} className="font-medium">{c.title}</Link>
-              <div className="muted text-xs">{chanceKindLabel[c.kind as keyof typeof chanceKindLabel] ?? c.kind} · verantwortlich {c.ownerName}{showSetup && c.setupName ? ` · ${c.setupName}` : ""}</div>
+              <div className="muted text-xs">{chanceKindLabel[c.kind as keyof typeof chanceKindLabel] ?? c.kind}<CandidateHint c={c} />{showSetup && c.setupName ? ` · ${c.setupName}` : ""}{!c.candidate ? ` · ${c.ownerName}` : ""} <QuickActions c={c} back={back} /></div>
             </div>
             <ProcessStepper
               steps={CHANCE_STEPS.map((s) => ({ key: s, label: opportunityStatusLabel[s] ?? s }))}
@@ -46,7 +77,7 @@ export function ChancenUebersicht({ chances, emptyText, showSetup = false }: { c
         <summary className="text-sm muted">Beauftragt ({done.length}) – laufende Arbeit siehe <Link href="/einsaetze">Einsätze</Link></summary>
         <ul className="mt-2 text-sm space-y-1">
           {done.map((c) => (
-            <li key={c.id} className="flex flex-wrap gap-x-2"><Link href={`/bedarfe/${c.id}`}>{c.title}</Link><span className="muted text-xs">{chanceKindLabel[c.kind as keyof typeof chanceKindLabel] ?? c.kind} · {c.ownerName}{showSetup && c.setupName ? ` · ${c.setupName}` : ""}</span></li>
+            <li key={c.id} className="flex flex-wrap gap-x-2"><Link href={`/bedarfe/${c.id}`}>{c.title}</Link><span className="muted text-xs">{chanceKindLabel[c.kind as keyof typeof chanceKindLabel] ?? c.kind}<CandidateHint c={c} />{showSetup && c.setupName ? ` · ${c.setupName}` : ""} <QuickActions c={c} back={back} /></span></li>
           ))}
         </ul>
       </details>

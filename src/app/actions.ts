@@ -696,7 +696,7 @@ export async function confirmOpportunityAction(fd: FormData) {
 
 export async function changeOpportunityStatusAction(fd: FormData) {
   const data = formToObject(fd);
-  return run(`/bedarfe/${data.opportunityId}`, async (actor) => {
+  return run(backOf(data, `/bedarfe/${data.opportunityId}`), async (actor) => {
     await changeOpportunityStatus(actor, data.opportunityId ?? "", { version: Number(data.version), status: data.status as never, reason: data.reason });
   }, "Status der Chance geändert.");
 }
@@ -1752,6 +1752,7 @@ export async function deleteOpportunityAction(fd: FormData) {
     const { eq } = await import("drizzle-orm");
     const opp = await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, data.opportunityId ?? ""), columns: { setupId: true } });
     const r = await deleteOpportunityPermanently(actor, data.opportunityId ?? "", data);
+    if (data.back && !data.back.startsWith(`/bedarfe/`)) return `${data.back}${data.back.includes("?") ? "&" : "?"}ok=${encodeURIComponent(`Chance „${r.title}“ gelöscht.`)}`;
     return opp ? `/setups/${opp.setupId}?ok=${encodeURIComponent(`Chance „${r.title}“ gelöscht.`)}` : "/kunden";
   }, "Chance gelöscht.");
 }

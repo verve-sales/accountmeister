@@ -11,6 +11,7 @@ import { listOpportunitiesForSetup } from "@/modules/opportunities/service";
 import { canReassignResponsibility, loadSetupContext } from "@/modules/identity/authz";
 import { analyzeSetup } from "@/modules/strategy/analysis";
 import { ChancenUebersicht } from "@/components/ChancenUebersicht";
+import { topCandidatesForOpportunities } from "@/modules/staffing/service";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
 import { Comments, WorkBlock } from "@/components/Work";
 import { DeleteBlock } from "@/components/DeleteBlock";
@@ -82,6 +83,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const roleGroups = groupByFamily(roles);
   const roleName = new Map(roles.map((r) => [r.id, r.name]));
   const openOpportunities = opportunities.filter((o) => o.status !== "BEENDET");
+  const topCandidates = await topCandidatesForOpportunities(opportunities.map((o) => o.id)).catch(() => new Map<string, { name: string; status: string }>());
   const leaderRoles = await db.query.roleAssignments.findMany({ where: or(eq(schema.roleAssignments.role, "PRINCIPAL"), eq(schema.roleAssignments.role, "CEO"), eq(schema.roleAssignments.role, "SALES_OPS")) });
   const opsIds = new Set(leaderRoles.filter((r) => r.role === "SALES_OPS").map((r) => r.userId));
   const leaderIds = [...new Set(leaderRoles.map((r) => r.userId))].filter((uid) => uid !== actor.userId);
@@ -124,7 +126,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       {analysis && (
         <section className="card">
           <h2 className="font-semibold mb-2">Wo stehen wir? – je Chance</h2>
-          <ChancenUebersicht chances={opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: name(o.ownerUserId) }))} emptyText="Noch keine Chance in diesem Setup – worauf läuft es hinaus?" />
+          <ChancenUebersicht chances={opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: name(o.ownerUserId), version: d.canEdit ? o.version : undefined, candidate: topCandidates.get(o.id) ?? null }))} emptyText="Noch keine Chance in diesem Setup – worauf läuft es hinaus?" back={`/setups/${id}`} />
           <p className="text-sm mt-3"><span className="muted">Nächster großer Schritt im Setup: </span>{analysis.nextStep}</p>
           {setupRuns.filter((r) => r.status === "AKTIV").map((r) => {
             const cur = r.steps.find((x) => x.status === "OFFEN");
