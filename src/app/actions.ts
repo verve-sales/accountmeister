@@ -1123,6 +1123,15 @@ export async function updateOrderDatesAction(fd: FormData) {
   }, "Einsatzdaten gespeichert – die Verlängerungsregel richtet sich danach.");
 }
 
+export async function endOrderAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/kunden"), async (actor) => {
+    const { endOrder } = await import("@/modules/health/service");
+    const r = await endOrder(actor, data.orderId ?? "", data);
+    throw new PendingInfo(`Einsatz beendet zum ${r.end} – verschwindet aus allen Übersichten${r.engagements ? ` (${r.engagements} Einsatzakte(n) auf „endet“ gesetzt)` : ""}.`);
+  }, "Einsatz beendet.");
+}
+
 export async function recordExistingEngagementAction(fd: FormData) {
   const data = formToObject(fd);
   const id = data.accountId ?? "";

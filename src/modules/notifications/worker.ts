@@ -48,7 +48,11 @@ export function startNotificationWorker(): void {
         // Einsatzregeln (Etappe 29): Catch-ups, fällige Check-ins, Verlängerung – idempotent über Schlüssel
         await runJob("einsatz-regeln", async () => {
           const { ensureCatchups, notifyDueCheckins, ensureRenewalDecisions } = await import("@/modules/engagements/care");
-          return { catchups: await ensureCatchups(), checkinHinweise: await notifyDueCheckins(), verlaengerungen: await ensureRenewalDecisions() };
+          const { ensureOrdersEnded } = await import("@/modules/health/service");
+          const { db } = await import("@/db/client");
+          let beendet = 0;
+          for (const ws of await db.query.workspaces.findMany({ columns: { id: true } })) beendet += await ensureOrdersEnded(ws.id);
+          return { catchups: await ensureCatchups(), checkinHinweise: await notifyDueCheckins(), verlaengerungen: await ensureRenewalDecisions(), auftraegeBeendet: beendet };
         });
         // Moco-Abgleich (Etappe 31): stündlich als Rückfallebene zu den Webhooks; nur wenn eingeschaltet
         const { mocoEnabled } = await import("@/modules/moco/client");

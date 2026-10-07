@@ -161,7 +161,7 @@ async function loadEngagements(accountIds: string[]): Promise<Map<string, Engage
   const seen = new Set<string>();
   for (const r of rows) {
     const akte = endByOrder.get(r.o.id);
-    if (akte && ["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(akte.status)) continue;
+    if (akte && (["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(akte.status) || (akte.status === "ENDET" && !!akte.plannedEnd && akte.plannedEnd < t))) continue;
     const plannedEnd = akte?.plannedEnd ?? r.o.plannedEnd;
     // Dubletten derselben Chance mit gleichem Ende nur einmal
     const dupKey = `${r.o.opportunityId}:${plannedEnd ?? ""}`;
@@ -435,6 +435,64 @@ export async function updateOrderDates(actor: Actor, orderId: string, raw: unkno
   if (!u) throw new ConflictError();
   await recordAudit(db, actor, "order.dates_updated", "ORDER", orderId, { ende: i.plannedEnd || null, frist: i.renewalDeadline || null });
   return u;
+}
+
+/** Auftrag beenden (Einsatz ist vorbei): setzt den Auftrag auf „beendet“, beendet verknüpfte Einsatzakten, schließt Check-ins – endgültig raus aus allen Übersichten. */
+export const orderEndInput = z.object({ version: z.coerce.number().int().positive(), endDate: dateOpt, reason: z.string().trim().max(500).optional().or(z.literal("")) });
+
+export async function endOrder(actor: Actor, orderId: string, raw: unknown) {
+  const parsed = orderEndInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError("Bitte ein gültiges Enddatum angeben (TT.MM.JJJJ).");
+  const i = parsed.data;
+  const order = await db.query.orders.findFirst({ where: and(eq(schema.orders.id, orderId), eq(schema.orders.workspaceId, actor.workspaceId)) });
+  if (!order) throw new NotFoundError("Auftrag");
+  const opp = await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, order.opportunityId) });
+  const account = await getAccount(actor, opp!.accountId);
+  if (!canMaintainHealth(actor, account)) throw new ForbiddenError("Einsätze beenden BD, Principal, CEO oder Sales Operations.");
+  const end = i.endDate || order.plannedEnd || today();
+  const engs = await db.query.engagements.findMany({ where: eq(schema.engagements.orderId, orderId) });
+  await db.transaction(async (tx) => {
+    const [u] = await tx
+      .update(schema.orders)
+      .set({ engagementStatus: "BEENDET", plannedEnd: end, statusReason: i.reason || order.statusReason, version: i.version + 1, updatedAt: new Date() })
+      .where(and(eq(schema.orders.id, orderId), eq(schema.orders.version, i.version)))
+      .returning();
+    if (!u) throw new ConflictError();
+    for (const e of engs) {
+      if (["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(e.status)) continue;
+      await tx.update(schema.engagements).set({ status: e.status === "ENDET" ? e.status : "ENDET", actualEnd: e.actualEnd ?? end, plannedEnd: end, version: e.version + 1, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
+      const open = await tx.query.checkins.findMany({ where: and(eq(schema.checkins.engagementId, e.id), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])) });
+      for (const c of open) await tx.update(schema.checkins).set({ status: "ABGESAGT", note: `${c.note ?? ""}\nEntfallen: Einsatz beendet`.trim(), version: c.version + 1, updatedAt: new Date() }).where(eq(schema.checkins.id, c.id));
+      await tx.update(schema.renewalDecisions).set({ status: "ERLEDIGT", updatedAt: new Date() }).where(and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])));
+      await recordAudit(tx, actor, "engagement.status", "ENGAGEMENT", e.id, { von: e.status, nach: "ENDET", grund: i.reason || "Auftrag beendet" });
+    }
+    await recordAudit(tx, actor, "order.ended", "ORDER", orderId, { ende: end, grund: i.reason || null });
+  });
+  return { orderId, end, engagements: engs.length };
+}
+
+/**
+ * Aufräumregel (Etappe 33): Aufträge, deren Einsatzakte beendet ist oder deren Ende länger als 14 Tage zurückliegt,
+ * gelten als beendet – sonst stehen längst vorbei Einsätze in allen Übersichten. Protokolliert als Regel, nie stillschweigend gelöscht.
+ */
+export async function ensureOrdersEnded(workspaceId: string): Promise<number> {
+  const t = today();
+  const cutoff = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+  const running = await db.query.orders.findMany({ where: and(eq(schema.orders.workspaceId, workspaceId), eq(schema.orders.engagementStatus, "GESTARTET")) });
+  if (!running.length) return 0;
+  const engs = await db.query.engagements.findMany({ where: inArray(schema.engagements.orderId, running.map((o) => o.id)), columns: { orderId: true, status: true, plannedEnd: true } });
+  let n = 0;
+  for (const o of running) {
+    const mine = engs.filter((e) => e.orderId === o.id);
+    const akteEnded = mine.length > 0 && mine.every((e) => ["ENDET", "ABGESCHLOSSEN", "ABGEBROCHEN"].includes(e.status));
+    const akteRunning = mine.some((e) => ["AKTIV", "PAUSIERT", "GEPLANT", "VORBEREITUNG"].includes(e.status));
+    const endPassed = !!o.plannedEnd && o.plannedEnd < cutoff && !akteRunning;
+    if (!akteEnded && !endPassed) continue;
+    await db.update(schema.orders).set({ engagementStatus: "BEENDET", updatedAt: new Date() }).where(eq(schema.orders.id, o.id));
+    await db.insert(schema.auditEvents).values({ workspaceId, actorUserId: null, action: "order.auto_ended", objectType: "ORDER", objectId: o.id, changes: { ende: o.plannedEnd, grund: akteEnded ? "Einsatzakte beendet" : `Ende vor ${t} überschritten` } }).catch(() => undefined);
+    n++;
+  }
+  return n;
 }
 
 /**

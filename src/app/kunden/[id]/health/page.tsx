@@ -10,7 +10,8 @@ import { HealthBadge } from "@/components/HealthBadge";
 import { Feedback } from "@/components/Feedback";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
-import { attachContractAction, recordExistingEngagementAction, saveHealthAnswerAction, setContractLinkAction, setOrderConsultantAction, updateOrderDatesAction } from "../../../actions";
+import { attachContractAction, endOrderAction, recordExistingEngagementAction, saveHealthAnswerAction, setContractLinkAction, setOrderConsultantAction, updateOrderDatesAction } from "../../../actions";
+import { ensureOrdersEnded } from "@/modules/health/service";
 import { db, schema } from "@/db/client";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -38,6 +39,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
   const q = h.questions[idx] ?? null;
   const canDecide = !isSalesOpsOnly(actor);
   const activeSetups = setups.filter((s) => s.status !== "ARCHIVIERT");
+  await ensureOrdersEnded(actor.workspaceId).catch(() => 0);
   const roadmaps = await renewalRoadmaps(h.engagements);
   const users = await db.query.users.findMany({ where: and(eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")), orderBy: (u, { asc }) => [asc(u.displayName)] });
   const setupIds = [...new Set(h.engagements.map((e) => e.setupId))];
@@ -212,7 +214,15 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
                       </details>
                     )}
                   </td>
-                  <td className="text-sm">{e.status === "GESTARTET" ? "läuft" : "beauftragt"}{e.daysToEnd !== null && e.daysToEnd >= 0 ? ` · noch ${e.daysToEnd} Tage` : ""}</td>
+                  <td className="text-sm">
+                    {e.daysToEnd !== null && e.daysToEnd < 0 ? <span style={{ color: "#c0392b", fontWeight: 600 }}>Ende überschritten ({-e.daysToEnd} Tage)</span> : <>{e.status === "GESTARTET" ? "läuft" : "beauftragt"}{e.daysToEnd !== null && e.daysToEnd >= 0 ? ` · noch ${e.daysToEnd} Tage` : ""}</>}
+                    {may && (
+                      <form action={endOrderAction} className="mt-1 flex flex-wrap gap-1 items-center">
+                        <input type="hidden" name="orderId" value={e.orderId} /><input type="hidden" name="version" value={e.version} /><input type="hidden" name="back" value={back} /><input type="hidden" name="endDate" value={e.plannedEnd ?? ""} />
+                        <button className={`btn btn-small${e.daysToEnd !== null && e.daysToEnd < 0 ? "" : " btn-secondary"}`} type="submit" title="Auftrag und Einsatzakte beenden – raus aus allen Übersichten">Beendet{e.plannedEnd ? ` zum ${fmtDate(e.plannedEnd)}` : ""}</button>
+                      </form>
+                    )}
+                  </td>
                   <td className="text-sm">{fmtDate(e.plannedStart)}</td>
                   <td>
                     {may ? (
@@ -232,7 +242,9 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
             </tbody>
           </table>
         )}
-        {[...roadmaps.entries()].filter(([oid]) => { const e = h.engagements.find((x) => x.orderId === oid); return e && e.daysToEnd !== null && e.daysToEnd <= 180; }).map(([oid, ms]) => {
+        <details className="mt-3">
+        <summary className="text-sm font-semibold">Fahrpläne Verlängerung ({[...roadmaps.keys()].filter((oid) => { const e = h.engagements.find((x) => x.orderId === oid); return e && e.daysToEnd !== null && e.daysToEnd >= 0 && e.daysToEnd <= 180; }).length})</summary>
+        {[...roadmaps.entries()].filter(([oid]) => { const e = h.engagements.find((x) => x.orderId === oid); return e && e.daysToEnd !== null && e.daysToEnd >= 0 && e.daysToEnd <= 180; }).map(([oid, ms]) => {
           const e = h.engagements.find((x) => x.orderId === oid)!;
           const color: Record<string, string> = { ERLEDIGT: "#2f7d32", UEBERFAELLIG: "#c0392b", BALD: "#8a6d1f", SPAETER: "var(--muted)" };
           const label: Record<string, string> = { ERLEDIGT: "erledigt", UEBERFAELLIG: "überfällig", BALD: "steht an", SPAETER: "später" };
@@ -251,6 +263,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
             </div>
           );
         })}
+        </details>
         <p className="muted text-xs mt-2">Verlängerungsregel: 3 Monate vor Ende bekommt der BD einen Ping („Verlängerung ansprechen“). Am Auslösetag (Verlängerungsfrist − 14 Tage, sonst Einsatzende − 8 Wochen) startet automatisch „Verlängerung vor Einsatzende“ an der Chance; der erste Schritt kommt als Vorschlag zum BD. Vier Wochen vor Ende ohne Fortschritt erscheint der Einsatz bei Principal und CEO als Eskalation.</p>
         {canDecide && may && q?.key !== "ENGAGEMENT_MISSING" && <ExistingEngagementForm accountId={id} setups={activeSetups} />}
       </section>

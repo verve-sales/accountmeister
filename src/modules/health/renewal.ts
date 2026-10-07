@@ -13,6 +13,8 @@ import { DAY, renewalPingDate, renewalTriggerDate } from "./service";
  * Berechnet beim Öffnen von Start/Meine Arbeit für die Einsätze, die der Akteur verantwortet.
  */
 export async function ensureRenewalRuns(actor: Actor, now = new Date()): Promise<number> {
+  const { ensureOrdersEnded } = await import("./service");
+  await ensureOrdersEnded(actor.workspaceId).catch(() => 0);
   let rows = await db
     .select({ o: schema.orders, opp: schema.opportunities, bd: schema.accounts.responsibleBdUserId })
     .from(schema.orders)

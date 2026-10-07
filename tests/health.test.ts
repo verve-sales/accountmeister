@@ -4,7 +4,7 @@ import { db, schema } from "@/db/client";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
 import { loadActor } from "@/modules/identity/actor";
 import { assignRole } from "@/modules/governance/service";
-import { getHealth, recordExistingEngagement, renewalTriggerDate, saveHealthAnswer, snapshotHealth, updateOrderDates } from "@/modules/health/service";
+import { endOrder, ensureOrdersEnded, getHealth, recordExistingEngagement, renewalTriggerDate, saveHealthAnswer, snapshotHealth, updateOrderDates } from "@/modules/health/service";
 import { ensureRenewalRuns, listRenewals } from "@/modules/health/renewal";
 import { actorFor, ensureSeed } from "./helpers";
 
@@ -83,5 +83,24 @@ describe("Etappe 23: Kunden-Health-Check und Verlängerungsregel", () => {
     expect((high.health.score ?? 0) - (low.health.score ?? 0)).toBeGreaterThan(10);
     const drops = await db.query.standardTasks.findMany({ where: and(eq(schema.standardTasks.accountId, s.accountId), eq(schema.standardTasks.kind, "HEALTH_DROP")) });
     expect(drops.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("Beendete Einsätze verschwinden: Aufräumregel beendet Aufträge mit lange überschrittenem Ende; „Beendet“-Knopf beendet Auftrag samt Einsatzakte", async () => {
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    // Altlast: Auftrag gestartet, Ende vor 99 Tagen, keine Einsatzakte
+    const old = await recordExistingEngagement(david, s.accountId, { setupId: s.setupId, title: `Altlast ${Date.now()}`, kind: "VERVE_EXPERTE", plannedStart: inDays(-300), plannedEnd: inDays(-99), evidenceText: "Bestellung aus dem Vorjahr." });
+    expect(old.engagementStatus).toBe("GESTARTET");
+    expect(await ensureOrdersEnded(s.workspaceId)).toBeGreaterThanOrEqual(1);
+    expect((await db.query.orders.findFirst({ where: eq(schema.orders.id, old.id) }))?.engagementStatus).toBe("BEENDET");
+    expect((await getHealth(david, s.accountId)).engagements.map((e) => e.orderId)).not.toContain(old.id);
+    expect((await listRenewals([s.accountId])).some((r) => r.orderId === old.id)).toBe(false);
+    // Laufender Auftrag (Ende in 20 Tagen) bleibt – und lässt sich per Knopf beenden
+    const cur = await recordExistingEngagement(david, s.accountId, { setupId: s.setupId, title: `Läuft noch ${Date.now()}`, kind: "VERVE_EXPERTE", plannedStart: inDays(-100), plannedEnd: inDays(20), evidenceText: "Bestellung 4712." });
+    expect(await ensureOrdersEnded(s.workspaceId)).toBe(0);
+    const r = await endOrder(david, cur.id, { version: cur.version, endDate: inDays(-1), reason: "Projekt vorzeitig beendet" });
+    expect(r.end).toBe(inDays(-1));
+    expect((await db.query.orders.findFirst({ where: eq(schema.orders.id, cur.id) }))?.engagementStatus).toBe("BEENDET");
+    expect((await getHealth(david, s.accountId)).engagements.map((e) => e.orderId)).not.toContain(cur.id);
   });
 });
