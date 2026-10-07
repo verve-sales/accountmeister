@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { db, schema } from "@/db/client";
+import { db, schema, type Db, type Tx } from "@/db/client";
 import type { RelationshipState } from "@/db/schema";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
@@ -29,6 +29,8 @@ export const createPersonInput = z.object({
   linkedinUrl: linkedinUrlField,
   functionTitle: z.string().trim().max(200).optional().or(z.literal("")),
   orgUnitId: z.string().optional().or(z.literal("")),
+  /** Neuer Bereich (Freitext) – wird am Kunden angelegt bzw. bei Namensgleichheit wiederverwendet */
+  orgUnitName: z.string().trim().max(200).optional().or(z.literal("")),
   knownResponsibility: z.string().trim().max(500).optional().or(z.literal("")),
   accessClass: z.enum(schema.accessClassEnum.enumValues).default("ACCOUNT_TEAM"),
   setupId: z.string().optional().or(z.literal("")), // optional: sofort eine Beziehung „Name/Funktion bekannt“ im Setup anlegen
@@ -60,11 +62,11 @@ export async function createPerson(actor: Actor, raw: unknown) {
       })
       .returning();
     if (!person) throw new Error("Person konnte nicht angelegt werden");
-    if (input.functionTitle) {
+    if (input.functionTitle || input.orgUnitId || input.orgUnitName) {
       await tx.insert(schema.personFunctions).values({
         personId: person.id,
-        orgUnitId: input.orgUnitId || null,
-        functionTitle: input.functionTitle,
+        orgUnitId: await resolveOrgUnit(tx, account.id, input.orgUnitId || undefined, input.orgUnitName || undefined),
+        functionTitle: input.functionTitle || "Funktion noch unbekannt",
         knownResponsibility: input.knownResponsibility || null,
       });
     }
@@ -83,10 +85,23 @@ export async function createPerson(actor: Actor, raw: unknown) {
   });
 }
 
+/** Bereich auflösen: gewählte ID, sonst Freitext (bei Namensgleichheit wiederverwenden, sonst anlegen). */
+export async function resolveOrgUnit(tx: Tx | Db, accountId: string, orgUnitId: string | undefined, orgUnitName: string | undefined): Promise<string | null> {
+  if (orgUnitId) return orgUnitId;
+  const name = (orgUnitName ?? "").trim();
+  if (!name) return null;
+  const all = await tx.query.orgUnits.findMany({ where: eq(schema.orgUnits.accountId, accountId), columns: { id: true, name: true } });
+  const hit = all.find((u) => u.name.trim().toLowerCase() === name.toLowerCase());
+  if (hit) return hit.id;
+  const [u] = await tx.insert(schema.orgUnits).values({ accountId, name }).returning();
+  return u!.id;
+}
+
 export const setFunctionInput = z.object({
   personId: z.string().min(1),
   functionTitle: z.string().trim().min(2, "Funktion fehlt").max(200),
   orgUnitId: z.string().optional().or(z.literal("")),
+  orgUnitName: z.string().trim().max(200).optional().or(z.literal("")),
   knownResponsibility: z.string().trim().max(500).optional().or(z.literal("")),
   validFrom: z.string().optional().or(z.literal("")),
 });
@@ -105,7 +120,7 @@ export async function setPersonFunction(actor: Actor, raw: unknown) {
       .where(and(eq(schema.personFunctions.personId, person.id), isNull(schema.personFunctions.validTo)));
     await tx.insert(schema.personFunctions).values({
       personId: person.id,
-      orgUnitId: input.orgUnitId || null,
+      orgUnitId: person.accountId ? await resolveOrgUnit(tx, person.accountId, input.orgUnitId || undefined, input.orgUnitName || undefined) : input.orgUnitId || null,
       functionTitle: input.functionTitle,
       knownResponsibility: input.knownResponsibility || null,
       validFrom: input.validFrom || today,

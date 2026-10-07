@@ -327,6 +327,15 @@ Leads nach Moco: Unter Mehr → Moco → „Chancen als Leads nach Moco übertra
 Einrichtung (Betrieb): MOCO_MODE=http, MOCO_SUBDOMAIN, MOCO_API_KEY (technischer Nutzer; schreibt in Moco nur Leads), MOCO_WEBHOOK_SECRET; Webhooks in Moco für Project, Company, User anlegen.`,
   },
   {
+    id: "personen-begriffe",
+    title: "Personen beim Kunden: Bereich, Beziehungsstand, Kontaktweg",
+    where: "Setup → Personen & Zugang",
+    keywords: ["bereich", "org unit", "abteilung", "unbekannt", "beziehungsstand", "im austausch", "aktiver austausch", "kontaktweg", "zugang", "buyingcenter", "person anlegen", "funktion"],
+    body: `Bereich: die Organisationseinheit des Kunden, zu der eine Person gehört (Abteilung, Team, Programm – z. B. „ELBE Build & Deliver“). Bereiche sind je Kunde frei; beim Anlegen einer Person oder beim Setzen einer Funktion wählst du einen vorhandenen oder tippst einen neuen ein („… oder neuen Bereich eintippen“) – er wird am Kunden angelegt und steht danach allen zur Auswahl. „– unbekannt –“ heißt nur: noch nicht erfasst.
+Beziehungsstand (je Person und Setup, mit Halter auf Verve-Seite): Name/Funktion bekannt → Vorstellung angefragt → Vorgestellt → Im Austausch → Konkrete Zusammenarbeit; außerdem „Derzeit nicht aktiv“. Ab „Vorgestellt“ braucht ein Stand einen Beleg (Quelle). „Im aktiven Austausch“ im Health-Check zählt die Personen mit Stand „Im Austausch“ oder „Konkrete Zusammenarbeit“ – also die, mit denen tatsächlich gesprochen wird, nicht die nur bekannten Namen. Hängt alles an einer Person, ist die Position verwundbar.
+Kontaktweg (Briefing 8): ein geplanter Weg zu einer Zielperson, die wir noch nicht kennen – über welche belegte Beziehung (wer von uns kennt wen) soll die Vorstellung legitim zustande kommen. Ein Kontaktweg hat Zielperson, Vermittler, nächsten Schritt und Status (Entwurf, offen, erledigt) und trennt belegte, geplante und bloß hypothetische Verbindungen. Er ist kein Kanal (Telefon, Mail) – der steht an der einzelnen Aktion.`,
+  },
+  {
     id: "regeln",
     title: "Regeln, die das Tool durchsetzt",
     where: "überall",

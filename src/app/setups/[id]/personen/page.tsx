@@ -99,6 +99,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                 <div>
                   <label className="label" htmlFor="pUnit">Bereich</label>
                   <select id="pUnit" name="orgUnitId" className="select" defaultValue=""><option value="">– unbekannt –</option>{units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
+                  <input name="orgUnitName" className="input mt-1" placeholder="… oder neuen Bereich eintippen (z. B. „ELBE Build & Deliver“)" aria-label="Neuer Bereich" maxLength={200} />
                 </div>
                 <div><label className="label" htmlFor="pResp">Bekannte Zuständigkeit</label><input id="pResp" name="knownResponsibility" className="input" /></div>
                 <div><label className="label" htmlFor="pMail">Berufliche E-Mail (optional)</label><input id="pMail" name="email" type="email" className="input" /></div>
@@ -148,6 +149,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                 <div>
                   <label className="label" htmlFor="fUnit">Bereich</label>
                   <select id="fUnit" name="orgUnitId" className="select" defaultValue=""><option value="">– unbekannt –</option>{units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
+                  <input name="orgUnitName" className="input mt-1" placeholder="… oder neuen Bereich eintippen" aria-label="Neuer Bereich" maxLength={200} />
                 </div>
                 <div><label className="label" htmlFor="fResp">Bekannte Zuständigkeit</label><input id="fResp" name="knownResponsibility" className="input" /></div>
                 <div className="sm:col-span-2"><button className="btn btn-secondary" type="submit">Funktion setzen</button></div>
