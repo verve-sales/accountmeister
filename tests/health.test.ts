@@ -6,6 +6,7 @@ import { loadActor } from "@/modules/identity/actor";
 import { assignRole } from "@/modules/governance/service";
 import { endOrder, ensureOrdersEnded, getHealth, recordExistingEngagement, renewalTriggerDate, saveHealthAnswer, snapshotHealth, updateOrderDates } from "@/modules/health/service";
 import { ensureRenewalRuns, listRenewals } from "@/modules/health/renewal";
+import { quickFill, topCandidatesForOpportunities } from "@/modules/staffing/service";
 import { actorFor, ensureSeed } from "./helpers";
 
 const inDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
@@ -102,5 +103,19 @@ describe("Etappe 23: Kunden-Health-Check und Verlängerungsregel", () => {
     expect(r.end).toBe(inDays(-1));
     expect((await db.query.orders.findFirst({ where: eq(schema.orders.id, cur.id) }))?.engagementStatus).toBe("BEENDET");
     expect((await getHealth(david, s.accountId)).engagements.map((e) => e.orderId)).not.toContain(cur.id);
+  });
+
+  it("Konvertierte Chance ohne Person (im Health-Check nachgetragen): Person hinterlegen legt Einsatz an, verknüpft ihn mit dem Auftrag und setzt ihn aktiv", async () => {
+    process.env.FEATURE_BESETZUNG = "true";
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const order = await recordExistingEngagement(david, s.accountId, { setupId: s.setupId, title: `UX Unterstützung ${Date.now()}`, kind: "VERVE_EXPERTE", plannedStart: inDays(-60), plannedEnd: inDays(80), evidenceText: "Bestellung UX, 50 %." });
+    const r = await quickFill(david, order.opportunityId, { title: "UX Unterstützung", resourceKind: "INTERN", internalUserId: david.userId, desiredStart: "", plannedEnd: "", endOpen: "false" });
+    const e = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, r.engagement.id) }))!;
+    expect(e.orderId).toBe(order.id);
+    expect(e.status).toBe("AKTIV");
+    expect(e.plannedEnd).toBe(inDays(80));
+    expect((await topCandidatesForOpportunities([order.opportunityId])).get(order.opportunityId)).toEqual({ name: expect.stringMatching(/David.*\(intern\)/), status: "BESETZT" });
+    expect((await db.query.orders.findFirst({ where: eq(schema.orders.id, order.id) }))?.consultantUserId).toBe(david.userId);
   });
 });

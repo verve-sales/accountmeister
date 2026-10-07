@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { topCandidatesForOpportunities } from "@/modules/staffing/service";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db/client";
+import { canManageStaffingAt, freelancerOptions, topCandidatesForOpportunities } from "@/modules/staffing/service";
+import { QuickFillForm } from "@/components/QuickFillForm";
 import { mocoDealUrl } from "@/modules/moco/client";
 import { initiativeKindLabel, listInitiatives, type InitiativeKind } from "@/modules/agenda/service";
 import { notFound, redirect } from "next/navigation";
@@ -141,6 +144,10 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
 
   const staffedBy = (await topCandidatesForOpportunities([opp.id]).catch(() => new Map<string, { name: string; status: string }>())).get(opp.id);
   const staffedByText = staffedBy ? (staffedBy.status === "BESETZT" ? staffedBy.name : null) : null;
+  const staffingOn = getConfig().FEATURE_BESETZUNG === "true";
+  const oppEngagements = staffingOn ? await db.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id), columns: { id: true } }) : [];
+  const staffingManage = staffingOn && !closed ? await canManageStaffingAt(actor, opp.id).catch(() => false) : false;
+  const staffingFreelancers = staffingManage ? await freelancerOptions(actor).catch(() => []) : [];
   return (
     <div className="space-y-6">
       <p className="text-sm">
@@ -151,7 +158,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         <Status label={opportunityStatusLabel[opp.status] ?? opp.status} />
         {opp.fastTrack && <Status label="Direkte Anfrage (Fast-Track)" />}
         {staffedByText && <span className="text-sm">Besetzt mit: <strong>{staffedByText}</strong></span>}
-        <span className="muted text-sm">Vertrieblich verantwortlich: {name(opp.ownerUserId)} · angelegt {fmtDateTime(opp.createdAt)}{opp.requestedAt && <> · Anfrage eingegangen {fmtDateTime(opp.requestedAt)}</>}</span>
+        <span className="muted text-sm">Vertrieblich verantwortlich (BD): {name(opp.ownerUserId)} · angelegt {fmtDateTime(opp.createdAt)}{opp.requestedAt && <> · Anfrage eingegangen {fmtDateTime(opp.requestedAt)}</>}</span>
         {!canEdit && <span className="muted text-sm">(nur lesend)</span>}
         {opp.mocoDealId && <span className="muted text-xs">Lead in Moco (#{opp.mocoDealId}){mocoDealUrl(opp.mocoDealId) ? <> · <a href={mocoDealUrl(opp.mocoDealId)!} target="_blank" rel="noreferrer">in Moco öffnen</a></> : null}</span>}
         {!opp.mocoDealId && opp.mocoProjectId && <span className="muted text-xs">Projekt in Moco (#{opp.mocoProjectId})</span>}
@@ -161,7 +168,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
           <input type="hidden" name="opportunityId" value={opp.id} />
           <input type="hidden" name="version" value={opp.version} />
           <div>
-            <label className="label" htmlFor="reassignOwner">Verantwortlichkeit umstellen</label>
+            <label className="label" htmlFor="reassignOwner">Vertriebliche Verantwortung umstellen</label>
             <select id="reassignOwner" name="ownerUserId" className="select" required defaultValue="">
               <option value="" disabled>Bitte wählen …</option>
               {d.users.filter((u) => u.id !== opp.ownerUserId).map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
@@ -193,6 +200,22 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         <h2 className="font-semibold mb-2">Chance</h2>
         <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
           <div className="sm:col-span-2"><dt className="muted">Wofür</dt><dd><strong>{chanceKindLabel[opp.kind]}</strong>{opp.roleId ? ` · ${d.roles.find((r) => r.id === opp.roleId)?.name ?? "Rolle"}` : " · Standardrolle noch offen"}{opp.headcount ? ` · ${opp.headcount}×` : ""}{opp.horizon ? ` · ${opp.horizon}` : ""}{opp.status === "ANTIZIPIERT" && <span className="muted"> · antizipiert – vom Kunden noch nicht ausgesprochen</span>}</dd></div>
+          {(opp.status === "BEAUFTRAGT" || staffedByText) && (
+            <div className="sm:col-span-2" id="besetzt-mit">
+              <dt className="muted">Besetzt mit</dt>
+              <dd>
+                {staffedByText ? <strong>{staffedByText}</strong> : <span style={{ color: "#b7791f" }}>noch nicht hinterlegt</span>}
+                {oppEngagements.length > 0 ? <> · {oppEngagements.map((e, i) => <span key={e.id}>{i ? ", " : ""}<Link href={`/einsaetze/${e.id}`}>Einsatz öffnen</Link></span>)}</> : null}
+                {staffingManage && (
+                  <details className="mt-1" open={!staffedByText}>
+                    <summary className="text-xs">{staffedByText ? "weitere Person hinterlegen" : "Person hinterlegen (intern oder Freelancer)"}</summary>
+                    <QuickFillForm opportunityId={opp.id} back={`/bedarfe/${opp.id}#besetzt-mit`} users={activeUsers.map((u) => ({ id: u.id, name: u.displayName }))} freelancers={staffingFreelancers} defaults={{ resourceKind: opp.kind === "FREELANCER_EXPERTE" ? "FREELANCER" : "INTERN", title: opp.title, desiredStart: d.orders[0]?.plannedStart ?? null, plannedEnd: d.orders[0]?.plannedEnd ?? null, endOpen: !d.orders[0]?.plannedEnd }} />
+                    <p className="muted text-xs mt-1">Legt die Einsatzakte an und verknüpft sie mit dem vorhandenen Auftrag; läuft der Auftrag schon, ist der Einsatz direkt aktiv.</p>
+                  </details>
+                )}
+              </dd>
+            </div>
+          )}
           <div className="sm:col-span-2"><dt className="muted">Beschreibung in Kundensprache</dt><dd className="whitespace-pre-wrap">{opp.needDescription}</dd></div>
           <div><dt className="muted">Konkreter Anlass</dt><dd>{opp.trigger ?? "–"}</dd></div>
           <div className="sm:col-span-2">
@@ -252,7 +275,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
                 <input type="hidden" name="version" value={opp.version} />
                 <div><label className="label" htmlFor="oTitle">Titel</label><input id="oTitle" name="title" className="input" required minLength={3} defaultValue={opp.title} /></div>
                 <div>
-                  <label className="label" htmlFor="oOwner">Verantwortlich</label>
+                  <label className="label" htmlFor="oOwner">Vertrieblich verantwortlich (BD)</label>
                   <select id="oOwner" name="ownerUserId" className="select" defaultValue={opp.ownerUserId}>{d.users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}</select>
                 </div>
                 <div className="sm:col-span-2"><label className="label" htmlFor="oNeed">Beschreibung in Kundensprache</label><textarea id="oNeed" name="needDescription" className="textarea" required minLength={10} defaultValue={opp.needDescription} /></div>

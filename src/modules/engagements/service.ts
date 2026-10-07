@@ -100,6 +100,23 @@ export async function ensureEngagementForSelection(tx: Tx, actor: Actor, candida
     // Der BD betreut den Kunden standardmäßig selbst (F04), bis eine Übergabe angenommen ist
     await tx.insert(schema.careAssignments).values({ workspaceId: p.workspaceId, engagementId: e.id, role: "CUSTOMER_CARE", userId: p.bdUserId, fromDate: todayIso(), acceptedAt: new Date(), grantedBy: actor.userId }).onConflictDoNothing();
     await recordAudit(tx, actor, "engagement.created", "ENGAGEMENT", e.id, { position: p.id, kandidatur: c.id });
+    // Besetzung nachgetragen an einer schon konvertierten Chance (z. B. im Health-Check erfasster Auftrag): mit dem
+    // Auftrag ohne Einsatzakte verknüpfen, Laufzeit übernehmen und – läuft der Auftrag schon – direkt aktiv setzen.
+    const linked = new Set((await tx.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, p.opportunityId), columns: { orderId: true } })).map((x) => x.orderId).filter((x): x is string => !!x));
+    const orders = await tx.query.orders.findMany({ where: and(eq(schema.orders.opportunityId, p.opportunityId), eq(schema.orders.status, "BEAUFTRAGUNG_BESTAETIGT")), orderBy: asc(schema.orders.createdAt) });
+    const order = orders.find((o) => !linked.has(o.id) && o.engagementStatus !== "BEENDET") ?? null;
+    if (order) {
+      const running = order.engagementStatus === "GESTARTET";
+      const start = e.plannedStart ?? order.plannedStart;
+      const end = e.plannedEnd ?? order.plannedEnd;
+      await tx
+        .update(schema.engagements)
+        .set({ orderId: order.id, plannedStart: start, plannedEnd: end, renewalDeadline: order.renewalDeadline, ...(running ? { status: "AKTIV", actualStart: start ?? todayIso() } : {}), updatedAt: new Date() })
+        .where(eq(schema.engagements.id, e.id));
+      await tx.update(schema.orders).set({ consultantUserId: c.internalUserId ?? order.consultantUserId, consultantName: c.internalUserId ? order.consultantName : personName, updatedAt: new Date() }).where(eq(schema.orders.id, order.id));
+      await recordAudit(tx, actor, "engagement.linked_order", "ENGAGEMENT", e.id, { auftrag: order.id, aktiv: running });
+      return (await tx.query.engagements.findFirst({ where: eq(schema.engagements.id, e.id) }))!;
+    }
   }
   return row;
 }
