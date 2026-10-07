@@ -21,9 +21,9 @@ import { listMyWork, workFilterValues, workTargets, ensureOverdueNotificationsSa
 import { WorkList } from "@/components/Work";
 import { listMyCheckins, listRenewalCards } from "@/modules/engagements/care";
 import { RenewalCards } from "@/components/Renewal";
+import { CheckinRow } from "@/components/Arbeitsliste";
 import { plusDaysIso } from "@/modules/work/calendar";
 import { getConfig } from "@/lib/config";
-import { checkinAction } from "../actions";
 import { WorkCreateForm } from "@/components/WorkCreateForm";
 import { changeActionStatusAction, respondHandoverAction, respondSupportRequestAction } from "../actions";
 
@@ -39,35 +39,6 @@ const FILTERS = [
   { key: "ueberfaellig", label: "überfällig" },
   { key: "woche", label: "diese Woche" },
 ] as const;
-
-type CheckinItem = Awaited<ReturnType<typeof listMyCheckins>>[number];
-
-function CheckinRow({ c, soon }: { c: CheckinItem; soon: boolean }) {
-  return (
-    <li className="flex flex-wrap items-center gap-2" style={{ borderLeft: `3px solid ${c.overdue ? "#c0392b" : soon ? "#b7791f" : "var(--border)"}`, paddingLeft: ".6rem" }}>
-      <div style={{ minWidth: "16rem", flex: "1 1 16rem" }}>
-        <Link href={`/einsaetze/${c.engagementId}#checkins`}><strong>{c.engagementTitle}</strong></Link>
-        <div className="muted text-xs">{c.accountName} · {c.side === "KUNDE" ? "Kunde" : "Freelancer"} · fällig {fmtDate(c.dueDate)}{c.overdue ? " (überfällig)" : ""}</div>
-      </div>
-      <form action={checkinAction} className="flex flex-wrap gap-1 items-center">
-        <input type="hidden" name="checkinId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="back" value="/meine-arbeit#checkins" /><input type="hidden" name="action" value="ERLEDIGEN" />
-        <span className="muted text-xs">heute geführt, Stimmung:</span>
-        <button className="btn btn-small" type="submit" name="mood" value="POSITIV" style={{ background: "#2f7d32" }}>positiv</button>
-        <button className="btn btn-small" type="submit" name="mood" value="MITTEL" style={{ background: "#b7791f" }}>mittel</button>
-        <button className="btn btn-small" type="submit" name="mood" value="NEGATIV" style={{ background: "#c0392b" }}>negativ</button>
-        <details className="inline">
-          <summary className="text-xs muted" style={{ cursor: "pointer" }}>mehr</summary>
-          <div className="flex flex-wrap gap-1 items-center mt-1">
-            <input type="datetime-local" name="heldAt" className="input" aria-label="Gesprächstermin" />
-            <input name="note" className="input" placeholder="Ergebnis" aria-label="Ergebnis" style={{ minWidth: 200 }} />
-            <input name="salesHint" className="input" placeholder="Sales-Hinweis (optional)" aria-label="Sales-Hinweis" />
-            <button className="btn btn-secondary btn-small" type="submit">Mit Details erledigen</button>
-          </div>
-        </details>
-      </form>
-    </li>
-  );
-}
 
 export default async function MeineArbeitPage({ searchParams }: { searchParams: Promise<{ fehler?: string; ok?: string; v?: string; f?: string }> }) {
   const params = await searchParams;
@@ -143,11 +114,11 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
             <details open={soon.length > 0}>
               <summary className="font-semibold">Meine Check-ins ({checkins.length}){soon.length ? ` – ${soon.length} fällig bis ${fmtDate(plusDaysIso(today, 7))}` : " – nichts in den nächsten 7 Tagen"}</summary>
               <p className="muted text-xs mt-1 mb-2">Ein Klick auf die Stimmung erledigt den Check-in mit heutigem Datum; der nächste wird automatisch in 6 Wochen fällig. Details (Termin, Ergebnis, Sales-Hinweis) über „mehr“.</p>
-              <ul className="space-y-2 text-sm">{soon.map((c) => <CheckinRow key={c.id} c={c} soon />)}</ul>
+              <ul className="space-y-2 text-sm">{soon.map((c) => <CheckinRow key={c.id} c={c} back="/meine-arbeit#checkins" />)}</ul>
               {later.length > 0 && (
                 <details className="mt-2">
                   <summary className="text-sm muted">Später fällig ({later.length})</summary>
-                  <ul className="space-y-2 text-sm mt-2">{later.map((c) => <CheckinRow key={c.id} c={c} soon={false} />)}</ul>
+                  <ul className="space-y-2 text-sm mt-2">{later.map((c) => <CheckinRow key={c.id} c={c} back="/meine-arbeit#checkins" />)}</ul>
                 </details>
               )}
             </details>

@@ -21,16 +21,17 @@ function staffingNav(actor: Actor): boolean {
 export const metadata: Metadata = { title: "Accountmeister – Verve AI", description: "Interne Sales-Arbeitsumgebung von Verve Consulting", icons: { icon: "/verve-ai-lockup.png" } };
 export const dynamic = "force-dynamic";
 
+/** Hauptnavigation (Etappe 33, Zielbild Bedienung): fünf Einträge, alles Weitere unter „Mehr“. */
 const NAV = [
   { href: "/start", label: "Start" },
   { href: "/meine-arbeit", label: "Meine Arbeit" },
   { href: "/kunden", label: "Kunden" },
-  { href: "/weeklys", label: "Weeklys" },
-  { href: "/ziele", label: "Ziele & Portfolio" },
 ];
 
-/** Weitere Bereiche – erreichbar, aber nicht in der ersten Reihe (E-043: fünf Einträge in der Hauptnavigation). */
+/** Weitere Bereiche – erreichbar über „Mehr“, nicht in der ersten Reihe. */
 const MORE = [
+  { href: "/weeklys", label: "Weeklys" },
+  { href: "/ziele", label: "Ziele & Portfolio" },
   { href: "/eingang", label: "Eingang" },
   { href: "/vorgehen", label: "Vorgehen" },
   { href: "/artefakte", label: "Artefakte" },
@@ -62,12 +63,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span className="font-semibold">Accountmeister</span>
             </Link>
             {actor && (
-              <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                {[...NAV, ...(actor?.roles.has("CEO") ? [{ href: "/ceo", label: "CEO-Dashboard" }] : []), ...(actor?.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : [])].map((n) => (
+              <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm items-center">
+                {[...NAV, ...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/einsaetze", label: "Einsätze" }, { href: "/besetzung", label: "Besetzung" }] : [])].map((n) => (
                   <Link key={n.href} href={n.href}>
                     {n.label}
                   </Link>
                 ))}
+                <details className="nav-more">
+                  <summary>Mehr ▾</summary>
+                  <div className="nav-more-menu">
+                    {[...(actor.roles.has("CEO") ? [{ href: "/ceo", label: "CEO-Dashboard" }] : []), ...MORE.slice(0, 5), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(5)].map((n) => (
+                      <Link key={n.href} href={n.href}>
+                        {n.label}
+                      </Link>
+                    ))}
+                  </div>
+                </details>
               </nav>
             )}
             <div className="ml-auto text-sm muted flex flex-wrap items-center gap-3">
@@ -76,13 +87,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <form method="get" action="/suche" role="search" className="flex items-center">
                     <input name="q" className="input" placeholder="Suchen: Kunde, Person, Einsatz …" aria-label="Suchen" style={{ minWidth: 220, padding: "2px 8px", fontSize: 13 }} />
                   </form>
-                  <nav aria-label="Weitere Bereiche" className="flex flex-wrap gap-x-3 text-xs">
-                    {[...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/besetzung", label: "Besetzung" }, { href: "/einsaetze", label: "Einsätze" }] : []), ...MORE.slice(0, 3), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(actor && provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...MORE.slice(3)].map((n) => (
-                      <Link key={n.href} href={n.href} className="muted">
-                        {n.label}
-                      </Link>
-                    ))}
-                  </nav>
                   <Link href="/benachrichtigungen" className="no-underline" aria-label={unread ? `Benachrichtigungen: ${unread} ungelesen` : "Benachrichtigungen"} title="Benachrichtigungen" style={{ color: "var(--text)", position: "relative", display: "inline-flex", alignItems: "center" }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />

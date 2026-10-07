@@ -208,10 +208,12 @@ Vertrag oder Bestellung hinterlegst du im Health-Check bei „Einsätze“ → �
   {
     id: "start",
     title: "Startseite und Meine Arbeit",
-    where: "Start; Mehr → Meine Arbeit",
-    keywords: ["start", "startseite", "dashboard", "meine arbeit", "diese woche", "uebersicht", "aufgaben", "offene aktionen"],
-    body: `Start zeigt: „Wo stehen wir insgesamt?“ (Chancen je Stufe), Health-Check-Hinweise, auslaufende Einsätze, die Kachel Freelancer-Hebel, „Diese Woche dran“ und je Kunde, wo der nächste große Schritt hängt (mit Health-Badge).
-Meine Arbeit sammelt alles, was bei dir liegt: offene Übernahmen an dich, Unterstützungsaufträge, deine offenen Aktionen und Chancen, nächste Weeklys und deine Setups.`,
+    where: "Start; Meine Arbeit",
+    keywords: ["start", "startseite", "dashboard", "meine arbeit", "diese woche", "uebersicht", "aufgaben", "offene aktionen", "entscheidungen", "vorschlaege", "was gibt es neues", "schnelleingabe", "einspielen", "mehr menue", "navigation"],
+    body: `Start ist eine Arbeitsliste (seit Etappe 33): Oben „Was gibt es Neues?“ – Notiz, Mail-Ausschnitt oder Gesprächsergebnis eintippen, Kunde · Setup wählen, Einspielen; die KI macht daraus Vorschläge (Beobachtung, Kontakt, Chance, Aktion), die du unter „Vorschläge“ mit einem Klick übernimmst oder verwirfst. Darunter drei Gruppen: Entscheidungen (Verlängerungen bestätigen, Übernahmen annehmen, Unterstützungsaufträge, Vorgänge zur Prüfung), Aufgaben (Vorgänge bei dir, fällige Check-ins mit Stimmungsknopf, Verlängerungen klären, Aktionen) und Vorschläge (KI-Vorschläge, Moco-Hinweise). Je Gruppe sind fünf Karten sichtbar, der Rest ist eingeklappt; Überfälliges steht oben und ist rot. Jede Karte trägt Person, Kunde und Datum.
+Alles Weitere steht eingeklappt unter „Übersichten“: Chancen je Stufe, Health-Check-Lücken, auslaufende Einsätze, Freelancer-Hebel, Diese Woche dran, Kunden mit nächstem Schritt, Ideen aus Quellen, Ziele, Aktivität, Performance, Mein Team.
+Navigation: Start, Meine Arbeit, Kunden, Einsätze, Besetzung – alles andere (Weeklys, Ziele & Portfolio, Eingang, Vorgehen, Artefakte, Moco, Provisionsrechner, Verwaltung, Einstellungen, Hilfe) unter „Mehr ▾“ oben; die Suche steht daneben.
+Meine Arbeit zeigt dieselben Dinge als vollständige Listen (Vorgänge mit Filtern, Check-ins, Übernahmen, Unterstützung, Aktionen, Chancen in Arbeit, Setups).`,
   },
   {
     id: "agenda",

@@ -281,12 +281,21 @@ export async function notifyDueCheckins(workspaceId?: string): Promise<number> {
 export async function listMyCheckins(actor: Actor) {
   const rows = await db.query.checkins.findMany({ where: and(eq(schema.checkins.workspaceId, actor.workspaceId), eq(schema.checkins.ownerUserId, actor.userId), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])), orderBy: asc(schema.checkins.dueDate) });
   if (!rows.length) return [];
-  const engs = await db.query.engagements.findMany({ where: inArray(schema.engagements.id, [...new Set(rows.map((r) => r.engagementId))]), columns: { id: true, title: true, accountId: true } });
-  const accounts = await db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(engs.map((e) => e.accountId))]), columns: { id: true, name: true } });
+  const engs = await db.query.engagements.findMany({ where: inArray(schema.engagements.id, [...new Set(rows.map((r) => r.engagementId))]), columns: { id: true, title: true, accountId: true, freelancerId: true, internalUserId: true } });
+  const [accounts, fls, users] = await Promise.all([
+    db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(engs.map((e) => e.accountId))]), columns: { id: true, name: true } }),
+    db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(engs.map((e) => e.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+    db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(engs.map((e) => e.internalUserId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+  ]);
   const en = new Map(engs.map((e) => [e.id, e]));
   const an = new Map(accounts.map((a) => [a.id, a.name]));
+  const fn = new Map(fls.map((f) => [f.id, f.displayName]));
+  const un = new Map(users.map((u) => [u.id, u.displayName]));
   const t = todayIso();
-  return rows.map((r) => ({ ...r, engagementTitle: en.get(r.engagementId)?.title ?? "?", accountName: an.get(en.get(r.engagementId)?.accountId ?? "") ?? "?", overdue: r.dueDate < t }));
+  return rows.map((r) => {
+    const e = en.get(r.engagementId);
+    return { ...r, engagementTitle: e?.title ?? "?", personName: e ? personLabel(e, fn, un) : "?", accountName: an.get(e?.accountId ?? "") ?? "?", overdue: r.dueDate < t };
+  });
 }
 
 // ---------------------------------------------------------------------------

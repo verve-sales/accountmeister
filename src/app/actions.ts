@@ -878,11 +878,13 @@ export async function uploadDocumentAction(fd: FormData) {
 
 export async function smartDumpAction(fd: FormData) {
   const data = formToObject(fd);
-  return run("/start", async (actor) => {
+  const back = backOf(data, "/start");
+  return run(back, async (actor) => {
     const r = await smartDump(actor, data);
     if (r.repeated) throw new PendingInfo("Dieser Text wurde schon einmal so eingefügt; es wurden keine neuen Vorschläge erzeugt.");
     if (r.created === 0) throw new PendingInfo(r.noSuggestionReason ? `Gespeichert, aber keine Vorschläge: ${r.noSuggestionReason}` : `Gespeichert, aber keine neuen Vorschläge (${r.skipped} bereits vorhanden, ${r.rejected} zurückgewiesen).`);
-    return `/setups/${data.setupId ?? ""}`;
+    if (!data.back) return `/setups/${data.setupId ?? ""}`;
+    throw new PendingInfo(`Eingespielt – ${r.created} Vorschlag/Vorschläge unter „Vorschläge“ zum Übernehmen.`);
   }, "Text gespeichert und Vorschläge erzeugt – bitte im Setup prüfen.");
 }
 

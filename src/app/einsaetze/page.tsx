@@ -45,7 +45,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
       <Feedback params={sp} />
       <form method="get" action="/einsaetze" className="flex flex-wrap gap-2 items-center text-sm">
         <input type="hidden" name="f" value={filter} />
-        <input name="q" className="input" defaultValue={q} placeholder="Kunde, Person oder Einsatz suchen …" aria-label="Suchen" style={{ minWidth: 280 }} />
+        <input name="q" className="input" defaultValue={q} placeholder="Kunde, Person oder Einsatz suchen …" aria-label="Suchen" style={{ width: 360 }} />
         <button className="btn btn-small" type="submit">Suchen</button>
         {q && <Link href={`/einsaetze?f=${filter}`} className="muted text-xs">zurücksetzen</Link>}
       </form>
