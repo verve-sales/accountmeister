@@ -81,7 +81,7 @@ export default async function MeineBdsKundePage({ params, searchParams }: { para
         </section>
       </div>
 
-      {canLeaveDecision(actor) && (
+      {canLeaveDecision(actor, id) && (
       <section className="card" id="entscheidung">
         <h2 className="font-semibold mb-1">Entscheidung oder Hinweis für den BD</h2>
         <p className="muted text-xs mb-2">Wird ein Vorgang bei {row.bdName}, verknüpft mit dem Kunden – erscheint bei ihm oben auf Start. Du siehst unten, ob er erledigt ist.</p>

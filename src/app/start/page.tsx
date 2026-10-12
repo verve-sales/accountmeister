@@ -5,6 +5,7 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { buildDashboard, viewAccountCounts, viewLabel, type DashboardView } from "@/modules/dashboard/service";
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
 import { isReadOnlyActor } from "@/modules/identity/actor";
+import { canEditSetup, loadSetupContext } from "@/modules/identity/authz";
 import { MATURITY, maturityLabel } from "@/modules/strategy/chancen";
 import { CHANCE_STEPS } from "@/lib/chanceStages";
 import { countChancesByStatus } from "@/modules/opportunities/service";
@@ -83,7 +84,11 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   // Schnelleingabe: alle Setups, die ich bearbeiten darf (auch ohne Dashboard-Sicht)
   const quickSetups: { id: string; label: string }[] = [];
   for (const a of await listVisibleAccounts(actor).catch(() => [])) {
-    for (const st of await listSetupsForAccount(actor, a.id).catch(() => [])) if (st.status !== "ARCHIVIERT") quickSetups.push({ id: st.id, label: `${a.name} · ${st.name}` });
+    for (const st of await listSetupsForAccount(actor, a.id).catch(() => [])) {
+      if (st.status === "ARCHIVIERT") continue;
+      const ctx = await loadSetupContext(actor, st.id).catch(() => null);
+      if (ctx && canEditSetup(actor, ctx)) quickSetups.push({ id: st.id, label: `${a.name} · ${st.name}` });
+    }
   }
   const back = "/start";
   const arbeitsliste = (

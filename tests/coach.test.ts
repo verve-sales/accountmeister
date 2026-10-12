@@ -10,7 +10,9 @@ import { createOpportunity } from "@/modules/opportunities/service";
 import { quickFill } from "@/modules/staffing/service";
 import { getEngagementDetail, listEngagements } from "@/modules/engagements/service";
 import { startRenewal } from "@/modules/engagements/care";
-import { buildPortfolio, leaveDecision } from "@/modules/portfolio/service";
+import { buildPortfolio, canLeaveDecision, leaveDecision } from "@/modules/portfolio/service";
+import { createAccount } from "@/modules/accounts/service";
+import { createSetup } from "@/modules/setups/service";
 import { buildDashboard } from "@/modules/dashboard/service";
 import { smartDump } from "@/modules/suggestions/service";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
@@ -60,5 +62,32 @@ describe("Etappe 33: Rolle Coach (nur lesen)", () => {
     if (other) await expect(getAccount(coach, other.id)).rejects.toThrow();
     const p = await buildPortfolio(coach);
     expect(p.rows.every((r) => r.accountId === s.accountId)).toBe(true);
+  });
+
+  it("C03: Coach auf echten Kunden + BD/Principal auf eigenem Testkunden: experimentiert im Testkunden, echte Kunden bleiben nur lesbar", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const s = await ensureSeed();
+    const admin = await actorFor("admin");
+    const petra = await actorFor("petra");
+    const coach0 = await makeCoach(s.accountId);
+    const test = await createAccount(petra, { name: `Testkunde Coaching ${Date.now()} (fiktiv)` });
+    await assignRole(admin, { userId: coach0.userId, role: "BD", accountId: test.id });
+    await assignRole(admin, { userId: coach0.userId, role: "PRINCIPAL", accountId: test.id });
+    await db.update(schema.accounts).set({ responsibleBdUserId: coach0.userId }).where(eq(schema.accounts.id, test.id));
+    const flora = (await loadActor(coach0.userId))!;
+    expect(isReadOnlyActor(flora)).toBe(false);
+    const setup = await createSetup(flora, { accountId: test.id, name: "Spielwiese" });
+    const r = await smartDump(flora, { setupId: setup.id, text: "Frau Muster (fiktiv) sagt, ab Q1 werden zwei Tester gebraucht; Budget kommt aus dem Programm Nord." });
+    expect(r.created + r.skipped + r.rejected).toBeGreaterThanOrEqual(0);
+    // Echter Kunde: weiter nur lesen
+    await expect(smartDump(flora, { setupId: s.setupId, text: "Darf hier nichts einspielen, nur lesen." })).rejects.toBeInstanceOf(ForbiddenError);
+    expect(canLeaveDecision(flora, s.accountId)).toBe(false);
+    expect(canLeaveDecision(flora, test.id)).toBe(true);
+    await expect(leaveDecision(flora, s.accountId, { text: "Bitte anrufen" })).rejects.toBeInstanceOf(ForbiddenError);
+    // Meine BDs zeigt beide Kunden
+    const p = await buildPortfolio(flora);
+    expect(p.rows.some((x) => x.accountId === s.accountId)).toBe(true);
+    expect(p.rows.some((x) => x.accountId === test.id)).toBe(true);
   });
 });

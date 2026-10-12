@@ -38,9 +38,17 @@ export function canBrowsePortfolio(actor: Actor): boolean {
   return canLeaveDecision(actor) || actor.roles.has("COACH") || [...actor.accountRoles.values()].some((r) => r.has("COACH"));
 }
 
-/** Entscheidungen/Hinweise an BDs hinterlassen: Principal und CEO (nicht Coach). */
-export function canLeaveDecision(actor: Actor): boolean {
+/** Entscheidungen/Hinweise an BDs hinterlassen: Principal und CEO (nicht Coach) – mit accountId: für genau diesen Kunden. */
+export function canLeaveDecision(actor: Actor, accountId?: string): boolean {
+  if (accountId) return hasRole(actor, "CEO") || hasRole(actor, "PRINCIPAL", accountId);
   return hasRole(actor, "CEO") || actor.roles.has("PRINCIPAL") || [...actor.accountRoles.values()].some((r) => r.has("PRINCIPAL"));
+}
+
+/** Sicht für „Meine BDs“: CEO, sonst Coach (umfasst alle lesbaren Kunden, auch eigene Principal-Kunden), sonst Principal. */
+function portfolioView(actor: Actor): "CEO" | "COACH" | "PRINCIPAL" {
+  if (hasRole(actor, "CEO")) return "CEO";
+  if (actor.roles.has("COACH") || [...actor.accountRoles.values()].some((r) => r.has("COACH"))) return "COACH";
+  return "PRINCIPAL";
 }
 
 const IN_WORK = ["IN_KLAERUNG", "BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG"] as const;
@@ -63,7 +71,7 @@ async function teamFor(workspaceId: string, accountIds: string[]) {
 
 export async function buildPortfolio(actor: Actor): Promise<{ rows: PortfolioRow[]; byBd: { bdName: string; bdUserId: string | null; rows: PortfolioRow[] }[] }> {
   if (!canBrowsePortfolio(actor)) throw new ForbiddenError("„Meine BDs“ sehen Principal, CEO und Coach.");
-  const d = await buildDashboard(actor, hasRole(actor, "CEO") ? "CEO" : canLeaveDecision(actor) ? "PRINCIPAL" : "COACH");
+  const d = await buildDashboard(actor, portfolioView(actor));
   const cards: AccountCard[] = d?.accounts ?? [];
   if (!cards.length) return { rows: [], byBd: [] };
   const ids = cards.map((c) => c.accountId);
@@ -130,7 +138,7 @@ export async function portfolioAccount(actor: Actor, accountId: string) {
   const idx = rows.findIndex((r) => r.accountId === accountId);
   if (idx < 0) throw new NotFoundError("Kunde");
   const row = rows[idx]!;
-  const d = await buildDashboard(actor, hasRole(actor, "CEO") ? "CEO" : canLeaveDecision(actor) ? "PRINCIPAL" : "COACH");
+  const d = await buildDashboard(actor, portfolioView(actor));
   const card = d?.accounts.find((c) => c.accountId === accountId) ?? null;
   const [engs, opps, lastHints] = await Promise.all([
     db.query.engagements.findMany({ where: and(eq(schema.engagements.accountId, accountId), inArray(schema.engagements.status, ["AKTIV", "PAUSIERT", "GEPLANT", "VORBEREITUNG"])) }),
@@ -164,7 +172,7 @@ export async function portfolioAccount(actor: Actor, accountId: string) {
 
 /** Entscheidung oder Hinweis für den BD: wird ein Vorgang (Aktion) beim BD mit Bezug auf den Kunden. */
 export async function leaveDecision(actor: Actor, accountId: string, raw: { text?: string; dueDate?: string; targetUserId?: string; priority?: string }) {
-  if (!canLeaveDecision(actor)) throw new ForbiddenError("Entscheidungen für den BD hinterlassen Principal und CEO.");
+  if (!canLeaveDecision(actor, accountId)) throw new ForbiddenError("Entscheidungen für den BD hinterlassen Principal (für diesen Kunden) und CEO.");
   const { rows } = await buildPortfolio(actor);
   const row = rows.find((r) => r.accountId === accountId);
   if (!row) throw new NotFoundError("Kunde");
