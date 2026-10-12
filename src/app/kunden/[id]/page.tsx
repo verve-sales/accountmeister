@@ -70,7 +70,9 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const chanceRows = opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: ownerNames.get(o.ownerUserId) ?? "?", setupName: o.setupName, version: o.version, candidate: topCandidates.get(o.id) ?? null }));
   const [runs, accountPlaybooks, salesOps, activeUsers] = await Promise.all([
     listRuns(actor, { accountId: id }),
-    listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true }),
+    // Kunden- und Setup-Muster lassen sich vom Kunden aus starten (Setup-Muster in bestehendem oder neuem Setup);
+    // Chancen-Muster laufen an einer Chance und werden dort gestartet.
+    Promise.all([listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true })]).then(([a, b]) => [...a, ...b]),
     listSalesOpsUsers(actor.workspaceId),
     db.query.users.findMany({ where: eq(schema.users.status, "ACTIVE"), orderBy: (u, { asc }) => [asc(u.displayName)] }),
   ]);
@@ -161,7 +163,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         runs={runs}
         back={back}
         users={activeUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
-        start={mayStartPlaybook && account.status !== "ARCHIVED" ? { playbooks: accountPlaybooks, hidden: { accountId: account.id }, setups: setups.filter((x) => x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })), defaultNewSetupName: `Reaktivierung ${new Date().getFullYear()}`, defaultOwnerId: account.responsibleBdUserId, salesOps } : null}
+        start={mayStartPlaybook && account.status !== "ARCHIVED" ? { playbooks: accountPlaybooks, hidden: { accountId: account.id }, setups: setups.filter((x) => x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })), defaultNewSetupName: `Reaktivierung ${new Date().getFullYear()}`, defaultOwnerId: account.responsibleBdUserId, salesOps, hint: "Muster für eine einzelne Chance (z. B. Ausschreibung) startest du auf der Chance selbst, unter „Vorgehen“." } : null}
       />
 
       <Comments actor={actor} subjectType="KUNDE" subjectId={account.id} back={back} />

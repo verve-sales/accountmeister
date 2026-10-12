@@ -38,6 +38,8 @@ export function PlaybookRuns({
     recommendation?: string | null;
     /** Personen mit Rolle Sales Operations – übernehmen die Vorbereitungsschritte */
     salesOps?: User[];
+    /** Hinweis unter der Auswahl, z. B. wo weitere Muster gestartet werden */
+    hint?: string | null;
   } | null;
 }) {
   const active = runs.filter((r) => r.status === "AKTIV");
@@ -71,6 +73,7 @@ export function PlaybookRuns({
                 {start.playbooks.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.steps.length} Schritte)</option>)}
               </select>
               <ul className="muted text-xs mt-1 space-y-0.5">{start.playbooks.map((p) => <li key={p.id}><strong>{p.name}:</strong> {p.description}</li>)}</ul>
+              {start.hint && <p className="muted text-xs mt-1">{start.hint}</p>}
             </div>
             {start.setups && (
               <>

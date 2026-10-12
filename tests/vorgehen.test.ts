@@ -199,4 +199,18 @@ describe("Etappe 20: Vorgehensmuster (Altkunden-Reaktivierung u. a.)", () => {
     expect(metrics.text).not.toMatch(/\d+\s*%/);
     expect(d.drafts.some((x) => x.kind === "GESPRAECHSLEITFADEN")).toBe(true);
   });
+
+  it("Setup-Muster lassen sich vom Kunden aus starten – in einem neuen oder bestehenden Setup", async () => {
+    const s = await ensureSeed();
+    const petra = await actorFor("petra");
+    const setupScoped = (await listPlaybooks(petra)).filter((p) => p.scope === "SETUP" && p.active);
+    expect(setupScoped.length).toBeGreaterThan(0);
+    const pb = setupScoped[0]!;
+    await expect(startPlaybookRun(petra, { playbookId: pb.id, accountId: s.accountId })).rejects.toBeInstanceOf(ValidationError);
+    const name = `Vom Kunden gestartet ${Date.now()}`;
+    const run = await startPlaybookRun(petra, { playbookId: pb.id, accountId: s.accountId, newSetupName: name });
+    const setup = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, run.setupId) });
+    expect(setup?.name).toBe(name);
+    expect(setup?.accountId).toBe(s.accountId);
+  });
 });

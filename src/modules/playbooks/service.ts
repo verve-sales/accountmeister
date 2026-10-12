@@ -241,6 +241,9 @@ export async function startPlaybookRun(actor: Actor, raw: unknown, opts: { propo
     if (opp.status === "BEENDET") throw new TransitionError("Auf eine beendete Chance wird kein Vorgehen mehr angewendet.");
     opportunityId = opp.id;
     setupId = opp.setupId;
+  } else if (playbook.scope === "SETUP" && !input.setupId && input.accountId) {
+    // Vom Kunden aus gestartet: Setup-Muster laufen in einem bestehenden oder neu angelegten Setup
+    if (!input.newSetupName) throw new ValidationError("Bitte ein bestehendes Setup wählen oder einen Namen für ein neues Setup angeben.");
   } else if (playbook.scope === "SETUP") {
     if (!input.setupId) throw new ValidationError("Dieses Muster wird auf ein Setup angewendet.");
     setupId = input.setupId;
