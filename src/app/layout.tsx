@@ -19,6 +19,13 @@ function staffingNav(actor: Actor): boolean {
   return ["BD", "PRINCIPAL", "CEO", "SALES_OPS"].some((r) => roles.has(r));
 }
 
+/** Coach liest Einsätze mit, aber keine Besetzungs-Pipeline. */
+function coachNav(actor: Actor): boolean {
+  if (actor.roles.has("COACH")) return true;
+  for (const set of actor.accountRoles.values()) if (set.has("COACH")) return true;
+  return false;
+}
+
 export const metadata: Metadata = { title: "Accountmeister – Verve AI", description: "Interne Sales-Arbeitsumgebung von Verve Consulting", icons: { icon: "/verve-ai-lockup.png" } };
 export const dynamic = "force-dynamic";
 
@@ -65,7 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </Link>
             {actor && (
               <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm items-center">
-                {[...NAV, ...(canBrowsePortfolio(actor) ? [{ href: "/meine-bds", label: "Meine BDs" }] : []), ...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/einsaetze", label: "Einsätze" }, { href: "/besetzung", label: "Besetzung" }] : [])].map((n) => (
+                {[...NAV, ...(canBrowsePortfolio(actor) ? [{ href: "/meine-bds", label: "Meine BDs" }] : []), ...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/einsaetze", label: "Einsätze" }, { href: "/besetzung", label: "Besetzung" }] : cfg.FEATURE_BESETZUNG === "true" && coachNav(actor) ? [{ href: "/einsaetze", label: "Einsätze" }] : [])].map((n) => (
                   <Link key={n.href} href={n.href}>
                     {n.label}
                   </Link>

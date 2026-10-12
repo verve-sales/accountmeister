@@ -57,6 +57,7 @@ export function canViewAccount(actor: Actor, account: AccountRow): boolean {
   if (isResponsibleBd(actor, account)) return true;
   if (hasRole(actor, "PRINCIPAL", account.id) || hasRole(actor, "CEO")) return true;
   if (isSalesOps(actor)) return true; // Sales Operations unterstützt alle BDs
+  if (hasRole(actor, "COACH")) return true; // Coach arbeitsraumweit: liest alle Kunden mit (kundenbezogen: über accountRoles unten)
   // Account-bezogene Rollen (z. B. BD/ANKER mit Scope auf diesen Kunden)
   if (actor.accountRoles.has(account.id)) return true;
   return false;
@@ -91,6 +92,7 @@ export function canViewSetup(actor: Actor, ctx: SetupContext): boolean {
   if (isResponsibleBd(actor, ctx.account)) return true;
   if (hasRole(actor, "PRINCIPAL", ctx.account.id)) return true;
   if (isSalesOps(actor)) return true;
+  if (hasRole(actor, "COACH", ctx.account.id)) return true; // Coach liest mit (wie ein Principal, aber ohne Bearbeitung)
   if (ctx.setup.visibility === "ACCOUNT_TEAM" && canViewAccount(actor, ctx.account)) return true;
   if (ctx.setup.visibility === "WORKSPACE" && hasAnyContentRole(actor)) return true;
   // CEO: Zusammenfassung sichtbar, aber keine Rohquellen (siehe canViewSource)

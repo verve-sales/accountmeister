@@ -17,16 +17,17 @@ import { buildChanceOverview, MATURITY, type ChanceRow } from "@/modules/strateg
  * CEO: alle Kunden zusammenfassend, ohne Rohquellen). Rechteprüfungen bleiben die der Dienste.
  */
 
-export const DASHBOARD_VIEWS = ["BD", "ANKER", "PRINCIPAL", "CEO", "SALES_OPS"] as const;
+export const DASHBOARD_VIEWS = ["BD", "ANKER", "PRINCIPAL", "CEO", "SALES_OPS", "COACH"] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
 
-export const viewLabel: Record<DashboardView, string> = { BD: "BD", ANKER: "Anker", PRINCIPAL: "Principal", CEO: "CEO", SALES_OPS: "Sales Operations" };
+export const viewLabel: Record<DashboardView, string> = { BD: "BD", ANKER: "Anker", PRINCIPAL: "Principal", CEO: "CEO", SALES_OPS: "Sales Operations", COACH: "Coach" };
 export const viewDescription: Record<DashboardView, string> = {
   BD: "Meine Kunden und Setups als zuständiger BD: was diese Woche dran ist, wo der nächste große Schritt hängt.",
   ANKER: "Setups, in denen ich Kontext beitrage: Rückfragen an mich, Kontaktaufnahmen, die auf mich warten.",
   PRINCIPAL: "Mein Portfolio: Unterstützungsaufträge, Kunden mit Stillstand oder Lücken, Zielbezug.",
   CEO: "Gesamtbild ohne Rohquellen: Stand je Kunde, Ziele, wo es hakt.",
   SALES_OPS: "Für die BDs vorzubereiten: Vorbereitungsschritte und Unterstützungsaufträge an mich, Kunden mit Lücken (Personen, Buyingcenter, Recherche).",
+  COACH: "Mitlesen für das Coaching: Stand je Kunde, wo es hakt, was das Team diese Woche tut – ohne Bearbeitung.",
 };
 
 /** Welche Sichten stehen dieser Person offen? */
@@ -43,6 +44,7 @@ export async function availableViews(actor: Actor): Promise<DashboardView[]> {
   if (has("PRINCIPAL")) views.push("PRINCIPAL");
   if (has("CEO")) views.push("CEO");
   if (has("SALES_OPS")) views.push("SALES_OPS");
+  if (has("COACH")) views.push("COACH");
   return views;
 }
 

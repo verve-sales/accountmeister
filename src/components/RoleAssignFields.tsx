@@ -39,7 +39,7 @@ export function RoleAssignFields({
       </div>
       <div>
         <label className="label" htmlFor="rAccount">
-          Kunde {accountRequired ? "(bei BD zwingend – arbeitsraumweit ist für BD nicht vorgesehen)" : "(nur BD/Principal kundenbezogen)"}
+          Kunde {accountRequired ? "(bei BD zwingend – arbeitsraumweit ist für BD nicht vorgesehen)" : role === "COACH" ? "(Coach: kundenbezogen = nur diese Kunden; arbeitsraumweit = alle Kunden, nur lesen)" : "(nur BD/Principal/Coach kundenbezogen)"}
         </label>
         <select id="rAccount" name="accountId" className="select" required={accountRequired} defaultValue="">
           {!accountRequired && <option value="">– arbeitsraumweit –</option>}

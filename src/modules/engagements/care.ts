@@ -398,6 +398,7 @@ export async function startRenewal(actor: Actor, engagementId: string, raw: unkn
   const p = renewalStartInput.safeParse(raw);
   if (!p.success) throw new ValidationError(issues(p.error));
   const a = await requireEngagement(actor, engagementId);
+  if (!(a.manage || a.care)) throw new ForbiddenError("Verlängerungen stoßen Sales Operations, Betreuung, BD, Principal oder CEO an.");
   const e = a.engagement;
   const i = p.data;
   if (!["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status)) throw new TransitionError("Verlängert wird ein laufender Einsatz.");

@@ -327,6 +327,13 @@ Leads nach Moco: Unter Mehr → Moco → „Chancen als Leads nach Moco übertra
 Einrichtung (Betrieb): MOCO_MODE=http, MOCO_SUBDOMAIN, MOCO_API_KEY (technischer Nutzer; schreibt in Moco nur Leads), MOCO_WEBHOOK_SECRET; Webhooks in Moco für Project, Company, User anlegen.`,
   },
   {
+    id: "coach",
+    title: "Rolle Coach (nur lesen)",
+    where: "Verwaltung → Zugänge → Rolle „Coach (nur lesen)“",
+    keywords: ["coach", "sales coach", "nur lesen", "lesezugriff", "lesend", "extern", "gast", "beobachter"],
+    body: `Die Rolle Coach liest mit und ändert nichts. Kundenbezogen vergeben sieht der Coach nur diese Kunden (mit allen Setups, Chancen, Einsätzen, Personen und Weeklys), arbeitsraumweit alle Kunden. Der Coach hat die Startsicht „Coach“ mit den Übersichten, „Meine BDs“ zum Durchgehen der Kunden je BD (ohne das Feld für Entscheidungen) und die Einsatzliste – aber keine Besetzungs-Pipeline, keinen Freelancer-Pool, keine Schnelleingabe, keine Verlängerung, keine Entscheidungen und keine Bearbeitung. Persönliche und gesperrte Quellen bleiben unsichtbar. Für Externe (z. B. Sales-Coach) vorher Vertraulichkeitsvereinbarung und Gastzugang in Microsoft Entra.`,
+  },
+  {
     id: "personen-begriffe",
     title: "Personen beim Kunden: Bereich, Beziehungsstand, Kontaktweg",
     where: "Setup → Personen & Zugang",

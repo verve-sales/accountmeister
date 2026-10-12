@@ -225,6 +225,13 @@
       "when": 1791102660284,
       "tag": "0031_moco_anbindung",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791807300929,
+      "tag": "0032_coach_rolle",
+      "breakpoints": true
     }
   ]
 }

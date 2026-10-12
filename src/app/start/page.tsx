@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildDashboard, viewAccountCounts, viewLabel, type DashboardView } from "@/modules/dashboard/service";
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
+import { isReadOnlyActor } from "@/modules/identity/actor";
 import { MATURITY, maturityLabel } from "@/modules/strategy/chancen";
 import { CHANCE_STEPS } from "@/lib/chanceStages";
 import { countChancesByStatus } from "@/modules/opportunities/service";
@@ -92,7 +93,8 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <Vorschlaege suggestions={suggestions} hints={hints} userNames={userNames} users={users} back={back} aiEnabled={ai.enabled} />
     </>
   );
-  const quickEntry = quickSetups.length > 0 && (
+  const readOnly = isReadOnlyActor(actor);
+  const quickEntry = !readOnly && quickSetups.length > 0 && (
     <section className="card" id="neues">
       <form action={smartDumpAction} className="flex flex-wrap gap-2 items-end text-sm">
         <input type="hidden" name="back" value="/start#vorschlaege" />
@@ -137,7 +139,11 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <Feedback params={params} />
       <SosBanner sos={openSos} />
       {quickEntry}
-      {arbeitsliste}
+      {readOnly ? (
+        <section className="card text-sm">
+          <strong>Coach-Zugang (nur lesen).</strong> Zum Durchgehen: <Link href="/meine-bds">Meine BDs</Link> (Kunden je BD mit Stand) · <Link href="/kunden">Kunden</Link> · <Link href="/einsaetze">Einsätze</Link>. Unten die Übersichten zum Aufklappen. Änderungen sind in diesem Zugang nicht möglich.
+        </section>
+      ) : arbeitsliste}
       {work.myTeams.length > 0 && (
         <p className="text-sm muted">{work.myTeams.map((t) => <Link key={t.id} href={`/team/${t.id}`} className="mr-3">{work.queue.filter((q) => q.teamId === t.id).length} im Eingang {t.name}</Link>)}</p>
       )}

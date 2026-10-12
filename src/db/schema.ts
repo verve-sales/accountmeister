@@ -28,7 +28,7 @@ import { sql } from "drizzle-orm";
 // Enums (fachliche Zustände, Briefing Kap. 9.2 / 15.3 / 16.2)
 // ---------------------------------------------------------------------------
 
-export const roleEnum = pgEnum("role", ["ANKER", "BD", "PRINCIPAL", "CEO", "ADMIN", "SALES_OPS"]);
+export const roleEnum = pgEnum("role", ["ANKER", "BD", "PRINCIPAL", "CEO", "ADMIN", "SALES_OPS", "COACH"]);
 export const roleScopeEnum = pgEnum("role_scope", ["WORKSPACE", "ACCOUNT"]);
 export const userStatusEnum = pgEnum("user_status", ["ACTIVE", "INACTIVE"]);
 

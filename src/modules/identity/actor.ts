@@ -58,6 +58,23 @@ export function hasAnyContentRole(actor: Actor): boolean {
   return false;
 }
 
+/**
+ * Coach (Etappe 33): liest mit, ändert nichts. Kundenbezogen vergeben sieht der Coach nur diese Kunden,
+ * arbeitsraumweit alle. Keine Entscheidungs-, Pflege- oder Betreuungsrechte, keine Rohquellen außer Team-Freigaben.
+ */
+export function isCoach(actor: Actor, accountId?: string): boolean {
+  return hasRole(actor, "COACH", accountId);
+}
+
+/** Nur Coach – keine weitere fachliche Rolle: Oberfläche blendet Eingaben aus (die Services lehnen sie ohnehin ab). */
+export function isReadOnlyActor(actor: Actor): boolean {
+  if (!isCoach(actor) && ![...actor.accountRoles.values()].some((s) => s.has("COACH"))) return false;
+  const other: Role[] = ["ANKER", "BD", "PRINCIPAL", "CEO", "SALES_OPS"];
+  if (other.some((r) => actor.roles.has(r))) return false;
+  for (const set of actor.accountRoles.values()) if (other.some((r) => set.has(r))) return false;
+  return true;
+}
+
 /** Sales Operations (Etappe 22): bereitet vor, pflegt und hält nach – arbeitsraumweit, ohne Entscheidungsrechte. */
 export function isSalesOps(actor: Actor): boolean {
   return actor.roles.has("SALES_OPS");

@@ -28,6 +28,8 @@ export type EngagementAccess = {
   commercial: boolean;
   /** Sales Operations ohne BD-Kontext */
   ops: boolean;
+  /** nur lesend (Coach) – keine Pflege, keine Entscheidung */
+  readOnly: boolean;
   care: boolean;
   careRoles: string[];
 };
@@ -46,8 +48,9 @@ export async function engagementAccess(actor: Actor, e: EngagementRow, tx: Tx | 
   const manage = commercial || ops;
   const cares = await tx.query.careAssignments.findMany({ where: and(eq(schema.careAssignments.engagementId, e.id), eq(schema.careAssignments.userId, actor.userId), isNull(schema.careAssignments.toDate)) });
   const care = cares.length > 0;
-  if (!manage && !care) return null;
-  return { engagement: e, account, manage, commercial, ops, care, careRoles: cares.map((c) => c.role) };
+  const readOnly = !manage && !care && hasRole(actor, "COACH", account.id);
+  if (!manage && !care && !readOnly) return null;
+  return { engagement: e, account, manage, commercial, ops, care, readOnly, careRoles: cares.map((c) => c.role) };
 }
 
 export async function requireEngagement(actor: Actor, id: string, tx: Tx | Db = db): Promise<EngagementAccess> {

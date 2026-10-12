@@ -289,7 +289,7 @@ export async function assignRole(actor: Actor, raw: unknown) {
   const user = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.userId), eq(schema.users.workspaceId, actor.workspaceId)) });
   if (!user) throw new NotFoundError("Person");
   const scope = input.accountId ? "ACCOUNT" : "WORKSPACE";
-  if (scope === "ACCOUNT" && input.role !== "BD" && input.role !== "PRINCIPAL") throw new ValidationError("Kundenbezogen werden nur BD und Principal vergeben.");
+  if (scope === "ACCOUNT" && input.role !== "BD" && input.role !== "PRINCIPAL" && input.role !== "COACH") throw new ValidationError("Kundenbezogen werden nur BD, Principal und Coach vergeben.");
   // BD sieht über canViewAccount/canViewSetup automatisch alles, was der zugeordnete Kunde umfasst (hasRole ignoriert
   // den accountId-Parameter bei Workspace-Scope) – eine arbeitsraumweite BD-Rolle würde also versehentlich alle
   // Kunden sichtbar machen. Anders als Principal/CEO ist das für BD nie beabsichtigt, deshalb hart erzwungen.
