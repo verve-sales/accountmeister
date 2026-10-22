@@ -68,7 +68,7 @@ export function ChancenUebersicht({ chances, emptyText, showSetup = false, back 
               endState={side ? { label: opportunityStatusLabel[c.status] ?? c.status, tone: "warn" } : null}
               variant="compact"
             />
-            {next && <Link href={`/bedarfe/${c.id}#${next.anchor}`} className="btn btn-secondary btn-small">{next.label}</Link>}
+            {next && c.version !== undefined && <Link href={`/bedarfe/${c.id}#${next.anchor}`} className="btn btn-secondary btn-small">{next.label}</Link>}
           </li>
         );
       })}

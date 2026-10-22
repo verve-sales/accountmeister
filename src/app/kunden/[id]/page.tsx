@@ -5,7 +5,7 @@ import { getAccount } from "@/modules/accounts/service";
 import { listSetupsForAccount } from "@/modules/setups/service";
 import { listOpportunitiesForAccount } from "@/modules/opportunities/service";
 import { canCreateSetup, canReassignResponsibility } from "@/modules/identity/authz";
-import { isSalesOps } from "@/modules/identity/actor";
+import { isReadOnlyFor, isSalesOps } from "@/modules/identity/actor";
 import { ChancenUebersicht } from "@/components/ChancenUebersicht";
 import { topCandidatesForOpportunities } from "@/modules/staffing/service";
 import { canDeleteAccount } from "@/modules/accounts/deletion";
@@ -67,7 +67,8 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const ownerIds = [...new Set(opportunities.map((o) => o.ownerUserId))];
   const ownerNames = new Map(ownerIds.length ? (await db.query.users.findMany({ where: inArray(schema.users.id, ownerIds) })).map((u) => [u.id, u.displayName]) : []);
   const topCandidates = await topCandidatesForOpportunities(opportunities.map((o) => o.id)).catch(() => new Map());
-  const chanceRows = opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: ownerNames.get(o.ownerUserId) ?? "?", setupName: o.setupName, version: o.version, candidate: topCandidates.get(o.id) ?? null }));
+  const ro = isReadOnlyFor(actor, id);
+  const chanceRows = opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: ownerNames.get(o.ownerUserId) ?? "?", setupName: o.setupName, version: ro ? undefined : o.version, candidate: topCandidates.get(o.id) ?? null }));
   const [runs, accountPlaybooks, salesOps, activeUsers] = await Promise.all([
     listRuns(actor, { accountId: id }),
     // Kunden- und Setup-Muster lassen sich vom Kunden aus starten (Setup-Muster in bestehendem oder neuem Setup);
@@ -114,7 +115,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         <section className="card">
           <div className="flex flex-wrap items-baseline gap-3 mb-1">
             <h2 className="font-semibold">Health-Check – wie sicher sitzen wir im Sattel?</h2>
-            <Link href={`/kunden/${account.id}/health`} className="btn btn-small ml-auto">{health.questions.length ? `Interview (${health.questions.length} offene Fragen)` : "Health-Check ansehen"}</Link>
+            <Link href={`/kunden/${account.id}/health`} className="btn btn-small ml-auto">{health.questions.length && !ro ? `Interview (${health.questions.length} offene Fragen)` : "Health-Check ansehen"}</Link>
           </div>
           <HealthBadge score={health.score} level={health.level} coverage={health.coverage} size="large" />
           <p className="text-sm mt-2">
@@ -154,7 +155,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
 
       <Beschaffung account={account} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} />
       {getConfig().FEATURE_BESETZUNG === "true" && <Beschaffungsprofil actor={actor} account={account} back={back} />}
-      {!sosList.some((x) => x.status !== "GELOEST") && account.status !== "ARCHIVED" && <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} />}
+      {!ro && !sosList.some((x) => x.status !== "GELOEST") && account.status !== "ARCHIVED" && <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} />}
 
       {account.status === "DORMANT" && <p className="text-sm" style={{ background: "var(--warn-soft)", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ruht. Mit dem Vorgehen „Altkunden-Reaktivierung“ (unten) wird er wieder aktiv angegangen.</p>}
 
@@ -172,10 +173,10 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       <section className="card">
         <div className="flex flex-wrap items-baseline gap-3 mb-2">
           <h2 className="font-semibold">Öffentliche Informationen zum Unternehmen</h2>
-          <form action={refreshCompanyResearchAction} className="ml-auto">
+          {!ro && <form action={refreshCompanyResearchAction} className="ml-auto">
             <input type="hidden" name="accountId" value={account.id} />
             <button className="btn btn-secondary btn-small" type="submit">{research.latest ? "Aktualisieren" : "Recherche starten"}</button>
-          </form>
+          </form>}
         </div>
         <p className="muted text-xs mb-2">Ausschließlich öffentliche, unternehmensbezogene Angaben mit Quelle (Branche, Sitz, Größenordnung, öffentliche Meldungen) – nie zu benannten Einzelpersonen. Fixture-Daten (fiktiv): kein echter Internetzugriff, bis ein Suchdienst konfiguriert ist.</p>
         {!research.latest ? (
@@ -374,7 +375,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             </div>
             <div>
               <label className="label" htmlFor="bdUserId">Zuständiger BD</label>
-              <select id="bdUserId" name="bdUserId" className="select" defaultValue="">
+              <select id="bdUserId" name="bdUserId" className="select" defaultValue={account.responsibleBdUserId && bdUsers.some((u) => u.id === account.responsibleBdUserId) ? account.responsibleBdUserId : ""}>
                 <option value="">– Zuordnung offen (erscheint im Eingang) –</option>
                 {bdUsers.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
               </select>
@@ -387,7 +388,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             </div>
             <div>
               <label className="label" htmlFor="creatorContribution">Mein vereinbarter Beitrag</label>
-              <select id="creatorContribution" name="creatorContribution" className="select" defaultValue="ANKER_KONTEXT">
+              <select id="creatorContribution" name="creatorContribution" className="select" defaultValue={account.responsibleBdUserId === actor.userId ? "BD_ZUSTAENDIG" : "ANKER_KONTEXT"}>
                 {schema.membershipContributionEnum.enumValues.map((v) => <option key={v} value={v}>{contributionLabel[v]}</option>)}
               </select>
             </div>

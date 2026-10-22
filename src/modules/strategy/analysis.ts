@@ -90,9 +90,15 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
     db.query.reviews.findMany({ where: and(eq(schema.reviews.setupId, setupId), eq(schema.reviews.status, "BESTAETIGT")), orderBy: desc(schema.reviews.scheduledFor), limit: 1 }),
   ]);
   const oppIds = opps.map((o) => o.id);
-  const [offers, orders] = oppIds.length
-    ? await Promise.all([db.query.offers.findMany({ where: inArray(schema.offers.opportunityId, oppIds) }), db.query.orders.findMany({ where: inArray(schema.orders.opportunityId, oppIds) })])
-    : [[], []];
+  const [offers, orders0, running] = oppIds.length
+    ? await Promise.all([
+        db.query.offers.findMany({ where: inArray(schema.offers.opportunityId, oppIds) }),
+        db.query.orders.findMany({ where: inArray(schema.orders.opportunityId, oppIds) }),
+        // Laufende Einsätze ohne Auftrag (Schnellbesetzung, Moco-Import) zählen ebenfalls als „gestartet“
+        db.query.engagements.findMany({ where: and(eq(schema.engagements.setupId, setupId), inArray(schema.engagements.status, ["AKTIV", "PAUSIERT", "ENDET"])), columns: { id: true } }),
+      ])
+    : [[], [], []];
+  const orders = running.length ? [...orders0, { status: "", engagementStatus: "GESTARTET" }] : orders0;
   let lastWeekly: Date | null = null;
   if (reviews[0]) {
     const v = await db.query.reviewVersions.findFirst({ where: eq(schema.reviewVersions.reviewId, reviews[0].id), orderBy: desc(schema.reviewVersions.confirmedAt) });

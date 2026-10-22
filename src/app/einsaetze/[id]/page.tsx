@@ -69,9 +69,9 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           {e.mocoProjectId && <span className="muted text-xs">aus Moco (Projekt {e.mocoProjectId}{e.externalRef ? <> · <a href={e.externalRef} target="_blank" rel="noreferrer">in Moco öffnen</a></> : null}) – Laufzeit und Zuweisung führt Moco</span>}
           <span>Laufzeit: {fmtDate(e.actualStart ?? e.plannedStart)} – {e.plannedEnd ? `${fmtDate(e.plannedEnd)}${e.daysToEnd !== null ? ` (${e.daysToEnd} Tage)` : ""}` : "offen"}</span>
           {nextDue && <span style={nextDue < new Date().toISOString().slice(0, 10) ? { color: RED, fontWeight: 600 } : undefined}>nächste Frist {fmtDate(nextDue)}</span>}
-          <span className="muted text-xs ml-auto">{a.commercial ? "BD-Kontext" : a.ops ? "Sales Operations" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
+          <span className="muted text-xs ml-auto">{a.commercial ? "BD-Kontext" : a.ops ? "Sales Operations" : a.readOnly ? "Coach (nur lesen)" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
         </div>
-        {!final && !(openRenewal && openRenewal.proposedTo) && (
+        {!final && (a.manage || a.care) && !(openRenewal && openRenewal.proposedTo) && (
           <details className="mt-2">
             <summary className="btn btn-small" style={{ display: "inline-block" }}>Verlängerung anstoßen</summary>
             <div className="card mt-2"><RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} /></div>

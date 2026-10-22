@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db, schema } from "@/db/client";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
-import { loadActor, type Actor } from "@/modules/identity/actor";
+import { isReadOnlyFor, loadActor, type Actor } from "@/modules/identity/actor";
 import { notify } from "@/modules/notifications/service";
 import { canSeeSubject, resolveSubject } from "@/modules/work/subjects";
 import { canViewWorkItem } from "@/modules/work/service";
@@ -77,6 +77,7 @@ export async function addComment(actor: Actor, raw: unknown) {
   if (!p.success) throw new ValidationError(p.error.issues.map((i) => i.message).join("; "));
   const { subjectType, subjectId, body } = p.data;
   const target = await resolveTarget(actor, subjectType, subjectId);
+  if (isReadOnlyFor(actor, target.accountId)) throw new ForbiddenError("Der Coach-Zugang ist nur lesend – Rückmeldungen bitte direkt an den BD.");
   const users = await db.query.users.findMany({ where: and(eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")), columns: { id: true, displayName: true } });
   const candidates = findMentions(body, users).filter((u) => u !== actor.userId);
   const mentions: string[] = [];
@@ -100,6 +101,12 @@ export async function addComment(actor: Actor, raw: unknown) {
     return c!;
   });
   return { comment, skipped };
+}
+
+/** Darf der Akteur hier kommentieren? (Coach nur lesend; Sichtrecht prüft listComments) */
+export async function canComment(actor: Actor, subjectType: CommentSubject, subjectId: string): Promise<boolean> {
+  const target = await resolveTarget(actor, subjectType, subjectId).catch(() => null);
+  return !!target && !isReadOnlyFor(actor, target.accountId);
 }
 
 export async function listComments(actor: Actor, subjectType: CommentSubject, subjectId: string) {

@@ -75,6 +75,17 @@ export function isReadOnlyActor(actor: Actor): boolean {
   return true;
 }
 
+/**
+ * Nur lesend für diesen Kunden: Coach (arbeitsraumweit oder für den Kunden) ohne eine fachliche Rolle, die hier schreiben darf.
+ * Wichtig für gemischte Zugänge (Coach auf echten Kunden, BD/Principal auf dem eigenen Testkunden).
+ */
+export function isReadOnlyFor(actor: Actor, accountId: string | null | undefined): boolean {
+  if (!accountId) return isReadOnlyActor(actor);
+  if (!isCoach(actor, accountId)) return false;
+  const other: Role[] = ["ANKER", "BD", "PRINCIPAL", "CEO", "SALES_OPS"];
+  return !other.some((r) => hasRole(actor, r, accountId));
+}
+
 /** Sales Operations (Etappe 22): bereitet vor, pflegt und hält nach – arbeitsraumweit, ohne Entscheidungsrechte. */
 export function isSalesOps(actor: Actor): boolean {
   return actor.roles.has("SALES_OPS");

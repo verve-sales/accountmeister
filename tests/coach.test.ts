@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { resetConfigCacheForTests } from "@/lib/config";
 import { ForbiddenError } from "@/lib/errors";
-import { loadActor, isReadOnlyActor, type Actor } from "@/modules/identity/actor";
+import { loadActor, isReadOnlyActor, isReadOnlyFor, type Actor } from "@/modules/identity/actor";
 import { assignRole } from "@/modules/governance/service";
 import { getAccount } from "@/modules/accounts/service";
 import { createOpportunity } from "@/modules/opportunities/service";
@@ -13,8 +13,13 @@ import { startRenewal } from "@/modules/engagements/care";
 import { buildPortfolio, canLeaveDecision, leaveDecision } from "@/modules/portfolio/service";
 import { createAccount } from "@/modules/accounts/service";
 import { createSetup } from "@/modules/setups/service";
-import { buildDashboard } from "@/modules/dashboard/service";
-import { smartDump } from "@/modules/suggestions/service";
+import { buildDashboard, resolveView } from "@/modules/dashboard/service";
+import { acceptSuggestionAsChance, smartDump } from "@/modules/suggestions/service";
+import { addComment, canComment } from "@/modules/comments/service";
+import { createWorkItem } from "@/modules/work/service";
+import { createSos } from "@/modules/sos/service";
+import { loadSetupContext } from "@/modules/identity/authz";
+import { analyzeSetup } from "@/modules/strategy/analysis";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 import { actorFor, ensureSeed } from "./helpers";
 
@@ -90,4 +95,55 @@ describe("Etappe 33: Rolle Coach (nur lesen)", () => {
     expect(p.rows.some((x) => x.accountId === s.accountId)).toBe(true);
     expect(p.rows.some((x) => x.accountId === test.id)).toBe(true);
   });
+
+  it("C04: gemischter Coach-Zugang – auf echten Kunden keine Kommentare, Vorgänge, SOS; im Testkunden schon; Start in der Coach-Sicht", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const s = await ensureSeed();
+    const admin = await actorFor("admin");
+    const petra = await actorFor("petra");
+    const coach0 = await makeCoach();
+    const test = await createAccount(petra, { name: `Testkunde C04 ${Date.now()} (fiktiv)` });
+    await assignRole(admin, { userId: coach0.userId, role: "BD", accountId: test.id }).catch(() => null);
+    const flora = (await loadActor(coach0.userId))!;
+    expect(isReadOnlyFor(flora, s.accountId)).toBe(true);
+    expect(isReadOnlyFor(flora, test.id)).toBe(false);
+    await expect(addComment(flora, { subjectType: "KUNDE", subjectId: s.accountId, body: "Hinweis vom Coach" })).rejects.toBeInstanceOf(ForbiddenError);
+    expect(await canComment(flora, "KUNDE", s.accountId)).toBe(false);
+    expect(await canComment(flora, "KUNDE", test.id)).toBe(true);
+    await expect(createWorkItem(flora, { title: "Bitte anrufen", subjectType: "KUNDE", subjectId: s.accountId, target: "me" })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(createSos(flora, { accountId: s.accountId, kind: "LAGE_ENG", title: "Darf nicht", situation: "Coach darf kein SOS auslösen." })).rejects.toBeInstanceOf(ForbiddenError);
+    const c = await addComment(flora, { subjectType: "KUNDE", subjectId: test.id, body: "Im Testkunden ausprobiert" });
+    expect(c.comment.id).toBeTruthy();
+    const { view, available } = await resolveView(flora, null);
+    expect(available).toContain("COACH");
+    expect(view).toBe("COACH");
+  });
+
+  it("C05: Beobachtung aus der KI mit einem Klick als Chance übernehmen; laufender Einsatz ohne Auftrag zählt als gestartet", async () => {
+    process.env.AI_PROVIDER = "test";
+    process.env.FEATURE_BESETZUNG = "true";
+    resetConfigCacheForTests();
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const r = await smartDump(david, { setupId: s.setupId, text: "Gespräch mit der Teamleitung: Das Plattformteam plant im Frühjahr eine Lasttest-Offensive und sucht dafür Performance-Tester." });
+    expect(r.created).toBeGreaterThan(0);
+    const sugg = await db.query.suggestions.findFirst({ where: and(eq(schema.suggestions.setupId, s.setupId), eq(schema.suggestions.type, "BEOBACHTUNG"), eq(schema.suggestions.status, "NEU")) });
+    expect(sugg).toBeTruthy();
+    const res = await acceptSuggestionAsChance(david, sugg!.id, { version: sugg!.version, chanceTitle: "Performance-Tester Lasttest-Offensive" });
+    expect(res.opportunity.status).toBe("IN_KLAERUNG");
+    expect(res.opportunity.title).toBe("Performance-Tester Lasttest-Offensive");
+    const sig = await db.query.signals.findFirst({ where: eq(schema.signals.id, res.acceptedObjectId) });
+    expect(sig?.opportunityId).toBe(res.opportunity.id);
+    // Schnellbesetzung ohne Auftrag, Einsatz aktiv → Setup-Stufe „gestartet“
+    const setupName = `Stufe ${Date.now()}`;
+    const st = await createSetup(david, { accountId: s.accountId, name: setupName, bdUserId: david.userId, creatorContribution: "BD_ZUSTAENDIG" });
+    const opp = await createOpportunity(david, { setupId: st.id, title: "Einsatz ohne Auftrag", needDescription: "Läuft bereits beim Kunden.", kind: "FREELANCER_EXPERTE" });
+    const q = await quickFill(david, opp.id, { title: "Tester:in", resourceKind: "FREELANCER", newName: `Ina Ohneauftrag ${Date.now()} (fiktiv)`, ekRate: "700", vkRate: "900", desiredStart: plusDaysIso(todayIso(), -10), plannedEnd: plusDaysIso(todayIso(), 100) });
+    await db.update(schema.engagements).set({ status: "AKTIV", actualStart: plusDaysIso(todayIso(), -10) }).where(eq(schema.engagements.id, q.engagement.id));
+    const ctx = (await loadSetupContext(david, st.id))!;
+    const a = await analyzeSetup(david, ctx);
+    expect(a.stage).toBe("GESTARTET");
+  });
 });
+

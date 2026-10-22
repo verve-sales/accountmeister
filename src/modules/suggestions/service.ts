@@ -445,3 +445,20 @@ export async function listMySuggestions(actor: Actor) {
 export async function listOpenQuestionsForSetup(setupId: string) {
   return db.query.openQuestions.findMany({ where: and(eq(schema.openQuestions.setupId, setupId), ne(schema.openQuestions.status, "BEANTWORTET")), orderBy: desc(schema.openQuestions.createdAt) });
 }
+
+/**
+ * „Als Chance übernehmen“ (Etappe 34): eine KI-Beobachtung, die einen konkreten Bedarf beschreibt, mit einem Klick
+ * als Chance „in Klärung“ anlegen. Die Beobachtung entsteht wie bei „Annehmen“ und bleibt als Herkunft verknüpft.
+ */
+export async function acceptSuggestionAsChance(actor: Actor, id: string, raw: unknown) {
+  const { suggestion: s } = await requireSuggestion(actor, id);
+  if (s.type !== "BEOBACHTUNG") throw new ValidationError("Nur eine Beobachtung lässt sich als Chance übernehmen.");
+  const data = (raw ?? {}) as Record<string, unknown>;
+  const edited = typeof data.editedText === "string" ? data.editedText.trim() : "";
+  const res = await acceptSuggestion(actor, id, { version: data.version, editedText: edited });
+  const { createOpportunity } = await import("@/modules/opportunities/service");
+  const title = (typeof data.chanceTitle === "string" && data.chanceTitle.trim().length >= 3 ? data.chanceTitle.trim() : s.title).slice(0, 200);
+  const need = (edited || s.observation).padEnd(10, ".").slice(0, 4000);
+  const opp = await createOpportunity(actor, { setupId: s.setupId, title, needDescription: need, signalId: res.acceptedObjectId, trigger: s.evidenceQuote ? `„${s.evidenceQuote}“` : "" });
+  return { ...res, opportunity: opp };
+}

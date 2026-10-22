@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db, schema, type Db, type Tx } from "@/db/client";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
-import type { Actor } from "@/modules/identity/actor";
+import { isReadOnlyFor, type Actor } from "@/modules/identity/actor";
 import { notify, type NotificationKind } from "@/modules/notifications/service";
 import { addWorkdays, plusDaysIso, todayIso } from "./calendar";
 import { resolveSubject, subjectTypeValues, type ResolvedSubject } from "./subjects";
@@ -105,6 +105,7 @@ export async function createWorkItem(actor: Actor, raw: unknown, tx0?: Tx) {
     parent && (i.subjectType === "OHNE" || !i.subjectId)
       ? await resolveSubject(actor, parent.subjectType, parent.subjectId)
       : await resolveSubject(actor, i.subjectType, i.subjectId || null);
+  if (subject.accountId && isReadOnlyFor(actor, subject.accountId)) throw new ForbiddenError("Der Coach-Zugang ist nur lesend – Vorgänge legen BD, Anker oder Sales Operations an.");
 
   // Ziel bestimmen
   let assigneeUserId: string | null = null;

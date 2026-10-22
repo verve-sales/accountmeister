@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildDashboard, viewAccountCounts, viewLabel, type DashboardView } from "@/modules/dashboard/service";
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
-import { isReadOnlyActor } from "@/modules/identity/actor";
+import { isCoach, isReadOnlyActor } from "@/modules/identity/actor";
 import { canEditSetup, loadSetupContext } from "@/modules/identity/authz";
 import { MATURITY, maturityLabel } from "@/modules/strategy/chancen";
 import { CHANCE_STEPS } from "@/lib/chanceStages";
@@ -148,7 +148,16 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         <section className="card text-sm">
           <strong>Coach-Zugang (nur lesen).</strong> Zum Durchgehen: <Link href="/meine-bds">Meine BDs</Link> (Kunden je BD mit Stand) · <Link href="/kunden">Kunden</Link> · <Link href="/einsaetze">Einsätze</Link>. Unten die Übersichten zum Aufklappen. Änderungen sind in diesem Zugang nicht möglich.
         </section>
-      ) : arbeitsliste}
+      ) : (
+        <>
+          {(isCoach(actor) || [...actor.accountRoles.values()].some((r) => r.has("COACH"))) && (
+            <section className="card text-sm">
+              <strong>Coach-Zugang.</strong> Echte Kunden siehst du nur lesend; in deinem Testkunden darfst du alles ausprobieren. Zum Durchgehen: <Link href="/meine-bds">Meine BDs</Link> · <Link href="/kunden">Kunden</Link> · <Link href="/einsaetze">Einsätze</Link>.
+            </section>
+          )}
+          {arbeitsliste}
+        </>
+      )}
       {work.myTeams.length > 0 && (
         <p className="text-sm muted">{work.myTeams.map((t) => <Link key={t.id} href={`/team/${t.id}`} className="mr-3">{work.queue.filter((q) => q.teamId === t.id).length} im Eingang {t.name}</Link>)}</p>
       )}

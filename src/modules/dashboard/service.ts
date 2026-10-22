@@ -52,7 +52,9 @@ export async function resolveView(actor: Actor, requested: string | null | undef
   const available = await availableViews(actor);
   if (available.length === 0) return { view: null, available };
   const wanted = DASHBOARD_VIEWS.find((v) => v === requested);
-  return { view: wanted && available.includes(wanted) ? wanted : available[0]!, available };
+  // Wer (auch) Coach ist, startet in der Coach-Sicht – sonst zeigt die BD-Sicht nur den eigenen Testkunden
+  const fallback = available.includes("COACH") ? "COACH" : available[0]!;
+  return { view: wanted && available.includes(wanted) ? wanted : fallback, available };
 }
 
 // ---------------------------------------------------------------------------

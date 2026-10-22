@@ -1,3 +1,4 @@
+import { isReadOnlyFor } from "@/modules/identity/actor";
 import { and, desc, eq, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
@@ -42,6 +43,7 @@ export async function createSos(actor: Actor, raw: unknown) {
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const i = parsed.data;
   const account = await getAccount(actor, i.accountId); // Kundenteam inkl. Anker über ihre Setup-Beteiligung
+  if (isReadOnlyFor(actor, account.id)) throw new ForbiddenError("Der Coach-Zugang ist nur lesend.");
   if (i.setupId) {
     const s = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, i.setupId) });
     if (!s || s.accountId !== account.id) throw new ValidationError("Das Setup gehört nicht zu diesem Kunden.");

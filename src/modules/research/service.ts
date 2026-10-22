@@ -3,7 +3,7 @@ import { db, schema } from "@/db/client";
 import { DomainError, ForbiddenError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
-import { hasAnyContentRole } from "@/modules/identity/actor";
+import { hasAnyContentRole, isReadOnlyFor } from "@/modules/identity/actor";
 import { getAccount } from "@/modules/accounts/service";
 import { getCompanyResearchAdapter, ResearchAdapterError } from "./index";
 import type { CompanyFact } from "./adapter";
@@ -36,7 +36,7 @@ export async function getCompanyResearch(actor: Actor, accountId: string): Promi
 
 /** Recherche (neu) abrufen und als aktuelle Fassung speichern – überschreibt die vorherige Fassung dieses Kunden. */
 export async function refreshCompanyResearch(actor: Actor, accountId: string): Promise<CompanyResearchRow> {
-  if (!hasAnyContentRole(actor)) throw new ForbiddenError("Nur fachliche Rollen starten eine Unternehmensrecherche.");
+  if (!hasAnyContentRole(actor) || isReadOnlyFor(actor, accountId)) throw new ForbiddenError("Nur fachliche Rollen starten eine Unternehmensrecherche.");
   const account = await getAccount(actor, accountId);
   const adapter = getCompanyResearchAdapter();
   let result;

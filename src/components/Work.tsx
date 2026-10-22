@@ -1,7 +1,9 @@
 import Link from "next/link";
 import type { Actor } from "@/modules/identity/actor";
 import { listWorkForSubject, workKindLabel, workStatusLabel, workTargets, type WorkItemView } from "@/modules/work/service";
-import { listComments, type CommentSubject } from "@/modules/comments/service";
+import { canComment, listComments, type CommentSubject } from "@/modules/comments/service";
+import { isReadOnlyFor } from "@/modules/identity/actor";
+import { resolveSubject } from "@/modules/work/subjects";
 import { addCommentAction, deleteCommentAction, editCommentAction } from "@/app/actions";
 import { fmtDate } from "@/lib/labels";
 import { WorkCreateForm } from "./WorkCreateForm";
@@ -53,7 +55,9 @@ export function WorkList({ items, empty, showAccount = true, perspective }: { it
 
 /** Block „Vorgänge“ an Kunde, Setup, Chance oder SOS: offene Vorgänge, zuletzt erledigte, neuer Vorgang. */
 export async function WorkBlock({ actor, subjectType, subjectId, back, title = "Vorgänge", canCreate = true }: { actor: Actor; subjectType: "KUNDE" | "SETUP" | "CHANCE" | "SOS"; subjectId: string; back: string; title?: string; canCreate?: boolean }) {
-  const [list, targets] = await Promise.all([listWorkForSubject(actor, subjectType, subjectId), workTargets(actor)]);
+  const [list, targets, subject] = await Promise.all([listWorkForSubject(actor, subjectType, subjectId), workTargets(actor), resolveSubject(actor, subjectType, subjectId).catch(() => null)]);
+  // Coach-Zugang: nur lesen – keine Vorgänge anlegen
+  if (subject && isReadOnlyFor(actor, subject.accountId)) canCreate = false;
   return (
     <section className="card" id="vorgaenge">
       <div className="flex flex-wrap items-baseline gap-2 mb-2">
@@ -84,7 +88,7 @@ export async function WorkBlock({ actor, subjectType, subjectId, back, title = "
 
 /** Kommentare am Objekt mit @-Erwähnungen */
 export async function Comments({ actor, subjectType, subjectId, back }: { actor: Actor; subjectType: CommentSubject; subjectId: string; back: string }) {
-  const list = await listComments(actor, subjectType, subjectId);
+  const [list, mayComment] = await Promise.all([listComments(actor, subjectType, subjectId), canComment(actor, subjectType, subjectId)]);
   const backTo = `${back.split("#")[0]}#kommentare`;
   return (
     <section className="card" id="kommentare">
@@ -121,6 +125,7 @@ export async function Comments({ actor, subjectType, subjectId, back }: { actor:
           </li>
         ))}
       </ul>
+      {mayComment ? (
       <form action={addCommentAction} className="mt-3 flex flex-col gap-2">
         <input type="hidden" name="subjectType" value={subjectType} />
         <input type="hidden" name="subjectId" value={subjectId} />
@@ -131,6 +136,9 @@ export async function Comments({ actor, subjectType, subjectId, back }: { actor:
           <button className="btn btn-small" type="submit">Kommentieren</button>
         </div>
       </form>
+      ) : (
+        <p className="muted text-xs mt-2">Nur lesend (Coach-Zugang) – Rückmeldungen bitte direkt an den BD.</p>
+      )}
     </section>
   );
 }

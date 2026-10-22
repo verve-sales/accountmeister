@@ -6,6 +6,7 @@ import { engagementFilterValues, engagementStatusLabel, listEngagements, type En
 import { renewalStatusLabel } from "@/modules/engagements/care";
 import { Feedback } from "@/components/Feedback";
 import { fmtDate } from "@/lib/labels";
+import { isReadOnlyFor } from "@/modules/identity/actor";
 
 const FILTERS: { key: EngagementFilter; label: string }[] = [
   { key: "alle", label: "alle" },
@@ -88,7 +89,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
                     </td>
                     <td className="text-xs">
                       {e.renewalStatus ? <>{renewalStatusLabel[e.renewalStatus] ?? e.renewalStatus}{e.renewalTo && e.renewalStatus !== "ZU_KLAEREN" ? <> bis {fmtDate(e.renewalTo)}</> : null}</> : <span className="muted">–</span>}
-                      {renewalOpen && ["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status) && <div><Link href={`/einsaetze/${e.id}#verlaengerung`}>anstoßen</Link></div>}
+                      {renewalOpen && !isReadOnlyFor(actor, e.accountId) && ["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status) && <div><Link href={`/einsaetze/${e.id}#verlaengerung`}>anstoßen</Link></div>}
                     </td>
                     <td className="text-xs">{e.careNames.length ? e.careNames.map((n) => n.replace(/ \((Kundenbetreuung|Freelancer-Betreuung)\)$/, "")).join(", ") : <span style={{ color: "#b7791f" }}>offen</span>}</td>
                   </tr>

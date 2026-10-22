@@ -1,7 +1,7 @@
 import { schema } from "@/db/client";
 import { Status } from "@/components/Status";
 import { feedbackReasonLabel, fmtDateTime, priorityCategoryLabel, suggestionStatusLabel, suggestionTypeLabel } from "@/lib/labels";
-import { acceptSuggestionAction, suggestionFeedbackAction } from "@/app/actions";
+import { acceptSuggestionAction, acceptSuggestionAsChanceAction, suggestionFeedbackAction } from "@/app/actions";
 
 type Suggestion = typeof schema.suggestions.$inferSelect;
 
@@ -46,7 +46,8 @@ export function SuggestionCard({ s, ownerName, canDecide, back, users }: { s: Su
                 {users.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
               </select>
             )}
-            <button className="btn btn-small" type="submit">Annehmen</button>
+            <button className="btn btn-small" type="submit">{s.type === "BEOBACHTUNG" ? "Als Beobachtung annehmen" : "Annehmen"}</button>
+            {s.type === "BEOBACHTUNG" && <button className="btn btn-small" type="submit" formAction={acceptSuggestionAsChanceAction} title="Legt die Beobachtung an und daraus sofort eine Chance „in Klärung“">Als Chance übernehmen</button>}
           </form>
           <form action={suggestionFeedbackAction} className="flex flex-wrap gap-1 items-end">
             <input type="hidden" name="suggestionId" value={s.id} />

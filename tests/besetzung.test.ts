@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { resetConfigCacheForTests } from "@/lib/config";
+import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { loadActor, type Actor } from "@/modules/identity/actor";
 import { assignRole } from "@/modules/governance/service";
@@ -24,7 +25,10 @@ async function newOpportunity(david: Actor, title: string) {
   return createOpportunity(david, { setupId: s.setupId, title, needDescription: `Bedarf: ${title} für das Plattformteam.`, kind: "FREELANCER_EXPERTE", ownerUserId: david.userId });
 }
 
-const base = { mustHave: "Mindestens fünf Jahre Erfahrung in Java und Spring; Deutsch verhandlungssicher.", tasks: "Backend-Services entwickeln\nCode-Reviews", niceToHave: "Kubernetes", location: "Köln, 60 % remote", language: "Deutsch, Englisch", desiredStart: "2026-11-02", scopeAmount: 4, scopeUnit: "TAGE_PRO_WOCHE", proposalDue: "2026-10-20", ekMax: "850", vkMin: "1050", rateUnit: "TAG" } as const;
+// Fristen relativ zu heute – feste Daten liefen sonst in die Vergangenheit
+const DUE = plusDaysIso(todayIso(), 14);
+const START = plusDaysIso(todayIso(), 30);
+const base = { mustHave: "Mindestens fünf Jahre Erfahrung in Java und Spring; Deutsch verhandlungssicher.", tasks: "Backend-Services entwickeln\nCode-Reviews", niceToHave: "Kubernetes", location: "Köln, 60 % remote", language: "Deutsch, Englisch", desiredStart: START, scopeAmount: 4, scopeUnit: "TAGE_PRO_WOCHE", proposalDue: DUE, ekMax: "850", vkMin: "1050", rateUnit: "TAG" } as const;
 
 describe("Etappe 28 (E1): Position – Zustände und Rechte", () => {
   it("BD legt Position an (Entwurf), offen erst mit Mindestangaben; Kopie; Pause/Abbruch mit Grund", async () => {
@@ -100,7 +104,7 @@ describe("Etappe 28 (E1): Suchauftrag → Teamvorschau → Annahme → Kandidatu
     await expect(requestSearch(david, p1.id, { expectedResult: "Noch einmal – darf nicht doppelt laufen." })).rejects.toBeInstanceOf(ConflictError);
     expect(w1.kind).toBe("SUCHE");
     expect(w1.status).toBe("ANGEFRAGT");
-    expect(w1.dueDate).toBe("2026-10-20");
+    expect(w1.dueDate).toBe(DUE);
 
     // A03: Teamvorschau – Sales Ops sieht die Position vor Annahme nur minimal, ohne EK/Kandidaturen
     const preview = await getPositionDetail(ops, p1.id);
@@ -221,7 +225,7 @@ describe("Etappe 28 (E1): Suchauftrag → Teamvorschau → Annahme → Kandidatu
     const back = await actOnWorkItem(ops2, w2.id, { version: w2b.version, action: "ABGEBEN", note: "Krank bis Monatsende." });
     expect(back.status).toBe("ANGEFRAGT");
     expect(back.assigneeUserId).toBeNull();
-    expect(back.dueDate).toBe("2026-10-20");
+    expect(back.dueDate).toBe(DUE);
     expect((await listMyWork(david)).requested.find((x) => x.id === w2.id)?.requesterName).toMatch(/David/);
     // Position abbrechen schließt den Suchauftrag nachvollziehbar
     const p2row = (await db.query.staffingPositions.findFirst({ where: eq(schema.staffingPositions.id, p2.id) }))!;
@@ -252,7 +256,7 @@ describe("Etappe 28 (E1): KI – Ausschreibungsentwurf und Texteingang", () => {
     expect(d1.adStatus).toBe("ENTWURF");
     expect(ad.note).toMatch(/KI deaktiviert/);
     expect(JSON.stringify(ad)).not.toMatch(/850|1050|1100|vertraulich|Beispielkonzern/);
-    expect(ad.conditions.join(" ")).toMatch(/Start: 2026-11-02/);
+    expect(ad.conditions.join(" ")).toContain(`Start: ${START}`);
     const text = adToText(ad);
     expect(text).toMatch(/Scrum Master/);
     // Freigabe nur BD; danach kein stilles Überschreiben

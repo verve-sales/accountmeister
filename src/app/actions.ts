@@ -28,7 +28,7 @@ import { addAccessPlanStep, changeAccessPlanStatus, createAccessPlan } from "@/m
 import { addDecision, confirmReview, correctReview, createReview, saveReviewDraft } from "@/modules/reviews/service";
 import { changePriority, createPriority, saveAccountPlanSnapshot } from "@/modules/accountplan/service";
 import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/artifacts/service";
-import { acceptSuggestion, giveFeedback, smartDump, structureReviewNote, structureSource } from "@/modules/suggestions/service";
+import { acceptSuggestion, acceptSuggestionAsChance, giveFeedback, smartDump, structureReviewNote, structureSource } from "@/modules/suggestions/service";
 import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
 import { refreshCompanyResearch } from "@/modules/research/service";
 import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
@@ -490,6 +490,13 @@ export async function acceptSuggestionAction(fd: FormData) {
   return run(data.back ?? "/meine-arbeit", async (actor) => {
     await acceptSuggestion(actor, data.suggestionId ?? "", data);
   }, "Vorschlag angenommen – das Objekt wurde im ungeprüften Zustand angelegt.");
+}
+
+export async function acceptSuggestionAsChanceAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/meine-arbeit", async (actor) => {
+    await acceptSuggestionAsChance(actor, data.suggestionId ?? "", data);
+  }, "Als Chance übernommen – sie steht „in Klärung“ im Setup unter „Wo stehen wir?“.");
 }
 
 export async function suggestionFeedbackAction(fd: FormData) {
