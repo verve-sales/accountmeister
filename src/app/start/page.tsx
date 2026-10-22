@@ -12,7 +12,7 @@ import { countChancesByStatus } from "@/modules/opportunities/service";
 import { BarChart, CHART_COLORS } from "@/components/charts/BarChart";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
-import { fmtDate, goalStatusLabel, opportunityStatusLabel } from "@/lib/labels";
+import { fmtDate, goalStatusLabel, opportunityStatusLabel, agoLabel } from "@/lib/labels";
 import { ensureStandardTasksSafe, freelancerStats } from "@/modules/focus/standardTasks";
 import { getFocus } from "@/modules/focus/service";
 import { computeHealthFor } from "@/modules/health/service";
@@ -288,7 +288,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               <div className="flex flex-wrap items-baseline gap-3">
                 <h3 className="font-semibold text-lg"><Link href={`/kunden/${c.accountId}`}>{c.accountName}</Link></h3>
                 {healthBy.get(c.accountId) && <HealthBadge score={healthBy.get(c.accountId)!.score} level={healthBy.get(c.accountId)!.level} coverage={healthBy.get(c.accountId)!.coverage} />}
-                <span className="muted text-sm">{c.chanceCount} Chance(n) · {c.setups.length} Setup(s){c.responsibleBdName ? ` · BD ${c.responsibleBdName}` : " · BD offen"} · letzte Änderung vor {c.daysSinceActivity} Tag(en)</span>
+                <span className="muted text-sm">{c.chanceCount} Chance(n) · {c.setups.length} Setup(s){c.responsibleBdName ? ` · BD ${c.responsibleBdName}` : " · BD offen"} · letzte Änderung {agoLabel(c.daysSinceActivity)}</span>
               </div>
               <p className="text-sm mt-2"><span className="muted">Wofür: </span>{c.chanceCount ? <strong>{c.purpose}</strong> : <span style={{ color: "#8a6d1f" }}>{c.purpose}</span>}</p>
               <p className="text-sm mt-1"><span className="muted">Nächster großer Schritt: </span>{c.nextStep}</p>
@@ -333,7 +333,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                       <td>{c.blockers.length}</td>
                       <td>{c.missing.length}</td>
                       <td>{c.moves.length}</td>
-                      <td>vor {c.daysSinceActivity} Tag(en)</td>
+                      <td>{agoLabel(c.daysSinceActivity)}</td>
                     </tr>
                   ))}
                 </tbody>

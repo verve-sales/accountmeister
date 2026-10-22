@@ -6,7 +6,7 @@ import { DomainError } from "@/lib/errors";
 import { HealthBadge } from "@/components/HealthBadge";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
-import { fmtDate, opportunityStatusLabel } from "@/lib/labels";
+import { fmtDate, opportunityStatusLabel, agoLabel } from "@/lib/labels";
 import { engagementStatusLabel } from "@/modules/engagements/service";
 import { renewalStatusLabel } from "@/modules/engagements/care";
 import { workStatusLabel } from "@/modules/work/service";
@@ -43,7 +43,7 @@ export default async function MeineBdsKundePage({ params, searchParams }: { para
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold"><Link href={`/kunden/${id}`}>{row.accountName}</Link></h1>
         <HealthBadge score={row.health.score} level={row.health.level} coverage={row.health.coverage} />
-        <span className="muted text-sm">BD {row.bdName}{row.ankerNames.length ? ` · Anker ${row.ankerNames.join(", ")}` : " · kein Anker"}{row.principalNames.length ? ` · Principal ${row.principalNames.join(", ")}` : ""} · letzter Kontakt {row.daysSinceActivity >= 999 ? "nie" : `vor ${row.daysSinceActivity} Tagen`}</span>
+        <span className="muted text-sm">BD {row.bdName}{row.ankerNames.length ? ` · Anker ${row.ankerNames.join(", ")}` : " · kein Anker"}{row.principalNames.length ? ` · Principal ${row.principalNames.join(", ")}` : ""} · letzter Kontakt {agoLabel(row.daysSinceActivity)}</span>
       </div>
       <Feedback params={sp} />
 

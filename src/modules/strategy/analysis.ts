@@ -109,7 +109,7 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
   const stage = stageFromOpportunities(activeOpps, offers, orders);
   const roles = await listRoles(ctx.setup.workspaceId, { includeInactive: true });
   const roleName = (id: string | null) => (id ? roles.find((r) => r.id === id)?.name ?? null : null);
-  const describe = (o: (typeof opps)[number]) => `${o.headcount ? `${o.headcount}× ` : ""}${roleName(o.roleId) ?? o.title}${o.kind !== "VERVE_EXPERTE" ? ` (${chanceKindLabel[o.kind]})` : ""}${o.horizon ? ` ${o.horizon}` : ""} – ${o.status === "ANTIZIPIERT" ? "antizipiert" : (opportunityStatusLabel[o.status] ?? o.status).toLowerCase()}`;
+  const describe = (o: (typeof opps)[number]) => `${o.headcount ? `${o.headcount}× ` : ""}${roleName(o.roleId) ?? o.title}${o.kind !== "VERVE_EXPERTE" ? ` (${chanceKindLabel[o.kind]})` : ""}${o.horizon ? ` ${o.horizon}` : ""} – ${opportunityStatusLabel[o.status] ?? o.status}`;
   const purpose = activeOpps.length ? activeOpps.map(describe).join("; ") : "Noch keine Chance benannt – worauf läuft es hinaus?";
   const blockers: string[] = [];
   const missing: string[] = [];

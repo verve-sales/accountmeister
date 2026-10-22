@@ -47,7 +47,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
               {active.map((a) => (
                 <tr key={a.id}>
                   <td><Link href={`/kunden/${a.id}`}>{a.name}</Link>{a.isDemo && <span className="muted text-sm"> · Demo</span>}</td>
-                  <td>{a.orgType}</td>
+                  <td>{orgTypeLabel[a.orgType] ?? a.orgType}</td>
                   <td>{a.responsibleBdUserId ? bdNames.get(a.responsibleBdUserId) : <Status label="offen" />}</td>
                   <td><Status label={accountStatusLabel[a.status] ?? a.status} /></td>
                   <td>{healthBy.get(a.id) ? <Link href={`/kunden/${a.id}/health`}><HealthBadge score={healthBy.get(a.id)!.score} level={healthBy.get(a.id)!.level} coverage={healthBy.get(a.id)!.coverage} /></Link> : null}</td>
@@ -80,7 +80,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
               {archived.map((a) => (
                 <tr key={a.id}>
                   <td><Link href={`/kunden/${a.id}`}>{a.name}</Link></td>
-                  <td>{a.orgType}</td>
+                  <td>{orgTypeLabel[a.orgType] ?? a.orgType}</td>
                   <td><Link href={`/kunden/${a.id}/loeschen`} className="text-sm">wiederherstellen oder löschen</Link></td>
                 </tr>
               ))}

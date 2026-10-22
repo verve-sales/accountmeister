@@ -125,3 +125,11 @@ export const requirementStatusLabel: Record<string, string> = { OFFEN: "Offen", 
 export const playbookScopeLabel: Record<string, string> = { ACCOUNT: "Kunde", SETUP: "Setup", OPPORTUNITY: "Chance" };
 export const playbookRunStatusLabel: Record<string, string> = { AKTIV: "läuft", ABGESCHLOSSEN: "abgeschlossen", ZURUECKGESTELLT: "zurückgestellt" };
 export const playbookStepStatusLabel: Record<string, string> = { WARTET: "wartet", OFFEN: "aktuell", ERLEDIGT: "erledigt", UEBERSPRUNGEN: "übersprungen" };
+
+/** „heute“, „gestern“, „vor 5 Tagen“ – statt „vor 0 Tag(en)“; ab 999 Tagen „nie“. */
+export function agoLabel(days: number): string {
+  if (days >= 999) return "nie";
+  if (days <= 0) return "heute";
+  if (days === 1) return "gestern";
+  return `vor ${days} Tagen`;
+}

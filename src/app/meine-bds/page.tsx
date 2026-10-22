@@ -4,7 +4,7 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { buildPortfolio, canBrowsePortfolio } from "@/modules/portfolio/service";
 import { HealthBadge } from "@/components/HealthBadge";
 import { Feedback, type SearchParams } from "@/components/Feedback";
-import { fmtDate } from "@/lib/labels";
+import { fmtDate, agoLabel } from "@/lib/labels";
 
 const RED = "#c0392b";
 
@@ -35,7 +35,7 @@ export default async function MeineBdsPage({ searchParams }: { searchParams: Sea
                   <td style={{ fontVariantNumeric: "tabular-nums" }}>{r.runningEngagements}</td>
                   <td className="text-xs" style={{ whiteSpace: "nowrap" }}>{r.nextEnd ? <>{fmtDate(r.nextEnd)}{r.nextEndPerson ? <div className="muted">{r.nextEndPerson}</div> : null}</> : <span className="muted">–</span>}</td>
                   <td className="text-xs">{r.chancesInWork} in Arbeit{r.chancesAnticipated ? <span className="muted"> · {r.chancesAnticipated} antizipiert</span> : null}</td>
-                  <td className="text-xs" style={r.daysSinceActivity > 14 ? { color: RED, fontWeight: 600 } : undefined}>{r.daysSinceActivity >= 999 ? "nie" : `vor ${r.daysSinceActivity} Tagen`}</td>
+                  <td className="text-xs" style={r.daysSinceActivity > 14 ? { color: RED, fontWeight: 600 } : undefined}>{agoLabel(r.daysSinceActivity)}</td>
                   <td className="text-xs">{r.openDecisions ? <span style={{ color: "#b7791f", fontWeight: 600 }}>{r.openDecisions} Verlängerung(en)</span> : <span className="muted">–</span>}</td>
                   <td><HealthBadge score={r.health.score} level={r.health.level} coverage={r.health.coverage} /></td>
                 </tr>

@@ -57,7 +57,7 @@ describe("Etappe 10: Chance als Zentrum (E-045)", () => {
 
     // Analyse: Wofür-Zeile und Zug „nur antizipiert“
     const a = await analyzeSetup(david, await requireSetupContext(david, s.id));
-    expect(a.purpose).toMatch(/2× Test Management Q1 2027 – antizipiert/);
+    expect(a.purpose).toMatch(/2× Test Management Q1 2027 – Antizipiert/);
     expect(a.purpose).toMatch(/Ausschreibung/);
     expect(a.moves.some((m) => /nur antizipiert/.test(m.text))).toBe(true);
     expect(a.stage).toBe("KONTAKT"); // antizipiert zählt noch nicht als Klärung
