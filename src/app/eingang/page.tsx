@@ -9,7 +9,7 @@ import { getProviderStatus } from "@/modules/suggestions/service";
 import { Feedback } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { accessClassLabel, fmtDate, fmtDateTime, importKindLabel, importStatusLabel } from "@/lib/labels";
-import { confirmImportAction, decideMergeAction, importMailboxItemAction, importProtocolAction } from "../actions";
+import { confirmImportAction, decideMergeAction, importMailboxItemAction, importProtocolAction, reevaluateSourceAction } from "../actions";
 
 export default async function EingangPage({ searchParams }: { searchParams: Promise<{ fehler?: string; ok?: string; art?: string; q?: string }> }) {
   const params = await searchParams;
@@ -148,7 +148,17 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
                         <td className="text-sm">{fmtDateTime(it.at)}</td>
                         <td className="text-sm muted">{it.preview}</td>
                         <td>
-                          {done ? <span className="text-sm">bereits importiert {done.sourceId && <Link href={`/quellen/${done.sourceId}`}>(Quelle)</Link>}</span> : (
+                          {done ? (
+                            <span className="text-sm flex flex-wrap items-center gap-2">bereits importiert {done.sourceId && <Link href={`/quellen/${done.sourceId}`}>(Quelle)</Link>}
+                              {done.sourceId && ai.enabled && (
+                                <form action={reevaluateSourceAction} className="inline">
+                                  <input type="hidden" name="sourceId" value={done.sourceId} />
+                                  <input type="hidden" name="back" value="/start#vorschlaege" />
+                                  <button className="btn btn-small" type="submit">Mit KI (neu) auswerten</button>
+                                </form>
+                              )}
+                            </span>
+                          ) : (
                             <form action={importMailboxItemAction} className="flex flex-wrap gap-1 items-end">
                               <input type="hidden" name="kind" value={it.kind} />
                               <input type="hidden" name="externalId" value={it.externalId} />
