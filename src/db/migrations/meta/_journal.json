@@ -232,6 +232,13 @@
       "when": 1791807300929,
       "tag": "0032_coach_rolle",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792767912204,
+      "tag": "0033_verlaengerung_ki",
+      "breakpoints": true
     }
   ]
 }

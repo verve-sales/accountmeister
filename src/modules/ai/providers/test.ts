@@ -47,6 +47,32 @@ function detectRole(s: string): string | null {
   return null;
 }
 
+type TestItem = Omit<StructuredItem, "mentionedPersonRole" | "mentionedPersonUnit" | "mentionedPersonEmail" | "engagementRef" | "proposedEnd" | "conditionsNote"> & Partial<Pick<StructuredItem, "mentionedPersonRole" | "mentionedPersonUnit" | "mentionedPersonEmail" | "engagementRef" | "proposedEnd" | "conditionsNote">>;
+const EMPTY = { hypothesis: "", uncertainty: "", whyNow: "", nextStep: "", proposedQuestion: "", expectedResult: "", proposedOwnerName: "", mentionedPersonName: "" };
+const ROLE_LINE = /(business partner|einkauf|leiter|leitung|manager|referent|head of|direktor|bereichsleit|abteilungsleit|sachbearbeit|koordinat|recruit|rekrutierung|personal|vorstand|geschäftsführ)/i;
+const UNIT_LINE = /(einkauf|abteilung|bereich|team|personal|hr\b|it\b)/i;
+
+/** Signaturblöcke: „Vorname Nachname“ allein in einer Zeile, darunter Funktion/Bereich und ggf. E-Mail. */
+function signaturePersons(text: string): { name: string; role: string; unit: string; email: string; quote: string }[] {
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/[\u00a0\s]+/g, " ").trim());
+  const out: { name: string; role: string; unit: string; email: string; quote: string }[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const name = lines[i]!;
+    if (!/^[A-ZÄÖÜ][a-zäöüß]+( [A-ZÄÖÜ][\wäöüß-]+){1,3}$/.test(name) || /^(viele|beste|herzliche|freundliche|liebe|mit|sehr|hallo|guten)\b/i.test(name) || /verve/i.test(lines.slice(i, i + 5).join(" "))) continue;
+    if (out.some((o) => o.name === name)) continue;
+    const next = lines.slice(i + 1, i + 7).filter((l) => l && l !== "--" && !/^(gothaer allee|telefon|mobil|\d{5})/i.test(l));
+    const roleLine = next.find((l) => ROLE_LINE.test(l) && !/AG$|GmbH$|holding/i.test(l));
+    if (!roleLine) continue;
+    const emailLine = lines.slice(i + 1, i + 9).find((l) => /e-mail/i.test(l)) ?? "";
+    const email = emailLine.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/i)?.[0] ?? "";
+    // „HR Business Partner (K) & Rekrutierung“ → Funktion; „Dienstleistungs-Einkauf“ → Bereich
+    const isUnit = /^[\wäöüß-]*(einkauf|abteilung|bereich)$/i.test(roleLine);
+    const original = text.split(/\r?\n/).find((l) => l.replace(/[\u00a0\s]+/g, " ").trim() === roleLine)?.trim() ?? roleLine;
+    out.push({ name, role: isUnit ? "" : roleLine, unit: isUnit ? roleLine : UNIT_LINE.test(roleLine) && /&|\(/.test(roleLine) ? "" : "", email, quote: original });
+  }
+  return out;
+}
+
 const SPECULATION = /\b(könnte|vielleicht|möglicherweise|eventuell|wahrscheinlich|vermutlich|scheint|unklar ob)\b/i;
 const DECISION = /\b(entschieden|beschlossen|vereinbart|wir haben uns geeinigt|einigung|festgelegt)\b/i;
 const ACTION_VERB = /\b(übernimmt|kümmert sich|fragt|klärt|spricht .{0,40}? an|prüft|bereitet .{0,30}? vor|erstellt|schickt|sendet|ruft .{0,30}? an|meldet sich|organisiert|stellt .{0,30}? vor|bringt .{0,30}? mit)\b/i;
@@ -76,7 +102,7 @@ export class TestProvider implements AIProvider {
   }
 
   async structureNote(input: StructureNoteInput, opts?: TaskOptions): Promise<StructureNoteOutput> {
-    const items: StructuredItem[] = [];
+    const items: TestItem[] = [];
     const sentences = splitSentences(input.noteText);
     const seenPersons = new Set<string>();
 
@@ -228,7 +254,25 @@ export class TestProvider implements AIProvider {
       }
     }
 
-    return items.length > 0 ? { items, noSuggestionReason: "" } : { items: [], noSuggestionReason: "Aus dieser Notiz lässt sich kein belastbarer zusätzlicher Vorschlag ableiten." };
+    // Signaturen: Name in einer Zeile, darunter (bis 4 Zeilen) Funktion/Bereich – ergibt PERSON mit Funktion
+    for (const sig of signaturePersons(input.noteText)) {
+      const key = sig.name.toLowerCase();
+      const existing = items.find((i) => i.type === "PERSON" && (i.mentionedPersonName ?? "").toLowerCase().includes(key.split(" ").pop() ?? key));
+      if (existing) { Object.assign(existing, { mentionedPersonName: sig.name, mentionedPersonRole: sig.role, mentionedPersonUnit: sig.unit, mentionedPersonEmail: sig.email, evidenceQuote: sig.quote }); continue; }
+      if (seenPersons.has(key)) continue;
+      seenPersons.add(key);
+      items.push({ ...EMPTY, type: "PERSON", title: `${sig.name}${sig.role ? ` – ${sig.role}` : ""}`, observation: sig.quote, evidenceQuote: sig.quote, nextStep: "Person mit Funktion anlegen bzw. ergänzen.", expectedResult: "Person mit Funktion und Bereich.", mentionedPersonName: sig.name, mentionedPersonRole: sig.role, mentionedPersonUnit: sig.unit, mentionedPersonEmail: sig.email });
+    }
+    // Verlängerung eines gelisteten Einsatzes
+    for (const s of sentences) {
+      if (!/verlänger/i.test(s)) continue;
+      const hits = (input.engagements ?? []).filter((e) => { const last = e.person.split(/\s+/).pop() ?? ""; return last.length >= 3 && new RegExp(`\\b${last}\\b`, "i").test(s); });
+      if (hits.length !== 1) continue;
+      const end = s.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? (() => { const m = s.match(/\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/); return m ? `${m[3]}-${m[2]!.padStart(2, "0")}-${m[1]!.padStart(2, "0")}` : ""; })();
+      items.push({ ...EMPTY, type: "VERLAENGERUNG", title: `Verlängerung: ${hits[0]!.person}`, observation: s, evidenceQuote: s, engagementRef: hits[0]!.ref, proposedEnd: end, nextStep: "Verlängerung bestätigen und Ende setzen.", expectedResult: "Bestätigte Verlängerung mit neuem Ende." });
+    }
+
+    return (items.length > 0 ? { items, noSuggestionReason: "" } : { items: [], noSuggestionReason: "Aus dieser Notiz lässt sich kein belastbarer zusätzlicher Vorschlag ableiten." }) as StructureNoteOutput;
   }
 
   /**

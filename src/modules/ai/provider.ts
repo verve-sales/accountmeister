@@ -2,7 +2,7 @@ import type { PromptFocus } from "@/modules/focus/service";
 import type { PlaybookStepInput } from "@/modules/playbooks/drafts";
 import type { IntakeProposal, StructureNoteOutput } from "./schemas";
 
-export const STRUCTURE_NOTE_PROMPT_VERSION = "structure-note.v1";
+export const STRUCTURE_NOTE_PROMPT_VERSION = "structure-note.v2";
 export const ANALYZE_DOCUMENT_PROMPT_VERSION = "analyze-document.v2";
 export const INTERVIEW_NEXT_PROMPT_VERSION = "interview-next.v1";
 export const ASSISTANT_PROMPT_VERSION = "assistant.v5";
@@ -17,6 +17,10 @@ export type StructureNoteInput = {
   knownPersonNames: string[];
   /** Bereits dokumentierte bestätigte Aussagen (für KONFLIKT-Erkennung), nur Text */
   confirmedAssertions: string[];
+  /** Laufende Einsätze des Kunden (für VERLAENGERUNG-Erkennung): Kurzzeichen, Person, Rolle, Ende, Stand der Verlängerung */
+  engagements?: { ref: string; person: string; title: string; plannedEnd: string | null; renewal: string | null }[];
+  /** Bekannte Kundenpersonen mit Funktion (Ergänzung zu knownPersonNames) */
+  knownPersons?: { name: string; functionTitle: string | null }[];
 };
 
 /** Kontext für „Dokument analysieren“ (Kundenanlage): nur der Dokumenttext und Namen bereits bekannter Kunden. */

@@ -6,7 +6,7 @@ import { z } from "zod";
  * Version des Schemas = Version des Prompts (STRUCTURE_NOTE_PROMPT_VERSION).
  */
 
-export const suggestionTypeValues = ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT", "KONTAKTAUFNAHME"] as const;
+export const suggestionTypeValues = ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT", "KONTAKTAUFNAHME", "VERLAENGERUNG"] as const;
 export type SuggestionType = (typeof suggestionTypeValues)[number];
 
 export const structuredItemSchema = z.object({
@@ -28,6 +28,18 @@ export const structuredItemSchema = z.object({
   proposedOwnerName: z.string().max(200).optional().default(""),
   /** Anzeigename einer erwähnten Kundenperson (nur bei type=PERSON) */
   mentionedPersonName: z.string().max(200).optional().default(""),
+  /** Funktion/Titel der Person laut Text (z. B. aus der Signatur) – nur wenn im Text genannt */
+  mentionedPersonRole: z.string().max(200).optional().default(""),
+  /** Bereich/Abteilung der Person laut Text */
+  mentionedPersonUnit: z.string().max(200).optional().default(""),
+  /** E-Mail-Adresse der Person, nur wenn wörtlich im Text */
+  mentionedPersonEmail: z.string().max(200).optional().default(""),
+  /** Bezug auf einen laufenden Einsatz aus der mitgegebenen Liste (z. B. „E2“) */
+  engagementRef: z.string().max(20).optional().default(""),
+  /** VERLAENGERUNG: neues Enddatum JJJJ-MM-TT, nur wenn im Text eindeutig */
+  proposedEnd: z.string().max(10).optional().default(""),
+  /** VERLAENGERUNG: Konditionen laut Text (z. B. „Tagessatz unverändert“) */
+  conditionsNote: z.string().max(500).optional().default(""),
 });
 
 export const structureNoteOutputSchema = z.object({

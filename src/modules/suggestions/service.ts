@@ -29,6 +29,34 @@ import { addDecision } from "@/modules/reviews/service";
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const normalize = (s: string) => s.toLowerCase().replace(/\s+/g, " ").replace(/[„“"'.,;:!?()]/g, "").trim();
 
+/** Laufende Einsätze eines Kunden als Kontext für die KI (Kürzel E1, E2 …) – nur Person, Rolle, Ende, Verlängerungsstand. */
+export async function engagementContext(accountId: string) {
+  const engs = await db.query.engagements.findMany({ where: and(eq(schema.engagements.accountId, accountId), inArray(schema.engagements.status, ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET"])), orderBy: [schema.engagements.plannedEnd] });
+  if (!engs.length) return [];
+  const [fls, us, renewals] = await Promise.all([
+    db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...engs.map((e) => e.freelancerId).filter((x): x is string => !!x), "-"]), columns: { id: true, displayName: true } }),
+    db.query.users.findMany({ where: inArray(schema.users.id, [...engs.map((e) => e.internalUserId).filter((x): x is string => !!x), "-"]), columns: { id: true, displayName: true } }),
+    db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, engs.map((e) => e.id)), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) }),
+  ]);
+  const name = (e: (typeof engs)[number]) => (e.freelancerId ? fls.find((f) => f.id === e.freelancerId)?.displayName : e.internalUserId ? us.find((u) => u.id === e.internalUserId)?.displayName : null) ?? e.title.split(" – ").pop() ?? e.title;
+  const label: Record<string, string> = { ZU_KLAEREN: "zu klären", IN_ABSTIMMUNG: "in Abstimmung", ANGEBOTEN: "angeboten" };
+  return engs.map((e, i) => {
+    const r = renewals.find((x) => x.engagementId === e.id);
+    return { ref: `E${i + 1}`, id: e.id, opportunityId: e.opportunityId, person: name(e).replace(/\s*\((fiktiv|intern)\)\s*/gi, " ").trim(), title: e.title, plannedEnd: e.plannedEnd, renewal: r ? `${label[r.status] ?? r.status}${r.proposedTo ? ` bis ${r.proposedTo}` : ""}` : null };
+  });
+}
+
+/** Rückfall, wenn die KI keinen Einsatz nennt: eindeutiger Treffer über den Nachnamen der Person im Text. */
+export function matchEngagementByName<T extends { person: string }>(engs: T[], text: string): T | null {
+  const t = text.toLowerCase();
+  const hits = engs.filter((e) => {
+    const parts = e.person.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+    const last = parts[parts.length - 1];
+    return !!last && new RegExp(`\\b${last.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(t);
+  });
+  return hits.length === 1 ? hits[0]! : null;
+}
+
 export class UsageLimitError extends DomainError {
   constructor(limit: number) {
     super("AI_LIMIT", `Die tägliche Nutzungsgrenze für KI-Aufträge (${limit}) ist erreicht. Manuelle Dokumentation ist weiterhin möglich.`, 429);
@@ -42,6 +70,7 @@ export function getProviderStatus() {
 
 /** Priorisierung nach transparenten Kategorien (14.3) – keine KI-Scores. */
 export function categorize(item: StructuredItem): PriorityCategory {
+  if (item.type === "VERLAENGERUNG") return "KONKRETE_ANFRAGE";
   if (item.type === "KONFLIKT") return "PLANUNGSANLASS";
   if (item.type === "KONTAKTAUFNAHME") return "ZUGANGSLUECKE";
   if (item.type === "AKTION" && /termin|bis \d|deadline|frist|anfrage|angefragt/i.test(item.observation)) return "KONKRETE_ANFRAGE";
@@ -155,17 +184,23 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
 
   // Berechtigten Kontext laden (nur Namen/Texte, keine Rohquellen)
   const participantIds = input0.participantUserIds.length ? input0.participantUserIds : [actor.userId];
-  const [users, persons, confirmed] = await Promise.all([
+  const [users, persons, confirmed, engContext, workspaceUsers] = await Promise.all([
     db.query.users.findMany({ where: inArray(schema.users.id, participantIds) }),
     db.query.persons.findMany({ where: eq(schema.persons.accountId, ctx.account.id) }),
     db.query.assertions.findMany({ where: and(eq(schema.assertions.setupId, ctx.setup.id), eq(schema.assertions.epistemicStatus, "SACHVERHALT_BESTAETIGT")) }),
+    engagementContext(ctx.account.id),
+    db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { displayName: true, email: true } }),
   ]);
+  const functions = persons.length ? await db.query.personFunctions.findMany({ where: inArray(schema.personFunctions.personId, persons.map((p) => p.id)) }) : [];
+  const currentFunction = (pid: string) => functions.filter((f) => f.personId === pid && !f.validTo).map((f) => f.functionTitle)[0] ?? null;
   const input: StructureNoteInput = {
     noteText,
     setupName: ctx.setup.name,
     participantNames: users.map((u) => u.displayName),
     knownPersonNames: persons.map((p) => p.displayName),
+    knownPersons: persons.map((p) => ({ name: p.displayName, functionTitle: currentFunction(p.id) })),
     confirmedAssertions: confirmed.map((a) => a.content),
+    engagements: engContext.map((e) => ({ ref: e.ref, person: e.person, title: e.title, plannedEnd: e.plannedEnd, renewal: e.renewal })),
   };
   const inputHash = sha(noteText);
   const jobDedupe = sha(`${input0.dedupeScope}:${inputHash}:${STRUCTURE_NOTE_PROMPT_VERSION}`);
@@ -199,10 +234,37 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
   }
   const valid: StructuredItem[] = [];
   let rejected = 0;
+  // Beleg wörtlich – aber tolerant gegenüber Leerraum (E-Mails enthalten geschützte Leerzeichen und Umbrüche)
+  const ws = (t: string) => t.replace(/[\s\u00a0\u200b]+/g, " ").trim();
+  const noteFlat = ws(noteText);
+  const verveNames = new Set(workspaceUsers.map((u) => normalize(u.displayName.replace(/\(.*?\)/g, ""))));
+  const ownDomains = new Set(workspaceUsers.map((u) => u.email.split("@")[1]?.toLowerCase()).filter((d): d is string => !!d && !/example$/.test(d)));
+  const verveLast = new Set([...verveNames].map((n) => n.split(" ").pop()!).filter((n) => n.length >= 3));
+  const isVerve = (name: string, email: string) => {
+    const n = normalize(name.replace(/\(.*?\)/g, ""));
+    const titled = /^(frau|herr|fr|hr)\s+/.test(n);
+    const bare = n.replace(/^(frau|herr|fr|hr)\s+/, "");
+    return (!!bare && verveNames.has(bare)) || (titled && verveLast.has(bare.split(" ").pop() ?? "")) || (!!email && ownDomains.has(email.split("@")[1]?.toLowerCase() ?? "")) || /verve/i.test(email);
+  };
   for (const item of parsed.data.items) {
-    if (!noteText.includes(item.evidenceQuote) || (item.proposedOwnerName && !input.participantNames.includes(item.proposedOwnerName))) {
+    if (!noteFlat.includes(ws(item.evidenceQuote)) || (item.proposedOwnerName && !input.participantNames.includes(item.proposedOwnerName))) {
       rejected++;
       continue;
+    }
+    // Verve-Personen sind keine Kundenpersonen
+    if (item.type === "PERSON" && isVerve(item.mentionedPersonName, item.mentionedPersonEmail)) {
+      rejected++;
+      continue;
+    }
+    if (item.mentionedPersonEmail && !noteFlat.toLowerCase().includes(item.mentionedPersonEmail.toLowerCase())) item.mentionedPersonEmail = "";
+    if (item.proposedEnd && !/^\d{4}-\d{2}-\d{2}$/.test(item.proposedEnd)) item.proposedEnd = "";
+    // Einsatzbezug auflösen; Verlängerung ohne eindeutigen Einsatz → Beobachtung
+    let eng = item.engagementRef ? engContext.find((e) => e.ref === item.engagementRef.trim().toUpperCase()) ?? null : null;
+    if (!eng && item.type === "VERLAENGERUNG") eng = matchEngagementByName(engContext, `${item.title} ${item.observation} ${item.evidenceQuote}`);
+    item.engagementRef = eng?.id ?? "";
+    if (item.type === "VERLAENGERUNG" && !eng) {
+      item.type = "BEOBACHTUNG";
+      item.uncertainty = `${item.uncertainty ? `${item.uncertainty} ` : ""}Kein laufender Einsatz eindeutig zuzuordnen.`.trim();
     }
     valid.push(item);
   }
@@ -228,7 +290,7 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
   let skipped = 0;
   await db.transaction(async (tx) => {
     for (const item of valid) {
-      const dedupeKey = sha(`${item.type}:${normalize(item.evidenceQuote)}`);
+      const dedupeKey = sha(`${item.type}:${item.type === "PERSON" ? normalize(item.mentionedPersonName) + ":" : ""}${normalize(item.evidenceQuote)}`);
       const wofuer = purposeFor(`${item.title} ${item.observation} ${item.evidenceQuote}`);
       const existing = await tx.query.suggestions.findFirst({ where: and(eq(schema.suggestions.setupId, ctx.setup.id), eq(schema.suggestions.dedupeKey, dedupeKey)) });
       if (existing) {
@@ -239,9 +301,9 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
         workspaceId: actor.workspaceId,
         type: item.type,
         title: item.title,
-        opportunityId: wofuer.id,
-        purpose: wofuer.purpose,
-        targetRole: item.type === "PERSON" || item.type === "OFFENE_FRAGE" ? "BD" : "TEILNEHMENDE",
+        opportunityId: item.engagementRef ? (engContext.find((e) => e.id === item.engagementRef)?.opportunityId ?? wofuer.id) : wofuer.id,
+        purpose: item.engagementRef ? `Einsatz ${engContext.find((e) => e.id === item.engagementRef)?.title ?? ""}`.trim() : wofuer.purpose,
+        targetRole: item.type === "PERSON" || item.type === "OFFENE_FRAGE" || item.type === "VERLAENGERUNG" ? "BD" : "TEILNEHMENDE",
         setupId: ctx.setup.id,
         reviewId: input0.reviewId ?? null,
         trigger: input0.trigger,
@@ -256,6 +318,13 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
         expectedResult: item.expectedResult || null,
         proposedOwnerUserId: item.proposedOwnerName ? nameToUser.get(item.proposedOwnerName) ?? null : null,
         mentionedPersonName: item.mentionedPersonName || null,
+        mentionedPersonRole: item.mentionedPersonRole || null,
+        mentionedPersonUnit: item.mentionedPersonUnit || null,
+        mentionedPersonEmail: item.mentionedPersonEmail || null,
+        objectType: item.engagementRef ? "ENGAGEMENT" : null,
+        objectId: item.engagementRef || null,
+        proposedDate: item.proposedEnd || null,
+        conditionsNote: item.conditionsNote || null,
         priorityCategory: categorize(item),
         dedupeKey,
         recheckTrigger: "Neue Notiz oder neue Quelle im Setup",
@@ -300,6 +369,9 @@ export const acceptInput = z.object({
   /** Bearbeiteter Text (→ Status „verändert“), sonst Vorschlagstext */
   editedText: z.string().trim().max(4000).optional().or(z.literal("")),
   ownerUserId: z.string().optional().or(z.literal("")),
+  /** VERLAENGERUNG: neues Ende (vorbelegt aus dem Text bzw. +12 Monate) und Vertragsfolge */
+  newEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Neues Ende als Datum angeben").optional().or(z.literal("")),
+  contractFollowUp: z.string().trim().max(200).optional().or(z.literal("")),
 });
 
 /**
@@ -320,7 +392,18 @@ export async function acceptSuggestion(actor: Actor, id: string, raw: unknown) {
 
   let acceptedObjectType = "";
   let acceptedObjectId = "";
-  if (s.type === "BEOBACHTUNG" || s.type === "KONFLIKT") {
+  let message = "";
+  if (s.type === "VERLAENGERUNG") {
+    const r = await acceptRenewalSuggestion(actor, s, input.newEnd || s.proposedDate || "", input.contractFollowUp || "", input.editedText || "");
+    acceptedObjectType = "RENEWAL";
+    acceptedObjectId = r.decisionId;
+    message = r.message;
+  } else if (s.type === "PERSON" && (s.mentionedPersonRole || s.mentionedPersonUnit || s.mentionedPersonEmail)) {
+    const r = await acceptPersonSuggestion(actor, s, ctx);
+    acceptedObjectType = "PERSON";
+    acceptedObjectId = r.personId;
+    message = r.message;
+  } else if (s.type === "BEOBACHTUNG" || s.type === "KONFLIKT") {
     const { signal } = await captureObservation(actor, {
       setupId: s.setupId,
       observation: text,
@@ -375,7 +458,7 @@ export async function acceptSuggestion(actor: Actor, id: string, raw: unknown) {
       .returning();
     if (!updated) throw new ConflictError();
     await recordAudit(tx, actor, "suggestion.accepted", "SUGGESTION", id, { status: target, objekt: acceptedObjectType });
-    return { suggestion: updated, acceptedObjectType, acceptedObjectId };
+    return { suggestion: updated, acceptedObjectType, acceptedObjectId, message };
   });
 }
 
@@ -461,4 +544,84 @@ export async function acceptSuggestionAsChance(actor: Actor, id: string, raw: un
   const need = (edited || s.observation).padEnd(10, ".").slice(0, 4000);
   const opp = await createOpportunity(actor, { setupId: s.setupId, title, needDescription: need, signalId: res.acceptedObjectId, trigger: s.evidenceQuote ? `„${s.evidenceQuote}“` : "" });
   return { ...res, opportunity: opp };
+}
+
+type SuggestionRow = typeof schema.suggestions.$inferSelect;
+
+function addMonthsIso(iso: string, months: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Vorbelegung für das neue Ende einer Verlängerungskarte: Datum aus dem Text, sonst heutiges Ende + 12 Monate. */
+export async function renewalDefaults(s: Pick<SuggestionRow, "objectId" | "proposedDate">) {
+  const e = s.objectId ? await db.query.engagements.findFirst({ where: eq(schema.engagements.id, s.objectId) }) : null;
+  if (!e) return null;
+  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
+  const base = e.plannedEnd ?? new Date().toISOString().slice(0, 10);
+  return { engagementId: e.id, title: e.title, currentEnd: e.plannedEnd, newEnd: s.proposedDate || open?.proposedTo || addMonthsIso(base, 12), openStatus: open?.status ?? null };
+}
+
+/**
+ * Verlängerung aus einer KI-Karte: BD/Principal/CEO bestätigen direkt (Periode, Einsatzende, Moco-Projektende,
+ * offene Klärung erledigt); Sales Operations/Betreuung stoßen an – die Entscheidung geht an den BD.
+ */
+async function acceptRenewalSuggestion(actor: Actor, s: SuggestionRow, newEnd: string, contractFollowUp: string, note: string) {
+  if (!s.objectId) throw new ValidationError("Diese Karte ist keinem Einsatz zugeordnet.");
+  if (!newEnd) throw new ValidationError("Bitte das neue Ende angeben.");
+  const { engagementAccess } = await import("@/modules/engagements/authz");
+  const { decideRenewal, startRenewal } = await import("@/modules/engagements/care");
+  const e = await db.query.engagements.findFirst({ where: and(eq(schema.engagements.id, s.objectId), eq(schema.engagements.workspaceId, actor.workspaceId)) });
+  if (!e) throw new NotFoundError("Einsatz");
+  const a = await engagementAccess(actor, e);
+  if (!a || !(a.manage || a.care)) throw new ForbiddenError("Für diesen Einsatz dürfen Sie keine Verlängerung anstoßen.");
+  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
+  const quote = `Laut ${s.trigger}: „${s.evidenceQuote.slice(0, 200)}“${note ? ` – ${note}` : ""}`;
+  if (!open || open.proposedTo !== newEnd) await startRenewal(actor, e.id, { newEnd, conditions: "UNVERAENDERT", note: quote.slice(0, 1000) });
+  if (a.commercial) {
+    const r = await decideRenewal(actor, e.id, { decision: "BESTAETIGEN", contractFollowUp: contractFollowUp || "Nachtrag", note: s.conditionsNote ?? "" });
+    const moco = r.mocoWritten ? " Das Projektende in Moco ist aktualisiert." : r.mocoError ? " Moco konnte nicht aktualisiert werden – Sales Operations ist informiert." : "";
+    return { decisionId: r.decision.id, message: `Verlängerung bis ${newEnd.split("-").reverse().join(".")} bestätigt – die offene Klärung ist erledigt.${moco}` };
+  }
+  const cur = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["IN_ABSTIMMUNG"])) });
+  return { decisionId: cur?.id ?? "", message: `Verlängerung bis ${newEnd.split("-").reverse().join(".")} angestoßen – die Entscheidung liegt beim BD.` };
+}
+
+/** Person aus einer KI-Karte: bestehende Person (E-Mail oder Name) um Funktion/Bereich/E-Mail ergänzen, sonst neu anlegen. */
+async function acceptPersonSuggestion(actor: Actor, s: SuggestionRow, ctx: SetupContext) {
+  const { createPerson, resolveOrgUnit } = await import("@/modules/people/service");
+  const name = (s.mentionedPersonName ?? "").replace(/^(Frau|Herr|Fr\.|Hr\.)\s+/i, "").trim();
+  if (name.length < 2) throw new ValidationError("Der Vorschlag nennt keinen Namen.");
+  const persons = await db.query.persons.findMany({ where: eq(schema.persons.accountId, ctx.account.id) });
+  const clean = (n: string) => n.replace(/\(.*?\)/g, "").replace(/^(Frau|Herr|Fr\.|Hr\.)\s+/i, "").trim().toLowerCase();
+  const email = (s.mentionedPersonEmail ?? "").toLowerCase();
+  const hit =
+    (email && persons.find((p) => p.email?.toLowerCase() === email)) ||
+    persons.find((p) => clean(p.displayName) === name.toLowerCase()) ||
+    (() => {
+      const last = name.toLowerCase().split(/\s+/).pop()!;
+      const same = persons.filter((p) => clean(p.displayName).split(/\s+/).pop() === last);
+      return same.length === 1 ? same[0] : undefined;
+    })();
+  const role = s.mentionedPersonRole ?? "";
+  const unit = s.mentionedPersonUnit ?? "";
+  if (!hit) {
+    const p = await createPerson(actor, { accountId: ctx.account.id, displayName: name, email: s.mentionedPersonEmail ?? "", functionTitle: role, orgUnitName: unit, setupId: ctx.setup.id });
+    return { personId: p.id, message: `${name} angelegt${role ? ` als ${role}` : ""}${unit ? ` (${unit})` : ""}.` };
+  }
+  await db.transaction(async (tx) => {
+    if (email && !hit.email) await tx.update(schema.persons).set({ email: s.mentionedPersonEmail, updatedAt: new Date() }).where(eq(schema.persons.id, hit.id));
+    if (role || unit) {
+      const cur = (await tx.query.personFunctions.findMany({ where: eq(schema.personFunctions.personId, hit.id) })).find((f) => !f.validTo);
+      const unitId = unit ? await resolveOrgUnit(tx, ctx.account.id, undefined, unit) : cur?.orgUnitId ?? null;
+      if (!cur || (role && cur.functionTitle !== role) || (unit && cur.orgUnitId !== unitId)) {
+        const today = new Date().toISOString().slice(0, 10);
+        if (cur) await tx.update(schema.personFunctions).set({ validTo: today }).where(eq(schema.personFunctions.id, cur.id));
+        await tx.insert(schema.personFunctions).values({ personId: hit.id, orgUnitId: unitId, functionTitle: role || cur?.functionTitle || "Funktion noch unbekannt", validFrom: today, sourceId: s.sourceIds[0] ?? null });
+      }
+    }
+    await recordAudit(tx, actor, "person.updated_from_suggestion", "PERSON", hit.id, { funktion: role || null, bereich: unit || null });
+  });
+  return { personId: hit.id, message: `${hit.displayName.replace(/\(.*?\)/g, "").trim()} ergänzt${role ? `: ${role}` : ""}${unit ? ` (${unit})` : ""}.` };
 }

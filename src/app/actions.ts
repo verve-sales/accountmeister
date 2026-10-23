@@ -488,7 +488,8 @@ export async function structureNoteAction(fd: FormData) {
 export async function acceptSuggestionAction(fd: FormData) {
   const data = formToObject(fd);
   return run(data.back ?? "/meine-arbeit", async (actor) => {
-    await acceptSuggestion(actor, data.suggestionId ?? "", data);
+    const r = await acceptSuggestion(actor, data.suggestionId ?? "", data);
+    if (r.message) throw new PendingInfo(r.message);
   }, "Vorschlag angenommen – das Objekt wurde im ungeprüften Zustand angelegt.");
 }
 

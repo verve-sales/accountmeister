@@ -638,7 +638,7 @@ export const artifactVersions = pgTable(
 // ---------------------------------------------------------------------------
 
 export const suggestionStatusEnum = pgEnum("suggestion_status", ["NEU", "GEPRUEFT", "ANGENOMMEN", "VERAENDERT", "ZURUECKGESTELLT", "ABGELEHNT", "ERLEDIGT", "UEBERHOLT"]);
-export const suggestionTypeEnum = pgEnum("suggestion_type", ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT", "KONTAKTAUFNAHME"]);
+export const suggestionTypeEnum = pgEnum("suggestion_type", ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT", "KONTAKTAUFNAHME", "VERLAENGERUNG"]);
 export const priorityCategoryEnum = pgEnum("priority_category", [
   "KONKRETE_ANFRAGE", // konkrete Anfrage oder vereinbarter Termin
   "BLOCKIERTE_AKTION",
@@ -819,6 +819,13 @@ export const suggestions = pgTable(
     expectedResult: text("expected_result"),
     proposedOwnerUserId: text("proposed_owner_user_id").references(() => users.id), // Vorschlag, nicht Zuweisung
     mentionedPersonName: text("mentioned_person_name"),
+    /** Funktion/Titel und Bereich der erwähnten Person, wie im Text (z. B. Signatur) genannt */
+    mentionedPersonRole: text("mentioned_person_role"),
+    mentionedPersonUnit: text("mentioned_person_unit"),
+    mentionedPersonEmail: text("mentioned_person_email"),
+    /** Verlängerung: neues Enddatum (JJJJ-MM-TT) und Konditionen laut Text; Einsatz über objectType/objectId */
+    proposedDate: text("proposed_date"),
+    conditionsNote: text("conditions_note"),
     priorityCategory: priorityCategoryEnum("priority_category").notNull().default("NEUE_INFORMATION"),
     dedupeKey: text("dedupe_key").notNull(),
     recheckTrigger: text("recheck_trigger"), // Anlass für erneute Prüfung
