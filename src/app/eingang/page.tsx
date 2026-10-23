@@ -152,7 +152,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
                             <form action={importMailboxItemAction} className="flex flex-wrap gap-1 items-end">
                               <input type="hidden" name="kind" value={it.kind} />
                               <input type="hidden" name="externalId" value={it.externalId} />
-                              <select name="setupId" className="select" style={{ width: "13rem" }} required defaultValue="" aria-label="Zielsetup"><option value="" disabled>Zielsetup …</option>{editableSetups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+                              <select name="setupId" className="select" style={{ width: "15rem" }} required defaultValue="AUTO" aria-label="Zielsetup"><option value="AUTO">Kunde automatisch erkennen</option>{editableSetups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
                               <select name="accessClass" className="select" style={{ width: "10rem" }} defaultValue="PERSOENLICH" aria-label="Empfängerkreis">{schema.accessClassEnum.enumValues.map((v) => <option key={v} value={v}>{accessClassLabel[v]}</option>)}</select>
                               <label className="text-sm flex items-center gap-1"><input type="checkbox" name="structure" value="true" defaultChecked={ai.enabled} disabled={!ai.enabled} /> auswerten</label>
                               <button className="btn btn-small" type="submit">Übernehmen</button>

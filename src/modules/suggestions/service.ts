@@ -345,12 +345,23 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
 // Menschliche Entscheidung
 // ---------------------------------------------------------------------------
 
-async function requireSuggestion(actor: Actor, id: string) {
+export async function requireSuggestionAny(actor: Actor, id: string) {
   const s = await db.query.suggestions.findFirst({ where: and(eq(schema.suggestions.id, id), eq(schema.suggestions.workspaceId, actor.workspaceId)) });
   if (!s) throw new NotFoundError("Vorschlag");
+  if (!s.setupId) {
+    // Eingangs-Karte ohne erkannten Kunden: nur für die einspielende Person
+    if (s.proposedOwnerUserId !== actor.userId) throw new NotFoundError("Vorschlag");
+    return { suggestion: s, ctx: null as SetupContext | null };
+  }
   const ctx = await loadSetupContext(actor, s.setupId);
   if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Vorschlag");
-  return { suggestion: s, ctx };
+  return { suggestion: s, ctx: ctx as SetupContext | null };
+}
+
+async function requireSuggestion(actor: Actor, id: string) {
+  const r = await requireSuggestionAny(actor, id);
+  if (!r.ctx) throw new ValidationError("Dieser Vorschlag gehört noch zu keinem Kunden.");
+  return { suggestion: r.suggestion, ctx: r.ctx };
 }
 
 const transitions: Record<SuggestionStatus, SuggestionStatus[]> = {
@@ -384,6 +395,11 @@ export async function acceptSuggestion(actor: Actor, id: string, raw: unknown) {
   const parsed = acceptInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
+  const peek = await requireSuggestionAny(actor, id);
+  if (peek.suggestion.type === "KARTE") {
+    const { acceptIntakeCard } = await import("@/modules/eingang/service");
+    return acceptIntakeCard(actor, peek.suggestion, peek.ctx, raw);
+  }
   const { suggestion: s, ctx } = await requireSuggestion(actor, id);
   if (!canEditSetup(actor, ctx)) throw new ForbiddenError();
   const target: SuggestionStatus = input.editedText ? "VERAENDERT" : "ANGENOMMEN";
@@ -436,7 +452,7 @@ export async function acceptSuggestion(actor: Actor, id: string, raw: unknown) {
       .insert(schema.openQuestions)
       .values({
         workspaceId: actor.workspaceId,
-        setupId: s.setupId,
+        setupId: ctx.setup.id,
         opportunityId: s.opportunityId ?? null,
         question: s.type === "PERSON" ? `Welche Funktion und Zuständigkeit hat ${s.mentionedPersonName ?? "die genannte Person"}? (${text})` : text,
         decisionImpact: s.uncertainty ?? null,
@@ -473,8 +489,8 @@ export async function giveFeedback(actor: Actor, id: string, raw: unknown) {
   const parsed = feedbackInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
-  const { suggestion: s, ctx } = await requireSuggestion(actor, id);
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError();
+  const { suggestion: s, ctx } = await requireSuggestionAny(actor, id);
+  if (ctx && !canEditSetup(actor, ctx)) throw new ForbiddenError();
   if (!transitions[s.status].includes(input.status)) throw new TransitionError(`Übergang von „${s.status}“ nach „${input.status}“ ist nicht vorgesehen.`);
   if (input.status === "ABGELEHNT" && !input.feedbackReason) throw new ValidationError("Bitte einen Ablehnungsgrund wählen (hilft, Wiederholungen zu vermeiden).");
   return db.transaction(async (tx) => {
@@ -511,9 +527,13 @@ export async function listMySuggestions(actor: Actor) {
     where: and(eq(schema.suggestions.workspaceId, actor.workspaceId), or(eq(schema.suggestions.status, "NEU"), eq(schema.suggestions.status, "GEPRUEFT"))),
     orderBy: desc(schema.suggestions.computedAt),
   });
-  const out = [];
+  const out: (typeof rows[number] & { setupName: string; addressed: boolean })[] = [];
   const cache = new Map<string, SetupContext | null>();
   for (const r of rows) {
+    if (!r.setupId) {
+      if (r.proposedOwnerUserId === actor.userId) out.push({ ...r, setupName: "Eingang – Kunde noch offen", addressed: true });
+      continue;
+    }
     let ctx = cache.get(r.setupId);
     if (ctx === undefined) {
       ctx = await loadSetupContext(actor, r.setupId);
@@ -521,8 +541,26 @@ export async function listMySuggestions(actor: Actor) {
     }
     if (ctx && canEditSetup(actor, ctx)) out.push({ ...r, setupName: ctx.setup.name, addressed: r.proposedOwnerUserId === actor.userId });
   }
-  out.sort((a, b) => Number(b.addressed) - Number(a.addressed) || CATEGORY_ORDER[a.priorityCategory] - CATEGORY_ORDER[b.priorityCategory]);
-  return out.slice(0, 10);
+  // Eingangs-Karten: je Eingang zusammen (neuester zuerst), darin Kunde/Zuordnung zuerst, dann Bestandsänderungen
+  const cardRank = (r: (typeof out)[number]) => {
+    const t = (r.payload as { item?: { type?: string } } | null)?.item?.type ?? "";
+    return ["KUNDE", "EINSORTIERUNG"].includes(t) ? 0 : t === "SETUP" ? 1 : ["VERLAENGERUNG", "CHANCE_STATUS", "ERLEDIGT"].includes(t) ? 2 : t === "CHANCE" ? 3 : 4;
+  };
+  const jobTime = new Map<string, number>();
+  for (const r of out) if (r.type === "KARTE" && r.aiJobId) jobTime.set(r.aiJobId, Math.max(jobTime.get(r.aiJobId) ?? 0, new Date(r.computedAt).getTime()));
+  out.sort((a, b) => {
+    const ka = a.type === "KARTE" ? 0 : 1;
+    const kb = b.type === "KARTE" ? 0 : 1;
+    if (ka !== kb) return ka - kb;
+    if (ka === 0) {
+      const ja = jobTime.get(a.aiJobId ?? "") ?? 0;
+      const jb = jobTime.get(b.aiJobId ?? "") ?? 0;
+      if (ja !== jb) return jb - ja;
+      return cardRank(a) - cardRank(b) || CATEGORY_ORDER[a.priorityCategory] - CATEGORY_ORDER[b.priorityCategory];
+    }
+    return Number(b.addressed) - Number(a.addressed) || CATEGORY_ORDER[a.priorityCategory] - CATEGORY_ORDER[b.priorityCategory];
+  });
+  return out.slice(0, 30);
 }
 
 export async function listOpenQuestionsForSetup(setupId: string) {

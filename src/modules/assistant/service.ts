@@ -1,3 +1,4 @@
+import { createAction } from "@/modules/actions/service";
 import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
@@ -48,7 +49,7 @@ export type AssistantContextRef = { type: "GLOBAL" | "ACCOUNT" | "SETUP"; id: st
 
 export const contextInput = z.object({ type: z.enum(["GLOBAL", "ACCOUNT", "SETUP"]).default("GLOBAL"), id: z.string().optional().or(z.literal("")) });
 
-type Resolved = { ref: AssistantContextRef; ctx: SetupContext | null; account: typeof schema.accounts.$inferSelect | null; canWrite: boolean };
+export type Resolved = { ref: AssistantContextRef; ctx: SetupContext | null; account: typeof schema.accounts.$inferSelect | null; canWrite: boolean };
 
 /** Kontext auflösen und Rechte prüfen. Ungültige oder unsichtbare Kontexte fallen auf „allgemein“ zurück. */
 export async function resolveContext(actor: Actor, raw: unknown): Promise<Resolved> {
@@ -476,21 +477,38 @@ async function matchOpportunity(setupId: string, purpose: string) {
   return opps.find((o) => o.title.toLowerCase() === q) ?? opps.find((o) => o.title.toLowerCase().includes(q) || q.includes(o.title.toLowerCase())) ?? null;
 }
 
-type ApplyResult = { type: string; id: string; note?: string; rebind?: { type: "SETUP" | "ACCOUNT"; id: string; title: string } };
+export type ApplyResult = { type: string; id: string; note?: string; rebind?: { type: "SETUP" | "ACCOUNT"; id: string; title: string } };
 
 async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$inferSelect, res: Resolved, item: AssistantItem): Promise<ApplyResult> {
-  const origin = "Assistent-Dialog";
+  return applyCard(actor, res, item, { origin: "Assistent-Dialog", sourceFor: (setupId) => db.transaction(async (tx) => ensureThreadSource(tx, actor, thread, setupId)) });
+}
+
+/** Umgebung einer Kartenübernahme: Herkunft (Text) und Quelle (Beleg) – Assistent-Dialog oder Eingangs-Auswertung. */
+export type CardEnv = {
+  origin: string;
+  sourceFor: (setupId: string | null) => Promise<string>;
+  /** Eingangs-Auswertung: die Karte IST schon der Vorschlag – Aktion/Frage/Kontakt werden direkt angelegt statt erneut vorgeschlagen. */
+  intake?: boolean;
+  /** Fälligkeit (JJJJ-MM-TT) für AKTION aus der Eingangs-Auswertung */
+  dueDate?: string;
+  /** Wofür: bereits aufgelöste Chance (Kürzel) */
+  opportunityId?: string | null;
+};
+
+/** Eine Karte übernehmen (Assistent und Eingangs-Auswertung teilen sich diese Logik). */
+export async function applyCard(actor: Actor, res: Resolved, item: AssistantItem, env: CardEnv): Promise<ApplyResult> {
+  const origin = env.origin;
   if (item.type === "KUNDE") {
     if (!canCreateAccount(actor)) throw new ForbiddenError("Nur BD oder Principal legen Kunden an.");
     const account = await createAccount(actor, { name: item.name, orgType: item.orgType, responsibleBdUserId: hasRole(actor, "BD") ? actor.userId : null });
     const setup = await createSetup(actor, { accountId: account.id, name: item.setupName, contextNote: item.contextNote || `Angelegt aus ${origin}.`, bdUserId: hasRole(actor, "BD") ? actor.userId : null, creatorContribution: "ANKER_KONTEXT" });
-    await db.transaction(async (tx) => ensureThreadSource(tx, actor, thread, setup.id));
+    await env.sourceFor(setup.id);
     return { type: "SETUP", id: setup.id, note: `Kunde „${account.name}“ und Setup „${setup.name}“ angelegt; das Gespräch gehört jetzt zu diesem Setup.`, rebind: { type: "SETUP", id: setup.id, title: "Assistent · Setup" } };
   }
   if (item.type === "SETUP") {
     if (!res.account) throw new ValidationError("Für ein Setup fehlt der Kunde – sag mir zuerst, um welche Organisation es geht.");
     const setup = await createSetup(actor, { accountId: res.account.id, name: item.name, contextNote: item.contextNote || `Angelegt aus ${origin}.`, bdUserId: hasRole(actor, "BD") ? actor.userId : null, creatorContribution: "ANKER_KONTEXT" });
-    await db.transaction(async (tx) => ensureThreadSource(tx, actor, thread, setup.id));
+    await env.sourceFor(setup.id);
     return { type: "SETUP", id: setup.id, note: `Setup „${setup.name}“ angelegt; das Gespräch gehört jetzt zu diesem Setup.`, rebind: { type: "SETUP", id: setup.id, title: "Assistent · Setup" } };
   }
   if (item.type === "PERSON") {
@@ -499,7 +517,7 @@ async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$i
     const person = await createPerson(actor, { accountId: res.account.id, displayName: item.displayName, functionTitle: item.functionTitle, knownResponsibility: item.knownResponsibility, email, phone: item.phone.trim().slice(0, 50), setupId: res.ctx?.setup.id ?? "", accessClass: "ACCOUNT_TEAM" });
     let note = `Person „${person.displayName}“ angelegt.`;
     if (res.ctx && (item.decisionRole || item.stance !== "UNBEKANNT" || item.influence !== "UNBEKANNT")) {
-      const sourceId = await db.transaction(async (tx) => ensureThreadSource(tx, actor, thread, res.ctx!.setup.id));
+      const sourceId = await env.sourceFor(res.ctx!.setup.id);
       await upsertAssessment(actor, { personId: person.id, setupId: res.ctx.setup.id, decisionRole: item.decisionRole ?? "", stance: item.stance, influence: item.influence, note: item.assessmentNote, sourceId, confirm: false });
       note += " Einschätzung als Hypothese gespeichert.";
     }
@@ -621,7 +639,7 @@ async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$i
   if (!res.ctx) throw new ValidationError("Dafür braucht es ein Setup. Lege zuerst Kunde und Setup an (Karten „Kunde“/„Setup“) oder öffne den Assistenten in einem Setup.");
   if (!canEditSetup(actor, res.ctx)) throw new ForbiddenError("Sie sind an diesem Setup nicht bearbeitend beteiligt.");
   const setupId = res.ctx.setup.id;
-  const sourceId = await db.transaction(async (tx) => ensureThreadSource(tx, actor, thread, setupId));
+  const sourceId = await env.sourceFor(setupId);
   // Wofür (E-045): purpose gegen bestehende Chancen des Setups auflösen (Titel, unscharf)
   const purpose = "purpose" in item ? item.purpose : "";
   const linkedOpp = purpose ? await matchOpportunity(setupId, purpose) : null;
@@ -665,6 +683,20 @@ async function applyItem(actor: Actor, thread: typeof schema.assistantThreads.$i
   if (item.type === "CHANCE") {
     const opp = await createOpportunity(actor, { setupId, title: item.title, needDescription: item.needDescription, trigger: origin, kind: item.kind, roleName: item.roleName, headcount: item.headcount ?? undefined, horizon: item.horizon, anticipated: item.anticipated });
     return { type: "OPPORTUNITY", id: opp.id, note: `Chance (${item.anticipated ? "antizipiert" : "in Klärung"}) angelegt${item.roleName ? ` – Rolle „${item.roleName}“` : ""}.` };
+  }
+  const linkedOppId = env.opportunityId ?? linkedOpp?.id ?? null;
+  if (env.intake && item.type === "AKTION") {
+    const owner = item.ownerRole === "BD" && res.ctx.setup.bdUserId ? res.ctx.setup.bdUserId : actor.userId;
+    const a = await createAction(actor, { setupId, title: item.title.slice(0, 300), agreement: item.description, ownerUserId: owner, dueDate: env.dueDate ?? "", agreedInConversation: owner === actor.userId, opportunityId: linkedOppId ?? "" });
+    return { type: "ACTION", id: a.id, note: `Aufgabe angelegt${env.dueDate ? ` (bis ${env.dueDate.split("-").reverse().join(".")})` : ""}${owner !== actor.userId ? " – als Vorschlag beim BD" : ""}.${purposeNote}` };
+  }
+  if (env.intake && item.type === "KONTAKT") {
+    const a = await createAction(actor, { setupId, title: `Kontaktaufnahme ${item.personName}: ${item.occasion}`.slice(0, 300), agreement: item.draftMessage, ownerUserId: actor.userId, agreedInConversation: true, opportunityId: linkedOppId ?? "" });
+    return { type: "ACTION", id: a.id, note: `Kontaktaufnahme als Aufgabe angelegt (Entwurf im Text – Versand bleibt Handarbeit).${purposeNote}` };
+  }
+  if (env.intake && item.type === "FRAGE") {
+    const [qq] = await db.insert(schema.openQuestions).values({ workspaceId: actor.workspaceId, setupId, opportunityId: linkedOppId, question: item.question.slice(0, 1000), possibleSource: `Aus ${origin}`, ownerUserId: actor.userId, createdBy: actor.userId }).returning();
+    return { type: "OPEN_QUESTION", id: qq!.id, note: `Offene Frage angelegt.${purposeNote}` };
   }
   if (item.type === "AKTION") {
     const id = await db.transaction(async (tx) => insertSuggestionCard(tx, actor, setupId, sourceId, origin, { type: "AKTION", title: item.title.slice(0, 200), targetRole: item.ownerRole, observation: item.description || item.title, evidenceQuote: item.evidenceQuote, nextStep: item.title, whyNow: item.dueHint ? `Frist/Hinweis: ${item.dueHint}` : "", uncertainty: "Vorschlag aus dem Assistenten – erst die Annahme macht daraus eine Aufgabe.", priority: "KONKRETE_ANFRAGE", opportunityId: linkedOpp?.id ?? null, purpose }));

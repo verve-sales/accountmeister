@@ -91,6 +91,20 @@ export function parseRelativeDue(hint: string | null | undefined, today = todayI
   if (/^(morgen)\b/.test(h)) return plusDaysIso(today, 1);
   if (/^übermorgen\b/.test(h)) return plusDaysIso(today, 2);
   if (/^(nächste|kommende)\s+woche\b/.test(h)) return plusDaysIso(today, 7);
+  // „Ende des Monats“, „Monatsende“, „Ende der Woche“, „Ende nächsten Monats“, „Anfang nächsten Monats“
+  const t = new Date(`${today}T00:00:00Z`);
+  const lastOfMonth = (y: number, m0: number) => iso(new Date(Date.UTC(y, m0 + 1, 0)));
+  if (/^(ende des monats|ende diese[sn] monats|monatsende|zum monatsende)\b/.test(h)) return lastOfMonth(t.getUTCFullYear(), t.getUTCMonth());
+  if (/^(ende (des )?nächsten monats|ende kommenden monats)\b/.test(h)) return lastOfMonth(t.getUTCFullYear(), t.getUTCMonth() + 1);
+  if (/^(anfang (des )?nächsten monats|anfang kommenden monats)\b/.test(h)) return iso(new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 1)));
+  if (/^(ende der woche|ende dieser woche|wochenende)\b/.test(h)) return plusDaysIso(today, (5 - t.getUTCDay() + 7) % 7);
+  const months = ["januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "dezember"];
+  const mm = h.match(/^(ende|anfang|mitte)\s+(januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)/);
+  if (mm) {
+    const mi = months.indexOf(mm[2]!);
+    const y = mi < t.getUTCMonth() ? t.getUTCFullYear() + 1 : t.getUTCFullYear();
+    return mm[1] === "ende" ? lastOfMonth(y, mi) : iso(new Date(Date.UTC(y, mi, mm[1] === "anfang" ? 1 : 15)));
+  }
   let m = h.match(/^in\s+(\d{1,3})\s+(tag|tagen|woche|wochen)\b/);
   if (m) return plusDaysIso(today, Number(m[1]) * (m[2]!.startsWith("woche") ? 7 : 1));
   m = h.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})?/);

@@ -191,7 +191,7 @@ export function extractAccountPage(text: string, opts: { hasCustomer: boolean })
         continue;
       }
       const quote = name || email;
-      items.push({ type: "PERSON", displayName, functionTitle: position, email: emailOk ? email : "", phone, knownResponsibility: art ? `Stakeholder: ${art}` : "", decisionRole: role, stance: "UNBEKANNT", influence: "UNBEKANNT", assessmentNote: name ? "" : "Name aus der E-Mail-Adresse abgeleitet – bitte prüfen.", evidenceQuote: quote });
+      items.push({ type: "PERSON", displayName, functionTitle: position, orgUnitName: "", personRef: "", chanceRef: "", email: emailOk ? email : "", phone, knownResponsibility: art ? `Stakeholder: ${art}` : "", decisionRole: role, stance: "UNBEKANNT", influence: "UNBEKANNT", assessmentNote: name ? "" : "Name aus der E-Mail-Adresse abgeleitet – bitte prüfen.", evidenceQuote: quote });
       continue;
     }
 

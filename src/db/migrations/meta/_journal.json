@@ -239,6 +239,13 @@
       "when": 1792767912204,
       "tag": "0033_verlaengerung_ki",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792769496112,
+      "tag": "0034_eingang_karten",
+      "breakpoints": true
     }
   ]
 }

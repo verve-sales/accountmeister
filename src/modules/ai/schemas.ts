@@ -201,7 +201,7 @@ export const riskCardValues = ["UMSTRUKTURIERUNG", "BUDGETKUERZUNG", "WETTBEWERB
 export const assistantItemSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("KUNDE"), name: z.string().min(2).max(200), orgType: z.enum(orgTypeValues).optional().default("SONSTIGE"), setupName: z.string().min(3).max(200), contextNote: z.string().max(2000).optional().default(""), ...q }),
   z.object({ type: z.literal("SETUP"), name: z.string().min(3).max(200), contextNote: z.string().max(2000).optional().default(""), ...q }),
-  z.object({ type: z.literal("PERSON"), displayName: z.string().min(2).max(200), functionTitle: z.string().max(200).optional().default(""), email: z.string().max(200).optional().default(""), phone: z.string().max(50).optional().default(""), knownResponsibility: z.string().max(500).optional().default(""), decisionRole: z.enum(decisionRoleValues).nullable().optional().default(null), stance: z.enum(stanceValues).optional().default("UNBEKANNT"), influence: z.enum(influenceValues).optional().default("UNBEKANNT"), assessmentNote: z.string().max(500).optional().default(""), ...q }),
+  z.object({ type: z.literal("PERSON"), displayName: z.string().min(2).max(200), functionTitle: z.string().max(200).optional().default(""), orgUnitName: z.string().max(200).optional().default(""), personRef: z.string().max(20).optional().default(""), chanceRef: z.string().max(20).optional().default(""), email: z.string().max(200).optional().default(""), phone: z.string().max(50).optional().default(""), knownResponsibility: z.string().max(500).optional().default(""), decisionRole: z.enum(decisionRoleValues).nullable().optional().default(null), stance: z.enum(stanceValues).optional().default("UNBEKANNT"), influence: z.enum(influenceValues).optional().default("UNBEKANNT"), assessmentNote: z.string().max(500).optional().default(""), ...q }),
   z.object({ type: z.literal("SIGNAL"), observation: z.string().min(5).max(2000), relevanceHypothesis: z.string().max(2000).optional().default(""), ...q, ...w }),
   z.object({
     type: z.literal("CHANCE"),
@@ -227,7 +227,7 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
     successCriterion: z.string().max(500).optional().default(""),
     ...q,
   }),
-  z.object({ type: z.literal("AKTION"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), ownerRole: z.enum(["BD", "ANKER", "PRINCIPAL"]).default("BD"), dueHint: z.string().max(100).optional().default(""), ...q, ...w }),
+  z.object({ type: z.literal("AKTION"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), ownerRole: z.enum(["BD", "ANKER", "PRINCIPAL"]).default("BD"), dueHint: z.string().max(100).optional().default(""), dueDate: z.string().max(10).optional().default(""), chanceRef: z.string().max(20).optional().default(""), ...q, ...w }),
   z.object({ type: z.literal("KONTAKT"), personName: z.string().min(2).max(200), viaVerveName: z.string().max(200).optional().default(""), occasion: z.string().min(3).max(500), draftMessage: z.string().max(1500).optional().default(""), ...q, ...w }),
   z.object({ type: z.literal("FRAGE"), question: z.string().min(3).max(500), ...q, ...w }),
   // Etappe 26: Kundenagenda, Beschaffung, Bestandseinsatz, Risiko, SOS, Hebel, Team – z. B. aus einer eingefügten Account-Seite
@@ -272,6 +272,21 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
   }),
 ]);
 export type AssistantItem = z.infer<typeof assistantItemSchema>;
+
+/**
+ * Eingangs-Auswertung (Etappe 36): dieselben Karten wie im Assistenten plus Karten, die sich auf den
+ * Bestand beziehen (Kürzel aus dem mitgegebenen Lagebild: C1 Chance, E1 Einsatz, A1 Aktion, Q1 Frage, P1 Person).
+ */
+export const intakeExtraSchemas = [
+  z.object({ type: z.literal("VERLAENGERUNG"), engagementRef: z.string().min(1).max(20), decision: z.enum(["VERLAENGERN", "ENDET"]).optional().default("VERLAENGERN"), newEnd: z.string().max(10).optional().default(""), conditionsNote: z.string().max(500).optional().default(""), ...q }),
+  z.object({ type: z.literal("CHANCE_STATUS"), chanceRef: z.string().min(1).max(20), status: z.enum(["IN_KLAERUNG", "BESTAETIGT", "ZURUECKGESTELLT", "BEENDET"]), reason: z.string().max(500).optional().default(""), ...q }),
+  z.object({ type: z.literal("ERLEDIGT"), ref: z.string().min(1).max(20), result: z.string().max(1000).optional().default(""), ...q }),
+  z.object({ type: z.literal("STIMMUNG"), engagementRef: z.string().min(1).max(20), side: z.enum(["KUNDE", "FREELANCER"]).optional().default("KUNDE"), mood: z.enum(["POSITIV", "MITTEL", "NEGATIV"]), note: z.string().max(500).optional().default(""), ...q }),
+  z.object({ type: z.literal("FREELANCER"), displayName: z.string().min(2).max(200), email: z.string().max(200).optional().default(""), phone: z.string().max(50).optional().default(""), skills: z.string().max(2000).optional().default(""), availableFrom: z.string().max(10).optional().default(""), ekRate: z.string().max(20).optional().default(""), chanceRef: z.string().max(20).optional().default(""), ...q }),
+] as const;
+export const intakeItemSchema = z.discriminatedUnion("type", [...assistantItemSchema.options, ...intakeExtraSchemas]);
+export type IntakeItem = z.infer<typeof intakeItemSchema>;
+export const intakeOutputSchema = z.object({ items: z.array(z.unknown()).max(40).default([]), summary: z.string().max(1000).optional().default(""), noSuggestionReason: z.string().max(500).optional().default("") });
 
 export const assistantOutputSchema = z.object({
   items: z.array(assistantItemSchema).max(30).default([]),

@@ -7,7 +7,7 @@ import { Status } from "@/components/Status";
 import { accessClassLabel, epistemicLabel, fmtDateTime, sourceTypeLabel } from "@/lib/labels";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { hasRole } from "@/modules/identity/actor";
-import { eraseSourceAction, lockSourceAction, structureSourceAction } from "../../actions";
+import { eraseSourceAction, lockSourceAction, reevaluateSourceAction, structureSourceAction } from "../../actions";
 import { getProviderStatus } from "@/modules/suggestions/service";
 import { extractStatusLabel } from "@/lib/labels";
 
@@ -40,6 +40,15 @@ export default async function QuellePage({ params, searchParams }: { params: Pro
           <div><dt className="muted">Zugriff</dt><dd>{accessClassLabel[q.source.accessClass]}</dd></div>
         </dl>
         <p className="muted text-sm mt-3">Eine Quelle belegt zunächst eine Aussage, nicht automatisch ihre Richtigkeit oder Bindungswirkung (Briefing 13.3).</p>
+        {ai.enabled && !q.document && !q.source.isLocked && (q.source.body ?? "").trim().length >= 12 && (q.canEdit || q.source.ownerUserId === actor.userId) && (
+          <form action={reevaluateSourceAction} className="mt-3 flex flex-wrap gap-2 items-center">
+            <input type="hidden" name="sourceId" value={q.source.id} />
+            <input type="hidden" name="back" value="/start#vorschlaege" />
+            {!q.setup && <input type="hidden" name="auto" value="true" />}
+            <button className="btn" type="submit">Mit KI (neu) auswerten</button>
+            <span className="muted text-sm">Erkennt Kunde, Personen mit Funktion, Chancen, Verlängerungen, Aufgaben und Erledigtes – die Karten erscheinen auf Start unter „Vorschläge“.</span>
+          </form>
+        )}
       </section>
       {q.document && (
         <section className="card">

@@ -24,6 +24,20 @@ export type StructureNoteInput = {
 };
 
 /** Kontext für „Dokument analysieren“ (Kundenanlage): nur der Dokumenttext und Namen bereits bekannter Kunden. */
+export const INTAKE_PROMPT_VERSION = "intake.v1";
+
+/** Eingangs-Auswertung (Etappe 36): Text + Lagebild (mit Kürzeln) + Lernhinweise. */
+export type IntakeInput = {
+  text: string;
+  /** z. B. „E-Mail vom 20.10.2026 von Sabine Saß“ */
+  sourceLabel: string;
+  today: string;
+  /** Lagebild als Text: Kunde, Setups, Chancen (C1…), Einsätze (E1…), offene Aktionen (A1…), offene Fragen (Q1…), Personen (P1…), Verve-Personen, bekannte Kunden */
+  contextText: string;
+  /** Zuletzt abgelehnte Vorschläge mit Grund – ähnliche nicht erneut vorschlagen */
+  lessons: string[];
+};
+
 export type AnalyzeDocumentInput = {
   documentText: string;
   fileName: string;
@@ -129,6 +143,8 @@ export type ModelInfo = { id: string; ownedBy?: string };
 export interface AIProvider {
   info(): ProviderInfo;
   structureNote(input: StructureNoteInput, opts?: TaskOptions): Promise<unknown>;
+  /** Eingangs-Auswertung mit Karten (Etappe 36) – optional; ohne sie fällt die Auswertung auf structureNote zurück. */
+  intake?(input: IntakeInput, opts?: TaskOptions): Promise<unknown>;
   /** Kundenanlage aus Dokument – optional; Anbieter ohne diese Fähigkeit werfen oder lassen es weg. */
   analyzeDocument?(input: AnalyzeDocumentInput, opts?: TaskOptions): Promise<unknown>;
   /** Nächste Interviewfrage (Etappe 7A) – optional. */

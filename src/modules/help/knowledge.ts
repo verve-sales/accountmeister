@@ -18,6 +18,16 @@ export type HelpSection = {
 
 export const HELP_SECTIONS: HelpSection[] = [
   {
+    id: "eingang-ki",
+    title: "Was gibt es Neues? – Mails und Notizen von der KI auswerten lassen",
+    where: "Start → „Was gibt es Neues?“ · Eingang (Postfach) · Quelle → „Mit KI (neu) auswerten“",
+    keywords: ["was gibt es neues", "mail", "e-mail", "einspielen", "auswerten", "eingang", "ki", "karte", "vorschlag", "neuer kunde", "verlängerung", "signatur", "funktion", "erledigt", "abhaken", "postfach", "neu auswerten"],
+    body: `Mail, Mailverlauf, Notiz oder Protokoll einfügen (oder im Eingang aus dem Postfach übernehmen) – Kunde/Setup steht standardmäßig auf „automatisch erkennen“. Erkannt wird über Absender- und Mailadressen, Domänen, Kunden-, Personen- und Einsatznamen; ist kein Kunde bekannt, schlägt die KI „Neuer Kunde“ vor.
+Die KI bekommt das Lagebild des Kunden mit (Chancen, laufende Einsätze mit Verlängerungsstand, offene Aktionen und Fragen, Personen mit Funktion) und macht daraus Karten: neuer Kunde/Setup, Person mit Funktion, Bereich, E-Mail und Buyingcenter-Rolle (bestehende Person wird ergänzt), neue Chance, neuer Stand einer bestehenden Chance (bestätigt, abgesagt, zurückgestellt), Verlängerung oder Ende eines Einsatzes, Stimmung zu einem Einsatz (wird Check-in), Besetzung, Freelancer (Pool oder Kandidatur), Aufgabe mit echtem Datum („bis Ende des Monats“ → Datum), „Erledigt“ (offene Aktion/Frage wird abgehakt), offene Frage, Beobachtung.
+Jede Karte zeigt die Textstelle als Beleg und wird mit einem Klick übernommen. Verlängerung: als BD/Principal direkt bestätigt (Einsatzende, Moco, offene Klärung erledigt), sonst als Anstoß an den BD; steht kein Datum im Text, ist „heutiges Ende + 12 Monate“ vorbelegt. Nach „Neuer Kunde“ gehören die übrigen Karten desselben Eingangs automatisch zu diesem Kunden.
+Ablehnen mit Grund lohnt sich: die zuletzt abgelehnten Vorschläge gehen als Hinweis an die KI. Eine schon importierte Mail wird beim erneuten Übernehmen neu ausgewertet; jede Quelle lässt sich über „Mit KI (neu) auswerten“ noch einmal durchlaufen.`,
+  },
+  {
     id: "grundidee",
     title: "Worum es geht: Kunde, Setup, Chance, Wofür",
     where: "Kunden → Kunde → Setup → Chance",

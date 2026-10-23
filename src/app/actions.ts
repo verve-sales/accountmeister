@@ -31,7 +31,8 @@ import { changeArtifactStatus, createDraft, saveNewVersion } from "@/modules/art
 import { acceptSuggestion, acceptSuggestionAsChance, giveFeedback, smartDump, structureReviewNote, structureSource } from "@/modules/suggestions/service";
 import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
 import { refreshCompanyResearch } from "@/modules/research/service";
-import { confirmImport, decideMerge, importMailboxItem, importProtocol, validateFileName } from "@/modules/imports/service";
+import { confirmImport, decideMerge, importMailboxItem, importMailboxItemSmart, importProtocol, validateFileName } from "@/modules/imports/service";
+import { eingangFromSource, eingangFromText } from "@/modules/eingang/service";
 import { assignRole, createUserAccess, eraseSourceContent, lockSource, purgeExpiredLogs, pseudonymizePerson, revokeRole, setUserStatus } from "@/modules/governance/service";
 import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, changeOpportunityStatus, confirmOpportunity, confirmOrder, createOffer, createOpportunity, createOrder, createProfileReference, markOrderEvidenceIncomplete, markReady, markStarted, presentOffer, reassignOpportunityOwner, removeParticipation, saveMeddpicc, setRequirementStatus, updateOpportunity } from "@/modules/opportunities/service";
 import { uploadDocument } from "@/modules/documents/service";
@@ -548,7 +549,12 @@ export async function importProtocolAction(fd: FormData) {
     text = await file.text();
   }
   return run("/eingang", async (actor) => {
-    const r = await importProtocol(actor, { ...data, text, fileName });
+    const wantsAi = data.structure === "true" || data.structure === "on";
+    const r = await importProtocol(actor, { ...data, text, fileName, structure: false });
+    if (wantsAi && r.sourceId) {
+      const e = await eingangFromSource(actor, r.sourceId);
+      throw new PendingInfo(eingangMessage(e, r.repeated ? "Quelle war bereits importiert – neu ausgewertet" : "Quelle übernommen"));
+    }
     if (r.repeated) throw new PendingInfo("Diese Quelle war bereits importiert – kein zweiter Import.");
     if (r.newVersion) throw new PendingInfo("Quelle war bekannt; geänderter Inhalt wurde als neue Version gespeichert.");
     const n = r.structured?.created ?? 0;
@@ -559,6 +565,10 @@ export async function importProtocolAction(fd: FormData) {
 export async function importMailboxItemAction(fd: FormData) {
   const data = formToObject(fd);
   return run("/eingang", async (actor) => {
+    if (data.structure === "true" || data.structure === "on") {
+      const r = await importMailboxItemSmart(actor, data);
+      throw new PendingInfo(eingangMessage(r, r.repeated ? `„${r.title}“ war schon importiert – neu ausgewertet` : `„${r.title}“ übernommen`));
+    }
     const r = await importMailboxItem(actor, data);
     if (r.repeated) throw new PendingInfo("Dieses Objekt war bereits importiert – kein zweiter Import.");
     throw new PendingInfo(`„${r.job.title}“ übernommen${r.structured ? ` und ausgewertet: ${r.structured.created} Vorschlag/Vorschläge` : ""}. Warnungen: ${r.job.warnings.length}.`);
@@ -882,6 +892,32 @@ export async function uploadDocumentAction(fd: FormData) {
     if (r.extract.status !== "OK") throw new PendingInfo(`Dokument gespeichert. ${r.extract.note ?? ""}`.trim());
     return `/quellen/${r.sourceId}`;
   }, "Dokument als Quelle gespeichert. Text wurde extrahiert.");
+}
+
+function eingangMessage(r: { created: number; rejected: number; accountName: string | null; reason: string; noSuggestionReason: string }, head: string): string {
+  const where = r.accountName ? ` · Kunde ${r.accountName} (erkannt über ${r.reason})` : " · kein bekannter Kunde erkannt – die Karten schlagen Kunde/Zuordnung vor";
+  if (r.created === 0) return `${head}${where}. Keine neuen Karten${r.noSuggestionReason ? `: ${r.noSuggestionReason}` : ""}${r.rejected ? ` (${r.rejected} ohne Beleg verworfen)` : ""}.`;
+  return `${head}${where}. ${r.created} Karte(n) unter „Vorschläge“ – je ein Klick zum Übernehmen.`;
+}
+
+/** „Was gibt es Neues?“ (Etappe 36): Kunde/Setup automatisch erkennen oder gewähltes Setup, Karten erzeugen. */
+export async function eingangAction(fd: FormData) {
+  const data = formToObject(fd);
+  const back = backOf(data, "/start#vorschlaege");
+  return run(back, async (actor) => {
+    const r = await eingangFromText(actor, data);
+    throw new PendingInfo(eingangMessage(r, "Eingespielt"));
+  }, "");
+}
+
+/** Quelle (Mail, Notiz, Protokoll) mit der aktuellen Auswertungslogik neu auswerten. */
+export async function reevaluateSourceAction(fd: FormData) {
+  const data = formToObject(fd);
+  const back = backOf(data, "/start#vorschlaege");
+  return run(back, async (actor) => {
+    const r = await eingangFromSource(actor, data.sourceId ?? "", { autoRoute: data.auto === "true" });
+    throw new PendingInfo(eingangMessage(r, "Neu ausgewertet"));
+  }, "");
 }
 
 export async function smartDumpAction(fd: FormData) {

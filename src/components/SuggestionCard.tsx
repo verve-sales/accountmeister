@@ -1,6 +1,7 @@
 import { schema } from "@/db/client";
 import { Status } from "@/components/Status";
 import { renewalDefaults } from "@/modules/suggestions/service";
+import { EingangCard } from "@/components/EingangCard";
 import { feedbackReasonLabel, fmtDate, fmtDateTime, priorityCategoryLabel, suggestionStatusLabel, suggestionTypeLabel } from "@/lib/labels";
 import { acceptSuggestionAction, acceptSuggestionAsChanceAction, suggestionFeedbackAction } from "@/app/actions";
 
@@ -11,6 +12,7 @@ type Suggestion = typeof schema.suggestions.$inferSelect;
  * Warum-jetzt, nächsten Schritt, vorgeschlagene Person, Modell-/Promptversion. Entscheidung bleibt beim Menschen.
  */
 export async function SuggestionCard({ s, ownerName, canDecide, back, users }: { s: Suggestion; ownerName: string | null; canDecide: boolean; back: string; users: { id: string; displayName: string }[] }) {
+  if (s.type === "KARTE") return <EingangCard s={s} canDecide={canDecide} back={back} />;
   const open = s.status === "NEU" || s.status === "GEPRUEFT" || s.status === "ZURUECKGESTELLT";
   const renewal = s.type === "VERLAENGERUNG" ? await renewalDefaults(s) : null;
   return (

@@ -155,7 +155,7 @@ async function buildWeek(actor: Actor, view: DashboardView, ctxs: SetupContext[]
   // An mich adressierte Vorschläge (nicht für CEO – Vorschläge stammen aus Quellen)
   if (view !== "CEO" && setupIds.length) {
     const sugg = await db.query.suggestions.findMany({ where: and(inArray(schema.suggestions.setupId, setupIds), eq(schema.suggestions.proposedOwnerUserId, actor.userId), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT"])), limit: 5 });
-    for (const s of sugg) items.push({ kind: "VORSCHLAG", text: `Vorschlag prüfen: ${s.title} – ${setupName.get(s.setupId) ?? ""}`, href: "/meine-arbeit", due: null, overdue: false, today: false });
+    for (const s of sugg) items.push({ kind: "VORSCHLAG", text: `Vorschlag prüfen: ${s.title} – ${setupName.get(s.setupId ?? "") ?? ""}`, href: "/meine-arbeit", due: null, overdue: false, today: false });
   }
 
   // Unterstützungsaufträge (Principal/CEO: an mich; BD: meine offenen)
@@ -249,7 +249,7 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
     ideas = sugg
       .filter((s) => s.proposedOwnerUserId !== actor.userId)
       .slice(0, 8)
-      .map((s) => ({ text: s.title, detail: s.nextStep || s.hypothesis || s.observation || "", href: `/setups/${s.setupId}`, setupName: setupName.get(s.setupId) ?? "" }));
+      .map((s) => ({ text: s.title, detail: s.nextStep || s.hypothesis || s.observation || "", href: `/setups/${s.setupId}`, setupName: setupName.get(s.setupId ?? "") ?? "" }));
   }
 
   // Ziele (Principal/CEO)
@@ -295,7 +295,7 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
         orderBy: (s, { desc }) => desc(s.computedAt),
         limit: 8,
       });
-      opportunityHints = hints.map((h) => ({ text: h.title, detail: h.hypothesis || h.observation || "", href: `/setups/${h.setupId}`, accountName: accountOf.get(h.setupId) ?? "" }));
+      opportunityHints = hints.map((h) => ({ text: h.title, detail: h.hypothesis || h.observation || "", href: `/setups/${h.setupId}`, accountName: accountOf.get(h.setupId ?? "") ?? "" }));
     }
   }
 

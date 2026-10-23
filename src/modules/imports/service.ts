@@ -372,3 +372,88 @@ export async function listMyImports(actor: Actor) {
     mergeItems: items.filter((i) => i.importJobId === r.id).map((i) => ({ ...i, candidates: i.candidatePersonIds.map((id) => ({ id, displayName: pn.get(id) ?? "?" })) })),
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Etappe 36: Mail mit Eingangs-Auswertung – Kunde automatisch erkennen, Karten statt Einzelvorschläge
+// ---------------------------------------------------------------------------
+
+export const importMailboxSmartInput = z.object({
+  kind: z.enum(["MAIL", "TERMIN"]),
+  externalId: z.string().min(1),
+  /** „AUTO“ = Kunde/Setup erkennen (auch neuer Kunde) */
+  setupId: z.string().min(1).default("AUTO"),
+  accessClass: z.enum(schema.accessClassEnum.enumValues).default("PERSOENLICH"),
+});
+
+/**
+ * Mail/Termin übernehmen und mit der Eingangs-Auswertung auswerten. Bereits importierte Mails werden nicht doppelt
+ * gespeichert, aber neu ausgewertet (z. B. nach einer verbesserten Auswertungslogik).
+ */
+export async function importMailboxItemSmart(actor: Actor, raw: unknown) {
+  const parsed = importMailboxSmartInput.safeParse(raw);
+  if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
+  const input = parsed.data;
+  const { eingangFromSource, routeText } = await import("@/modules/eingang/service");
+  const conn = await db.query.integrationConnections.findFirst({ where: and(eq(schema.integrationConnections.userId, actor.userId), eq(schema.integrationConnections.provider, "MICROSOFT_GRAPH")) });
+  if (!conn || conn.status === "WIDERRUFEN" || !conn.tokenRef) throw new ValidationError("Kein verbundenes Postfach.");
+  let fetched: FetchedSource;
+  try {
+    const callToken = await resolveMailboxCallToken(conn);
+    fetched = await getMailCalendarAdapter().fetch({ tokenRef: callToken, fixture: conn.fixtureMode, kind: input.kind as SelectableKind, externalId: input.externalId });
+  } catch (e) {
+    throw adapterErrorToDomain(e);
+  }
+  const clean = sanitizeToText(fetched.bodyText);
+  const header = [
+    fetched.kind === "MAIL" ? `Von: ${fetched.from?.name ?? "?"}${fetched.from?.email ? ` <${fetched.from.email}>` : ""}` : `Organisator: ${fetched.from?.name ?? "?"}`,
+    `Datum: ${new Date(fetched.at).toLocaleString("de-DE", { timeZone: "Europe/Berlin" })}`,
+    fetched.participants.length ? `Beteiligte: ${fetched.participants.map((p) => `${p.name}${p.email ? ` <${p.email}>` : ""}`).join(", ")}` : "",
+    `Betreff: ${fetched.subject}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const body = `${header}\n\n${clean}`;
+  const participants = [...(fetched.from ? [fetched.from] : []), ...fetched.participants];
+  const label = `${fetched.kind === "MAIL" ? "E-Mail" : "Termin"} „${fetched.subject}“ vom ${new Date(fetched.at).toLocaleDateString("de-DE")}${fetched.from?.name ? ` von ${fetched.from.name}` : ""}`;
+  const externalKey = `${conn.provider}:${fetched.kind}:${fetched.externalId}`;
+  const existing = await db.query.importJobs.findFirst({ where: and(eq(schema.importJobs.workspaceId, actor.workspaceId), eq(schema.importJobs.kind, input.kind), eq(schema.importJobs.externalKey, externalKey)) });
+  if (existing?.sourceId) {
+    const r = await eingangFromSource(actor, existing.sourceId, { participants, sourceLabel: label, autoRoute: input.setupId === "AUTO" });
+    return { title: fetched.subject, repeated: true, ...r };
+  }
+  const route = await routeText(actor, body, participants, input.setupId === "AUTO" ? undefined : input.setupId);
+  let sourceId: string;
+  if (route.ctx) {
+    if (!canEditSetup(actor, route.ctx)) throw new ForbiddenError("In dieses Setup darfst du nichts importieren.");
+    const proposal = await proposeForText(actor, clean, participants);
+    const res = await persistImport(actor, route.ctx, {
+      kind: input.kind,
+      externalKey,
+      connectionId: conn.id,
+      title: fetched.subject,
+      sourceType: fetched.kind === "MAIL" ? "EMAIL" : "TERMIN",
+      body,
+      origin: `${conn.fixtureMode ? "Fixture" : "Microsoft 365"} · ${fetched.kind === "MAIL" ? "E-Mail" : "Termin"} · Import durch ${actor.displayName}`,
+      sourceTime: new Date(fetched.at),
+      accessClass: input.accessClass,
+      contentHash: fetched.contentHash,
+      warnings: proposal.warnings,
+      scopeSummary: `1 ${fetched.kind === "MAIL" ? "E-Mail" : "Termin"}, ${clean.length} Zeichen Text`,
+      mentioned: [],
+      participantsForAi: [actor.userId],
+      structure: false,
+    });
+    sourceId = res.sourceId;
+  } else {
+    // Kein bekannter Kunde: Quelle persönlich ablegen; die Karten schlagen Kunde/Setup vor
+    sourceId = await db.transaction(async (tx) => {
+      const [src] = await tx.insert(schema.sources).values({ workspaceId: actor.workspaceId, setupId: null, type: fetched.kind === "MAIL" ? "EMAIL" : "TERMIN", title: fetched.subject, body, origin: `Microsoft 365 · Import durch ${actor.displayName}`, externalKey, sourceTime: new Date(fetched.at), ownerUserId: actor.userId, accessClass: "PERSOENLICH" }).returning();
+      const [job] = await tx.insert(schema.importJobs).values({ workspaceId: actor.workspaceId, actorUserId: actor.userId, kind: input.kind, connectionId: conn.id, externalKey, title: fetched.subject, setupId: null, accountId: null, accessClass: "PERSOENLICH", sourceId: src!.id, status: "UEBERNOMMEN", scopeSummary: "Kunde noch offen", warnings: [] }).returning();
+      await tx.insert(schema.sourceVersions).values({ sourceId: src!.id, versionNo: 1, body, contentHash: fetched.contentHash, importJobId: job!.id });
+      await recordAudit(tx, actor, "import.taken_over", "IMPORT", job!.id, { kind: input.kind, kunde: "offen" });
+      return src!.id;
+    });
+  }
+  const r = await eingangFromSource(actor, sourceId, { participants, sourceLabel: label });
+  return { title: fetched.subject, repeated: false, ...r };
+}

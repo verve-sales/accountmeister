@@ -2,6 +2,7 @@ import { looksLikeHowTo } from "@/modules/help/knowledge";
 import { extractAccountPage } from "@/modules/assistant/accountPage";
 import { decisionRoleLabel } from "@/lib/labels";
 import type { TaskOptions } from "../provider";
+import type { IntakeInput } from "../provider";
 import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdviceInput, FormSuggestInput, InterviewNextInput, ProviderInfo, StrategyInput, StructureNoteInput } from "../provider";
 import type { AssistantItem, BuyingCenterProposal, FormSuggestion, IntakeProposal, InterviewNext, StrategyProposal, StructuredItem, StructureNoteOutput } from "../schemas";
 import { ruleBasedStepDrafts, type StepDrafts } from "@/modules/playbooks/drafts";
@@ -58,7 +59,7 @@ function signaturePersons(text: string): { name: string; role: string; unit: str
   const out: { name: string; role: string; unit: string; email: string; quote: string }[] = [];
   for (let i = 0; i < lines.length; i++) {
     const name = lines[i]!;
-    if (!/^[A-ZÄÖÜ][a-zäöüß]+( [A-ZÄÖÜ][\wäöüß-]+){1,3}$/.test(name) || /^(viele|beste|herzliche|freundliche|liebe|mit|sehr|hallo|guten)\b/i.test(name) || /verve/i.test(lines.slice(i, i + 5).join(" "))) continue;
+    if (!/^[A-ZÄÖÜ][a-zäöüß]+( [A-ZÄÖÜ][\wäöüß-]+){1,3}$/.test(name) || /^(viele|beste|herzliche|freundliche|liebe|mit|sehr|hallo|guten)\b/i.test(name) || /\b(GmbH|AG|SE|KG|mbH|Holding|Gruppe|Group)\b/.test(name) || /verve/i.test(lines.slice(i, i + 5).join(" "))) continue;
     if (out.some((o) => o.name === name)) continue;
     const next = lines.slice(i + 1, i + 7).filter((l) => l && l !== "--" && !/^(gothaer allee|telefon|mobil|\d{5})/i.test(l));
     const roleLine = next.find((l) => ROLE_LINE.test(l) && !/AG$|GmbH$|holding/i.test(l));
@@ -280,6 +281,63 @@ export class TestProvider implements AIProvider {
    * Personen aus „Herr/Frau Nachname“, Beobachtungen und mögliche Bedarfe aus Sätzen mit typischen Verben.
    * Jedes Element zitiert wörtlich aus dem Text.
    */
+  /**
+   * Eingangs-Auswertung – regelbasiert für Entwicklung und Tests: liest das Lagebild (Kürzel) und erkennt
+   * Signaturen, Verlängerungen/Enden, Bedarfe, Aufgaben mit Frist, Erledigtes, Statuswechsel und Stimmungen.
+   */
+  async intake(input: IntakeInput): Promise<unknown> {
+    const ctx = input.contextText.split("\n");
+    const refLines = (prefix: string) => ctx.filter((l) => new RegExp(`^- ${prefix}\\d+: `).test(l)).map((l) => { const m = l.match(new RegExp(`^- (${prefix}\\d+): (.*)$`))!; return { ref: m[1]!, text: m[2]! }; });
+    const engs = refLines("E").map((e) => ({ ref: e.ref, person: e.text.split(" – ")[0]!.trim() }));
+    const persons = refLines("P").map((p) => ({ ref: p.ref, name: p.text.split(" – ")[0]!.split(" <")[0]!.trim() }));
+    const chances = refLines("C").map((c) => ({ ref: c.ref, title: c.text.split(" [")[0]!.trim() }));
+    const actions = refLines("A").map((a) => ({ ref: a.ref, title: a.text.split(" [")[0]!.trim() }));
+    const noCustomer = ctx.some((l) => l.startsWith("Kein Kunde erkannt"));
+    const known = (ctx.find((l) => l.startsWith("Kein Kunde erkannt"))?.split(": ").slice(1).join(": ") ?? "").split("; ").filter((x) => x && x !== "–");
+    const items: Record<string, unknown>[] = [];
+    const sentences = splitSentences(input.text);
+    const lastOf = (n: string) => n.replace(/\(.*?\)/g, "").trim().split(/\s+/).pop() ?? "";
+    const has = (s: string, w: string) => w.length >= 3 && new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(s);
+    if (noCustomer) {
+      const k = known.find((n) => n.split(/\s+/).some((w) => w.length >= 4 && has(input.text, w.replace(/[()]/g, ""))));
+      const q = k ? sentences.find((x) => k.split(/\s+/).some((w) => w.length >= 4 && has(x, w.replace(/[()]/g, "")))) : undefined;
+      if (k && q) items.push({ type: "EINSORTIERUNG", accountName: k, setupName: "", reasoning: "Kundenname im Text", evidenceQuote: q });
+      else {
+        const doc = await this.analyzeDocument({ documentText: input.text, fileName: "Eingang", knownAccountNames: [] });
+        if (doc.organization) items.push({ type: "KUNDE", name: doc.organization.name, orgType: doc.organization.orgType, setupName: `Erstkontakt ${doc.organization.name}`.slice(0, 200), contextNote: "", evidenceQuote: doc.organization.evidenceQuote });
+      }
+    }
+    for (const sig of signaturePersons(input.text)) {
+      const p = persons.find((x) => lastOf(x.name).toLowerCase() === lastOf(sig.name).toLowerCase());
+      items.push({ type: "PERSON", displayName: sig.name, functionTitle: sig.role, orgUnitName: sig.unit, email: sig.email, personRef: p?.ref ?? "", decisionRole: /einkauf/i.test(`${sig.role} ${sig.unit}`) ? "EINKAUF_VERTRAGSWEG" : null, evidenceQuote: sig.quote });
+    }
+    for (const x of sentences) {
+      const eng = engs.filter((e) => has(x, lastOf(e.person)));
+      if (/verlänger|nicht verlängert|beenden den einsatz|einsatz endet/i.test(x) && eng.length === 1) {
+        const ende = /nicht verlänger|keine verlängerung|beenden/i.test(x);
+        const iso = x.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1] ?? (() => { const m = x.match(/\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/); return m ? `${m[3]}-${m[2]!.padStart(2, "0")}-${m[1]!.padStart(2, "0")}` : ""; })();
+        items.push({ type: "VERLAENGERUNG", engagementRef: eng[0]!.ref, decision: ende ? "ENDET" : "VERLAENGERN", newEnd: iso, conditionsNote: "", evidenceQuote: x });
+      }
+      if (eng.length === 1 && /sehr zufrieden|begeistert|top arbeit|super arbeit/i.test(x)) items.push({ type: "STIMMUNG", engagementRef: eng[0]!.ref, side: "KUNDE", mood: "POSITIV", note: x, evidenceQuote: x });
+      if (eng.length === 1 && /unzufrieden|probleme mit|nicht zufrieden/i.test(x)) items.push({ type: "STIMMUNG", engagementRef: eng[0]!.ref, side: "KUNDE", mood: "NEGATIV", note: x, evidenceQuote: x });
+      const role = detectRole(x);
+      if (/\b(brauchen|benötigen|suchen)\b/i.test(x) && role && !chances.some((c) => has(x, c.title.split(" ")[0] ?? ""))) items.push({ type: "CHANCE", title: `${role}${/zwei|2 /i.test(x) ? " (2×)" : ""}`, needDescription: x, kind: /freelanc|extern/i.test(x) ? "FREELANCER_EXPERTE" : "VERVE_EXPERTE", roleName: role, headcount: /zwei|2 /i.test(x) ? 2 : null, horizon: "", anticipated: false, evidenceQuote: x });
+      for (const c of chances) {
+        const words = c.title.split(/\s+/).filter((w) => w.length >= 5);
+        if (!words.some((w) => has(x, w))) continue;
+        if (/absage|abgesagt|kein bedarf|nicht weiter/i.test(x)) items.push({ type: "CHANCE_STATUS", chanceRef: c.ref, status: "BEENDET", reason: x, evidenceQuote: x });
+        else if (/bedarf (ist )?bestätigt|bestätigen den bedarf|freigegeben/i.test(x)) items.push({ type: "CHANCE_STATUS", chanceRef: c.ref, status: "BESTAETIGT", reason: x, evidenceQuote: x });
+      }
+      for (const a of actions) {
+        const words = a.title.split(/\s+/).filter((w) => w.length >= 5);
+        if (words.filter((w) => has(x, w)).length >= Math.min(2, words.length) && /erledigt|erhalten|liegt (uns )?vor|ist bestätigt/i.test(x)) items.push({ type: "ERLEDIGT", ref: a.ref, result: x, evidenceQuote: x });
+      }
+      const due = /nächster schritt|bis ende (des|der) (monats|woche)|bis (zum )?\d{1,2}\.\d{1,2}\.|bis (montag|dienstag|mittwoch|donnerstag|freitag)/i.test(x);
+      if (due && /schicken|senden|zusenden|liefern|vorstellen|melden|rückmeldung/i.test(x)) items.push({ type: "AKTION", title: x.replace(/^nächster schritt:\s*/i, "").slice(0, 200), description: "", ownerRole: "BD", dueHint: x.match(/bis [^.,;]+/i)?.[0] ?? "", dueDate: "", chanceRef: "", purpose: "", evidenceQuote: x });
+    }
+    return { items, summary: "", noSuggestionReason: items.length ? "" : "Nichts Belastbares erkannt." };
+  }
+
   async analyzeDocument(input: AnalyzeDocumentInput): Promise<IntakeProposal> {
     const text = input.documentText;
     const lines = text.split(/\n+/).map((l) => l.trim()).filter(Boolean);
@@ -609,13 +667,13 @@ export class TestProvider implements AIProvider {
     const items: AssistantItem[] = [];
     const hasCustomer = /Kunde:/.test(input.contextText);
     if (p.organization && !hasCustomer) items.push({ type: "KUNDE", name: p.organization.name, orgType: p.organization.orgType, setupName: `Erstkontakt ${p.organization.name}`.slice(0, 200), contextNote: "", evidenceQuote: p.organization.evidenceQuote });
-    for (const x of p.persons) items.push({ type: "PERSON", phone: "", ...x });
+    for (const x of p.persons) items.push({ type: "PERSON", phone: "", orgUnitName: "", personRef: "", chanceRef: "", ...x });
     // Wofür: bestehende Chancen aus dem Kontext oder die hier vorgeschlagene(n) Chance(n)
     const known = (input.contextText.split("\n").find((l) => l.startsWith("Chancen:")) ?? "").slice("Chancen:".length).split(";").map((x) => x.split(" [")[0]!.trim()).filter(Boolean);
     const purposeFor = (text: string) => p.needs.find((n) => text.includes(n.evidenceQuote) || n.evidenceQuote.includes(text))?.title ?? known.find((k) => text.toLowerCase().includes(k.toLowerCase().split(" ")[0] ?? "\u0000")) ?? p.needs[0]?.title ?? known[0] ?? "";
     for (const x of p.signals) items.push({ type: "SIGNAL", ...x, purpose: purposeFor(x.observation) });
     for (const x of p.needs) items.push({ type: "CHANCE", title: x.title, needDescription: x.needDescription, kind: x.kind, roleName: x.roleName, headcount: null, horizon: x.horizon, anticipated: !/bestätigt|beauftragt|Anfrage/i.test(x.needDescription), evidenceQuote: x.evidenceQuote });
-    for (const x of p.actions) items.push({ type: "AKTION", ...x, purpose: purposeFor(x.title) });
+    for (const x of p.actions) items.push({ type: "AKTION", dueDate: "", chanceRef: "", ...x, purpose: purposeFor(x.title) });
     for (const x of p.contacts) items.push({ type: "KONTAKT", ...x, purpose: purposeFor(x.occasion) });
     const missing: string[] = [];
     if (!hasCustomer && !p.organization) missing.push("Um welche Organisation geht es (mit Rechtsform)?");

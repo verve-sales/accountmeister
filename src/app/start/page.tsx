@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildDashboard, viewAccountCounts, viewLabel, type DashboardView } from "@/modules/dashboard/service";
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
-import { isCoach, isReadOnlyActor } from "@/modules/identity/actor";
+import { hasAnyContentRole, isCoach, isReadOnlyActor } from "@/modules/identity/actor";
 import { canEditSetup, loadSetupContext } from "@/modules/identity/authz";
 import { MATURITY, maturityLabel } from "@/modules/strategy/chancen";
 import { CHANCE_STEPS } from "@/lib/chanceStages";
@@ -24,7 +24,7 @@ import { ensureInitiativeRemindersSafe } from "@/modules/agenda/service";
 import { listOpenSosForActor } from "@/modules/sos/service";
 import { SosBanner } from "@/components/SosPanel";
 import { ensureOverdueNotificationsSafe, listMyWork } from "@/modules/work/service";
-import { createOpportunityAction, setDashboardViewAction, smartDumpAction } from "../actions";
+import { createOpportunityAction, setDashboardViewAction, eingangAction } from "../actions";
 import { listMyCheckins } from "@/modules/engagements/care";
 import { listMyOpenActions } from "@/modules/actions/service";
 import { listMyHandovers } from "@/modules/handovers/service";
@@ -99,18 +99,18 @@ export default async function StartPage({ searchParams }: { searchParams: Search
     </>
   );
   const readOnly = isReadOnlyActor(actor);
-  const quickEntry = !readOnly && quickSetups.length > 0 && (
+  const quickEntry = !readOnly && hasAnyContentRole(actor) && (
     <section className="card" id="neues">
-      <form action={smartDumpAction} className="flex flex-wrap gap-2 items-end text-sm">
+      <form action={eingangAction} className="flex flex-wrap gap-2 items-end text-sm">
         <input type="hidden" name="back" value="/start#vorschlaege" />
         <div style={{ flex: "1 1 24rem" }}>
-          <label className="label" htmlFor="quickText">Was gibt es Neues? <span className="muted font-normal">Notiz, Mail-Ausschnitt, Gesprächsergebnis – die KI macht Vorschläge, du übernimmst mit einem Klick.</span></label>
-          <textarea id="quickText" name="text" className="textarea" rows={2} required minLength={12} placeholder="z. B. Frau Keller sagt, ab Q1 brauchen sie zwei weitere Tester; Budget kommt aus dem Programm ELBE." />
+          <label className="label" htmlFor="quickText">Was gibt es Neues? <span className="muted font-normal">Mail, Notiz, Gesprächsergebnis einfügen – die KI erkennt Kunde, Personen, Chancen, Verlängerungen und Aufgaben; du übernimmst je Karte mit einem Klick.</span></label>
+          <textarea id="quickText" name="text" className="textarea" rows={3} required minLength={12} placeholder="z. B. Frau Keller sagt, ab Q1 brauchen sie zwei weitere Tester; Budget kommt aus dem Programm ELBE." />
         </div>
         <div>
           <label className="label" htmlFor="quickSetup">Kunde · Setup</label>
-          <select id="quickSetup" name="setupId" className="select" required defaultValue={quickSetups.length === 1 ? quickSetups[0]!.id : ""}>
-            <option value="" disabled>– wählen –</option>
+          <select id="quickSetup" name="setupId" className="select" defaultValue="AUTO">
+            <option value="AUTO">automatisch erkennen (auch neuer Kunde)</option>
             {quickSetups.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}
           </select>
         </div>

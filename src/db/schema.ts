@@ -638,7 +638,7 @@ export const artifactVersions = pgTable(
 // ---------------------------------------------------------------------------
 
 export const suggestionStatusEnum = pgEnum("suggestion_status", ["NEU", "GEPRUEFT", "ANGENOMMEN", "VERAENDERT", "ZURUECKGESTELLT", "ABGELEHNT", "ERLEDIGT", "UEBERHOLT"]);
-export const suggestionTypeEnum = pgEnum("suggestion_type", ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT", "KONTAKTAUFNAHME", "VERLAENGERUNG"]);
+export const suggestionTypeEnum = pgEnum("suggestion_type", ["BEOBACHTUNG", "AKTION", "ENTSCHEIDUNG", "OFFENE_FRAGE", "PERSON", "KONFLIKT", "KONTAKTAUFNAHME", "VERLAENGERUNG", "KARTE"]);
 export const priorityCategoryEnum = pgEnum("priority_category", [
   "KONKRETE_ANFRAGE", // konkrete Anfrage oder vereinbarter Termin
   "BLOCKIERTE_AKTION",
@@ -803,8 +803,13 @@ export const suggestions = pgTable(
     purpose: text("purpose"), // Wofür als Text, wenn (noch) keine Chance existiert
     title: text("title").notNull(),
     targetRole: text("target_role").notNull(), // adressierte Rolle (BD, ANKER, PRINCIPAL …)
-    setupId: text("setup_id").notNull().references(() => projectSetups.id),
+    /** Setup des Vorschlags; leer nur bei Eingangs-Karten ohne erkannten Kunden (sichtbar nur für die einspielende Person) */
+    setupId: text("setup_id").references(() => projectSetups.id),
+    /** Kunde (bei Eingangs-Karten, auch ohne Setup) */
+    accountId: text("account_id").references(() => accounts.id),
     reviewId: text("review_id").references(() => reviews.id),
+    /** Eingangs-Karte (Typ KARTE): die vollständige Karte der Eingangs-Auswertung inkl. aufgelöster Kürzel */
+    payload: jsonb("payload"),
     objectType: text("object_type"), // optionaler Bezug auf ein bestehendes Objekt
     objectId: text("object_id"),
     trigger: text("trigger").notNull(), // Beobachtung bzw. Auslöser
