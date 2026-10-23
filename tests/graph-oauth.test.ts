@@ -75,6 +75,8 @@ describe("Microsoft-Graph-OAuth (Autorisierungs-URL, Mandant, Redirect)", () => 
       expect(scope).toContain("Calendars.Read");
       expect(scope).not.toContain("Mail.ReadWrite");
       expect(scope).not.toContain("Send");
+      // Kein erzwungener Zustimmungsdialog – sonst „Administratorgenehmigung erforderlich“ trotz Admin-Zustimmung
+      expect(url.searchParams.get("prompt")).not.toBe("consent");
     });
   });
 

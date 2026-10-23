@@ -61,8 +61,10 @@ export function buildAuthorizationUrl(redirectUri: string, pending: PendingMailC
   u.searchParams.set("state", pending.state);
   u.searchParams.set("code_challenge", challenge);
   u.searchParams.set("code_challenge_method", "S256");
-  // Immer erneut nach Zustimmung fragen: dieselbe App-Registrierung fragt sonst nur die Anmelde-Scopes ab.
-  u.searchParams.set("prompt", "consent");
+  // Kein „prompt=consent“: Die Zustimmung erteilt die Administration einmal zentral (Entra → Administratorzustimmung).
+  // Ein erzwungener Zustimmungsdialog führt bei abgeschalteter Benutzerzustimmung zu „Administratorgenehmigung
+  // erforderlich“, obwohl die Zustimmung längst vorliegt. Nur das Konto wählen lassen.
+  u.searchParams.set("prompt", "select_account");
   return u.toString();
 }
 
