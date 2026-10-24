@@ -58,6 +58,7 @@ Es wird **keine neue App-Registrierung** gebraucht; die App-Registrierung aus Sc
 2. Links „API-Berechtigungen → Berechtigung hinzufügen → Microsoft Graph → Delegierte Berechtigungen“. Diese drei hinzufügen (User.Read ist bereits vorhanden):
    - `Mail.Read` (Postfach lesen)
    - `Calendars.Read` (Kalender lesen)
+   - `Chat.Read` (eigene Teams-Chats lesen – seit Etappe 37; wer schon verbunden war, verbindet unter „Einstellungen“ einmal neu)
    - `offline_access` (damit die Verbindung nicht ständig neu bestätigt werden muss)
 3. Auf derselben Seite oben „Administratorzustimmung für Verve Consulting erteilen“ klicken und bestätigen. Ohne diesen Klick kann sich niemand verbinden, weil jede einzelne Person sonst selbst zustimmen müsste – das wollen wir nicht (Briefing 13.1: nur der Nutzer selbst verbindet sein eigenes Postfach, aber die Zustimmung zu den Berechtigungsarten wird zentral einmal erteilt).
 4. Links „Authentifizierung → Plattform hinzufügen → Web“. Umleitungs-URI: `https://accountmeister.verveconsulting.ai/api/integrations/microsoft/callback` (eine **zweite**, eigene Umleitungs-URI – zusätzlich zu der aus Schritt 4, nicht anstelle davon). Speichern.

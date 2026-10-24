@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { AdapterError, type ConnectionState, type FetchedSource, type MailCalendarAdapter, type SelectableItem, type SelectableKind } from "../adapter";
-import { FIXTURE_EVENTS, FIXTURE_MAILS, toSelectable } from "./fixtures";
+import { FIXTURE_EVENTS, FIXTURE_CHATS, FIXTURE_MAILS, toSelectable } from "./fixtures";
 import { fetchRealSource, listRealSelectable } from "./client";
 import { GRAPH_SCOPES, graphOAuthAvailable } from "./oauth";
 
@@ -19,10 +19,10 @@ import { GRAPH_SCOPES, graphOAuthAvailable } from "./oauth";
  * interne Fixture-Referenz, im echten Modus dagegen ein bereits gültiges, kurzlebiges Access-Token, das der
  * Service je Aufruf frisch per Refresh-Token besorgt hat.
  *
- * Minimale delegierte Berechtigungen (lesend): Mail.Read, Calendars.Read, User.Read, offline_access.
+ * Minimale delegierte Berechtigungen (lesend): Mail.Read, Calendars.Read, Chat.Read (Teams-Chats, Etappe 37), User.Read, offline_access.
  * Keine Schreibrechte (kein Mail.Send, kein Calendars.ReadWrite).
  */
-const REQUESTED_SCOPES = ["User.Read", "Mail.Read", "Calendars.Read", "offline_access"];
+const REQUESTED_SCOPES = ["User.Read", "Mail.Read", "Calendars.Read", "Chat.Read", "offline_access"];
 
 export class GraphAdapter implements MailCalendarAdapter {
   readonly providerId = "MICROSOFT_GRAPH" as const;
@@ -62,7 +62,7 @@ export class GraphAdapter implements MailCalendarAdapter {
   async listSelectable(input: { tokenRef: string | null; fixture: boolean; kind: SelectableKind; query?: string; limit?: number }): Promise<SelectableItem[]> {
     this.assertConnected(input.tokenRef);
     if (!input.fixture) return listRealSelectable(input.tokenRef!, input.kind, input.query, input.limit ?? 25);
-    const all = (input.kind === "MAIL" ? FIXTURE_MAILS : FIXTURE_EVENTS).map(toSelectable);
+    const all = (input.kind === "MAIL" ? FIXTURE_MAILS : input.kind === "CHAT" ? FIXTURE_CHATS : FIXTURE_EVENTS).map(toSelectable);
     const q = input.query?.toLowerCase().trim();
     const filtered = q ? all.filter((s) => s.subject.toLowerCase().includes(q) || s.preview.toLowerCase().includes(q) || (s.from?.name.toLowerCase().includes(q) ?? false)) : all;
     return filtered.slice(0, input.limit ?? 25);
@@ -74,7 +74,7 @@ export class GraphAdapter implements MailCalendarAdapter {
       const real = await fetchRealSource(input.tokenRef!, input.kind, input.externalId);
       return { ...real, bodyText: sanitizeToText(real.bodyText) };
     }
-    const found = (input.kind === "MAIL" ? FIXTURE_MAILS : FIXTURE_EVENTS).find((s) => s.externalId === input.externalId);
+    const found = (input.kind === "MAIL" ? FIXTURE_MAILS : input.kind === "CHAT" ? FIXTURE_CHATS : FIXTURE_EVENTS).find((s) => s.externalId === input.externalId);
     if (!found) throw new AdapterError("NOT_FOUND", "Quelle nicht (mehr) zugänglich.");
     return { ...found, bodyText: sanitizeToText(found.bodyText) };
   }

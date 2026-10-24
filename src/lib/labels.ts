@@ -46,7 +46,7 @@ export const epistemicLabel: Record<string, string> = {
   WIDERSPRUECHLICH: "Widersprüchlich",
   UEBERHOLT: "Überholt",
 };
-export const sourceTypeLabel: Record<string, string> = { NOTIZ: "Notiz", PROTOKOLL: "Protokoll", EMAIL: "E-Mail", TERMIN: "Termin", OEFFENTLICH: "Öffentliche Quelle", DOKUMENT: "Dokument", INTERVIEW: "Interview" };
+export const sourceTypeLabel: Record<string, string> = { NOTIZ: "Notiz", PROTOKOLL: "Protokoll", EMAIL: "E-Mail", TERMIN: "Termin", OEFFENTLICH: "Öffentliche Quelle", DOKUMENT: "Dokument", INTERVIEW: "Interview", CHAT: "Teams-Chat" };
 export const accountStatusLabel: Record<string, string> = { ACTIVE: "aktiv", DORMANT: "ruhend", ARCHIVED: "archiviert" };
 export const orgTypeLabel: Record<string, string> = { KONZERN: "Konzern", TOCHTERGESELLSCHAFT: "Tochtergesellschaft", EINZELUNTERNEHMEN: "Einzelunternehmen", OEFFENTLICH: "Öffentliche Einrichtung", SONSTIGE: "Sonstige" };
 export const stanceLabel: Record<string, string> = { UNBEKANNT: "unbekannt", POSITIV: "positiv", NEUTRAL: "neutral", KRITISCH: "kritisch" };
@@ -109,7 +109,7 @@ export const suggestionTypeLabel: Record<string, string> = { BEOBACHTUNG: "Beoba
 export const priorityCategoryLabel: Record<string, string> = { KONKRETE_ANFRAGE: "Konkrete Anfrage / Termin", BLOCKIERTE_AKTION: "Blockierte Aktion", NEUE_INFORMATION: "Neue Information", ZUGANGSLUECKE: "Zugangslücke", PLANUNGSANLASS: "Planungs-/Verlängerungsanlass", VERBESSERUNGSIDEE: "Verbesserungsidee" };
 export const feedbackReasonLabel: Record<string, string> = { FALSCHE_ANNAHME: "Falsche Annahme", BEREITS_ERLEDIGT: "Bereits erledigt", UNPASSEND: "Unpassend", NICHT_ZULAESSIG: "Nicht zulässig", KEIN_AKTUELLER_ANLASS: "Kein aktueller Anlass", SONSTIGES: "Sonstiges" };
 export const importStatusLabel: Record<string, string> = { VORGESCHLAGEN: "Vorgeschlagen", UEBERNOMMEN: "Übernommen", AUSGEWERTET: "Ausgewertet", BESTAETIGT: "Bestätigt", FEHLER: "Fehler", VERWORFEN: "Verworfen" };
-export const importKindLabel: Record<string, string> = { PROTOKOLL_TEXT: "Protokolltext", PROTOKOLL_DATEI: "Protokolldatei", MAIL: "E-Mail", TERMIN: "Termin" };
+export const importKindLabel: Record<string, string> = { PROTOKOLL_TEXT: "Protokolltext", PROTOKOLL_DATEI: "Protokolldatei", MAIL: "E-Mail", TERMIN: "Termin", CHAT: "Teams-Chat" };
 export const integrationStatusLabel: Record<string, string> = { VERBUNDEN_FIXTURE: "Verbunden (Fixture-Modus)", VERBUNDEN: "Verbunden", ABGELAUFEN: "Abgelaufen – erneut anmelden", WIDERRUFEN: "Widerrufen", FEHLER: "Fehler" };
 export const supportStatusLabel: Record<string, string> = { ANGEFRAGT: "Angefragt", ANGENOMMEN: "Angenommen", ZURUECKGEGEBEN: "Zurückgegeben", ERLEDIGT: "Erledigt", ZURUECKGEZOGEN: "Zurückgezogen" };
 export const goalStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", ZUR_ABSTIMMUNG: "Zur Abstimmung", VEREINBART: "Vereinbart", GEAENDERT: "Geändert – erneute Abstimmung", BEENDET: "Beendet" };

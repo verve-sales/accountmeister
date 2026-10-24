@@ -565,7 +565,7 @@ export async function importProtocolAction(fd: FormData) {
 export async function importMailboxItemAction(fd: FormData) {
   const data = formToObject(fd);
   return run("/eingang", async (actor) => {
-    if (data.structure === "true" || data.structure === "on") {
+    if (data.structure === "true" || data.structure === "on" || data.kind === "CHAT") {
       const r = await importMailboxItemSmart(actor, data);
       throw new PendingInfo(eingangMessage(r, r.repeated ? `„${r.title}“ war schon importiert – neu ausgewertet` : `„${r.title}“ übernommen`));
     }

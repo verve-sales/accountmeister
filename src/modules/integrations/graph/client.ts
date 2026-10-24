@@ -15,6 +15,7 @@ async function graphGet(path: string, accessToken: string, fetchImpl: typeof fet
     signal: AbortSignal.timeout(15_000),
   });
   if (res.status === 401) throw new AdapterError("AUTH", "Microsoft Graph hat den Zugriff abgelehnt (Token abgelaufen oder widerrufen).");
+  if (res.status === 403) throw new AdapterError("AUTH", "Microsoft Graph verweigert den Zugriff (403) – vermutlich fehlt eine Berechtigung (z. B. Chat.Read für Teams-Chats). Bitte unter Einstellungen das Postfach neu verbinden.");
   if (res.status === 404) throw new AdapterError("NOT_FOUND", "Quelle nicht (mehr) zugänglich.");
   if (res.status === 429) throw new AdapterError("RATE_LIMIT", "Microsoft Graph hat vorübergehend gedrosselt. Bitte später erneut versuchen.");
   if (!res.ok) throw new AdapterError("TEMPORARY", `Microsoft Graph antwortete mit Fehler ${res.status}.`);
@@ -80,8 +81,69 @@ function eventToSelectable(e: GraphEvent): SelectableItem {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Teams-Chats (Etappe 37, Chat.Read): Liste der eigenen Chats, Verlauf eines Chats als Text
+// ---------------------------------------------------------------------------
+
+type GraphChatMember = { displayName?: string; email?: string; userId?: string };
+type GraphChatMessage = { id: string; createdDateTime?: string; messageType?: string; deletedDateTime?: string | null; from?: { user?: { displayName?: string; id?: string } | null; application?: { displayName?: string } | null } | null; body?: { content?: string; contentType?: string } };
+type GraphChat = { id: string; topic?: string | null; chatType?: string; members?: GraphChatMember[]; lastMessagePreview?: { createdDateTime?: string; body?: { content?: string }; from?: { user?: { displayName?: string } | null } | null } | null; lastUpdatedDateTime?: string };
+
+const stripHtml = (h: string) => h.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<attachment[^>]*><\/attachment>/gi, "[Anhang]").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+const chatTitle = (c: GraphChat) => c.topic?.trim() || `Chat mit ${(c.members ?? []).map((m) => m.displayName).filter(Boolean).slice(0, 4).join(", ") || "?"}`;
+const fmtBerlin = (iso?: string) => (iso ? new Date(iso).toLocaleString("de-DE", { timeZone: "Europe/Berlin", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).replace(",", "") : "?");
+
+function chatToSelectable(c: GraphChat): SelectableItem {
+  const last = c.lastMessagePreview;
+  return {
+    kind: "CHAT",
+    externalId: c.id,
+    subject: chatTitle(c),
+    from: last?.from?.user?.displayName ? { name: last.from.user.displayName } : null,
+    participants: (c.members ?? []).map((m) => ({ name: m.displayName ?? "?", email: m.email || undefined })),
+    at: last?.createdDateTime ?? c.lastUpdatedDateTime ?? new Date().toISOString(),
+    preview: stripHtml(last?.body?.content ?? "").slice(0, 140),
+    hasAttachments: false,
+  };
+}
+
+async function listChats(accessToken: string, query: string | undefined, top: number, fetchImpl: typeof fetch): Promise<SelectableItem[]> {
+  const json = (await graphGet(`/me/chats?$expand=members,lastMessagePreview&$orderby=lastMessagePreview/createdDateTime desc&$top=${Math.min(top, 50)}`, accessToken, fetchImpl)) as { value?: GraphChat[] };
+  let items = (json.value ?? []).filter((c) => c.lastMessagePreview).map(chatToSelectable);
+  if (query?.trim()) {
+    const q = query.trim().toLowerCase();
+    items = items.filter((i) => i.subject.toLowerCase().includes(q) || i.preview.toLowerCase().includes(q) || i.participants.some((p) => p.name.toLowerCase().includes(q)));
+  }
+  return items;
+}
+
+/** Verlauf eines Chats: die letzten bis zu 50 Nachrichten, älteste zuerst, je Zeile „[Zeit] Name: Text“. */
+async function fetchChat(accessToken: string, chatId: string, fetchImpl: typeof fetch): Promise<FetchedSource> {
+  const id = encodeURIComponent(chatId);
+  const chat = (await graphGet(`/me/chats/${id}?$expand=members`, accessToken, fetchImpl)) as GraphChat;
+  const msgs = (await graphGet(`/me/chats/${id}/messages?$top=50`, accessToken, fetchImpl)) as { value?: GraphChatMessage[] };
+  const lines = (msgs.value ?? [])
+    .filter((m) => m.messageType === "message" && !m.deletedDateTime)
+    .sort((a, b) => (a.createdDateTime ?? "").localeCompare(b.createdDateTime ?? ""))
+    .map((m) => `[${fmtBerlin(m.createdDateTime)}] ${m.from?.user?.displayName ?? m.from?.application?.displayName ?? "?"}: ${stripHtml(m.body?.content ?? "")}`);
+  const bodyText = lines.join("\n");
+  const last = (msgs.value ?? []).map((m) => m.createdDateTime ?? "").sort().at(-1) ?? new Date().toISOString();
+  return {
+    kind: "CHAT",
+    externalId: chat.id,
+    subject: chatTitle(chat),
+    from: null,
+    participants: (chat.members ?? []).map((m) => ({ name: m.displayName ?? "?", email: m.email || undefined })),
+    at: last,
+    bodyText,
+    attachmentNames: [],
+    contentHash: contentHash(chatTitle(chat), bodyText, last),
+  };
+}
+
 export async function listRealSelectable(accessToken: string, kind: SelectableKind, query: string | undefined, limit: number, fetchImpl: typeof fetch = fetch): Promise<SelectableItem[]> {
   const top = Math.max(1, Math.min(limit, 50));
+  if (kind === "CHAT") return listChats(accessToken, query, top, fetchImpl);
   if (kind === "MAIL") {
     const select = "id,subject,from,toRecipients,receivedDateTime,bodyPreview,hasAttachments";
     const path = query?.trim()
@@ -102,6 +164,7 @@ export async function listRealSelectable(accessToken: string, kind: SelectableKi
 }
 
 export async function fetchRealSource(accessToken: string, kind: SelectableKind, externalId: string, fetchImpl: typeof fetch = fetch): Promise<FetchedSource> {
+  if (kind === "CHAT") return fetchChat(accessToken, externalId, fetchImpl);
   if (kind === "MAIL") {
     const select = "id,subject,from,toRecipients,receivedDateTime,body,hasAttachments";
     const m = (await graphGet(`/me/messages/${encodeURIComponent(externalId)}?$select=${select}`, accessToken, fetchImpl)) as GraphMessage;

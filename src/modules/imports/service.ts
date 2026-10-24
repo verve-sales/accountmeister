@@ -198,11 +198,11 @@ export async function importMailboxItem(actor: Actor, raw: unknown) {
 }
 
 type PersistInput = {
-  kind: "PROTOKOLL_TEXT" | "PROTOKOLL_DATEI" | "MAIL" | "TERMIN";
+  kind: "PROTOKOLL_TEXT" | "PROTOKOLL_DATEI" | "MAIL" | "TERMIN" | "CHAT";
   externalKey: string;
   connectionId?: string;
   title: string;
-  sourceType: "PROTOKOLL" | "EMAIL" | "TERMIN";
+  sourceType: "PROTOKOLL" | "EMAIL" | "TERMIN" | "CHAT";
   body: string;
   origin: string;
   sourceTime: Date;
@@ -378,7 +378,7 @@ export async function listMyImports(actor: Actor) {
 // ---------------------------------------------------------------------------
 
 export const importMailboxSmartInput = z.object({
-  kind: z.enum(["MAIL", "TERMIN"]),
+  kind: z.enum(["MAIL", "TERMIN", "CHAT"]),
   externalId: z.string().min(1),
   /** „AUTO“ = Kunde/Setup erkennen (auch neuer Kunde) */
   setupId: z.string().min(1).default("AUTO"),
@@ -404,20 +404,31 @@ export async function importMailboxItemSmart(actor: Actor, raw: unknown) {
     throw adapterErrorToDomain(e);
   }
   const clean = sanitizeToText(fetched.bodyText);
+  const isChat = fetched.kind === "CHAT";
+  const kindLabel = fetched.kind === "MAIL" ? "E-Mail" : isChat ? "Teams-Chat" : "Termin";
   const header = [
-    fetched.kind === "MAIL" ? `Von: ${fetched.from?.name ?? "?"}${fetched.from?.email ? ` <${fetched.from.email}>` : ""}` : `Organisator: ${fetched.from?.name ?? "?"}`,
+    isChat ? `Teams-Chat: ${fetched.subject}` : fetched.kind === "MAIL" ? `Von: ${fetched.from?.name ?? "?"}${fetched.from?.email ? ` <${fetched.from.email}>` : ""}` : `Organisator: ${fetched.from?.name ?? "?"}`,
     `Datum: ${new Date(fetched.at).toLocaleString("de-DE", { timeZone: "Europe/Berlin" })}`,
     fetched.participants.length ? `Beteiligte: ${fetched.participants.map((p) => `${p.name}${p.email ? ` <${p.email}>` : ""}`).join(", ")}` : "",
-    `Betreff: ${fetched.subject}`,
+    isChat ? "" : `Betreff: ${fetched.subject}`,
   ]
     .filter(Boolean)
     .join("\n");
   const body = `${header}\n\n${clean}`;
   const participants = [...(fetched.from ? [fetched.from] : []), ...fetched.participants];
-  const label = `${fetched.kind === "MAIL" ? "E-Mail" : "Termin"} „${fetched.subject}“ vom ${new Date(fetched.at).toLocaleDateString("de-DE")}${fetched.from?.name ? ` von ${fetched.from.name}` : ""}`;
+  const label = `${kindLabel} „${fetched.subject}“ vom ${new Date(fetched.at).toLocaleDateString("de-DE")}${fetched.from?.name && !isChat ? ` von ${fetched.from.name}` : ""}`;
   const externalKey = `${conn.provider}:${fetched.kind}:${fetched.externalId}`;
   const existing = await db.query.importJobs.findFirst({ where: and(eq(schema.importJobs.workspaceId, actor.workspaceId), eq(schema.importJobs.kind, input.kind), eq(schema.importJobs.externalKey, externalKey)) });
   if (existing?.sourceId) {
+    // Inhalt geändert (z. B. neue Chatnachrichten): neue Quellenversion, dann neu auswerten
+    const versions = await db.query.sourceVersions.findMany({ where: eq(schema.sourceVersions.sourceId, existing.sourceId), orderBy: desc(schema.sourceVersions.versionNo) });
+    if (versions[0] && versions[0].contentHash !== fetched.contentHash) {
+      await db.transaction(async (tx) => {
+        await tx.insert(schema.sourceVersions).values({ sourceId: existing.sourceId!, versionNo: versions[0]!.versionNo + 1, body, contentHash: fetched.contentHash, importJobId: existing.id });
+        await tx.update(schema.sources).set({ body, sourceTime: new Date(fetched.at) }).where(eq(schema.sources.id, existing.sourceId!));
+        await recordAudit(tx, actor, "import.reimported", "IMPORT", existing.id, { versionNo: versions[0]!.versionNo + 1 });
+      });
+    }
     const r = await eingangFromSource(actor, existing.sourceId, { participants, sourceLabel: label, autoRoute: input.setupId === "AUTO" });
     return { title: fetched.subject, repeated: true, ...r };
   }
@@ -431,14 +442,14 @@ export async function importMailboxItemSmart(actor: Actor, raw: unknown) {
       externalKey,
       connectionId: conn.id,
       title: fetched.subject,
-      sourceType: fetched.kind === "MAIL" ? "EMAIL" : "TERMIN",
+      sourceType: fetched.kind === "MAIL" ? "EMAIL" : isChat ? "CHAT" : "TERMIN",
       body,
-      origin: `${conn.fixtureMode ? "Fixture" : "Microsoft 365"} · ${fetched.kind === "MAIL" ? "E-Mail" : "Termin"} · Import durch ${actor.displayName}`,
+      origin: `${conn.fixtureMode ? "Fixture" : "Microsoft 365"} · ${kindLabel} · Import durch ${actor.displayName}`,
       sourceTime: new Date(fetched.at),
       accessClass: input.accessClass,
       contentHash: fetched.contentHash,
       warnings: proposal.warnings,
-      scopeSummary: `1 ${fetched.kind === "MAIL" ? "E-Mail" : "Termin"}, ${clean.length} Zeichen Text`,
+      scopeSummary: `1 ${kindLabel}, ${clean.length} Zeichen Text`,
       mentioned: [],
       participantsForAi: [actor.userId],
       structure: false,
@@ -447,7 +458,7 @@ export async function importMailboxItemSmart(actor: Actor, raw: unknown) {
   } else {
     // Kein bekannter Kunde: Quelle persönlich ablegen; die Karten schlagen Kunde/Setup vor
     sourceId = await db.transaction(async (tx) => {
-      const [src] = await tx.insert(schema.sources).values({ workspaceId: actor.workspaceId, setupId: null, type: fetched.kind === "MAIL" ? "EMAIL" : "TERMIN", title: fetched.subject, body, origin: `Microsoft 365 · Import durch ${actor.displayName}`, externalKey, sourceTime: new Date(fetched.at), ownerUserId: actor.userId, accessClass: "PERSOENLICH" }).returning();
+      const [src] = await tx.insert(schema.sources).values({ workspaceId: actor.workspaceId, setupId: null, type: fetched.kind === "MAIL" ? "EMAIL" : isChat ? "CHAT" : "TERMIN", title: fetched.subject, body, origin: `Microsoft 365 · Import durch ${actor.displayName}`, externalKey, sourceTime: new Date(fetched.at), ownerUserId: actor.userId, accessClass: "PERSOENLICH" }).returning();
       const [job] = await tx.insert(schema.importJobs).values({ workspaceId: actor.workspaceId, actorUserId: actor.userId, kind: input.kind, connectionId: conn.id, externalKey, title: fetched.subject, setupId: null, accountId: null, accessClass: "PERSOENLICH", sourceId: src!.id, status: "UEBERNOMMEN", scopeSummary: "Kunde noch offen", warnings: [] }).returning();
       await tx.insert(schema.sourceVersions).values({ sourceId: src!.id, versionNo: 1, body, contentHash: fetched.contentHash, importJobId: job!.id });
       await recordAudit(tx, actor, "import.taken_over", "IMPORT", job!.id, { kind: input.kind, kunde: "offen" });

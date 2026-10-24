@@ -246,6 +246,13 @@
       "when": 1792769496112,
       "tag": "0034_eingang_karten",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792824356377,
+      "tag": "0035_teams_chats",
+      "breakpoints": true
     }
   ]
 }

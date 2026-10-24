@@ -41,6 +41,25 @@ export const FIXTURE_MAILS: FetchedSource[] = [
   },
 ];
 
+/** Teams-Chat (fiktiv): der Verlauf wird als Text mit Zeit und Name je Nachricht geliefert, älteste zuerst. */
+export const FIXTURE_CHATS: FetchedSource[] = [
+  {
+    kind: "CHAT",
+    externalId: "19:fixture-chat-0001@unq.gbl.spaces",
+    subject: "Chat mit Anne Keller",
+    from: { name: "Anne Keller", email: "keller@beispielkonzern.example" },
+    participants: [
+      { name: "Anne Keller", email: "keller@beispielkonzern.example" },
+      { name: "David Demo", email: "david.demo@verve.example" },
+    ],
+    at: "2026-10-20T15:12:00Z",
+    bodyText:
+      "[20.10.2026 15:02] Anne Keller: Hallo Herr Demo, kurze Info vorab: Wir möchten den Einsatz von Frau Klein bis 31.03.2027 verlängern, Konditionen wie bisher.\n[20.10.2026 15:05] David Demo: Danke, das freut mich! Ich kümmere mich um den Nachtrag.\n[20.10.2026 15:12] Anne Keller: Super. Und bitte schicken Sie mir bis Ende des Monats zwei Profile für die Lasttests.",
+    attachmentNames: [],
+    contentHash: "fixture-chat-0001-v1",
+  },
+];
+
 export const FIXTURE_EVENTS: FetchedSource[] = [
   {
     kind: "TERMIN",

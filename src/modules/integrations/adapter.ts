@@ -1,11 +1,11 @@
 /**
- * Mail-/Kalender-Adaptervertrag (Briefing 13.4).
+ * Mail-/Kalender-/Teams-Chat-Adaptervertrag (Briefing 13.4; Teams-Chats seit Etappe 37).
  * Funktionen: Verbindung herstellen, Berechtigungen anzeigen, auswählbare Objekte listen, ausgewählte Quelle abrufen,
  * Änderungen erkennen, Verbindung widerrufen, Fehlerstatus liefern. Keine Schreibzugriffe (kein Senden, keine Termine).
  * Der Adapter kennt keine Datenbank; er liefert nur Daten an den Import-Service.
  */
 
-export type SelectableKind = "MAIL" | "TERMIN";
+export type SelectableKind = "MAIL" | "TERMIN" | "CHAT";
 
 export type SelectableItem = {
   kind: SelectableKind;

@@ -155,3 +155,8 @@ Ablauf: „Echtes Postfach verbinden“ unter Einstellungen führt zu Microsoft 
 | Sales-/Vergütungsregeln (A16) | nicht implementiert, keine Berechnung | Aktivierung entsprechender Prüfungen |
 | Startvoraussetzungs-Regelwerk (Vertrag/Compliance/Onboarding) | frei erfasste Voraussetzungen je Auftrag, Regelbezug als Text | produktiver Einsatzfreigabe |
 | Git-Remote | **entschieden: github.com/verve-sales/accountmeister**; Auslieferung aus dieser Sitzung per Bundle | – |
+
+## E-0xx Teams-Chats im Eingang (Etappe 37)
+
+Der Eingang liest auf Wunsch auch die eigenen Teams-Chats (delegiert, `Chat.Read`, nur lesend; keine Kanalnachrichten). Wie bei Mails gibt es kein pauschales Einlesen: Die Person wählt einen Chat; übernommen wird dessen Verlauf (letzte bis zu 50 Nachrichten) als Text „[Zeit] Name: Nachricht“. Neue Nachrichten im selben Chat werden als neue Quellenversion übernommen und erneut ausgewertet. Die Auswertung läuft über die Eingangs-KI (Kunde erkennen, Karten, ein Klick). Der Verbindungsaufbau verzichtet seit e21 auf `prompt=consent` (Administratorzustimmung zentral).
+

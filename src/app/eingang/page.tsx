@@ -17,7 +17,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
   if (!actor) redirect("/anmelden");
   const [open, mySetups, imports, conn] = await Promise.all([listSetupsWithOpenAssignment(actor), listMySetups(actor), listMyImports(actor), getMyConnection(actor)]);
   const ai = getProviderStatus();
-  const kind = params.art === "TERMIN" ? "TERMIN" : "MAIL";
+  const kind = params.art === "TERMIN" ? "TERMIN" : params.art === "CHAT" ? "CHAT" : "MAIL";
   let selectable: Awaited<ReturnType<typeof listSelectable>>["items"] = [];
   let selectableError: string | null = null;
   if (conn.state.connected) {
@@ -124,20 +124,24 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
 
       {/* Postfach */}
       <section className="card">
-        <h2 className="font-semibold mb-2">Aus dem eigenen Postfach importieren (Outlook)</h2>
+        <h2 className="font-semibold mb-2">Aus dem eigenen Postfach importieren (Outlook und Teams-Chats)</h2>
         {!conn.state.connected ? (
           <p className="muted text-sm">Kein Postfach verbunden. <Link href="/einstellungen">Unter Einstellungen verbinden</Link>. Es wird nie ein ganzes Postfach eingelesen – Sie wählen einzelne Mails oder Termine.</p>
         ) : (
           <>
             <p className="text-sm muted mb-2">{conn.state.accountLabel} · Berechtigungen: {conn.state.grantedScopes.join(", ")}{conn.state.fixtureMode && " · Fixture-Modus: fiktive Testquellen"}</p>
             <form className="flex flex-wrap gap-2 items-end mb-3" method="get">
-              <div><label className="label" htmlFor="art">Art</label><select id="art" name="art" className="select" defaultValue={kind}><option value="MAIL">E-Mails</option><option value="TERMIN">Termine</option></select></div>
+              <div><label className="label" htmlFor="art">Art</label><select id="art" name="art" className="select" defaultValue={kind}><option value="MAIL">E-Mails</option><option value="TERMIN">Termine</option><option value="CHAT">Teams-Chats</option></select></div>
               <div><label className="label" htmlFor="q">Suche (Betreff, Absender)</label><input id="q" name="q" className="input" defaultValue={params.q ?? ""} /></div>
               <button className="btn btn-secondary btn-small" type="submit">Anzeigen</button>
             </form>
+            {kind === "CHAT" && !conn.state.fixtureMode && !conn.state.grantedScopes.some((x) => /Chat\.Read/i.test(x)) && (
+              <p className="text-sm mb-2" style={{ color: "#b7791f" }}>Für Teams-Chats fehlt noch die Berechtigung „Chat.Read“: in Entra ergänzen (Administratorzustimmung), dann unter <Link href="/einstellungen">Einstellungen</Link> das Postfach einmal neu verbinden.</p>
+            )}
+            {kind === "CHAT" && <p className="muted text-sm mb-2">Übernommen wird der Verlauf (letzte bis zu 50 Nachrichten) des gewählten Chats. Kommen später neue Nachrichten dazu, wertet „Übernehmen“ den Chat erneut aus – Erledigtes und Doppeltes erkennt die KI.</p>}
             {selectableError ? <p className="error">{selectableError}</p> : selectable.length === 0 ? <p className="muted text-sm">Keine passenden Objekte.</p> : (
               <table className="list">
-                <thead><tr><th>Betreff</th><th>Von</th><th>Zeitpunkt</th><th>Vorschau</th><th>Import</th></tr></thead>
+                <thead><tr><th>{kind === "CHAT" ? "Chat" : "Betreff"}</th><th>{kind === "CHAT" ? "Zuletzt von" : "Von"}</th><th>Zeitpunkt</th><th>Vorschau</th><th>Import</th></tr></thead>
                 <tbody>
                   {selectable.map((it) => {
                     const done = imports.find((j) => j.externalKey.endsWith(`:${it.kind}:${it.externalId}`));
@@ -148,7 +152,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
                         <td className="text-sm">{fmtDateTime(it.at)}</td>
                         <td className="text-sm muted">{it.preview}</td>
                         <td>
-                          {done ? (
+                          {done && it.kind !== "CHAT" ? (
                             <span className="text-sm flex flex-wrap items-center gap-2">bereits importiert {done.sourceId && <Link href={`/quellen/${done.sourceId}`}>(Quelle)</Link>}
                               {done.sourceId && ai.enabled && (
                                 <form action={reevaluateSourceAction} className="inline">
@@ -164,8 +168,9 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
                               <input type="hidden" name="externalId" value={it.externalId} />
                               <select name="setupId" className="select" style={{ width: "15rem" }} required defaultValue="AUTO" aria-label="Zielsetup"><option value="AUTO">Kunde automatisch erkennen</option>{editableSetups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
                               <select name="accessClass" className="select" style={{ width: "10rem" }} defaultValue="PERSOENLICH" aria-label="Empfängerkreis">{schema.accessClassEnum.enumValues.map((v) => <option key={v} value={v}>{accessClassLabel[v]}</option>)}</select>
-                              <label className="text-sm flex items-center gap-1"><input type="checkbox" name="structure" value="true" defaultChecked={ai.enabled} disabled={!ai.enabled} /> auswerten</label>
-                              <button className="btn btn-small" type="submit">Übernehmen</button>
+                              {it.kind === "CHAT" ? <input type="hidden" name="structure" value="true" /> : <label className="text-sm flex items-center gap-1"><input type="checkbox" name="structure" value="true" defaultChecked={ai.enabled} disabled={!ai.enabled} /> auswerten</label>}
+                              <button className="btn btn-small" type="submit">{it.kind === "CHAT" && done ? "Neue Nachrichten auswerten" : "Übernehmen"}</button>
+                              {it.kind === "CHAT" && done?.sourceId && <Link href={`/quellen/${done.sourceId}`} className="text-sm">(Quelle)</Link>}
                             </form>
                           )}
                         </td>

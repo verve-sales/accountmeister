@@ -8,7 +8,7 @@ import { getConfig } from "@/lib/config";
  * OIDC_CLIENT_ID und OIDC_CLIENT_SECRET, nur die Umleitungs-URI ist eine zweite, eigene.
  * Kein Schreibrecht wird angefragt (kein Mail.Send, kein Calendars.ReadWrite).
  */
-export const GRAPH_SCOPES = ["offline_access", "https://graph.microsoft.com/User.Read", "https://graph.microsoft.com/Mail.Read", "https://graph.microsoft.com/Calendars.Read"];
+export const GRAPH_SCOPES = ["offline_access", "https://graph.microsoft.com/User.Read", "https://graph.microsoft.com/Mail.Read", "https://graph.microsoft.com/Calendars.Read", "https://graph.microsoft.com/Chat.Read"];
 
 export function graphTenantId(cfg = getConfig()): string | null {
   if (!cfg.OIDC_ISSUER) return null;

@@ -55,7 +55,7 @@ export const relationshipStateEnum = pgEnum("relationship_state", [
   "NICHT_AKTIV",
 ]);
 
-export const sourceTypeEnum = pgEnum("source_type", ["NOTIZ", "PROTOKOLL", "EMAIL", "TERMIN", "OEFFENTLICH", "DOKUMENT", "INTERVIEW"]);
+export const sourceTypeEnum = pgEnum("source_type", ["NOTIZ", "PROTOKOLL", "EMAIL", "TERMIN", "OEFFENTLICH", "DOKUMENT", "INTERVIEW", "CHAT"]);
 export const accessClassEnum = pgEnum("access_class", [
   "PERSOENLICH", // nur Quelleninhaber
   "SETUP", // zugeordnete Setup-Beteiligte
@@ -885,7 +885,7 @@ export const openQuestions = pgTable(
 export const integrationProviderEnum = pgEnum("integration_provider", ["MICROSOFT_GRAPH"]);
 export const integrationStatusEnum = pgEnum("integration_status", ["VERBUNDEN_FIXTURE", "VERBUNDEN", "ABGELAUFEN", "WIDERRUFEN", "FEHLER"]);
 export const importJobStatusEnum = pgEnum("import_job_status", ["VORGESCHLAGEN", "UEBERNOMMEN", "AUSGEWERTET", "BESTAETIGT", "FEHLER", "VERWORFEN"]);
-export const importKindEnum = pgEnum("import_kind", ["PROTOKOLL_TEXT", "PROTOKOLL_DATEI", "MAIL", "TERMIN"]);
+export const importKindEnum = pgEnum("import_kind", ["PROTOKOLL_TEXT", "PROTOKOLL_DATEI", "MAIL", "TERMIN", "CHAT"]);
 
 /** Persönliche Verbindung eines Nutzers zu einem Anbieter – Tokens nur als verschlüsselte Referenz (13.4) */
 export const integrationConnections = pgTable(
