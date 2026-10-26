@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
-import { buildDashboard, viewAccountCounts, viewLabel, type DashboardView } from "@/modules/dashboard/service";
+import { buildDashboard, loadHat, viewLabel } from "@/modules/dashboard/service";
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
 import { hasAnyContentRole, isCoach, isReadOnlyActor } from "@/modules/identity/actor";
 import { canEditSetup, loadSetupContext } from "@/modules/identity/authz";
@@ -24,7 +24,7 @@ import { ensureInitiativeRemindersSafe } from "@/modules/agenda/service";
 import { listOpenSosForActor } from "@/modules/sos/service";
 import { SosBanner } from "@/components/SosPanel";
 import { ensureOverdueNotificationsSafe, listMyWork } from "@/modules/work/service";
-import { createOpportunityAction, setDashboardViewAction, eingangAction } from "../actions";
+import { createOpportunityAction, eingangAction } from "../actions";
 import { listMyCheckins } from "@/modules/engagements/care";
 import { listMyOpenActions } from "@/modules/actions/service";
 import { listMyHandovers } from "@/modules/handovers/service";
@@ -46,7 +46,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
   const store = await cookies();
-  const requested = store.get(DASHBOARD_VIEW_COOKIE)?.value ?? null;
+  const { hat } = await loadHat(actor, store.get(DASHBOARD_VIEW_COOKIE)?.value ?? null);
   // Fällige Standardaufgaben (Fokus Freelancer) erzeugen, bevor „Diese Woche dran“ geladen wird
   await ensureStandardTasksSafe(actor);
   // Verlängerungsregel: am Auslösetag das Vorgehen „Verlängerung“ anstoßen (Etappe 23)
@@ -55,8 +55,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   await ensureOverdueNotificationsSafe(actor);
   const work = await listMyWork(actor);
   const openSos = await listOpenSosForActor(actor);
-  const d = await buildDashboard(actor, requested);
-  const viewCounts = d && d.available.length > 1 ? await viewAccountCounts(actor).catch(() => []) : [];
+  const d = await buildDashboard(actor, hat);
   const focus = await getFocus(actor.workspaceId);
   const fl = d && focus.freelancerLever ? await freelancerStats(actor, d.accounts.map((c) => c.accountId)) : null;
   const healthAll = d ? await computeHealthFor(d.accounts.map((c) => ({ id: c.accountId, name: c.accountName }))) : [];
@@ -91,13 +90,27 @@ export default async function StartPage({ searchParams }: { searchParams: Search
     }
   }
   const back = "/start";
-  const arbeitsliste = (
-    <>
-      <Entscheidungen renewals={renewalCards} handovers={openIncoming} support={support} review={reviewItems} back={back} />
-      <Aufgaben work={work.assigned} checkins={checkins} actions={actions} renewals={renewalCards} support={support} back={back} today={today} />
-      <Vorschlaege suggestions={suggestions} hints={hints} userNames={userNames} users={users} back={back} aiEnabled={ai.enabled} />
-    </>
-  );
+  // Hut (Etappe 37): die Arbeitsliste ist persönlich – Verlängerungen der BDs erscheinen bei Principal/GF nur „im Blick“
+  const myRenewals = renewalCards.filter((c) => c.forMe);
+  const teamRenewals = renewalCards.filter((c) => !c.forMe);
+  const nDecide = myRenewals.filter((c) => c.mode === "ENTSCHEIDEN").length + openIncoming.length + support.filter((x) => x.isAddressee && x.status === "ANGEFRAGT").length + reviewItems.length;
+  const nTasks = work.assigned.length + checkins.length + actions.length + myRenewals.filter((c) => c.mode === "ANSTOSSEN").length + support.filter((x) => x.isAddressee && x.status === "ANGENOMMEN").length;
+  const nSuggest = suggestions.length + hints.length;
+  const arbeitsliste =
+    nDecide + nTasks + nSuggest === 0 ? (
+      <section className="card text-sm" id="arbeitsliste">
+        <strong>Alles erledigt.</strong> <span className="muted">Nichts zu entscheiden, nichts fällig, keine offenen Vorschläge.</span>
+      </section>
+    ) : (
+      <>
+        {nDecide > 0 ? <Entscheidungen renewals={myRenewals} handovers={openIncoming} support={support} review={reviewItems} back={back} /> : null}
+        {nTasks > 0 ? <Aufgaben work={work.assigned} checkins={checkins} actions={actions} renewals={myRenewals} support={support} back={back} today={today} /> : null}
+        {nSuggest > 0 ? <Vorschlaege suggestions={suggestions} hints={hints} userNames={userNames} users={users} back={back} aiEnabled={ai.enabled} /> : null}
+        {[nDecide ? null : "nichts zu entscheiden", nTasks ? null : "nichts fällig", nSuggest ? null : "keine offenen Vorschläge"].filter(Boolean).length > 0 && (
+          <p className="muted text-sm">Außerdem: {[nDecide ? null : "nichts zu entscheiden", nTasks ? null : "nichts fällig", nSuggest ? null : "keine offenen Vorschläge"].filter(Boolean).join(" · ")}.</p>
+        )}
+      </>
+    );
   const readOnly = isReadOnlyActor(actor);
   const quickEntry = !readOnly && hasAnyContentRole(actor) && (
     <section className="card" id="neues">
@@ -133,6 +146,10 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       </div>
     );
   }
+  // Principal/GF-Hut: erst „Bei deinen BDs im Blick“, dann die persönliche Arbeitsliste
+  const leader = d.view === "PRINCIPAL" || d.view === "CEO";
+  const atRisk = healthAll.filter((h) => h.level === "GEFAEHRDET").sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
+  const quiet = d.accounts.filter((c) => c.daysSinceActivity > 14).sort((a, b) => b.daysSinceActivity - a.daysSinceActivity);
   const kindLabel: Record<string, string> = { AKTION: "Aktion", UEBERGABE: "Übergabe", VORSCHLAG: "Vorschlag", UNTERSTUETZUNG: "Unterstützung", REVIEW: "Weekly", FRAGE: "Frage" };
 
   return (
@@ -150,13 +167,72 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         </section>
       ) : (
         <>
-          {(isCoach(actor) || [...actor.accountRoles.values()].some((r) => r.has("COACH"))) && (
+          {hat === "COACH" && (isCoach(actor) || [...actor.accountRoles.values()].some((r) => r.has("COACH"))) && (
             <section className="card text-sm">
               <strong>Coach-Zugang.</strong> Echte Kunden siehst du nur lesend; in deinem Testkunden darfst du alles ausprobieren. Zum Durchgehen: <Link href="/meine-bds">Meine BDs</Link> · <Link href="/kunden">Kunden</Link> · <Link href="/einsaetze">Einsätze</Link>.
             </section>
           )}
-          {arbeitsliste}
+          {leader ? null : arbeitsliste}
         </>
+      )}
+      {(d.view === "PRINCIPAL" || d.view === "CEO") && (
+        <section className="card" id="im-blick" aria-label="Bei deinen BDs im Blick">
+          <div className="flex flex-wrap items-baseline gap-3">
+            <h2 className="font-semibold">Bei deinen BDs im Blick</h2>
+            {canBrowsePortfolio(actor) && <Link href="/meine-bds" className="text-sm ml-auto">Kunden je BD durchgehen</Link>}
+          </div>
+          {teamRenewals.length + atRisk.length + quiet.length === 0 ? (
+            <p className="muted text-sm mt-1">Keine offenen Verlängerungen bei den BDs, kein gefährdeter Kunde, überall Bewegung in den letzten 14 Tagen.</p>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-4 mt-2 text-sm">
+              <div>
+                <div className="font-medium mb-1">Verlängerungen offen ({teamRenewals.length})</div>
+                {teamRenewals.length === 0 ? <p className="muted">Keine.</p> : (
+                  <ul className="space-y-1">
+                    {teamRenewals.slice(0, 5).map((c) => (
+                      <li key={c.decisionId}>
+                        <Link href={`/einsaetze/${c.engagementId}#verlaengerung`}>{c.person} · {c.accountName}</Link>
+                        <span className="muted"> · {c.mode === "ENTSCHEIDEN" ? "zu entscheiden" : "anzustoßen"}{c.bdName ? ` von ${c.bdName}` : ""}{c.daysToEnd !== null ? ` · Ende in ${c.daysToEnd} T.` : ""}</span>
+                      </li>
+                    ))}
+                    {teamRenewals.length > 5 && <li className="muted">… und {teamRenewals.length - 5} weitere</li>}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <div className="font-medium mb-1">Gefährdete Kunden ({atRisk.length})</div>
+                {atRisk.length === 0 ? <p className="muted">Keiner.</p> : (
+                  <ul className="space-y-1">
+                    {atRisk.slice(0, 5).map((h) => (
+                      <li key={h.accountId} className="flex flex-wrap gap-2 items-center"><Link href={`/kunden/${h.accountId}/health`}>{h.accountName}</Link><HealthBadge score={h.score} level={h.level} coverage={h.coverage} /></li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <div className="font-medium mb-1">Seit über 14 Tagen nichts dokumentiert ({quiet.length})</div>
+                {quiet.length === 0 ? <p className="muted">Überall Bewegung.</p> : (
+                  <ul className="space-y-1">
+                    {quiet.slice(0, 5).map((c) => (
+                      <li key={c.accountId}><Link href={`/kunden/${c.accountId}`}>{c.accountName}</Link><span className="muted"> · {c.responsibleBdName ? `BD ${c.responsibleBdName}` : "BD offen"} · {agoLabel(c.daysSinceActivity)}</span></li>
+                    ))}
+                    {quiet.length > 5 && <li className="muted">… und {quiet.length - 5} weitere</li>}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+      {leader && !readOnly ? arbeitsliste : null}
+      {d.view === "CEO" && (
+        <section className="card" id="ziele" aria-label="Ziele">
+          <div className="flex flex-wrap items-baseline gap-3">
+            <h2 className="font-semibold">Ziele ({d.goals.length})</h2>
+            <Link href="/ziele" className="text-sm ml-auto">Ziele & Portfolio</Link>
+          </div>
+          {d.goals.length === 0 ? <p className="muted text-sm mt-1">Keine laufenden Ziele.</p> : <ul className="space-y-1 text-sm mt-1">{d.goals.map((g, i) => <li key={i}><Link href={g.href}>{g.title}</Link> <Status label={goalStatusLabel[g.status] ?? g.status} /></li>)}</ul>}
+        </section>
       )}
       {work.myTeams.length > 0 && (
         <p className="text-sm muted">{work.myTeams.map((t) => <Link key={t.id} href={`/team/${t.id}`} className="mr-3">{work.queue.filter((q) => q.teamId === t.id).length} im Eingang {t.name}</Link>)}</p>
@@ -165,19 +241,9 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <div className="pt-2" id="uebersichten">
         <div className="flex flex-wrap items-baseline gap-3">
           <h2 className="font-semibold text-lg">Übersichten</h2>
-          <span className="muted text-sm">zum Aufklappen</span>
-          {d.available.length > 1 && (
-            <form action={setDashboardViewAction} className="flex flex-wrap items-center gap-2 text-sm ml-auto" aria-label="Sicht wählen">
-              <span className="muted">Sicht:</span>
-              {d.available.map((v: DashboardView) => (
-                <button key={v} name="view" value={v} type="submit" className={v === d.view ? "btn btn-small" : "btn btn-secondary btn-small"} aria-pressed={v === d.view}>
-                  {viewLabel[v]} ({viewCounts.find((c) => c.view === v)?.accounts ?? 0})
-                </button>
-              ))}
-            </form>
-          )}
+          <span className="muted text-sm">zum Aufklappen · als {viewLabel[d.view]}: {d.accounts.length} Kunden</span>
         </div>
-        <p className="muted text-xs mt-1">Die Sicht bestimmt nur, welche Kunden in den Übersichten gezählt werden ({viewLabel[d.view]}: {d.accounts.length} Kunden) – Entscheidungen, Aufgaben und Vorschläge oben hängen an dir als Person und ändern sich nicht.{canBrowsePortfolio(actor) ? <> Zum Durchgehen der Kunden je BD: <Link href="/meine-bds">Meine BDs</Link>.</> : null}</p>
+        {d.available.length > 1 && <p className="muted text-xs mt-1">Den Hut wechselst du oben rechts neben deinem Namen. Er bestimmt Navigation und Übersichten, nicht deine Rechte.</p>}
       </div>
       {d.empty && <p className="card text-sm">{d.empty}</p>}
 
@@ -362,7 +428,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             )}
           </details>
         )}
-        {(d.view === "PRINCIPAL" || d.view === "CEO") && (
+        {d.view === "PRINCIPAL" && (
           <details className="card">
             <summary className="font-semibold">Ziele ({d.goals.length})</summary>
             {d.goals.length === 0 ? (

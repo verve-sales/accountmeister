@@ -533,6 +533,11 @@ export type RenewalCard = {
   mode: "ENTSCHEIDEN" | "ANSTOSSEN";
   /** Personen, an die ich weitergeben kann (kommerziell zuständig) */
   delegates: { id: string; name: string }[];
+  /** zuständiger BD des Einsatzes */
+  bdUserId: string | null;
+  bdName: string | null;
+  /** Hut (Etappe 37): gehört die Karte in meine persönliche Arbeitsliste? Sonst nur „Bei deinen BDs im Blick“. */
+  forMe: boolean;
 };
 
 /** Verlängerungskarten für die Startseite: offene Entscheidungen (in Abstimmung) für kommerziell Zuständige, zu klärende für Sales Operations/Betreuung. */
@@ -566,6 +571,9 @@ export async function listRenewalCards(actor: Actor): Promise<RenewalCard[]> {
       const principals = await principalsFor(actor.workspaceId, e.accountId);
       for (const id of new Set([e.bdUserId, ...principals])) if (id !== actor.userId && un.has(id)) delegates.push({ id, name: un.get(id)! });
     }
+    // Persönlich: an mich weitergegeben, mein Einsatz als BD, kein BD hinterlegt (dann entscheiden Principal/CEO) oder Anstoß als Ops/Betreuung
+    const owner = d.commercialOwnerUserId;
+    const forMe = owner ? owner === actor.userId : !e.bdUserId || e.bdUserId === actor.userId || (mode === "ANSTOSSEN" && (a.ops || a.care));
     out.push({
       decisionId: d.id,
       version: d.version,
@@ -585,6 +593,9 @@ export async function listRenewalCards(actor: Actor): Promise<RenewalCard[]> {
       daysToEnd: e.plannedEnd ? Math.round((new Date(e.plannedEnd).getTime() - new Date(t).getTime()) / 86400000) : null,
       mode,
       delegates,
+      bdUserId: e.bdUserId,
+      bdName: e.bdUserId ? un.get(e.bdUserId) ?? null : null,
+      forMe,
     });
   }
   return out.sort((x, y) => (x.mode === y.mode ? (x.daysToEnd ?? 9999) - (y.daysToEnd ?? 9999) : x.mode === "ENTSCHEIDEN" ? -1 : 1));

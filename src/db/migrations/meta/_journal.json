@@ -253,6 +253,13 @@
       "when": 1792824356377,
       "tag": "0035_teams_chats",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793013396834,
+      "tag": "0036_hut",
+      "breakpoints": true
     }
   ]
 }

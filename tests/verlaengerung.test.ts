@@ -63,6 +63,11 @@ describe("Etappe 33 (Use Case 1): Verlängerung als Anstoß und Karte", () => {
     const card = bdCards.find((c) => c.engagementId === e.id)!;
     expect(card.mode).toBe("ENTSCHEIDEN");
     expect(card.person).toBe(freelancerName);
+    // Hut (Etappe 37): für den BD persönlich, bei der Geschäftsführung nur „im Blick“
+    expect(card.forMe).toBe(true);
+    const ceoCard = (await listRenewalCards(await actorFor("clemens"))).find((c) => c.engagementId === e.id);
+    expect(ceoCard?.forMe).toBe(false);
+    expect(ceoCard?.bdUserId).toBe(david.userId);
     expect((await listRenewalCards(ops)).some((c) => c.engagementId === e.id)).toBe(false);
     expect((await listNotifications(david)).some((n) => n.title.startsWith("Verlängerung bestätigen") && n.title.includes(freelancerName))).toBe(true);
 

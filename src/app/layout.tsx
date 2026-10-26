@@ -4,7 +4,10 @@ import Image from "next/image";
 import "./globals.css";
 import { getConfig } from "@/lib/config";
 import { getCurrentActor } from "@/modules/identity/session";
-import { logoutAction } from "./actions";
+import { cookies } from "next/headers";
+import { logoutAction, setHatAction } from "./actions";
+import { loadHat, viewLabel, viewDescription } from "@/modules/dashboard/service";
+import { splitNav } from "@/modules/dashboard/hat";
 import { roleLabel } from "@/lib/labels";
 import { AssistantPanel } from "@/components/AssistantPanel";
 import { provisionAccess } from "@/modules/provision/access";
@@ -29,18 +32,9 @@ function coachNav(actor: Actor): boolean {
 export const metadata: Metadata = { title: "Accountmeister – Verve AI", description: "Interne Sales-Arbeitsumgebung von Verve Consulting", icons: { icon: "/verve-ai-lockup.png" } };
 export const dynamic = "force-dynamic";
 
-/** Hauptnavigation (Etappe 33, Zielbild Bedienung): fünf Einträge, alles Weitere unter „Mehr“. */
-const NAV = [
-  { href: "/start", label: "Start" },
-  { href: "/meine-arbeit", label: "Meine Arbeit" },
-  { href: "/kunden", label: "Kunden" },
-];
-
-/** Weitere Bereiche – erreichbar über „Mehr“, nicht in der ersten Reihe. */
+/** Weitere Bereiche – immer unter „Mehr“. Die erste Reihe folgt dem Hut (Etappe 37, modules/dashboard/hat.ts). */
 const MORE = [
   { href: "/weeklys", label: "Weeklys" },
-  { href: "/ziele", label: "Ziele & Portfolio" },
-  { href: "/eingang", label: "Eingang" },
   { href: "/vorgehen", label: "Vorgehen" },
   { href: "/artefakte", label: "Artefakte" },
   { href: "/einstellungen", label: "Einstellungen" },
@@ -52,6 +46,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const actor = await getCurrentActor();
   const roles = actor ? [...actor.roles].filter((r) => r !== "ADMIN").map((r) => roleLabel[r] ?? r) : [];
   if (actor && actor.accountRoles.size > 0) roles.push("kundenbezogene Rollen");
+  const { hat, available } = actor ? await loadHat(actor, (await cookies()).get("am_sicht")?.value ?? null).catch(() => ({ hat: null, available: [] })) : { hat: null, available: [] };
+  const staffing = cfg.FEATURE_BESETZUNG === "true";
+  const allowed = new Set<string>(["start", "arbeit", "kunden", "eingang", "ziele"]);
+  if (actor && canBrowsePortfolio(actor)) allowed.add("bds");
+  if (actor && staffing && (staffingNav(actor) || coachNav(actor))) allowed.add("einsaetze");
+  if (actor && staffing && staffingNav(actor)) allowed.add("besetzung");
+  const nav = splitNav(hat, allowed);
   const unread = actor ? await unreadCount(actor).catch(() => 0) : 0;
   // Moco (Etappe 31): Link für Importberechtigte, wenn die Anbindung an ist, oder bei offenen Hinweisen für die Person
   const mocoLink = actor && cfg.MOCO_MODE !== "off" && (actor.roles.has("CEO") || actor.roles.has("PRINCIPAL") || (await (await import("@/modules/moco/sync")).openHintCount(actor).catch(() => 0)) > 0);
@@ -72,7 +73,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </Link>
             {actor && (
               <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm items-center">
-                {[...NAV, ...(canBrowsePortfolio(actor) ? [{ href: "/meine-bds", label: "Meine BDs" }] : []), ...(cfg.FEATURE_BESETZUNG === "true" && staffingNav(actor) ? [{ href: "/einsaetze", label: "Einsätze" }, { href: "/besetzung", label: "Besetzung" }] : cfg.FEATURE_BESETZUNG === "true" && coachNav(actor) ? [{ href: "/einsaetze", label: "Einsätze" }] : [])].map((n) => (
+                {nav.main.map((n) => (
                   <Link key={n.href} href={n.href}>
                     {n.label}
                   </Link>
@@ -80,7 +81,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <details className="nav-more">
                   <summary>Mehr ▾</summary>
                   <div className="nav-more-menu">
-                    {[...(actor.roles.has("CEO") ? [{ href: "/ceo", label: "CEO-Dashboard" }] : []), ...MORE.slice(0, 5), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(5)].map((n) => (
+                    {[...nav.more, ...(actor.roles.has("CEO") ? [{ href: "/ceo", label: "CEO-Dashboard" }] : []), ...MORE.slice(0, 3), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(3)].map((n) => (
                       <Link key={n.href} href={n.href}>
                         {n.label}
                       </Link>
@@ -104,9 +105,25 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                       <span style={{ position: "absolute", top: -6, right: -10, background: "#c0392b", color: "#fff", borderRadius: 999, fontSize: 10, lineHeight: "15px", minWidth: 15, padding: "0 4px", textAlign: "center", fontWeight: 700 }}>{unread > 99 ? "99+" : unread}</span>
                     )}
                   </Link>
-                  <span>
-                    {actor.displayName} · {roles.join(", ") || "keine Rolle"}
-                  </span>
+                  {hat && available.length > 1 ? (
+                    <details className="nav-more nav-hat" aria-label="Hut wechseln">
+                      <summary title="Ich arbeite gerade als … – bestimmt Navigation und Startseite, nicht deine Rechte">
+                        {actor.displayName} · <strong style={{ color: "var(--text)" }}>als {viewLabel[hat]}</strong> ▾
+                      </summary>
+                      <form action={setHatAction} className="nav-more-menu" style={{ minWidth: 260 }}>
+                        <span className="muted text-xs" style={{ padding: "4px 8px" }}>Ich arbeite als:</span>
+                        {available.map((v) => (
+                          <button key={v} name="hat" value={v} type="submit" className={v === hat ? "btn btn-small" : "btn btn-secondary btn-small"} aria-pressed={v === hat} title={viewDescription[v]} style={{ textAlign: "left" }}>
+                            {viewLabel[v]}
+                          </button>
+                        ))}
+                      </form>
+                    </details>
+                  ) : (
+                    <span>
+                      {actor.displayName} · {roles.join(", ") || "keine Rolle"}
+                    </span>
+                  )}
                   <form action={logoutAction}>
                     <button className="btn btn-secondary btn-small" type="submit">
                       Abmelden

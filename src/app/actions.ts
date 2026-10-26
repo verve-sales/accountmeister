@@ -195,13 +195,14 @@ export async function setRoleActiveAction(fd: FormData) {
 
 // --- Start / Dashboard -------------------------------------------------------
 
-/** Sichtwechsel auf der Startseite: nur eine Brille, keine Rechteänderung; Wahl wird im Cookie gemerkt. */
-export async function setDashboardViewAction(fd: FormData) {
-  await requireActor();
-  const view = String(fd.get("view") ?? "");
-  if (["BD", "ANKER", "PRINCIPAL", "CEO"].includes(view)) {
+/** Hut wechseln (Etappe 37): nur eine Brille, keine Rechteänderung; gemerkt je Person (Datenbank) und im Cookie. */
+export async function setHatAction(fd: FormData) {
+  const actor = await requireActor();
+  const { setHat } = await import("@/modules/dashboard/service");
+  const hat = await setHat(actor, String(fd.get("hat") ?? fd.get("view") ?? ""));
+  if (hat) {
     const store = await cookies();
-    store.set("am_sicht", view, { path: "/", httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 24 * 90 });
+    store.set("am_sicht", hat, { path: "/", httpOnly: true, sameSite: "lax", maxAge: 60 * 60 * 24 * 90 });
   }
   redirect("/start");
 }

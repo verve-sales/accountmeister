@@ -128,6 +128,7 @@ export const users = pgTable(
     timezone: text("timezone").notNull().default("Europe/Berlin"),
     externalSubject: text("external_subject"), // stabile Kennung des Identitätsanbieters (OIDC sub/oid)
     mocoUserId: integer("moco_user_id"), // Moco-Anbindung (Etappe 31): Moco-User-ID
+    preferredHat: text("preferred_hat"), // Hut (Etappe 37): zuletzt gewählte Arbeitsrolle (BD, ANKER, PRINCIPAL, CEO, SALES_OPS, COACH)
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

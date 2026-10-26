@@ -20,7 +20,7 @@ import { buildChanceOverview, MATURITY, type ChanceRow } from "@/modules/strateg
 export const DASHBOARD_VIEWS = ["BD", "ANKER", "PRINCIPAL", "CEO", "SALES_OPS", "COACH"] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
 
-export const viewLabel: Record<DashboardView, string> = { BD: "BD", ANKER: "Anker", PRINCIPAL: "Principal", CEO: "CEO", SALES_OPS: "Sales Operations", COACH: "Coach" };
+export const viewLabel: Record<DashboardView, string> = { BD: "BD", ANKER: "Anker", PRINCIPAL: "Principal", CEO: "Geschäftsführung", SALES_OPS: "Sales Operations", COACH: "Coach" };
 export const viewDescription: Record<DashboardView, string> = {
   BD: "Meine Kunden und Setups als zuständiger BD: was diese Woche dran ist, wo der nächste große Schritt hängt.",
   ANKER: "Setups, in denen ich Kontext beitrage: Rückfragen an mich, Kontaktaufnahmen, die auf mich warten.",
@@ -52,9 +52,28 @@ export async function resolveView(actor: Actor, requested: string | null | undef
   const available = await availableViews(actor);
   if (available.length === 0) return { view: null, available };
   const wanted = DASHBOARD_VIEWS.find((v) => v === requested);
-  // Wer (auch) Coach ist, startet in der Coach-Sicht – sonst zeigt die BD-Sicht nur den eigenen Testkunden
-  const fallback = available.includes("COACH") ? "COACH" : available[0]!;
+  // Geschäftsführung startet im GF-Hut; wer (auch) Coach ist, in der Coach-Sicht – sonst zeigt die BD-Sicht nur den eigenen Testkunden
+  const fallback = available.includes("CEO") ? "CEO" : available.includes("COACH") ? "COACH" : available[0]!;
   return { view: wanted && available.includes(wanted) ? wanted : fallback, available };
+}
+
+/**
+ * Hut (Etappe 37): Wer mehrere Rollen hat, arbeitet immer in einer – Navigation, Startseite und Übersichten folgen
+ * dem Hut. Gemerkt wird er je Person in der Datenbank (geräteübergreifend), das Cookie bleibt Rückfallwert.
+ */
+export async function loadHat(actor: Actor, cookieValue?: string | null): Promise<{ hat: DashboardView | null; available: DashboardView[] }> {
+  const u = await db.query.users.findFirst({ where: eq(schema.users.id, actor.userId), columns: { preferredHat: true } });
+  const { view, available } = await resolveView(actor, u?.preferredHat ?? cookieValue ?? null);
+  return { hat: view, available };
+}
+
+/** Hut wechseln: nur Rollen, die die Person wirklich hat (keine Rechteänderung). */
+export async function setHat(actor: Actor, hat: string): Promise<DashboardView | null> {
+  const available = await availableViews(actor);
+  const h = available.find((v) => v === hat);
+  if (!h) return null;
+  await db.update(schema.users).set({ preferredHat: h, updatedAt: new Date() }).where(eq(schema.users.id, actor.userId));
+  return h;
 }
 
 // ---------------------------------------------------------------------------
