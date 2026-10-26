@@ -1822,3 +1822,29 @@ export async function mocoHintsBulkAction(fd: FormData) {
     throw new PendingInfo(`${n} Hinweis(e) bearbeitet.`);
   }, "Hinweise bearbeitet.");
 }
+
+// --- Meine Principals (Etappe 38) --------------------------------------------
+
+/** Ziele eines Principals für ein Quartal speichern (Geschäftsführung). Felder: quarter, head_<accountId>, newCustomers, renewalQuote. */
+export async function savePrincipalTargetsAction(fd: FormData) {
+  const data = formToObject(fd);
+  const pid = data.principalUserId ?? "";
+  const back = `/meine-principals/${pid}?q=${encodeURIComponent(data.quarter ?? "")}#zahlen`;
+  return run(back, async (actor) => {
+    const { saveTargets } = await import("@/modules/principals/service");
+    const heads: Record<string, string> = {};
+    for (const [k, v] of Object.entries(data)) if (k.startsWith("head_")) heads[k.slice(5)] = v;
+    await saveTargets(actor, pid, { quarter: data.quarter, heads, newCustomers: data.newCustomers ?? "", renewalQuote: data.renewalQuote ?? "" });
+  }, "Ziele gespeichert.");
+}
+
+/** Vereinbarung aus dem Gespräch: wird ein Vorgang mit Frist beim Principal. */
+export async function addPrincipalAgreementAction(fd: FormData) {
+  const data = formToObject(fd);
+  const pid = data.principalUserId ?? "";
+  const back = `/meine-principals/${pid}?q=${encodeURIComponent(data.quarter ?? "")}#vereinbarungen`;
+  return run(back, async (actor) => {
+    const { addAgreement } = await import("@/modules/principals/service");
+    await addAgreement(actor, pid, data);
+  }, "Vereinbarung festgehalten – sie liegt als Vorgang mit Frist beim Principal.");
+}

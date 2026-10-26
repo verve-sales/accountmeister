@@ -12,10 +12,11 @@ export const ALL_LINKS: Record<string, NavLink> = {
   besetzung: { href: "/besetzung", label: "Besetzung" },
   eingang: { href: "/eingang", label: "Eingang" },
   ziele: { href: "/ziele", label: "Ziele" },
+  principals: { href: "/meine-principals", label: "Meine Principals" },
 };
 
 export const HAT_NAV: Record<DashboardView, string[]> = {
-  CEO: ["start", "ziele", "bds", "kunden", "einsaetze"],
+  CEO: ["start", "principals", "kunden", "einsaetze", "ziele"],
   PRINCIPAL: ["start", "bds", "kunden", "einsaetze"],
   BD: ["start", "arbeit", "kunden", "einsaetze", "eingang"],
   ANKER: ["start", "arbeit", "kunden", "eingang"],

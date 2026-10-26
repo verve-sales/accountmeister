@@ -28,6 +28,23 @@ Jede Karte zeigt die Textstelle als Beleg und wird mit einem Klick übernommen. 
 Ablehnen mit Grund lohnt sich: die zuletzt abgelehnten Vorschläge gehen als Hinweis an die KI. Eine schon importierte Mail wird beim erneuten Übernehmen neu ausgewertet; jede Quelle lässt sich über „Mit KI (neu) auswerten“ noch einmal durchlaufen.`,
   },
   {
+    id: "hut",
+    title: "Hut: in welcher Rolle arbeite ich gerade?",
+    where: "Kopfzeile → dein Name „als …“ ▾",
+    keywords: ["hut", "rolle", "sicht", "wechseln", "geschaeftsfuehrung", "principal", "bd", "coach", "navigation", "ueberladen"],
+    body: `Wer mehrere Rollen hat (z. B. Geschäftsführung, Principal und BD), arbeitet immer in einer: dem Hut. Er steht oben rechts neben deinem Namen und wird mit einem Klick gewechselt; gemerkt wird er je Person, auch auf anderen Geräten.
+Der Hut bestimmt die erste Reihe der Navigation (alles Weitere unter „Mehr“) und die Startseite – nicht deine Rechte. Die Arbeitsliste (Entscheidungen, Aufgaben, Vorschläge) ist immer persönlich: Verlängerungen der BDs erscheinen bei Principal und Geschäftsführung im Block „Bei deinen BDs im Blick“, nicht als eigene Entscheidung – außer sie wurden an dich weitergegeben.`,
+  },
+  {
+    id: "meine-principals",
+    title: "Meine Principals: Quartalsziele und Gespräch",
+    where: "Hut „Geschäftsführung“ → Meine Principals → Gespräch · Hut „Principal“ → Start → „Meine Ziele“",
+    keywords: ["principal", "ziele", "quartal", "koepfe", "neukunden", "verlaengerungsquote", "gespraech", "vereinbarung", "geschaeftsfuehrung", "stichtag"],
+    body: `Die Geschäftsführung setzt je Principal und Quartal drei Ziele: Köpfe je Kunde (Summe = Köpfe-Ziel des Principals), Neukunden und Verlängerungsquote in Prozent. Stichtag ist das Quartalsende; im laufenden Quartal zählt der Stand von heute. Kein Umsatz.
+Köpfe: verschiedene Personen mit laufendem Einsatz am Stichtag. Neukunde: der erste Einsatz beim Kunden beginnt im Quartal. Verlängerungsquote: im Quartal entschiedene Verlängerungen, bestätigt ÷ (bestätigt + nicht verlängert).
+Die Gesprächsseite folgt dem Ablauf Lage → Zahlen → offene Entscheidungen → Vereinbarungen. Jede Vereinbarung braucht eine Frist und landet als Vorgang beim Principal; offene und überfällige Vereinbarungen stehen in der Übersicht. Der Principal sieht seine Ziele und Vereinbarungen selbst, ändern kann sie nur die Geschäftsführung.`,
+  },
+  {
     id: "grundidee",
     title: "Worum es geht: Kunde, Setup, Chance, Wofür",
     where: "Kunden → Kunde → Setup → Chance",

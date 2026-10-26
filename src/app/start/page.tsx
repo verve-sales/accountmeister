@@ -34,6 +34,8 @@ import { listHints } from "@/modules/moco/sync";
 import { listVisibleAccounts } from "@/modules/accounts/service";
 import { listSetupsForAccount } from "@/modules/setups/service";
 import { db, schema } from "@/db/client";
+import { buildPrincipalOverview, myPrincipalSummary } from "@/modules/principals/service";
+import { TargetProgress } from "@/components/TargetProgress";
 import { eq } from "drizzle-orm";
 import { Aufgaben, Entscheidungen, Vorschlaege } from "@/components/Arbeitsliste";
 
@@ -148,6 +150,8 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   }
   // Principal/GF-Hut: erst „Bei deinen BDs im Blick“, dann die persönliche Arbeitsliste
   const leader = d.view === "PRINCIPAL" || d.view === "CEO";
+  const principalsQ = d.view === "CEO" ? await buildPrincipalOverview(actor).catch(() => null) : null;
+  const mine = d.view === "PRINCIPAL" ? await myPrincipalSummary(actor).catch(() => null) : null;
   const atRisk = healthAll.filter((h) => h.level === "GEFAEHRDET").sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
   const quiet = d.accounts.filter((c) => c.daysSinceActivity > 14).sort((a, b) => b.daysSinceActivity - a.daysSinceActivity);
   const kindLabel: Record<string, string> = { AKTION: "Aktion", UEBERGABE: "Übergabe", VORSCHLAG: "Vorschlag", UNTERSTUETZUNG: "Unterstützung", REVIEW: "Weekly", FRAGE: "Frage" };
@@ -225,13 +229,43 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         </section>
       )}
       {leader && !readOnly ? arbeitsliste : null}
-      {d.view === "CEO" && (
-        <section className="card" id="ziele" aria-label="Ziele">
+      {d.view === "CEO" && principalsQ && (
+        <section className="card" id="ziele" aria-label="Principals im Quartal">
           <div className="flex flex-wrap items-baseline gap-3">
-            <h2 className="font-semibold">Ziele ({d.goals.length})</h2>
-            <Link href="/ziele" className="text-sm ml-auto">Ziele & Portfolio</Link>
+            <h2 className="font-semibold">Principals {principalsQ.quarter.label}</h2>
+            <span className="muted text-xs">Köpfe · Neukunden · Verlängerungsquote gegen Ziel</span>
+            <Link href="/meine-principals" className="text-sm ml-auto">Meine Principals</Link>
           </div>
-          {d.goals.length === 0 ? <p className="muted text-sm mt-1">Keine laufenden Ziele.</p> : <ul className="space-y-1 text-sm mt-1">{d.goals.map((g, i) => <li key={i}><Link href={g.href}>{g.title}</Link> <Status label={goalStatusLabel[g.status] ?? g.status} /></li>)}</ul>}
+          {principalsQ.rows.length === 0 ? <p className="muted text-sm mt-1">Noch keine Principals zugeordnet.</p> : (
+            <table className="list text-sm mt-1">
+              <tbody>
+                {principalsQ.rows.map((r) => (
+                  <tr key={r.principal.userId}>
+                    <td><Link href={`/meine-principals/${r.principal.userId}`}><strong>{r.principal.name}</strong></Link></td>
+                    <td><TargetProgress actual={r.actuals.ref ? r.actuals.headsTotal : null} target={r.targets.headsTotal} /></td>
+                    <td><TargetProgress actual={r.actuals.ref ? r.actuals.newCustomers.length : null} target={r.targets.newCustomers} /></td>
+                    <td><TargetProgress actual={r.actuals.renewals.quote} target={r.targets.renewalQuote} unit=" %" /></td>
+                    <td className="text-xs">{r.overdueAgreements ? <span style={{ color: "#c0392b", fontWeight: 600 }}>{r.overdueAgreements} Vereinbarung(en) überfällig</span> : r.openAgreements ? `${r.openAgreements} Vereinbarung(en) offen` : null}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {d.goals.length > 0 && <p className="muted text-xs mt-2">Weitere Ziele: <Link href="/ziele">{d.goals.length} unter Ziele & Portfolio</Link></p>}
+        </section>
+      )}
+      {d.view === "PRINCIPAL" && mine && (
+        <section className="card" id="meine-ziele" aria-label="Meine Ziele">
+          <div className="flex flex-wrap items-baseline gap-3">
+            <h2 className="font-semibold">Meine Ziele {mine.quarter.label}</h2>
+            <Link href={`/meine-principals/${actor.userId}`} className="text-sm ml-auto">Details & Vereinbarungen</Link>
+          </div>
+          <div className="grid sm:grid-cols-4 gap-3 mt-2 text-sm">
+            <div><div className="muted text-xs">Köpfe</div><TargetProgress actual={mine.actuals.ref ? mine.actuals.headsTotal : null} target={mine.targets.headsTotal} /></div>
+            <div><div className="muted text-xs">Neukunden</div><TargetProgress actual={mine.actuals.ref ? mine.actuals.newCustomers.length : null} target={mine.targets.newCustomers} /></div>
+            <div><div className="muted text-xs">Verlängerungsquote</div><TargetProgress actual={mine.actuals.renewals.quote} target={mine.targets.renewalQuote} unit=" %" /></div>
+            <div><div className="muted text-xs">Vereinbarungen</div>{mine.openAgreements ? <span>{mine.openAgreements} offen{mine.overdueAgreements ? <span style={{ color: "#c0392b", fontWeight: 600 }}> · {mine.overdueAgreements} überfällig</span> : null}</span> : <span className="muted">keine offen</span>}</div>
+          </div>
         </section>
       )}
       {work.myTeams.length > 0 && (

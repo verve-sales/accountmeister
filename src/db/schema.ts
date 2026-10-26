@@ -2260,6 +2260,44 @@ export const checkins = pgTable(
 );
 
 /** Verlängerungsentscheidung je Einsatz (kein Einsatzstatus). */
+/**
+ * Ziele der Principals (Etappe 38, Use Case 7): die Geschäftsführung setzt je Principal und Quartal Köpfe je Kunde,
+ * Neukunden und Verlängerungsquote (Prozent). Stichtag ist das Quartalsende. Kein Umsatz.
+ */
+export const principalTargets = pgTable(
+  "principal_targets",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    principalUserId: text("principal_user_id").notNull().references(() => users.id),
+    quarter: text("quarter").notNull(), // z. B. 2026-Q4
+    metric: text("metric").notNull(), // KOEPFE (je Kunde) | NEUKUNDEN | VERLAENGERUNGSQUOTE
+    accountId: text("account_id").references(() => accounts.id), // nur bei KOEPFE
+    target: integer("target").notNull(),
+    setBy: text("set_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("principal_targets_idx").on(t.principalUserId, t.quarter)],
+);
+
+/** Vereinbarungen aus dem Gespräch GF ↔ Principal – jede wird ein Vorgang beim Principal. */
+export const principalAgreements = pgTable(
+  "principal_agreements",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    principalUserId: text("principal_user_id").notNull().references(() => users.id),
+    quarter: text("quarter").notNull(),
+    text: text("text").notNull(),
+    dueDate: date("due_date"),
+    workItemId: text("work_item_id").references(() => workItems.id),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("principal_agreements_idx").on(t.principalUserId, t.quarter)],
+);
+
 export const renewalDecisions = pgTable(
   "renewal_decisions",
   {
