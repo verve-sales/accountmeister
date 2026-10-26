@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { PendingButton } from "@/components/PendingButton";
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { listRunningEingang } from "@/modules/eingang/service";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -69,7 +72,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const staffing = getConfig().FEATURE_BESETZUNG === "true";
   const today = new Date().toISOString().slice(0, 10);
   const ai = getProviderStatus();
-  const [renewalCards, checkins, actions, handovers, support, suggestions, hints, users] = await Promise.all([
+  const [renewalCards, checkins, actions, handovers, support, suggestions, hints, eingangJobs, users] = await Promise.all([
     staffing ? listRenewalCards(actor).catch(() => []) : Promise.resolve([]),
     staffing ? listMyCheckins(actor).catch(() => []) : Promise.resolve([]),
     listMyOpenActions(actor).catch(() => []),
@@ -77,6 +80,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
     listMySupportRequests(actor).catch(() => []),
     ai.enabled ? listMySuggestions(actor).catch(() => []) : Promise.resolve([]),
     listHints(actor, { status: "OFFEN" }).catch(() => []),
+    ai.enabled ? listRunningEingang(actor).catch(() => ({ running: [], lastError: null })) : Promise.resolve({ running: [], lastError: null }),
     db.query.users.findMany({ where: eq(schema.users.status, "ACTIVE"), columns: { id: true, displayName: true } }),
   ]);
   const userNames = new Map(users.map((u) => [u.id, u.displayName]));
@@ -97,7 +101,20 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const teamRenewals = renewalCards.filter((c) => !c.forMe);
   const nDecide = myRenewals.filter((c) => c.mode === "ENTSCHEIDEN").length + openIncoming.length + support.filter((x) => x.isAddressee && x.status === "ANGEFRAGT").length + reviewItems.length;
   const nTasks = work.assigned.length + checkins.length + actions.length + myRenewals.filter((c) => c.mode === "ANSTOSSEN").length + support.filter((x) => x.isAddressee && x.status === "ANGENOMMEN").length;
-  const nSuggest = suggestions.length + hints.length;
+  const nSuggest = suggestions.length + hints.length + eingangJobs.running.length + (eingangJobs.lastError ? 1 : 0);
+  const eingangStatus = (eingangJobs.running.length > 0 || eingangJobs.lastError) && (
+    <div id="auswertung" className="text-sm">
+      {eingangJobs.running.length > 0 && (
+        <p className="card" style={{ borderLeft: "4px solid #2c5aa0" }}>
+          <strong>KI wertet aus …</strong> {eingangJobs.running.length === 1 ? "Eine Auswertung läuft" : `${eingangJobs.running.length} Auswertungen laufen`} seit {Math.max(1, Math.round((Date.now() - Math.min(...eingangJobs.running.map((j) => j.startedAt.getTime()))) / 1000))} s – die Karten erscheinen hier von selbst, bitte nicht erneut einspielen.
+          <AutoRefresh />
+        </p>
+      )}
+      {eingangJobs.lastError && eingangJobs.running.length === 0 && (
+        <p className="card" style={{ borderLeft: "4px solid #c0392b" }}><strong>Letzte Auswertung fehlgeschlagen</strong> ({agoLabel(Math.round((Date.now() - eingangJobs.lastError.at.getTime()) / 86400000))}): {eingangJobs.lastError.error}. Bitte noch einmal auswerten; bleibt es dabei, an die Verwaltung melden.</p>
+      )}
+    </div>
+  );
   const arbeitsliste =
     nDecide + nTasks + nSuggest === 0 ? (
       <section className="card text-sm" id="arbeitsliste">
@@ -107,7 +124,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <>
         {nDecide > 0 ? <Entscheidungen renewals={myRenewals} handovers={openIncoming} support={support} review={reviewItems} back={back} /> : null}
         {nTasks > 0 ? <Aufgaben work={work.assigned} checkins={checkins} actions={actions} renewals={myRenewals} support={support} back={back} today={today} /> : null}
-        {nSuggest > 0 ? <Vorschlaege suggestions={suggestions} hints={hints} userNames={userNames} users={users} back={back} aiEnabled={ai.enabled} /> : null}
+        {nSuggest > 0 ? <Vorschlaege suggestions={suggestions} hints={hints} userNames={userNames} users={users} back={back} aiEnabled={ai.enabled} status={eingangStatus || null} /> : null}
         {[nDecide ? null : "nichts zu entscheiden", nTasks ? null : "nichts fällig", nSuggest ? null : "keine offenen Vorschläge"].filter(Boolean).length > 0 && (
           <p className="muted text-sm">Außerdem: {[nDecide ? null : "nichts zu entscheiden", nTasks ? null : "nichts fällig", nSuggest ? null : "keine offenen Vorschläge"].filter(Boolean).join(" · ")}.</p>
         )}
@@ -129,7 +146,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             {quickSetups.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}
           </select>
         </div>
-        <button className="btn" type="submit">Einspielen</button>
+        <PendingButton busy="KI wertet aus …">Einspielen</PendingButton>
       </form>
     </section>
   );

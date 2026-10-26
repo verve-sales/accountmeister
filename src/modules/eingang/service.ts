@@ -650,3 +650,12 @@ async function applyPerson(actor: Actor, accountId: string, ctx: SetupContext | 
 export function eingangEnabled(): boolean {
   return getConfig().AI_PROVIDER !== "disabled";
 }
+
+/** Laufende und zuletzt gescheiterte Eingangs-Auswertungen der Person (Etappe 39) – für den Hinweis unter „Vorschläge“. */
+export async function listRunningEingang(actor: Actor): Promise<{ running: { id: string; startedAt: Date }[]; lastError: { at: Date; error: string } | null }> {
+  const since = new Date(Date.now() - 15 * 60_000);
+  const jobs = await db.query.aiJobs.findMany({ where: and(eq(schema.aiJobs.workspaceId, actor.workspaceId), eq(schema.aiJobs.actorUserId, actor.userId), eq(schema.aiJobs.type, "EINGANG")), orderBy: desc(schema.aiJobs.startedAt), limit: 10 });
+  const running = jobs.filter((j) => j.status === "GESTARTET" && j.startedAt >= since).map((j) => ({ id: j.id, startedAt: j.startedAt }));
+  const failed = jobs.find((j) => (j.status === "FEHLER" || j.status === "ABGELEHNT") && j.startedAt >= since && !jobs.some((k) => k.status === "ERFOLGREICH" && k.startedAt > j.startedAt));
+  return { running, lastError: failed ? { at: failed.startedAt, error: failed.error ?? "unbekannter Fehler" } : null };
+}

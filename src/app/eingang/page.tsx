@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PendingButton } from "@/components/PendingButton";
 import { redirect } from "next/navigation";
 import { schema } from "@/db/client";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -116,7 +117,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
             </div>
             <div><label className="label" htmlFor="impTime">Zeitpunkt des Gesprächs</label><input id="impTime" name="sourceTime" type="datetime-local" className="input" /></div>
             <div className="flex items-end"><label className="text-sm flex items-center gap-2"><input type="checkbox" name="structure" value="true" defaultChecked={ai.enabled} disabled={!ai.enabled} /> Nach Übernahme strukturieren (KI: {ai.enabled ? ai.model : "deaktiviert"})</label></div>
-            <div className="sm:col-span-2"><button className="btn" type="submit">Quelle übernehmen</button></div>
+            <div className="sm:col-span-2"><PendingButton busy="Wird übernommen …">Quelle übernehmen</PendingButton></div>
           </form>
         )}
         <p className="muted text-sm mt-2">Importprozess: Quelle wählen → Zielsetup → Umfang und Empfängerkreis → übernehmen → auswerten → Konflikte/Zuordnungen prüfen → bestätigen. Jeder Schritt wird protokolliert.</p>
@@ -158,7 +159,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
                                 <form action={reevaluateSourceAction} className="inline">
                                   <input type="hidden" name="sourceId" value={done.sourceId} />
                                   <input type="hidden" name="back" value="/start#vorschlaege" />
-                                  <button className="btn btn-small" type="submit">Mit KI (neu) auswerten</button>
+                                  <PendingButton className="btn btn-small" busy="KI wertet aus …">Mit KI (neu) auswerten</PendingButton>
                                 </form>
                               )}
                             </span>
@@ -169,7 +170,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
                               <select name="setupId" className="select" style={{ width: "15rem" }} required defaultValue="AUTO" aria-label="Zielsetup"><option value="AUTO">Kunde automatisch erkennen</option>{editableSetups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
                               <select name="accessClass" className="select" style={{ width: "10rem" }} defaultValue="PERSOENLICH" aria-label="Empfängerkreis">{schema.accessClassEnum.enumValues.map((v) => <option key={v} value={v}>{accessClassLabel[v]}</option>)}</select>
                               {it.kind === "CHAT" ? <input type="hidden" name="structure" value="true" /> : <label className="text-sm flex items-center gap-1"><input type="checkbox" name="structure" value="true" defaultChecked={ai.enabled} disabled={!ai.enabled} /> auswerten</label>}
-                              <button className="btn btn-small" type="submit">{it.kind === "CHAT" && done ? "Neue Nachrichten auswerten" : "Übernehmen"}</button>
+                              <PendingButton className="btn btn-small" busy="Wird übernommen …">{it.kind === "CHAT" && done ? "Neue Nachrichten auswerten" : "Übernehmen"}</PendingButton>
                               {it.kind === "CHAT" && done?.sourceId && <Link href={`/quellen/${done.sourceId}`} className="text-sm">(Quelle)</Link>}
                             </form>
                           )}

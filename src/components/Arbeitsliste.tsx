@@ -195,7 +195,7 @@ export function Aufgaben({ work, checkins, actions, renewals, support, back, tod
   );
 }
 
-export function Vorschlaege({ suggestions, hints, userNames, users, back, aiEnabled }: { suggestions: SuggestionItem[]; hints: HintItem[]; userNames: Map<string, string>; users: { id: string; displayName: string }[]; back: string; aiEnabled: boolean }) {
+export function Vorschlaege({ suggestions, hints, userNames, users, back, aiEnabled, status }: { suggestions: SuggestionItem[]; hints: HintItem[]; userNames: Map<string, string>; users: { id: string; displayName: string }[]; back: string; aiEnabled: boolean; status?: ReactNode }) {
   const items: ReactNode[] = [
     ...suggestions.map((x) => <li key={`v-${x.id}`}><SuggestionCard s={x} ownerName={x.proposedOwnerUserId ? userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide back={back} users={users} /></li>),
     ...hints.map((h) => (
@@ -210,7 +210,8 @@ export function Vorschlaege({ suggestions, hints, userNames, users, back, aiEnab
   return (
     <section id="vorschlaege" className="space-y-2">
       <h2 className="font-semibold">Vorschläge {items.length ? `(${items.length})` : ""}</h2>
-      {items.length === 0 ? <p className="muted text-sm">{aiEnabled ? "Keine offenen Vorschläge." : "KI-Anbieter ist aus – Vorschläge entstehen nur aus Regeln (Moco-Hinweise)."}</p> : <Fold items={items} label="Vorschläge" />}
+      {status}
+      {items.length === 0 && status ? null : items.length === 0 ? <p className="muted text-sm">{aiEnabled ? "Keine offenen Vorschläge." : "KI-Anbieter ist aus – Vorschläge entstehen nur aus Regeln (Moco-Hinweise)."}</p> : <Fold items={items} label="Vorschläge" />}
     </section>
   );
 }

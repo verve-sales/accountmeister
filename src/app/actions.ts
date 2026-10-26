@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { DomainError } from "@/lib/errors";
@@ -567,8 +568,7 @@ export async function importMailboxItemAction(fd: FormData) {
   const data = formToObject(fd);
   return run("/eingang", async (actor) => {
     if (data.structure === "true" || data.structure === "on" || data.kind === "CHAT") {
-      const r = await importMailboxItemSmart(actor, data);
-      throw new PendingInfo(eingangMessage(r, r.repeated ? `„${r.title}“ war schon importiert – neu ausgewertet` : `„${r.title}“ übernommen`));
+      return withBudget(importMailboxItemSmart(actor, data), (r) => eingangMessage(r, r.repeated ? `„${r.title}“ war schon importiert – neu ausgewertet` : `„${r.title}“ übernommen`));
     }
     const r = await importMailboxItem(actor, data);
     if (r.repeated) throw new PendingInfo("Dieses Objekt war bereits importiert – kein zweiter Import.");
@@ -902,12 +902,32 @@ function eingangMessage(r: { created: number; rejected: number; accountName: str
 }
 
 /** „Was gibt es Neues?“ (Etappe 36): Kunde/Setup automatisch erkennen oder gewähltes Setup, Karten erzeugen. */
+
+/**
+ * Eingangs-Auswertung mit Zeitbudget (Etappe 39): Antwortet die KI nicht innerhalb weniger Sekunden, läuft die Auswertung
+ * im Hintergrund weiter (after), die Seite antwortet sofort und zeigt den Lauf unter „Vorschläge“ an – statt eines Knopfes,
+ * der minutenlang scheinbar nichts tut.
+ */
+const EINGANG_BUDGET_MS = 8_000;
+async function withBudget<T>(work: Promise<T>, onDone: (r: T) => string): Promise<never> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<"timeout">((res) => { timer = setTimeout(() => res("timeout"), EINGANG_BUDGET_MS); });
+  const quiet = work.then((r) => ({ r }), (e: unknown) => ({ e }));
+  const first = await Promise.race([quiet, timeout]);
+  if (timer) clearTimeout(timer);
+  if (first === "timeout") {
+    after(async () => { const done = await quiet; if ("e" in done) console.error("Eingang im Hintergrund:", done.e); });
+    throw new PendingInfo("Die KI wertet noch aus – das dauert bei langen Mails bis zu zwei Minuten. Die Karten erscheinen unter „Vorschläge“, sobald sie fertig sind; die Seite aktualisiert sich von selbst.");
+  }
+  if ("e" in first) throw first.e;
+  throw new PendingInfo(onDone(first.r));
+}
+
 export async function eingangAction(fd: FormData) {
   const data = formToObject(fd);
   const back = backOf(data, "/start#vorschlaege");
   return run(back, async (actor) => {
-    const r = await eingangFromText(actor, data);
-    throw new PendingInfo(eingangMessage(r, "Eingespielt"));
+    return withBudget(eingangFromText(actor, data), (r) => eingangMessage(r, "Eingespielt"));
   }, "");
 }
 
@@ -916,8 +936,7 @@ export async function reevaluateSourceAction(fd: FormData) {
   const data = formToObject(fd);
   const back = backOf(data, "/start#vorschlaege");
   return run(back, async (actor) => {
-    const r = await eingangFromSource(actor, data.sourceId ?? "", { autoRoute: data.auto === "true" });
-    throw new PendingInfo(eingangMessage(r, "Neu ausgewertet"));
+    return withBudget(eingangFromSource(actor, data.sourceId ?? "", { autoRoute: data.auto === "true" }), (r) => eingangMessage(r, "Neu ausgewertet"));
   }, "");
 }
 

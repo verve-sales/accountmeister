@@ -9,7 +9,7 @@ import { createOpportunity } from "@/modules/opportunities/service";
 import { createAction } from "@/modules/actions/service";
 import { quickFill } from "@/modules/staffing/service";
 import { ensureRenewalDecisions } from "@/modules/engagements/care";
-import { eingangFromSource, eingangFromText, routeText } from "@/modules/eingang/service";
+import { eingangFromSource, eingangFromText, listRunningEingang, routeText } from "@/modules/eingang/service";
 import { acceptSuggestion, listMySuggestions } from "@/modules/suggestions/service";
 import { loadActor } from "@/modules/identity/actor";
 import { parseRelativeDue, plusDaysIso, todayIso } from "@/modules/work/calendar";
@@ -168,5 +168,23 @@ describe("Etappe 36: Eingangs-Auswertung – Kunde erkennen, Karten mit Bezug au
     expect(ren.objectId).toBe(q.engagement.id);
     expect(ren.title).toBe("Verlängerung: Lena Lindqvist bis 30.06.2027");
   });
-});
 
+  it("E05: Laufende und gescheiterte Eingangs-Auswertungen sind sichtbar (Hintergrundlauf, Etappe 39)", async () => {
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const base = { workspaceId: s.workspaceId, type: "EINGANG", actorUserId: david.userId, provider: "test", model: "t", promptVersion: "intake.v1", inputHash: "x", inputChars: 1 };
+    const [running] = await db.insert(schema.aiJobs).values({ ...base, dedupeKey: `run-${Date.now()}`, status: "GESTARTET" }).returning();
+    let st = await listRunningEingang(david);
+    expect(st.running.some((j) => j.id === running!.id)).toBe(true);
+    // Fehler nach dem Lauf: sichtbar, bis eine spätere Auswertung gelingt
+    await db.update(schema.aiJobs).set({ status: "ABGELEHNT", error: "Anbieter antwortet nicht" }).where(eq(schema.aiJobs.id, running!.id));
+    st = await listRunningEingang(david);
+    expect(st.running.some((j) => j.id === running!.id)).toBe(false);
+    expect(st.lastError?.error).toBe("Anbieter antwortet nicht");
+    await db.insert(schema.aiJobs).values({ ...base, dedupeKey: `ok-${Date.now()}`, status: "ERFOLGREICH", startedAt: new Date(Date.now() + 1000) });
+    st = await listRunningEingang(david);
+    expect(st.lastError).toBeNull();
+    // ein anderer Nutzer sieht nichts davon
+    expect((await listRunningEingang(await actorFor("nina"))).running.some((j) => j.id === running!.id)).toBe(false);
+  });
+});

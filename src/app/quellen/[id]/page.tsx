@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PendingButton } from "@/components/PendingButton";
 import { notFound, redirect } from "next/navigation";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -45,7 +46,7 @@ export default async function QuellePage({ params, searchParams }: { params: Pro
             <input type="hidden" name="sourceId" value={q.source.id} />
             <input type="hidden" name="back" value="/start#vorschlaege" />
             {!q.setup && <input type="hidden" name="auto" value="true" />}
-            <button className="btn" type="submit">Mit KI (neu) auswerten</button>
+            <PendingButton busy="KI wertet aus …">Mit KI (neu) auswerten</PendingButton>
             <span className="muted text-sm">Erkennt Kunde, Personen mit Funktion, Chancen, Verlängerungen, Aufgaben und Erledigtes – die Karten erscheinen auf Start unter „Vorschläge“.</span>
           </form>
         )}
