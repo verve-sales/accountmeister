@@ -43,6 +43,10 @@ import { eq } from "drizzle-orm";
 import { Aufgaben, Entscheidungen, Vorschlaege } from "@/components/Arbeitsliste";
 
 const DASHBOARD_VIEW_COOKIE = "am_sicht";
+/** Sekunden seit einem Zeitpunkt (für Laufzeit-Hinweise; außerhalb der Komponente, damit das Rendern rein bleibt). */
+function secondsSince(ms: number): number {
+  return Math.max(1, Math.round((Date.now() - ms) / 1000));
+}
 /** So viele Kunden mit dem größten Aufmerksamkeitsbedarf werden ausführlich gezeigt. */
 const FOCUS = 5;
 
@@ -106,12 +110,12 @@ export default async function StartPage({ searchParams }: { searchParams: Search
     <div id="auswertung" className="text-sm">
       {eingangJobs.running.length > 0 && (
         <p className="card" style={{ borderLeft: "4px solid #2c5aa0" }}>
-          <strong>KI wertet aus …</strong> {eingangJobs.running.length === 1 ? "Eine Auswertung läuft" : `${eingangJobs.running.length} Auswertungen laufen`} seit {Math.max(1, Math.round((Date.now() - Math.min(...eingangJobs.running.map((j) => j.startedAt.getTime()))) / 1000))} s – die Karten erscheinen hier von selbst, bitte nicht erneut einspielen.
+          <strong>KI wertet aus …</strong> {eingangJobs.running.length === 1 ? "Eine Auswertung läuft" : `${eingangJobs.running.length} Auswertungen laufen`} seit {secondsSince(Math.min(...eingangJobs.running.map((j) => j.startedAt.getTime())))} s – die Karten erscheinen hier von selbst, bitte nicht erneut einspielen.
           <AutoRefresh />
         </p>
       )}
       {eingangJobs.lastError && eingangJobs.running.length === 0 && (
-        <p className="card" style={{ borderLeft: "4px solid #c0392b" }}><strong>Letzte Auswertung fehlgeschlagen</strong> ({agoLabel(Math.round((Date.now() - eingangJobs.lastError.at.getTime()) / 86400000))}): {eingangJobs.lastError.error}. Bitte noch einmal auswerten; bleibt es dabei, an die Verwaltung melden.</p>
+        <p className="card" style={{ borderLeft: "4px solid #c0392b" }}><strong>Letzte Auswertung fehlgeschlagen</strong> ({agoLabel(Math.round(secondsSince(eingangJobs.lastError.at.getTime()) / 86400))}): {eingangJobs.lastError.error}. Bitte noch einmal auswerten; bleibt es dabei, an die Verwaltung melden.</p>
       )}
     </div>
   );

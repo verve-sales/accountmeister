@@ -9,6 +9,9 @@ import { eingangFromText } from "@/modules/eingang/service";
 import { acceptSuggestion, listCardsByInitiative, listMySuggestions } from "@/modules/suggestions/service";
 import type { IntakeItem } from "@/modules/ai/schemas";
 import { loadActor } from "@/modules/identity/actor";
+import { createWorkItem, listWorkForSubject } from "@/modules/work/service";
+import { resolveSubject } from "@/modules/work/subjects";
+import { NotFoundError } from "@/lib/errors";
 import { actorFor, ensureSeed } from "./helpers";
 
 describe("Etappe 43: KI-Vorschläge an der Schlüssel-Initiative", () => {
@@ -39,5 +42,21 @@ describe("Etappe 43: KI-Vorschläge an der Schlüssel-Initiative", () => {
     expect(opp.initiativeId).toBe(ini.id);
     // Fremde sehen die Karten an der Initiative nicht
     expect(Object.keys(await listCardsByInitiative(await actorFor("lars"), acc.id).catch(() => ({})))).toHaveLength(0);
+  });
+
+  it("I02: Vorgänge hängen an der Schlüssel-Initiative; sichtbar nur für die, die den Kunden sehen", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    await ensureSeed();
+    const d0 = await actorFor("david");
+    const acc = await createAccount(d0, { name: `Vorgangsbank ${Date.now().toString(36)} (fiktiv)`, orgType: "KONZERN", responsibleBdUserId: d0.userId });
+    const david = (await loadActor(d0.userId))!;
+    const ini = await createInitiative(david, { accountId: acc.id, kind: "INITIATIVE", title: "Cloud-Migration 2027" });
+    const subj = await resolveSubject(david, "INITIATIVE", ini.id);
+    expect(subj.link).toBe(`/kunden/${acc.id}/initiativen/${ini.id}`);
+    expect(subj.accountId).toBe(acc.id);
+    const w = await createWorkItem(david, { title: "Zielbild der Migration klären", subjectType: "INITIATIVE", subjectId: ini.id, target: "me" });
+    expect((await listWorkForSubject(david, "INITIATIVE", ini.id)).open.map((x) => x.id)).toContain(w.id);
+    await expect(resolveSubject(await actorFor("lars"), "INITIATIVE", ini.id)).rejects.toBeInstanceOf(NotFoundError);
   });
 });

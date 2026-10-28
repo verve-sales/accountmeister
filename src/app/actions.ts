@@ -710,6 +710,11 @@ export async function createOpportunityAction(fd: FormData) {
   const data = formToObject(fd);
   return run(data.back ?? `/setups/${data.setupId}`, async (actor) => {
     const o = await createOpportunity(actor, data);
+    // aus einer Schlüssel-Initiative heraus angelegt (Etappe 44): gleich zuordnen und dort bleiben
+    if (data.initiativeId) {
+      await linkChanceToInitiative(actor, o.id, data.initiativeId);
+      if (data.back) return data.back;
+    }
     return `/bedarfe/${o.id}`;
   }, "Chance angelegt.");
 }

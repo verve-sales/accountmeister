@@ -85,7 +85,7 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
         {!["PERSON", "VERLAENGERUNG", "CHANCE_STATUS", "ERLEDIGT", "STIMMUNG"].includes(item.type) && s.observation && s.observation !== s.evidenceQuote && <p>{s.observation}</p>}
         {resolved.dueDate ? <p>Frist: <strong>{fmtDate(resolved.dueDate)}</strong></p> : item.type === "AKTION" && item.dueHint ? <p>Frist laut Text: {item.dueHint}</p> : null}
         {opp && item.type !== "CHANCE_STATUS" ? <p className="muted">Wofür: <Link href={`/bedarfe/${opp.id}`}>{opp.title}</Link></p> : null}
-        {initiative ? <p><span className="status">Initiative</span> <Link href={`/kunden/${initiative.accountId}#agenda`}>{initiative.title}</Link></p> : null}
+        {initiative ? <p><span className="status">Initiative</span> <Link href={`/kunden/${initiative.accountId}/initiativen/${initiative.id}`}>{initiative.title}</Link></p> : null}
         <p className="muted">Beleg: „{s.evidenceQuote.length > 260 ? `${s.evidenceQuote.slice(0, 260)} …` : s.evidenceQuote}“</p>
       </div>
       {open && canDecide && showRoute && (

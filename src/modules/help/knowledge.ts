@@ -45,6 +45,14 @@ Köpfe: verschiedene Personen mit laufendem Einsatz am Stichtag. Neukunde: der e
 Die Gesprächsseite folgt dem Ablauf Lage → Zahlen → offene Entscheidungen → Vereinbarungen. Jede Vereinbarung braucht eine Frist und landet als Vorgang beim Principal; offene und überfällige Vereinbarungen stehen in der Übersicht. Der Principal sieht seine Ziele und Vereinbarungen selbst, ändern kann sie nur die Geschäftsführung.`,
   },
   {
+    id: "kundenansicht",
+    title: "Kundenansicht: Grundlagen, Strategie, Operativ",
+    where: "Kunden → Kunde → Reiter 1 Grundlagen · 2 Strategie · 3 Operativ",
+    keywords: ["kunde", "kundenansicht", "bucket", "grundlagen", "strategie", "operativ", "initiative", "schluesselinitiative", "health", "agenda", "sos", "beschaffung"],
+    body: `Die Kundenansicht hat drei Reiter. 1 Grundlagen: Health-Check (Ampel), Kundenagenda mit Prioritäten und Herausforderungen, laufende Standard-Vorgehen. 2 Strategie: die Schlüssel-Initiativen des Kunden – je Initiative die Zahl der Chancen, offenen Vorgänge und KI-Vorschläge; Chancen ohne Initiative lassen sich dort zuordnen, KI-Vorschläge ohne Initiativen-Bezug stehen darunter. 3 Operativ: Ansprechpartner, SOS-Protokolle, Einkauf und Beschaffung, Vorgänge am Kunden, Zuständigkeit, Setups, Kennungen für den Eingang, öffentliche Informationen.
+Ein Klick auf eine Schlüssel-Initiative öffnet sie: KI-Vorschläge dazu, die Chancen, die darauf einzahlen (bestehende zuordnen oder neue anlegen), offene Vorgänge an diesen Chancen und Vorgänge zur Initiative selbst. Ein offenes SOS wird auf jedem Reiter oben angezeigt.`,
+  },
+  {
     id: "begriffe",
     title: "Begriffe: Kunde, Setup, Chance, Aktion, Vorgang",
     where: "überall – das „?“ neben einem Begriff erklärt ihn",

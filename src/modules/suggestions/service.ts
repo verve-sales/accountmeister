@@ -668,10 +668,10 @@ async function acceptPersonSuggestion(actor: Actor, s: SuggestionRow, ctx: Setup
   return { personId: hit.id, message: `${hit.displayName.replace(/\(.*?\)/g, "").trim()} ergänzt${role ? `: ${role}` : ""}${unit ? ` (${unit})` : ""}.` };
 }
 
-/** Offene KI-Karten je Kunden-Initiative (Etappe 43) – für die Kundenagenda; nur, was die Person entscheiden darf. */
+/** Offene KI-Karten je Kunden-Initiative (Etappe 43) – für die Kundenagenda; nur, was die Person entscheiden darf. Ohne Initiative: Schlüssel „_ohne“ (nur Eingangskarten). */
 export async function listCardsByInitiative(actor: Actor, accountId: string): Promise<Record<string, (typeof schema.suggestions.$inferSelect)[]>> {
   const rows = await db.query.suggestions.findMany({
-    where: and(eq(schema.suggestions.workspaceId, actor.workspaceId), eq(schema.suggestions.accountId, accountId), isNotNull(schema.suggestions.initiativeId), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT", "ZURUECKGESTELLT"])),
+    where: and(eq(schema.suggestions.workspaceId, actor.workspaceId), eq(schema.suggestions.accountId, accountId), or(isNotNull(schema.suggestions.initiativeId), eq(schema.suggestions.type, "KARTE")), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT", "ZURUECKGESTELLT"])),
     orderBy: desc(schema.suggestions.computedAt),
   });
   const out: Record<string, (typeof rows)[number][]> = {};
@@ -686,7 +686,7 @@ export async function listCardsByInitiative(actor: Actor, accountId: string): Pr
       }
       ok = cache.get(r.setupId)!;
     }
-    if (ok) (out[r.initiativeId!] ??= []).push(r);
+    if (ok) (out[r.initiativeId ?? "_ohne"] ??= []).push(r);
   }
   return out;
 }

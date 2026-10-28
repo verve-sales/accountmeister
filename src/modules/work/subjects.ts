@@ -10,9 +10,9 @@ import { getAccount } from "@/modules/accounts/service";
  * wer den Kunden/das Setup/die Chance nicht sehen darf, sieht auch Kommentare und Vorgänge daran nicht (Ausnahme:
  * direkt Beteiligte eines Vorgangs, siehe work/service).
  */
-export const subjectTypeValues = ["KUNDE", "SETUP", "CHANCE", "SOS", "POSITION", "EINSATZ", "OHNE"] as const;
+export const subjectTypeValues = ["KUNDE", "SETUP", "CHANCE", "SOS", "POSITION", "EINSATZ", "INITIATIVE", "OHNE"] as const;
 export type SubjectType = (typeof subjectTypeValues)[number];
-export const subjectTypeLabel: Record<string, string> = { KUNDE: "Kunde", SETUP: "Setup", CHANCE: "Chance", SOS: "SOS", POSITION: "Position", EINSATZ: "Einsatz", OHNE: "ohne Bezug", VORGANG: "Vorgang" };
+export const subjectTypeLabel: Record<string, string> = { KUNDE: "Kunde", SETUP: "Setup", CHANCE: "Chance", SOS: "SOS", POSITION: "Position", EINSATZ: "Einsatz", INITIATIVE: "Initiative", OHNE: "ohne Bezug", VORGANG: "Vorgang" };
 
 export type ResolvedSubject = { type: SubjectType; id: string | null; accountId: string | null; label: string; link: string | null };
 
@@ -51,6 +51,13 @@ export async function resolveSubject(actor: Actor, type: string, id: string | nu
       const { requireEngagement } = await import("@/modules/engagements/authz");
       const a = await requireEngagement(actor, id);
       return { type, id, accountId: a.engagement.accountId, label: `${a.account.name} · Einsatz: ${a.engagement.title}`, link: `/einsaetze/${id}` };
+    }
+    case "INITIATIVE": {
+      // Schlüssel-Initiative der Kundenagenda (Etappe 44): sichtbar für alle, die den Kunden sehen
+      const ini = await db.query.accountInitiatives.findFirst({ where: and(eq(schema.accountInitiatives.id, id), eq(schema.accountInitiatives.workspaceId, actor.workspaceId)) });
+      if (!ini) throw new NotFoundError("Initiative");
+      const a = await getAccount(actor, ini.accountId);
+      return { type, id, accountId: a.id, label: `${a.name} · Initiative: ${ini.title}`, link: `/kunden/${a.id}/initiativen/${id}` };
     }
     default:
       throw new ValidationError("Unbekannter Bezug.");

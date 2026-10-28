@@ -11,24 +11,23 @@ import { ChancenUebersicht } from "@/components/ChancenUebersicht";
 import { topCandidatesForOpportunities } from "@/modules/staffing/service";
 import { canDeleteAccount } from "@/modules/accounts/deletion";
 import { DomainError } from "@/lib/errors";
-import { Feedback, type SearchParams } from "@/components/Feedback";
+import { Feedback } from "@/components/Feedback";
+import { EingangCard } from "@/components/EingangCard";
 import { Status } from "@/components/Status";
 import { orgTypeLabel } from "@/lib/labels";
 import { hasRoleForAccountWrite } from "@/modules/identity/authz";
 import { accountStatusLabel, fmtDate, setupStatusLabel, visibilityLabel, contributionLabel, opportunityStatusLabel } from "@/lib/labels";
-import { createSetupAction, setAccountKeysAction, setAccountOrgTypeAction } from "../../actions";
+import { createInitiativeAction, createSetupAction, linkChanceInitiativeAction, setAccountKeysAction, setAccountOrgTypeAction } from "../../actions";
 import { suggestedDomains } from "@/modules/accounts/keys";
 import { listCardsByInitiative } from "@/modules/suggestions/service";
 import { listPeopleForAccount } from "@/modules/people/service";
 import { relationshipStateLabel, priorityKindLabel, priorityStatusLabel } from "@/lib/labels";
 import { buildAccountPlan, canEditAccountPlan, listAccountPlanSnapshots } from "@/modules/accountplan/service";
 import { AccountPlanView } from "@/components/AccountPlanView";
-import { chanceKindLabel } from "@/modules/ai/schemas";
-import { listRoles } from "@/modules/roles/catalog";
 import { SuggestButton } from "@/components/SuggestButton";
 import { changePriorityAction, createPriorityAction, reassignAccountBdAction, refreshCompanyResearchAction, saveAccountPlanSnapshotAction, setAccountDormantAction } from "../../actions";
 import { db, schema } from "@/db/client";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getCompanyResearch, type CompanyFact } from "@/modules/research/service";
 import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
@@ -42,7 +41,9 @@ import { Comments, WorkBlock } from "@/components/Work";
 import { Beschaffungsprofil } from "@/components/Beschaffungsprofil";
 import { getConfig } from "@/lib/config";
 
-export default async function KundePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
+type Bucket = "grundlagen" | "strategie" | "operativ";
+
+export default async function KundePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; b?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const actor = await getCurrentActor();
@@ -57,10 +58,8 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const setups = await listSetupsForAccount(actor, id);
   const opportunities = await listOpportunitiesForAccount(actor, id);
   const people = await listPeopleForAccount(actor, id);
-  const roleNames = new Map((await listRoles(actor.workspaceId, { includeInactive: true })).map((r) => [r.id, r.name]));
   const [plan, snapshots, mayEditPlan] = await Promise.all([buildAccountPlan(actor, id), listAccountPlanSnapshots(actor, id), canEditAccountPlan(actor, id)]);
   const research = await getCompanyResearch(actor, id);
-  const back = `/kunden/${id}`;
   const mayCreate = canCreateSetup(actor, account);
   const mayDelete = canDeleteAccount(actor, account);
   const mayReassign = canReassignResponsibility(actor, account);
@@ -94,13 +93,32 @@ export default async function KundePage({ params, searchParams }: { params: Prom
     ? (bdUsers.find((u) => u.id === account.responsibleBdUserId)?.displayName ?? (await db.query.users.findFirst({ where: eq(schema.users.id, account.responsibleBdUserId) }))?.displayName ?? "?")
     : null;
 
+  // Kundenansicht in drei Buckets (Etappe 44): Grundlagen · Strategie · Operativ – nur der gewählte wird gezeigt
+  const bucket: Bucket = sp.b === "strategie" || sp.b === "operativ" ? sp.b : "grundlagen";
+  const back = `/kunden/${id}?b=${bucket}`;
+  const keyInitiatives = initiatives.filter((i) => i.kind === "INITIATIVE" && i.status === "OFFEN");
+  const cardsByIni = ro ? {} : await listCardsByInitiative(actor, account.id).catch(() => ({} as Record<string, never[]>));
+  const cardCount = (iid: string) => (cardsByIni as Record<string, unknown[]>)[iid]?.length ?? 0;
+  const iniCards = keyInitiatives.reduce((n, i) => n + cardCount(i.id), 0);
+  const otherCards = (cardsByIni as Record<string, (typeof schema.suggestions.$inferSelect)[]>)["_ohne"] ?? [];
+  const iniWork = keyInitiatives.length ? await db.query.workItems.findMany({ where: and(eq(schema.workItems.subjectType, "INITIATIVE"), inArray(schema.workItems.subjectId, keyInitiatives.map((i) => i.id))), columns: { subjectId: true, status: true } }) : [];
+  const openWork = (iid: string) => iniWork.filter((w) => w.subjectId === iid && !["ERLEDIGT", "VERWORFEN", "ABGELEHNT"].includes(w.status)).length;
+  const unassignedChances = opportunities.filter((o) => !o.initiativeId && !["BEENDET", "BEAUFTRAGT"].includes(o.status));
+  const openSos = sosList.filter((x) => x.status !== "GELOEST");
+  const tabs: { key: Bucket; label: string; hint: string }[] = [
+    { key: "grundlagen", label: "1 Grundlagen", hint: `Health-Check, Kundenagenda, laufende Vorgehen` },
+    { key: "strategie", label: "2 Strategie", hint: `${keyInitiatives.length} Schlüssel-Initiative(n)${iniCards + otherCards.length ? ` · ${iniCards + otherCards.length} KI-Vorschläge` : ""}` },
+    { key: "operativ", label: "3 Operativ", hint: `${people.length} Personen${openSos.length ? ` · ${openSos.length} SOS offen` : ""} · Beschaffung, Setups` },
+  ];
+
   return (
     <div className="space-y-6">
       <p className="text-sm"><Link href="/kunden">Kunden</Link> › {account.name}</p>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">{account.name}</h1>
+        {health && <Link href={`/kunden/${account.id}?b=grundlagen`} className="no-underline" title="Health-Check"><HealthBadge score={health.score} level={health.level} coverage={health.coverage} /></Link>}
         {account.status === "ARCHIVED" && <Status label={accountStatusLabel.ARCHIVED!} />}
-        <span className="muted text-sm">{orgTypeLabel[account.orgType] ?? account.orgType}</span>
+        <span className="muted text-sm">{orgTypeLabel[account.orgType] ?? account.orgType}{currentBdName ? ` · BD ${currentBdName}` : ""}</span>
         {mayDelete && <Link href={`/kunden/${account.id}/loeschen`} className="muted text-sm ml-auto">Kunde archivieren oder löschen</Link>}
       </div>
       {account.orgType === "SONSTIGE" && !ro && (hasRoleForAccountWrite(actor, account) || actor.roles.has("CEO")) && (
@@ -115,37 +133,23 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         </form>
       )}
       {account.status === "ARCHIVED" && <p className="text-sm" style={{ background: "#fdf6ec", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ist archiviert. Alles bleibt erhalten; <Link href={`/kunden/${account.id}/loeschen`}>wiederherstellen oder endgültig löschen</Link>.</p>}
-      <details id="kennungen" className="text-sm" open={mayKeys && account.mailDomains.length === 0 && domainSuggestions.length > 0}>
-        <summary style={{ cursor: "pointer" }}>
-          Kennungen für den Eingang:{" "}
-          {account.mailDomains.length + account.aliases.length > 0 ? <strong>{[...account.mailDomains, ...account.aliases.map((a) => `„${a}“`)].join(", ")}</strong> : <span style={{ color: "#b7791f" }}>noch keine – Mails werden nur über Namen erkannt</span>}
-        </summary>
-        <p className="muted text-xs mt-1">Trifft eine Kennung, ordnet der Eingang Mails und Notizen eindeutig diesem Kunden zu – die KI kann das nicht überstimmen. Mail-Domäne: alles nach dem @ (Subdomänen inklusive). Kürzel: Namen, unter denen der Kunde in Mails auftaucht (z. B. „TFS“).</p>
-        {mayKeys ? (
-          <form action={setAccountKeysAction} className="flex flex-wrap gap-2 items-end mt-2">
-            <input type="hidden" name="accountId" value={account.id} />
-            <div><label className="label" htmlFor="kDomains">Mail-Domänen</label><input id="kDomains" name="domains" className="input" style={{ width: "20rem" }} defaultValue={(account.mailDomains.length ? account.mailDomains : domainSuggestions).join(", ")} placeholder="kunde.de, kunde-gruppe.com" /></div>
-            <div><label className="label" htmlFor="kAliases">Kürzel</label><input id="kAliases" name="aliases" className="input" style={{ width: "16rem" }} defaultValue={account.aliases.join(", ")} placeholder="z. B. TFS, Toyota Bank" /></div>
-            <button className="btn btn-small" type="submit">Speichern</button>
-            {account.mailDomains.length === 0 && domainSuggestions.length > 0 && <span className="muted text-xs">Vorbelegt aus den E-Mail-Adressen bekannter Personen – bitte prüfen.</span>}
-          </form>
-        ) : null}
-      </details>
-      <section className="card">
-        <h2 className="font-semibold mb-2">Wo stehen wir? – je Chance<Term k="CHANCE" /></h2>
-        <ChancenUebersicht chances={chanceRows} showSetup={setups.length > 1} emptyText="Noch keine Chance benannt. Worauf läuft es bei diesem Kunden hinaus? Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten." back={`/kunden/${id}`} />
-        {runs.filter((r) => r.status === "AKTIV").map((r) => {
-          const cur = r.steps.find((x) => x.status === "OFFEN");
-          return cur ? <p key={r.id} className="text-sm mt-2">Laufendes Vorgehen <a href="#vorgehen">{r.playbookName}</a> ({r.setupName}): Schritt {cur.position}/{r.steps.length} – {cur.title}</p> : null;
-        })}
-        <p className="muted text-xs mt-2">Jede Chance hat ihren eigenen Stand. Wie sicher wir beim Kunden insgesamt stehen, zeigt der Health-Check.</p>
-      </section>
+      {openSos.length > 0 && bucket !== "operativ" && (
+        <p className="text-sm p-2" style={{ borderLeft: "4px solid #c0392b", background: "var(--surface-2)", borderRadius: 6 }}>
+          <strong>SOS offen:</strong> {openSos.map((x) => x.title).join(" · ")} – <Link href={`/kunden/${account.id}?b=operativ#sos`}>zum SOS-Protokoll</Link>
+        </p>
+      )}
+      <nav aria-label="Bereiche der Kundenansicht" className="flex flex-wrap gap-2 border-b" style={{ borderColor: "var(--border)" }}>
+        {tabs.map((t) => (
+          <Link key={t.key} href={`/kunden/${account.id}?b=${t.key}`} aria-current={bucket === t.key ? "page" : undefined} className="no-underline px-3 py-2 text-sm" style={{ borderBottom: bucket === t.key ? "3px solid var(--accent, #1f4e79)" : "3px solid transparent", color: "var(--text)", fontWeight: bucket === t.key ? 600 : 400 }}>
+            {t.label}
+            <span className="muted text-xs block" style={{ fontWeight: 400 }}>{t.hint}</span>
+          </Link>
+        ))}
+      </nav>
       <Feedback params={sp} />
 
-      {sosList.some((x) => x.status !== "GELOEST") && <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} />}
-      <KundenAgenda accountId={account.id} initiatives={initiatives} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} cards={ro ? {} : await listCardsByInitiative(actor, account.id).catch(() => ({}))} />
-      <WorkBlock actor={actor} subjectType="KUNDE" subjectId={account.id} back={back} canCreate={account.status !== "ARCHIVED"} />
-
+      {bucket === "grundlagen" && (
+        <>
       {health && (
         <section className="card">
           <div className="flex flex-wrap items-baseline gap-3 mb-1">
@@ -160,127 +164,106 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         </section>
       )}
 
-      {mayReassign && (
-        <section className="card">
-          <h2 className="font-semibold mb-2">Zuständigkeit</h2>
-          <p className="text-sm mb-2">Zuständiger BD: {currentBdName ?? <span className="muted">Zuordnung offen</span>}</p>
-          <form action={reassignAccountBdAction} className="flex flex-wrap items-end gap-2">
-            <input type="hidden" name="accountId" value={account.id} />
-            <input type="hidden" name="version" value={account.version} />
-            <div>
-              <label className="label" htmlFor="reassignBd">Zuständigen BD umstellen</label>
-              <select id="reassignBd" name="responsibleBdUserId" className="select" required defaultValue="">
-                <option value="" disabled>Bitte wählen …</option>
-                {bdUsers.filter((u) => u.id !== account.responsibleBdUserId).map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
-              </select>
-            </div>
-            <button className="btn btn-secondary" type="submit">Umstellen</button>
-          </form>
-          <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD können Sie die Kundenzuständigkeit jederzeit umstellen – unabhängig von der ursprünglichen Zuordnung.</p>
-          {account.status !== "ARCHIVED" && (
-            <form action={setAccountDormantAction} className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-              <input type="hidden" name="accountId" value={account.id} />
-              <input type="hidden" name="dormant" value={account.status === "DORMANT" ? "false" : "true"} />
-              <span className="muted">Status: {accountStatusLabel[account.status] ?? account.status}.</span>
-              <button className="btn btn-secondary btn-small" type="submit">{account.status === "DORMANT" ? "Wieder als aktiv führen" : "Als ruhend markieren"}</button>
-            </form>
-          )}
-        </section>
+          <KundenAgenda accountId={account.id} initiatives={initiatives} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} cards={cardsByIni as Record<string, (typeof schema.suggestions.$inferSelect)[]>} kinds={["PRIORITAET", "HERAUSFORDERUNG"]} defaultKind="PRIORITAET" title="Kundenagenda – Prioritäten und Herausforderungen" intro={<>Was den Kunden treibt, in seinen Worten. Die <Link href={`/kunden/${account.id}?b=strategie`}>Schlüssel-Initiativen</Link> stehen unter Strategie – dort hängen Chancen, Vorgänge und KI-Vorschläge.</>} />
+          {account.status === "DORMANT" && <p className="text-sm" style={{ background: "var(--warn-soft)", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ruht. Mit dem Vorgehen „Altkunden-Reaktivierung“ wird er wieder aktiv angegangen.</p>}
+          <PlaybookRuns
+            startCollapsed
+            runs={runs}
+            back={back}
+            users={activeUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
+            start={mayStartPlaybook && account.status !== "ARCHIVED" ? { playbooks: accountPlaybooks, hidden: { accountId: account.id }, setups: setups.filter((x) => x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })), defaultNewSetupName: `Reaktivierung ${new Date().getFullYear()}`, defaultOwnerId: account.responsibleBdUserId, salesOps, hint: "Muster für eine einzelne Chance (z. B. Ausschreibung) startest du auf der Chance selbst, unter „Vorgehen“." } : null}
+          />
+        </>
       )}
 
-      <Beschaffung account={account} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} />
-      {getConfig().FEATURE_BESETZUNG === "true" && <Beschaffungsprofil actor={actor} account={account} back={back} />}
-      {!ro && !sosList.some((x) => x.status !== "GELOEST") && account.status !== "ARCHIVED" && <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} />}
-
-      {account.status === "DORMANT" && <p className="text-sm" style={{ background: "var(--warn-soft)", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ruht. Mit dem Vorgehen „Altkunden-Reaktivierung“ (unten) wird er wieder aktiv angegangen.</p>}
-
-      <PlaybookRuns
-        startCollapsed
-        runs={runs}
-        back={back}
-        users={activeUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
-        start={mayStartPlaybook && account.status !== "ARCHIVED" ? { playbooks: accountPlaybooks, hidden: { accountId: account.id }, setups: setups.filter((x) => x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })), defaultNewSetupName: `Reaktivierung ${new Date().getFullYear()}`, defaultOwnerId: account.responsibleBdUserId, salesOps, hint: "Muster für eine einzelne Chance (z. B. Ausschreibung) startest du auf der Chance selbst, unter „Vorgehen“." } : null}
-      />
-
-      <Comments actor={actor} subjectType="KUNDE" subjectId={account.id} back={back} />
-
-      {/* Öffentliche Unternehmensrecherche (Etappe 16): eng begrenzte Ausnahme – nur öffentliche Firmendaten, nie Personennamen */}
-      <section className="card">
-        <div className="flex flex-wrap items-baseline gap-3 mb-2">
-          <h2 className="font-semibold">Öffentliche Informationen zum Unternehmen</h2>
-          {!ro && <form action={refreshCompanyResearchAction} className="ml-auto">
-            <input type="hidden" name="accountId" value={account.id} />
-            <button className="btn btn-secondary btn-small" type="submit">{research.latest ? "Aktualisieren" : "Recherche starten"}</button>
-          </form>}
-        </div>
-        <p className="muted text-xs mb-2">Ausschließlich öffentliche, unternehmensbezogene Angaben mit Quelle (Branche, Sitz, Größenordnung, öffentliche Meldungen) – nie zu benannten Einzelpersonen. Fixture-Daten (fiktiv): kein echter Internetzugriff, bis ein Suchdienst konfiguriert ist.</p>
-        {!research.latest ? (
-          <p className="muted text-sm">Noch keine Recherche gestartet.</p>
-        ) : (
-          <>
-            {(research.latest.facts as CompanyFact[]).length === 0 ? (
-              <p className="muted text-sm">{research.latest.note}</p>
-            ) : (
-              <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                {(research.latest.facts as CompanyFact[]).map((f, i) => (
-                  <div key={i}>
-                    <dt className="muted">{f.label}</dt>
-                    <dd>
-                      {f.value}
-                      <span className="muted"> · {f.sourceUrl ? <a href={f.sourceUrl} target="_blank" rel="noopener noreferrer">{f.sourceLabel}</a> : f.sourceLabel}{f.asOf ? ` (Stand ${f.asOf})` : ""}</span>
-                    </dd>
-                  </div>
+      {bucket === "strategie" && (
+        <>
+          <section className="card" id="initiativen">
+            <h2 className="font-semibold mb-1">Schlüssel-Initiativen des Kunden ({keyInitiatives.length})</h2>
+            <p className="muted text-sm mb-3">Je Initiative: die Chancen, die darauf einzahlen, die Vorgänge dazu und die KI-Vorschläge aus dem Eingang. Ein Klick öffnet die Initiative.</p>
+            {keyInitiatives.length === 0 ? <p className="muted text-sm">Noch keine Schlüssel-Initiative erfasst. Tipp: aus einer Mail oder Account-Seite erkennt die KI sie als Karte.</p> : (
+              <ul className="space-y-2">
+                {keyInitiatives.map((i) => (
+                  <li key={i.id}>
+                    <Link href={`/kunden/${account.id}/initiativen/${i.id}`} className="no-underline block p-3" style={{ border: "1px solid var(--border)", borderRadius: 8, color: "var(--text)" }}>
+                      <span className="flex flex-wrap items-baseline gap-3">
+                        <strong>{i.title}</strong>
+                        {(i.dueDate || i.dueHint) && <span className="muted text-xs">Termin {i.dueDate ? fmtDate(i.dueDate) : `„${i.dueHint}“`}</span>}
+                        <span className="text-xs ml-auto flex gap-3">
+                          <span>{i.chances.filter((c) => c.status !== "BEENDET").length} Chance(n)</span>
+                          <span>{openWork(i.id)} Vorgang/Vorgänge offen</span>
+                          {cardCount(i.id) > 0 && <span style={{ color: "#b7791f", fontWeight: 600 }}>{cardCount(i.id)} KI-Vorschlag/Vorschläge</span>}
+                          <span aria-hidden="true">›</span>
+                        </span>
+                      </span>
+                      {i.description && <span className="muted text-xs block mt-1">{i.description.slice(0, 200)}</span>}
+                    </Link>
+                  </li>
                 ))}
-              </dl>
+              </ul>
             )}
-            <p className="muted text-xs mt-2">{research.latest.note} Zuletzt abgerufen {fmtDate(research.latest.fetchedAt)}.</p>
-          </>
-        )}
-      </section>
-
-      {/* Wofür (E-045): worauf die Arbeit bei diesem Kunden hinausläuft – zuerst */}
-      <section className="card">
-        <h2 className="font-semibold mb-2">Wofür – Chancen ({opportunities.filter((o) => o.status !== "BEENDET" && o.status !== "ZURUECKGESTELLT" && o.status !== "BEAUFTRAGT").length} in Arbeit, {opportunities.filter((o) => o.status === "BEAUFTRAGT").length} beauftragt)</h2>
-        {opportunities.length === 0 ? (
-          <p className="text-sm" style={{ color: "#8a6d1f" }}>Noch keine Chance benannt. Worauf läuft es bei diesem Kunden hinaus – Verve-Experte in einer Standardrolle, Freelancer-Experte oder Ausschreibung? Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten.</p>
-        ) : (
-          <>
-            {opportunities.some((o) => o.status !== "BEENDET" && o.status !== "BEAUFTRAGT") ? (
-              <table className="list">
-                <thead><tr><th>Chance</th><th>Wofür</th><th>Setup</th><th>Reifegrad</th><th>Horizont</th></tr></thead>
-                <tbody>
-                  {opportunities.filter((o) => o.status !== "BEENDET" && o.status !== "BEAUFTRAGT").map((o) => (
-                    <tr key={o.id}>
-                      <td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link></td>
-                      <td className="text-sm">{chanceKindLabel[o.kind]}{o.roleId && roleNames.get(o.roleId) ? ` · ${roleNames.get(o.roleId)}` : ""}{o.headcount ? ` · ${o.headcount}×` : ""}</td>
-                      <td><Link href={`/setups/${o.setupId}`}>{o.setupName}</Link></td>
-                      <td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td>
-                      <td>{o.horizon ?? <span className="muted">–</span>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : <p className="text-sm muted">Keine Chance in Arbeit.</p>}
-            {opportunities.some((o) => o.status === "BEAUFTRAGT") && (
-              <details className="mt-2">
-                <summary className="text-sm muted">Konvertierte Chancen ({opportunities.filter((o) => o.status === "BEAUFTRAGT").length}) – Einsätze dazu unter <Link href="/einsaetze">Einsätze</Link></summary>
-                <table className="list mt-2">
-                  <thead><tr><th>Chance</th><th>Wofür</th><th>Setup</th></tr></thead>
-                  <tbody>
-                    {opportunities.filter((o) => o.status === "BEAUFTRAGT").map((o) => (
-                      <tr key={o.id}><td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link></td><td className="text-sm">{chanceKindLabel[o.kind]}</td><td><Link href={`/setups/${o.setupId}`}>{o.setupName}</Link></td></tr>
-                    ))}
-                  </tbody>
-                </table>
+            {mayAgenda && account.status !== "ARCHIVED" && (
+              <details className="mt-3">
+                <summary className="text-sm">Schlüssel-Initiative hinzufügen</summary>
+                <form action={createInitiativeAction} className="grid sm:grid-cols-2 gap-3 mt-2">
+                  <input type="hidden" name="accountId" value={account.id} />
+                  <input type="hidden" name="back" value={back} />
+                  <input type="hidden" name="kind" value="INITIATIVE" />
+                  <div className="sm:col-span-2"><label className="label" htmlFor="iniTitle2">Bezeichnung</label><input id="iniTitle2" name="title" className="input" required minLength={3} placeholder="z. B. Jira-Ablösung bis Ende 2026" /></div>
+                  <div className="sm:col-span-2"><label className="label" htmlFor="iniDesc2">Beschreibung (optional)</label><textarea id="iniDesc2" name="description" className="textarea" rows={2} /></div>
+                  <div><label className="label" htmlFor="iniDue2">Datum (optional)</label><input id="iniDue2" name="dueDate" type="date" className="input" /></div>
+                  <div><label className="label" htmlFor="iniHint2">oder ungefähr</label><input id="iniHint2" name="dueHint" className="input" placeholder="z. B. Q2 2027" /></div>
+                  <div className="sm:col-span-2"><button className="btn btn-small" type="submit">Aufnehmen</button></div>
+                </form>
               </details>
             )}
-          </>
-        )}
-        <p className="muted text-xs mt-2">Jede Chance hat einen eigenen Reifegrad; es gibt keinen zusammengefassten Pipelinestatus je Kunde. Beobachtungen, Fragen und Aktionen zahlen auf Chancen ein.</p>
-      </section>
+          </section>
 
-      <section className="card">
-        <h2 className="font-semibold mb-2">Überblick – Accountplan</h2>
+          {unassignedChances.length > 0 && (
+            <section className="card">
+              <h2 className="font-semibold mb-1">Chancen ohne Initiative ({unassignedChances.length})</h2>
+              <p className="muted text-sm mb-2">Auf welche Initiative zahlt die Chance ein? Zugeordnet erscheint sie in der Initiative.</p>
+              <ul className="space-y-1 text-sm">
+                {unassignedChances.map((o) => (
+                  <li key={o.id} className="flex flex-wrap items-center gap-2">
+                    <Link href={`/bedarfe/${o.id}`}>{o.title}</Link>
+                    <span className="muted">· {opportunityStatusLabel[o.status] ?? o.status} · {o.setupName}</span>
+                    {mayAgenda && keyInitiatives.length > 0 && (
+                      <form action={linkChanceInitiativeAction} className="flex gap-1 items-center ml-auto">
+                        <input type="hidden" name="opportunityId" value={o.id} />
+                        <input type="hidden" name="back" value={back} />
+                        <select name="initiativeId" className="select" required defaultValue="" aria-label="Initiative" style={{ width: "14rem" }}>
+                          <option value="" disabled>Initiative wählen …</option>
+                          {keyInitiatives.map((i) => <option key={i.id} value={i.id}>{i.title}</option>)}
+                        </select>
+                        <button className="btn btn-secondary btn-small" type="submit">Zuordnen</button>
+                      </form>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {otherCards.length > 0 && (
+            <section className="card">
+              <h2 className="font-semibold mb-1">Weitere KI-Vorschläge zu diesem Kunden ({otherCards.length})</h2>
+              <p className="muted text-sm mb-2">Aus dem Eingang, ohne erkennbaren Bezug zu einer Initiative.</p>
+              <ul className="space-y-2">{otherCards.slice(0, 5).map((c) => <EingangCard key={c.id} s={c} canDecide back={back} />)}</ul>
+              {otherCards.length > 5 && (
+                <details className="mt-2"><summary className="text-sm muted">+ {otherCards.length - 5} weitere</summary><ul className="space-y-2 mt-2">{otherCards.slice(5).map((c) => <EingangCard key={c.id} s={c} canDecide back={back} />)}</ul></details>
+              )}
+            </section>
+          )}
+
+          <details className="card">
+            <summary className="font-semibold">Alle Chancen im Überblick ({opportunities.length})<Term k="CHANCE" /></summary>
+            <div className="mt-2">
+              <ChancenUebersicht chances={chanceRows} showSetup={setups.length > 1} emptyText="Noch keine Chance benannt. Chancen entstehen im Setup („Chance erfassen“), in einer Initiative oder über den Assistenten." back={back} />
+            </div>
+          </details>
+      <details className="card">
+        <summary className="font-semibold">Accountplan – Ausbau-Vorhaben und gespeicherte Stände</summary>
         <AccountPlanView plan={plan} live>
           {mayEditPlan && (
             <div className="grid lg:grid-cols-2 gap-6 mt-2">
@@ -348,7 +331,62 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             </form>
           )}
         </div>
+      </details>
+        </>
+      )}
+
+      {bucket === "operativ" && (
+        <>
+      <section className="card">
+        <h2 className="font-semibold mb-2">Personen & Zugang ({people.length})</h2>
+        {people.length === 0 ? <p className="muted text-sm">Noch keine Personen erfasst. Personen werden im jeweiligen Setup gepflegt.</p> : (
+          <table className="list">
+            <thead><tr><th>Person</th><th>Funktion</th><th>Beziehungen (Halter · Stand)</th></tr></thead>
+            <tbody>
+              {people.map(({ person, currentFunction, relationships }) => (
+                <tr key={person.id}>
+                  <td>{person.displayName}</td>
+                  <td>{currentFunction?.functionTitle ?? <span className="muted">unbekannt</span>}</td>
+                  <td className="text-sm">{relationships.length === 0 ? <span className="muted">keine dokumentiert</span> : relationships.map((r) => <div key={r.id}>{r.holderName} · <Status label={relationshipStateLabel[r.state] ?? r.state} /></div>)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {setups.length > 0 && <p className="muted text-sm mt-2">Pflege je Setup: {setups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/personen`}>{s.name}</Link></span>)}</p>}
       </section>
+
+          <div id="sos">{(!ro && account.status !== "ARCHIVED") || openSos.length ? <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} /> : null}</div>
+          <Beschaffung account={account} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} />
+          {getConfig().FEATURE_BESETZUNG === "true" && <Beschaffungsprofil actor={actor} account={account} back={back} />}
+          <WorkBlock actor={actor} subjectType="KUNDE" subjectId={account.id} back={back} title="Vorgänge am Kunden (ohne Initiative)" canCreate={account.status !== "ARCHIVED"} />
+      {mayReassign && (
+        <section className="card">
+          <h2 className="font-semibold mb-2">Zuständigkeit</h2>
+          <p className="text-sm mb-2">Zuständiger BD: {currentBdName ?? <span className="muted">Zuordnung offen</span>}</p>
+          <form action={reassignAccountBdAction} className="flex flex-wrap items-end gap-2">
+            <input type="hidden" name="accountId" value={account.id} />
+            <input type="hidden" name="version" value={account.version} />
+            <div>
+              <label className="label" htmlFor="reassignBd">Zuständigen BD umstellen</label>
+              <select id="reassignBd" name="responsibleBdUserId" className="select" required defaultValue="">
+                <option value="" disabled>Bitte wählen …</option>
+                {bdUsers.filter((u) => u.id !== account.responsibleBdUserId).map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
+              </select>
+            </div>
+            <button className="btn btn-secondary" type="submit">Umstellen</button>
+          </form>
+          <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD können Sie die Kundenzuständigkeit jederzeit umstellen – unabhängig von der ursprünglichen Zuordnung.</p>
+          {account.status !== "ARCHIVED" && (
+            <form action={setAccountDormantAction} className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              <input type="hidden" name="accountId" value={account.id} />
+              <input type="hidden" name="dormant" value={account.status === "DORMANT" ? "false" : "true"} />
+              <span className="muted">Status: {accountStatusLabel[account.status] ?? account.status}.</span>
+              <button className="btn btn-secondary btn-small" type="submit">{account.status === "DORMANT" ? "Wieder als aktiv führen" : "Als ruhend markieren"}</button>
+            </form>
+          )}
+        </section>
+      )}
 
       <section className="card">
         <h2 className="font-semibold mb-2">Projektsetups ({setups.length})</h2>
@@ -377,25 +415,6 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             </tbody>
           </table>
         )}
-      </section>
-
-      <section className="card">
-        <h2 className="font-semibold mb-2">Personen & Zugang ({people.length})</h2>
-        {people.length === 0 ? <p className="muted text-sm">Noch keine Personen erfasst. Personen werden im jeweiligen Setup gepflegt.</p> : (
-          <table className="list">
-            <thead><tr><th>Person</th><th>Funktion</th><th>Beziehungen (Halter · Stand)</th></tr></thead>
-            <tbody>
-              {people.map(({ person, currentFunction, relationships }) => (
-                <tr key={person.id}>
-                  <td>{person.displayName}</td>
-                  <td>{currentFunction?.functionTitle ?? <span className="muted">unbekannt</span>}</td>
-                  <td className="text-sm">{relationships.length === 0 ? <span className="muted">keine dokumentiert</span> : relationships.map((r) => <div key={r.id}>{r.holderName} · <Status label={relationshipStateLabel[r.state] ?? r.state} /></div>)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {setups.length > 0 && <p className="muted text-sm mt-2">Pflege je Setup: {setups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/personen`}>{s.name}</Link></span>)}</p>}
       </section>
 
       {mayCreate && (
@@ -434,6 +453,61 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             </div>
           </form>
         </details>
+      )}
+          <section className="card text-sm">
+            <details id="kennungen" open={mayKeys && account.mailDomains.length === 0 && domainSuggestions.length > 0}>
+        <summary style={{ cursor: "pointer" }}>
+          Kennungen für den Eingang:{" "}
+          {account.mailDomains.length + account.aliases.length > 0 ? <strong>{[...account.mailDomains, ...account.aliases.map((a) => `„${a}“`)].join(", ")}</strong> : <span style={{ color: "#b7791f" }}>noch keine – Mails werden nur über Namen erkannt</span>}
+        </summary>
+        <p className="muted text-xs mt-1">Trifft eine Kennung, ordnet der Eingang Mails und Notizen eindeutig diesem Kunden zu – die KI kann das nicht überstimmen. Mail-Domäne: alles nach dem @ (Subdomänen inklusive). Kürzel: Namen, unter denen der Kunde in Mails auftaucht (z. B. „TFS“).</p>
+        {mayKeys ? (
+          <form action={setAccountKeysAction} className="flex flex-wrap gap-2 items-end mt-2">
+            <input type="hidden" name="accountId" value={account.id} />
+            <div><label className="label" htmlFor="kDomains">Mail-Domänen</label><input id="kDomains" name="domains" className="input" style={{ width: "20rem" }} defaultValue={(account.mailDomains.length ? account.mailDomains : domainSuggestions).join(", ")} placeholder="kunde.de, kunde-gruppe.com" /></div>
+            <div><label className="label" htmlFor="kAliases">Kürzel</label><input id="kAliases" name="aliases" className="input" style={{ width: "16rem" }} defaultValue={account.aliases.join(", ")} placeholder="z. B. TFS, Toyota Bank" /></div>
+            <button className="btn btn-small" type="submit">Speichern</button>
+            {account.mailDomains.length === 0 && domainSuggestions.length > 0 && <span className="muted text-xs">Vorbelegt aus den E-Mail-Adressen bekannter Personen – bitte prüfen.</span>}
+          </form>
+        ) : null}
+      </details>
+          </section>
+      {/* Öffentliche Unternehmensrecherche (Etappe 16): eng begrenzte Ausnahme – nur öffentliche Firmendaten, nie Personennamen */}
+      <section className="card">
+        <div className="flex flex-wrap items-baseline gap-3 mb-2">
+          <h2 className="font-semibold">Öffentliche Informationen zum Unternehmen</h2>
+          {!ro && <form action={refreshCompanyResearchAction} className="ml-auto">
+            <input type="hidden" name="accountId" value={account.id} />
+            <button className="btn btn-secondary btn-small" type="submit">{research.latest ? "Aktualisieren" : "Recherche starten"}</button>
+          </form>}
+        </div>
+        <p className="muted text-xs mb-2">Ausschließlich öffentliche, unternehmensbezogene Angaben mit Quelle (Branche, Sitz, Größenordnung, öffentliche Meldungen) – nie zu benannten Einzelpersonen. Fixture-Daten (fiktiv): kein echter Internetzugriff, bis ein Suchdienst konfiguriert ist.</p>
+        {!research.latest ? (
+          <p className="muted text-sm">Noch keine Recherche gestartet.</p>
+        ) : (
+          <>
+            {(research.latest.facts as CompanyFact[]).length === 0 ? (
+              <p className="muted text-sm">{research.latest.note}</p>
+            ) : (
+              <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                {(research.latest.facts as CompanyFact[]).map((f, i) => (
+                  <div key={i}>
+                    <dt className="muted">{f.label}</dt>
+                    <dd>
+                      {f.value}
+                      <span className="muted"> · {f.sourceUrl ? <a href={f.sourceUrl} target="_blank" rel="noopener noreferrer">{f.sourceLabel}</a> : f.sourceLabel}{f.asOf ? ` (Stand ${f.asOf})` : ""}</span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            <p className="muted text-xs mt-2">{research.latest.note} Zuletzt abgerufen {fmtDate(research.latest.fetchedAt)}.</p>
+          </>
+        )}
+      </section>
+
+          <Comments actor={actor} subjectType="KUNDE" subjectId={account.id} back={back} />
+        </>
       )}
     </div>
   );

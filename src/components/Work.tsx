@@ -55,7 +55,7 @@ export function WorkList({ items, empty, showAccount = true, perspective }: { it
 }
 
 /** Block „Vorgänge“ an Kunde, Setup, Chance oder SOS: offene Vorgänge, zuletzt erledigte, neuer Vorgang. */
-export async function WorkBlock({ actor, subjectType, subjectId, back, title = "Vorgänge", canCreate = true }: { actor: Actor; subjectType: "KUNDE" | "SETUP" | "CHANCE" | "SOS"; subjectId: string; back: string; title?: string; canCreate?: boolean }) {
+export async function WorkBlock({ actor, subjectType, subjectId, back, title = "Vorgänge", canCreate = true }: { actor: Actor; subjectType: "KUNDE" | "SETUP" | "CHANCE" | "SOS" | "INITIATIVE"; subjectId: string; back: string; title?: string; canCreate?: boolean }) {
   const [list, targets, subject] = await Promise.all([listWorkForSubject(actor, subjectType, subjectId), workTargets(actor), resolveSubject(actor, subjectType, subjectId).catch(() => null)]);
   // Coach-Zugang: nur lesen – keine Vorgänge anlegen
   if (subject && isReadOnlyFor(actor, subject.accountId)) canCreate = false;

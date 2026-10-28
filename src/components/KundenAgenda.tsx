@@ -20,16 +20,16 @@ type Initiative = {
 const HEADINGS: Record<InitiativeKind, string> = { PRIORITAET: "Prioritäten des Kunden", INITIATIVE: "Schlüssel-Initiativen", HERAUSFORDERUNG: "Herausforderungen & Problembereiche" };
 
 /** Kundenagenda (Etappe 26): was den Kunden treibt – getrennt von unseren Chancen, aber mit ihnen verknüpft. */
-export function KundenAgenda({ accountId, initiatives, canEdit, back, cards = {} }: { accountId: string; initiatives: Initiative[]; canEdit: boolean; back: string; cards?: Record<string, (typeof schema.suggestions.$inferSelect)[]> }) {
-  const open = initiatives.filter((i) => i.status === "OFFEN");
-  const done = initiatives.filter((i) => i.status !== "OFFEN");
+export function KundenAgenda({ accountId, initiatives, canEdit, back, cards = {}, kinds = [...initiativeKindValues], title = "Kundenagenda – was treibt den Kunden?", intro, defaultKind = "INITIATIVE" }: { accountId: string; initiatives: Initiative[]; canEdit: boolean; back: string; cards?: Record<string, (typeof schema.suggestions.$inferSelect)[]>; kinds?: InitiativeKind[]; title?: string; intro?: React.ReactNode; defaultKind?: InitiativeKind }) {
+  const open = initiatives.filter((i) => i.status === "OFFEN" && kinds.includes(i.kind as InitiativeKind));
+  const done = initiatives.filter((i) => i.status !== "OFFEN" && kinds.includes(i.kind as InitiativeKind));
   return (
     <section className="card" id="agenda">
-      <h2 className="font-semibold mb-1">Kundenagenda – was treibt den Kunden?</h2>
-      <p className="muted text-sm mb-3">Prioritäten, Schlüssel-Initiativen und Herausforderungen des Kunden in seinen Worten. Chancen zeigen, auf welche Initiative sie einzahlen. Initiativen mit Datum erinnern {`120`} Tage vorher.</p>
+      <h2 className="font-semibold mb-1">{title}</h2>
+      <p className="muted text-sm mb-3">{intro ?? <>Prioritäten, Schlüssel-Initiativen und Herausforderungen des Kunden in seinen Worten. Chancen zeigen, auf welche Initiative sie einzahlen. Initiativen mit Datum erinnern {`120`} Tage vorher.</>}</p>
       {open.length === 0 && <p className="muted text-sm">Noch nichts erfasst. Tipp: eine bestehende Account-Seite (z. B. aus Notion) in den Assistenten einfügen – er schlägt die Einträge als Karten vor.</p>}
-      <div className="grid md:grid-cols-3 gap-4">
-        {initiativeKindValues.map((k) => {
+      <div className={kinds.length >= 3 ? "grid md:grid-cols-3 gap-4" : "grid md:grid-cols-2 gap-4"}>
+        {kinds.map((k) => {
           const list = open.filter((i) => i.kind === k);
           if (!list.length) return null;
           return (
@@ -38,7 +38,7 @@ export function KundenAgenda({ accountId, initiatives, canEdit, back, cards = {}
               <ul className="space-y-2 text-sm">
                 {list.map((i) => (
                   <li key={i.id} style={{ borderLeft: "3px solid var(--border)", paddingLeft: ".5rem" }}>
-                    <div className="font-medium">{i.title}</div>
+                    <div className="font-medium"><Link href={`/kunden/${accountId}/initiativen/${i.id}`}>{i.title}</Link></div>
                     {i.description && <div className="muted text-xs" style={{ whiteSpace: "pre-wrap" }}>{i.description}</div>}
                     {(i.dueDate || i.dueHint) && <div className="text-xs">Termin: {i.dueDate ? fmtDate(i.dueDate) : ""}{i.dueHint && (!i.dueDate || i.dueHint !== i.dueDate) ? `${i.dueDate ? " · " : ""}„${i.dueHint}“` : ""}</div>}
                     {i.chances.length > 0 && (
@@ -84,8 +84,8 @@ export function KundenAgenda({ accountId, initiatives, canEdit, back, cards = {}
             <input type="hidden" name="back" value={back} />
             <div>
               <label className="label" htmlFor="iniKind">Art</label>
-              <select id="iniKind" name="kind" className="select" defaultValue="INITIATIVE">
-                {initiativeKindValues.map((k) => <option key={k} value={k}>{initiativeKindLabel[k]}</option>)}
+              <select id="iniKind" name="kind" className="select" defaultValue={defaultKind}>
+                {kinds.map((k) => <option key={k} value={k}>{initiativeKindLabel[k]}</option>)}
               </select>
             </div>
             <div><label className="label" htmlFor="iniTitle">Bezeichnung</label><input id="iniTitle" name="title" className="input" required minLength={3} placeholder="z. B. Toolvertrag läuft Ende 2026 aus" /></div>
