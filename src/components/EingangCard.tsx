@@ -1,10 +1,24 @@
 import Link from "next/link";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { Status } from "@/components/Status";
 import { feedbackReasonLabel, fmtDate, opportunityStatusLabel, orgTypeLabel } from "@/lib/labels";
-import { acceptSuggestionAction, suggestionFeedbackAction } from "@/app/actions";
-import { eingangTypeLabel, renewalDefaultsFor } from "@/modules/eingang/service";
+import { acceptSuggestionAction, reassignIntakeAction, suggestionFeedbackAction } from "@/app/actions";
+import { editableSetupOptions, eingangTypeLabel, renewalDefaultsFor } from "@/modules/eingang/service";
+import { getCurrentActor } from "@/modules/identity/session";
+import { cache } from "react";
+import { PendingButton } from "./PendingButton";
+
+/** je Seitenaufruf einmal: bearbeitbare Setups für „Anderer Kunde“ */
+const setupOptions = cache(async () => {
+  const actor = await getCurrentActor();
+  return actor ? editableSetupOptions(actor) : [];
+});
+/** Erste offene Karte je Eingang trägt die Zuordnung (einmal je Mail, nicht je Karte). */
+const firstOfJob = cache(async (aiJobId: string) => {
+  const r = await db.query.suggestions.findFirst({ where: and(eq(schema.suggestions.aiJobId, aiJobId), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT", "ZURUECKGESTELLT"])), orderBy: asc(schema.suggestions.createdAt), columns: { id: true } });
+  return r?.id ?? null;
+});
 import type { IntakeItem } from "@/modules/ai/schemas";
 
 type Suggestion = typeof schema.suggestions.$inferSelect;
@@ -15,10 +29,11 @@ const decisionRoleText: Record<string, string> = { BEDARFSTRAEGER: "Bedarfsträg
 
 /** Karte der Eingangs-Auswertung (Etappe 36): was erkannt wurde, worauf es sich bezieht, ein Klick zum Übernehmen. */
 export async function EingangCard({ s, canDecide, back }: { s: Suggestion; canDecide: boolean; back: string }) {
-  const payload = (s.payload ?? null) as { item: IntakeItem; resolved: Resolved } | null;
+  const payload = (s.payload ?? null) as { item: IntakeItem; resolved: Resolved; route?: { reason: string; confident: boolean; byKey: boolean; domains: string[] } } | null;
   if (!payload) return null;
   const { item, resolved } = payload;
   const open = s.status === "NEU" || s.status === "GEPRUEFT" || s.status === "ZURUECKGESTELLT";
+  const showRoute = !!s.aiJobId && !!s.sourceIds[0] && (await firstOfJob(s.aiJobId)) === s.id;
   const [opp, action, question, person, account] = await Promise.all([
     resolved.opportunityId ? db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, resolved.opportunityId) }) : null,
     resolved.actionId ? db.query.actions.findFirst({ where: eq(schema.actions.id, resolved.actionId) }) : null,
@@ -70,6 +85,28 @@ export async function EingangCard({ s, canDecide, back }: { s: Suggestion; canDe
         {opp && item.type !== "CHANCE_STATUS" ? <p className="muted">Wofür: <Link href={`/bedarfe/${opp.id}`}>{opp.title}</Link></p> : null}
         <p className="muted">Beleg: „{s.evidenceQuote.length > 260 ? `${s.evidenceQuote.slice(0, 260)} …` : s.evidenceQuote}“</p>
       </div>
+      {open && canDecide && showRoute && (
+        <div className="text-xs mt-2 flex flex-wrap items-center gap-2" style={{ color: payload.route && !payload.route.confident ? AMBER : undefined }}>
+          <span className={payload.route?.confident ? "muted" : undefined}>
+            {account ? <>Zugeordnet zu <strong>{account.name}</strong></> : "Kein Kunde erkannt"}
+            {payload.route?.reason ? ` – ${payload.route.byKey ? "eindeutig über " : "erkannt über "}${payload.route.reason.replace(/^Kennung: /, "Kennung ")}` : ""}
+            {payload.route && !payload.route.confident && account ? " (unsicher – bitte prüfen)" : ""}
+          </span>
+          <details>
+            <summary style={{ cursor: "pointer" }}>{account ? "Anderer Kunde?" : "Kunde wählen"}</summary>
+            <form action={reassignIntakeAction} className="flex flex-wrap gap-2 items-end mt-1">
+              <input type="hidden" name="suggestionId" value={s.id} />
+              <input type="hidden" name="back" value={back} />
+              <select name="setupId" className="select" required defaultValue="" aria-label="Richtiger Kunde · Setup" style={{ width: "18rem" }}>
+                <option value="" disabled>Richtiger Kunde · Setup …</option>
+                {(await setupOptions()).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+              {payload.route?.domains?.length ? <label className="flex items-center gap-1"><input type="checkbox" name="learn" value="true" defaultChecked /> Mails von {payload.route.domains.join(", ")} künftig diesem Kunden zuordnen</label> : null}
+              <PendingButton className="btn btn-secondary btn-small" busy="Wird neu ausgewertet …">Zuordnen und neu auswerten</PendingButton>
+            </form>
+          </details>
+        </div>
+      )}
       {canDecide && open && (
         <div className="mt-2 flex flex-wrap gap-4 items-end">
           {needsCustomer ? (

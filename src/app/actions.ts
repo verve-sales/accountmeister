@@ -961,6 +961,25 @@ export async function eingangAction(fd: FormData) {
   }, "");
 }
 
+/** Falsch zugeordneter Eingang: anderem Kunden/Setup zuordnen und neu auswerten (Etappe 42). */
+export async function reassignIntakeAction(fd: FormData) {
+  const data = formToObject(fd);
+  const back = backOf(data, "/start#vorschlaege");
+  return run(back, async (actor) => {
+    const { reassignIntake } = await import("@/modules/eingang/service");
+    return withBudget(reassignIntake(actor, data.suggestionId ?? "", data.setupId ?? "", { learn: data.learn === "true" }), (r) => `${eingangMessage(r, `Neu zugeordnet zu ${r.accountName}`)}${r.learned.length ? ` Kennung gelernt: ${r.learned.join(", ")}.` : ""}`);
+  }, "");
+}
+
+/** Kunden-Kennungen (Mail-Domänen, Kürzel) pflegen. */
+export async function setAccountKeysAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/kunden/${data.accountId ?? ""}#kennungen`, async (actor) => {
+    const { setAccountKeys } = await import("@/modules/accounts/keys");
+    await setAccountKeys(actor, data.accountId ?? "", data);
+  }, "Kennungen gespeichert – Mails von diesen Domänen werden künftig eindeutig diesem Kunden zugeordnet.");
+}
+
 /** Quelle (Mail, Notiz, Protokoll) mit der aktuellen Auswertungslogik neu auswerten. */
 export async function reevaluateSourceAction(fd: FormData) {
   const data = formToObject(fd);

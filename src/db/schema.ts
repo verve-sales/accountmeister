@@ -162,6 +162,9 @@ export const accounts = pgTable("accounts", {
   name: text("name").notNull(),
   orgType: orgTypeEnum("org_type").notNull().default("SONSTIGE"),
   mocoCompanyId: integer("moco_company_id"), // Moco-Company (Stammdaten führend in Moco)
+  /** Kunden-Kennungen (Etappe 42): Mail-Domänen und Kürzel – eine Treffer-Kennung ordnet Eingänge eindeutig zu. */
+  mailDomains: text("mail_domains").array().notNull().default(sql`'{}'::text[]`),
+  aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
   parentAccountId: text("parent_account_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => accounts.id),
   status: accountStatusEnum("status").notNull().default("ACTIVE"),
   responsibleBdUserId: text("responsible_bd_user_id").references(() => users.id),

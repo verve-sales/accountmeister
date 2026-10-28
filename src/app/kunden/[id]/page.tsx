@@ -16,7 +16,8 @@ import { Status } from "@/components/Status";
 import { orgTypeLabel } from "@/lib/labels";
 import { hasRoleForAccountWrite } from "@/modules/identity/authz";
 import { accountStatusLabel, fmtDate, setupStatusLabel, visibilityLabel, contributionLabel, opportunityStatusLabel } from "@/lib/labels";
-import { createSetupAction, setAccountOrgTypeAction } from "../../actions";
+import { createSetupAction, setAccountKeysAction, setAccountOrgTypeAction } from "../../actions";
+import { suggestedDomains } from "@/modules/accounts/keys";
 import { listPeopleForAccount } from "@/modules/people/service";
 import { relationshipStateLabel, priorityKindLabel, priorityStatusLabel } from "@/lib/labels";
 import { buildAccountPlan, canEditAccountPlan, listAccountPlanSnapshots } from "@/modules/accountplan/service";
@@ -71,6 +72,8 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const ownerNames = new Map(ownerIds.length ? (await db.query.users.findMany({ where: inArray(schema.users.id, ownerIds) })).map((u) => [u.id, u.displayName]) : []);
   const topCandidates = await topCandidatesForOpportunities(opportunities.map((o) => o.id)).catch(() => new Map());
   const ro = isReadOnlyFor(actor, id);
+  const mayKeys = !ro && (hasRoleForAccountWrite(actor, account) || actor.roles.has("CEO"));
+  const domainSuggestions = mayKeys ? await suggestedDomains(account.id, actor.workspaceId).catch(() => []) : [];
   const chanceRows = opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: ownerNames.get(o.ownerUserId) ?? "?", setupName: o.setupName, version: ro ? undefined : o.version, candidate: topCandidates.get(o.id) ?? null }));
   const [runs, accountPlaybooks, salesOps, activeUsers] = await Promise.all([
     listRuns(actor, { accountId: id }),
@@ -111,6 +114,22 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         </form>
       )}
       {account.status === "ARCHIVED" && <p className="text-sm" style={{ background: "#fdf6ec", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ist archiviert. Alles bleibt erhalten; <Link href={`/kunden/${account.id}/loeschen`}>wiederherstellen oder endgültig löschen</Link>.</p>}
+      <details id="kennungen" className="text-sm" open={mayKeys && account.mailDomains.length === 0 && domainSuggestions.length > 0}>
+        <summary style={{ cursor: "pointer" }}>
+          Kennungen für den Eingang:{" "}
+          {account.mailDomains.length + account.aliases.length > 0 ? <strong>{[...account.mailDomains, ...account.aliases.map((a) => `„${a}“`)].join(", ")}</strong> : <span style={{ color: "#b7791f" }}>noch keine – Mails werden nur über Namen erkannt</span>}
+        </summary>
+        <p className="muted text-xs mt-1">Trifft eine Kennung, ordnet der Eingang Mails und Notizen eindeutig diesem Kunden zu – die KI kann das nicht überstimmen. Mail-Domäne: alles nach dem @ (Subdomänen inklusive). Kürzel: Namen, unter denen der Kunde in Mails auftaucht (z. B. „TFS“).</p>
+        {mayKeys ? (
+          <form action={setAccountKeysAction} className="flex flex-wrap gap-2 items-end mt-2">
+            <input type="hidden" name="accountId" value={account.id} />
+            <div><label className="label" htmlFor="kDomains">Mail-Domänen</label><input id="kDomains" name="domains" className="input" style={{ width: "20rem" }} defaultValue={(account.mailDomains.length ? account.mailDomains : domainSuggestions).join(", ")} placeholder="kunde.de, kunde-gruppe.com" /></div>
+            <div><label className="label" htmlFor="kAliases">Kürzel</label><input id="kAliases" name="aliases" className="input" style={{ width: "16rem" }} defaultValue={account.aliases.join(", ")} placeholder="z. B. TFS, Toyota Bank" /></div>
+            <button className="btn btn-small" type="submit">Speichern</button>
+            {account.mailDomains.length === 0 && domainSuggestions.length > 0 && <span className="muted text-xs">Vorbelegt aus den E-Mail-Adressen bekannter Personen – bitte prüfen.</span>}
+          </form>
+        ) : null}
+      </details>
       <section className="card">
         <h2 className="font-semibold mb-2">Wo stehen wir? – je Chance<Term k="CHANCE" /></h2>
         <ChancenUebersicht chances={chanceRows} showSetup={setups.length > 1} emptyText="Noch keine Chance benannt. Worauf läuft es bei diesem Kunden hinaus? Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten." back={`/kunden/${id}`} />

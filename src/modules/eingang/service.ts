@@ -39,7 +39,19 @@ export type Participant = { name: string; email?: string };
 // 1) Kunde und Setup erkennen
 // ---------------------------------------------------------------------------
 
-export type Route = { ctx: SetupContext | null; account: typeof schema.accounts.$inferSelect | null; reason: string; confident: boolean };
+export type Route = {
+  ctx: SetupContext | null;
+  account: typeof schema.accounts.$inferSelect | null;
+  reason: string;
+  confident: boolean;
+  /** über eine Kunden-Kennung (Domäne/Kürzel) zugeordnet – dann eindeutig, die KI überstimmt das nicht */
+  byKey?: boolean;
+  /** fremde, als Kennung taugliche Mail-Domänen im Eingang (zum Lernen bei Neu-/Umzuordnung) */
+  domains?: string[];
+};
+
+/** Allgemeine Wörter, die in Kundennamen vorkommen, aber nichts über den Kunden sagen (z. B. „Agent Platforms“). */
+const GENERIC_NAME_WORDS = new Set(["gmbh", "gruppe", "group", "holding", "versicherung", "versicherungen", "bank", "fiktiv", "financial", "services", "service", "solutions", "consulting", "digital", "platform", "platforms", "plattform", "agent", "agents", "systems", "system", "software", "technology", "technologies", "partner", "partners", "international", "deutschland", "germany", "europe", "data", "cloud", "global", "management", "kreditbank", "leasing", "insurance"]);
 
 /** Kunde/Setup aus Absender, E-Mail-Domänen, Kunden-, Personen- und Einsatznamen im Text erkennen – nur sichtbare Kunden. */
 export async function routeText(actor: Actor, text: string, participants: Participant[] = [], hintSetupId?: string): Promise<Route> {
@@ -57,6 +69,7 @@ export async function routeText(actor: Actor, text: string, participants: Partic
     db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { id: true, displayName: true, email: true } }),
   ]);
   const ownDomains = new Set(users.map((u) => u.email.split("@")[1]?.toLowerCase()).filter((d): d is string => !!d));
+  const { keyDomainOf, domainMatches } = await import("@/modules/accounts/keys");
   const flat = ` ${norm(text)} `;
   const score = new Map<string, { n: number; why: string[] }>();
   const add = (accountId: string | null, n: number, why: string) => {
@@ -69,16 +82,35 @@ export async function routeText(actor: Actor, text: string, participants: Partic
   // E-Mail-Adressen: aus Beteiligten und aus dem Text
   const emails = new Set<string>([...participants.map((p) => (p.email ?? "").toLowerCase()).filter(Boolean), ...[...text.matchAll(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g)].map((m) => m[0].toLowerCase())]);
   const foreign = [...emails].filter((e) => !ownDomains.has(e.split("@")[1] ?? ""));
+  const keyDomains = [...new Set(foreign.map((e) => keyDomainOf(e, ownDomains)).filter((d): d is string => !!d))];
+  // 0) Kunden-Kennungen: Domäne oder Kürzel – eindeutig, schlägt alle Namensheuristiken
+  const keyHits = new Map<string, string>();
+  for (const a of accounts) {
+    const d = keyDomains.find((x) => a.mailDomains.some((k) => domainMatches(x, k)));
+    if (d) keyHits.set(a.id, `Kennung: Domäne ${d}`);
+    else {
+      const alias = a.aliases.find((al) => { const n = norm(al); return n.length >= 2 && flat.includes(` ${n} `); });
+      if (alias) keyHits.set(a.id, `Kennung: Kürzel „${alias}“`);
+    }
+  }
+  const domainKeyHits = [...keyHits.entries()].filter(([, why]) => why.startsWith("Kennung: Domäne"));
+  const decisive = domainKeyHits.length === 1 ? domainKeyHits : domainKeyHits.length === 0 && keyHits.size === 1 ? [...keyHits.entries()] : [];
+  if (decisive.length === 1) {
+    const [accId, why] = decisive[0]!;
+    const account = accounts.find((a) => a.id === accId)!;
+    const ctx = await pickSetup(actor, account.id, flat, engs, (e) => (e.freelancerId ? null : users.find((u) => u.id === e.internalUserId)?.displayName ?? null));
+    return { ctx, account, reason: why, confident: true, byKey: true, domains: keyDomains };
+  }
   for (const e of foreign) {
     for (const p of persons) if (p.email?.toLowerCase() === e) add(p.accountId, 10, `Absender/Adresse ${e} ist bekannt`);
     const dom = e.split("@")[1] ?? "";
     for (const p of persons) if (p.email && p.email.toLowerCase().endsWith(`@${dom}`)) add(p.accountId, 5, `Domäne ${dom}`);
   }
-  // Kundenname im Text (auch als Wortteil, z. B. „BarmeniaGothaer“ ↔ „Gothaer“)
+  // Kundenname im Text: ganzes Wort; als Wortteil nur ab 6 Zeichen (z. B. „BarmeniaGothaer“ ↔ „Gothaer“); allgemeine Wörter zählen nicht
   for (const a of accounts) {
-    const words = norm(a.name).split(" ").filter((w) => w.length >= 4 && !["gmbh", "gruppe", "group", "holding", "versicherung", "bank", "fiktiv"].includes(w));
-    if (words.some((w) => flat.includes(w))) add(a.id, 6, `Kundenname „${a.name}“ im Text`);
-    for (const d of foreign.map((e) => e.split("@")[1] ?? "")) if (words.some((w) => d.includes(w))) add(a.id, 6, `Domäne ${d}`);
+    const words = norm(a.name).split(" ").filter((w) => w.length >= 4 && !GENERIC_NAME_WORDS.has(w));
+    if (words.some((w) => flat.includes(` ${w} `) || (w.length >= 6 && flat.includes(w)))) add(a.id, 6, `Kundenname „${a.name}“ im Text`);
+    for (const d of keyDomains) if (words.some((w) => w.length >= 5 && d.split(".").some((part) => part === w || (w.length >= 6 && part.includes(w))))) add(a.id, 6, `Domäne ${d}`);
   }
   // Personen (eindeutiger Nachname) und Einsatzpersonen
   for (const p of persons) {
@@ -92,11 +124,12 @@ export async function routeText(actor: Actor, text: string, participants: Partic
     if (last.length >= 4 && flat.includes(` ${last} `)) add(e.accountId, 4, `Einsatz ${engPerson(e).replace(/\(.*?\)/g, "").trim()}`);
   }
   const ranked = [...score.entries()].sort((a, b) => b[1].n - a[1].n);
-  if (!ranked.length) return { ctx: null, account: null, reason: "kein bekannter Kunde erkannt", confident: false };
+  if (!ranked.length) return { ctx: null, account: null, reason: "kein bekannter Kunde erkannt", confident: false, domains: keyDomains };
   const [bestId, best] = ranked[0]!;
   const second = ranked[1]?.[1].n ?? 0;
   const account = accounts.find((a) => a.id === bestId)!;
-  const confident = best.n >= 5 && best.n >= second * 2;
+  // Sicher nur mit Adress-/Domänenbezug oder sehr deutlichem Vorsprung; reine Namensähnlichkeit bleibt unsicher
+  const confident = best.n >= 5 && best.n >= second * 2 && best.why.some((w) => /Adresse|Domäne|Einsatz/.test(w));
   // Setup: Einsatz-/Namens-Treffer, sonst einziges bzw. zuletzt aktives bearbeitbares Setup
   const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, account.id), orderBy: desc(schema.projectSetups.updatedAt) });
   const editable: SetupContext[] = [];
@@ -107,7 +140,26 @@ export async function routeText(actor: Actor, text: string, participants: Partic
   const engHit = engs.find((e) => e.accountId === account.id && (() => { const last = norm(engPerson(e)).split(" ").pop() ?? ""; return last.length >= 4 && flat.includes(` ${last} `); })());
   const byName = editable.find((c) => norm(c.setup.name).length >= 4 && flat.includes(norm(c.setup.name)));
   const ctx = (engHit && editable.find((c) => c.setup.id === engHit.setupId)) || byName || editable[0] || null;
-  return { ctx, account, reason: best.why.slice(0, 3).join(" · "), confident };
+  return { ctx, account, reason: best.why.slice(0, 3).join(" · "), confident, domains: keyDomains };
+}
+
+/** Setup für einen über Kennung erkannten Kunden: Einsatz- oder Setupname im Text, sonst zuletzt aktives bearbeitbares Setup. */
+async function pickSetup(actor: Actor, accountId: string, flat: string, engs: (typeof schema.engagements.$inferSelect)[], internalName: (e: typeof schema.engagements.$inferSelect) => string | null): Promise<SetupContext | null> {
+  const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, accountId), orderBy: desc(schema.projectSetups.updatedAt) });
+  const editable: SetupContext[] = [];
+  for (const s of setups.filter((x) => x.status !== "ARCHIVIERT")) {
+    const c = await loadSetupContext(actor, s.id);
+    if (c && canViewSetup(actor, c) && canEditSetup(actor, c)) editable.push(c);
+  }
+  const mine = engs.filter((e) => e.accountId === accountId);
+  const fls = mine.some((e) => e.freelancerId) ? await db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, mine.map((e) => e.freelancerId).filter((x): x is string => !!x)), columns: { id: true, displayName: true } }) : [];
+  const hit = mine.find((e) => {
+    const name = e.freelancerId ? fls.find((f) => f.id === e.freelancerId)?.displayName ?? "" : internalName(e) ?? "";
+    const last = norm(name).split(" ").pop() ?? "";
+    return last.length >= 4 && flat.includes(` ${last} `);
+  });
+  const byName = editable.find((c) => norm(c.setup.name).length >= 4 && flat.includes(norm(c.setup.name)));
+  return (hit && editable.find((c) => c.setup.id === hit.setupId)) || byName || editable[0] || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +341,8 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
       continue;
     }
     // Kunde schon erkannt → keine Kunden-/Einsortierungskarte
-    if (i.route.account && (item.type === "KUNDE" || item.type === "EINSORTIERUNG")) continue;
+    // Kunde sicher erkannt → keine Kunden-/Einsortierungskarte; unsicher → die KI darf eine andere Zuordnung vorschlagen
+    if (i.route.account && (item.type === "KUNDE" || item.type === "EINSORTIERUNG") && (i.route.confident || (item.type === "EINSORTIERUNG" && norm(item.accountName) === norm(i.route.account.name)))) continue;
     if (item.type === "AKTION") r.dueDate = ISO.test(item.dueDate) ? item.dueDate : parseRelativeDue(item.dueHint) ?? parseDueHint(item.dueHint) ?? "";
     if (item.type === "VERLAENGERUNG" && item.newEnd && !ISO.test(item.newEnd)) item.newEnd = "";
     valid.push({ item, resolved: r });
@@ -317,7 +370,7 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
         objectType: resolved.engagementId ? "ENGAGEMENT" : null,
         objectId: resolved.engagementId ?? null,
         proposedOwnerUserId: actor.userId,
-        payload: { item, resolved },
+        payload: { item, resolved, route: { reason: i.route.reason, confident: i.route.confident, byKey: !!i.route.byKey, domains: i.route.domains ?? [] } },
         priorityCategory: v.priority,
         dedupeKey,
         provider: info.id,
@@ -492,6 +545,14 @@ export async function acceptIntakeCard(actor: Actor, s: SuggestionRow, ctx0: Set
         const accId = r.rebind.type === "ACCOUNT" ? r.rebind.id : setupId ? (await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, setupId) }))?.accountId ?? null : null;
         await db.update(schema.suggestions).set({ setupId: setupId ?? undefined, accountId: accId }).where(and(eq(schema.suggestions.aiJobId, s.aiJobId), isNull(schema.suggestions.setupId), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT"])));
         result.note += " Die übrigen Karten dieses Eingangs sind jetzt diesem Kunden zugeordnet.";
+        // Kennung lernen: die Mail-Domänen dieses Eingangs gehören künftig zu diesem Kunden
+        const domains = (s.payload as { route?: { domains?: string[] } } | null)?.route?.domains ?? [];
+        if (accId && domains.length) {
+          const { learnDomain } = await import("@/modules/accounts/keys");
+          const learned: string[] = [];
+          for (const d of domains) if (await learnDomain(db, actor.workspaceId, accId, d)) learned.push(d);
+          if (learned.length) result.note += ` Kennung gelernt: Mails von ${learned.join(", ")} gehören künftig zu diesem Kunden.`;
+        }
       }
     }
   }
@@ -661,4 +722,46 @@ export async function listRunningEingang(actor: Actor): Promise<{ running: { id:
   const running = jobs.filter((j) => j.status === "GESTARTET" && j.startedAt >= since).map((j) => ({ id: j.id, startedAt: j.startedAt }));
   const failed = jobs.find((j) => (j.status === "FEHLER" || j.status === "ABGELEHNT") && j.startedAt >= since && !jobs.some((k) => k.status === "ERFOLGREICH" && k.startedAt > j.startedAt));
   return { running, lastError: failed ? { at: failed.startedAt, error: failed.error ?? "unbekannter Fehler" } : null };
+}
+
+/**
+ * Falsch zugeordnet? (Etappe 42) – Eingang einem anderen Kunden/Setup zuordnen und mit dessen Lagebild neu auswerten.
+ * Optional werden die Mail-Domänen des Eingangs zur Kennung des richtigen Kunden (und bei einem anderen Kunden entfernt).
+ */
+export async function reassignIntake(actor: Actor, suggestionId: string, setupId: string, opts: { learn?: boolean } = {}, deps: { provider?: AIProvider } = {}) {
+  const { requireSuggestionAny } = await import("@/modules/suggestions/service");
+  const { suggestion: s } = await requireSuggestionAny(actor, suggestionId);
+  const sourceId = s.sourceIds[0];
+  if (!sourceId) throw new ValidationError("Zu dieser Karte gibt es keine Quelle, die neu ausgewertet werden könnte.");
+  const ctx = await loadSetupContext(actor, setupId);
+  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError("In diesem Setup darfst du nicht arbeiten.");
+  const domains = (s.payload as { route?: { domains?: string[] } } | null)?.route?.domains ?? [];
+  const learned: string[] = [];
+  if (opts.learn && domains.length) {
+    const { learnDomain } = await import("@/modules/accounts/keys");
+    const { sql } = await import("drizzle-orm");
+    for (const d of domains) {
+      // falsche Kennung bei einem anderen Kunden lösen, dann beim richtigen setzen
+      await db.execute(sql`update accounts set mail_domains = array_remove(mail_domains, ${d}) where workspace_id = ${actor.workspaceId} and id <> ${ctx.account.id} and ${d} = any(mail_domains)`);
+      if (await learnDomain(db, actor.workspaceId, ctx.account.id, d)) learned.push(d);
+    }
+    if (learned.length) await recordAudit(db, actor, "account.keys_learned", "ACCOUNT", ctx.account.id, { domaenen: learned.length });
+  }
+  await db.update(schema.sources).set({ setupId: ctx.setup.id }).where(and(eq(schema.sources.id, sourceId), eq(schema.sources.workspaceId, actor.workspaceId)));
+  if (s.aiJobId) await db.update(schema.suggestions).set({ status: "UEBERHOLT" }).where(and(eq(schema.suggestions.aiJobId, s.aiJobId), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT", "ZURUECKGESTELLT"])));
+  const r = await eingangFromSource(actor, sourceId, { autoRoute: false }, deps);
+  return { ...r, accountName: ctx.account.name, learned };
+}
+
+/** Bearbeitbare Setups für die Auswahl „Anderer Kunde“. */
+export async function editableSetupOptions(actor: Actor): Promise<{ id: string; label: string }[]> {
+  const out: { id: string; label: string }[] = [];
+  for (const a of (await listVisibleAccounts(actor)).filter((x) => x.status !== "ARCHIVED")) {
+    const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, a.id) });
+    for (const st of setups.filter((x) => x.status !== "ARCHIVIERT")) {
+      const c = await loadSetupContext(actor, st.id);
+      if (c && canEditSetup(actor, c)) out.push({ id: st.id, label: `${a.name} · ${st.name}` });
+    }
+  }
+  return out.sort((x, y) => x.label.localeCompare(y.label, "de"));
 }
