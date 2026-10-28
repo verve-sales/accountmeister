@@ -334,8 +334,29 @@ export async function changeActionStatusAction(fd: FormData) {
 export async function createPersonAction(fd: FormData) {
   const data = formToObject(fd);
   return run(data.back ?? `/kunden/${data.accountId}`, async (actor) => {
-    await createPerson(actor, data);
+    const p = await createPerson(actor, data);
+    if ("reused" in p) throw new PendingInfo(`${p.displayName} gab es bei diesem Kunden schon – Angaben ergänzt statt doppelt angelegt.`);
   }, "Person angelegt.");
+}
+
+/** Doppelt angelegte Personen zusammenführen (Etappe 40). */
+export async function mergePersonsAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/kunden", async (actor) => {
+    const { mergePersons } = await import("@/modules/people/service");
+    const r = await mergePersons(actor, data.keepId ?? "", (data.dropIds ?? "").split(",").filter(Boolean));
+    throw new PendingInfo(`Zusammengeführt: ${r.removed} doppelte(r) Eintrag/Einträge entfernt, Funktionen, Beziehungen und Einschätzungen hängen jetzt an einer Person.`);
+  }, "");
+}
+
+/** Falsch angelegte Person entfernen (Etappe 40). */
+export async function deletePersonAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/kunden", async (actor) => {
+    const { deletePerson } = await import("@/modules/people/service");
+    const r = await deletePerson(actor, data.personId ?? "");
+    throw new PendingInfo(`${r.name} entfernt.`);
+  }, "");
 }
 
 export async function setPersonLinkedInAction(fd: FormData) {

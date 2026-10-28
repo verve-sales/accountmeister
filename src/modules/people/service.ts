@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema, type Db, type Tx } from "@/db/client";
 import type { RelationshipState } from "@/db/schema";
@@ -47,6 +47,9 @@ export async function createPerson(actor: Actor, raw: unknown) {
     const ctx = await loadSetupContext(actor, input.setupId);
     if (!ctx || ctx.account.id !== account.id || !canEditSetup(actor, ctx)) throw new ForbiddenError("Für diesen Kunden dürfen Sie keine Personen anlegen.");
   }
+  // Gibt es die Person beim Kunden schon (gleiche E-Mail oder gleicher Name), wird sie ergänzt statt doppelt angelegt
+  const existing = await findExistingPerson(db, account.id, input.displayName, input.email);
+  if (existing) return enrichExisting(actor, existing, input);
   return db.transaction(async (tx) => {
     const [person] = await tx
       .insert(schema.persons)
@@ -82,6 +85,32 @@ export async function createPerson(actor: Actor, raw: unknown) {
     }
     await recordAudit(tx, actor, "person.created", "PERSON", person.id, { accountId: account.id });
     return person;
+  });
+}
+
+/** Bestehende Person ergänzen: fehlende Kontaktdaten, neue Funktion (nur wenn anders), Beziehung im Setup (nur wenn keine). */
+async function enrichExisting(actor: Actor, person: typeof schema.persons.$inferSelect, input: z.infer<typeof createPersonInput>) {
+  return db.transaction(async (tx) => {
+    const fill: Partial<typeof schema.persons.$inferInsert> = {};
+    if (!person.email && input.email) fill.email = input.email;
+    if (!person.phone && input.phone) fill.phone = input.phone;
+    if (!person.linkedinUrl && input.linkedinUrl) fill.linkedinUrl = input.linkedinUrl;
+    if (Object.keys(fill).length) await tx.update(schema.persons).set({ ...fill, updatedAt: new Date(), version: person.version + 1 }).where(eq(schema.persons.id, person.id));
+    if (input.functionTitle) {
+      const fns = await tx.query.personFunctions.findMany({ where: and(eq(schema.personFunctions.personId, person.id), isNull(schema.personFunctions.validTo)) });
+      const same = fns.find((f) => f.functionTitle.trim().toLowerCase() === input.functionTitle!.trim().toLowerCase());
+      if (!same) {
+        await tx.insert(schema.personFunctions).values({ personId: person.id, orgUnitId: await resolveOrgUnit(tx, person.accountId!, input.orgUnitId || undefined, input.orgUnitName || undefined), functionTitle: input.functionTitle, knownResponsibility: input.knownResponsibility || null });
+      } else if (input.knownResponsibility && (same.knownResponsibility ?? "").length < input.knownResponsibility.length) {
+        await tx.update(schema.personFunctions).set({ knownResponsibility: input.knownResponsibility }).where(eq(schema.personFunctions.id, same.id));
+      }
+    }
+    if (input.setupId) {
+      const rel = await tx.query.relationships.findFirst({ where: and(eq(schema.relationships.personId, person.id), eq(schema.relationships.setupId, input.setupId)) });
+      if (!rel) await tx.insert(schema.relationships).values({ personId: person.id, holderUserId: actor.userId, setupId: input.setupId, state: "NAME_FUNKTION_BEKANNT", contextNote: "Angelegt aus dem Setup; noch kein persönlicher Kontakt dokumentiert.", createdBy: actor.userId });
+    }
+    await recordAudit(tx, actor, "person.enriched", "PERSON", person.id, { accountId: person.accountId });
+    return { ...person, ...fill, reused: true as const };
   });
 }
 
@@ -274,4 +303,146 @@ export async function listPeopleForAccount(actor: Actor, accountId: string, setu
 
 export async function listOrgUnits(accountId: string) {
   return db.query.orgUnits.findMany({ where: eq(schema.orgUnits.accountId, accountId), orderBy: (u, { asc }) => [asc(u.name)] });
+}
+
+// ---------------------------------------------------------------------------
+// Doppelte Personen (Etappe 40): erkennen, beim Anlegen wiederverwenden, zusammenführen, entfernen
+
+/** Name vergleichbar machen: Anrede und Titel weg, Kleinschreibung, Leerraum zusammenfassen. */
+export function personKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\b(frau|herr|dr\.?|prof\.?|dipl\.?-?\w*\.?)\s+/g, "")
+    .replace(/[.,;:()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Gibt es diese Person beim Kunden schon? Gleiche E-Mail oder gleicher (bereinigter) Name. */
+export async function findExistingPerson(tx: Tx | Db, accountId: string, displayName: string, email?: string | null) {
+  const people = await tx.query.persons.findMany({ where: eq(schema.persons.accountId, accountId), orderBy: (p, { asc }) => [asc(p.createdAt)] });
+  const mail = (email ?? "").trim().toLowerCase();
+  if (mail) {
+    const byMail = people.find((p) => (p.email ?? "").toLowerCase() === mail);
+    if (byMail) return byMail;
+  }
+  const key = personKey(displayName);
+  return people.find((p) => personKey(p.displayName) === key && (!mail || !p.email)) ?? null;
+}
+
+/** Gruppen mehrfach angelegter Personen eines Kunden (gleiche E-Mail oder gleicher Name). */
+export function duplicateGroups<T extends { id: string; displayName: string; email: string | null; createdAt: Date }>(people: T[]): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const p of people) {
+    const k = personKey(p.displayName);
+    groups.set(k, [...(groups.get(k) ?? []), p]);
+  }
+  return [...groups.values()].filter((g) => g.length > 1).map((g) => g.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
+}
+
+/**
+ * Mehrfach angelegte Personen zusammenführen: Funktionen, Beziehungen, Einschätzungen, Kontaktwege, Teilnahmen und
+ * offene KI-Karten zeigen danach auf die behaltene Person; fehlende Kontaktdaten werden übernommen; die Dubletten
+ * werden gelöscht. Identische Funktionen und Beziehungen bleiben nur einmal stehen.
+ */
+export async function mergePersons(actor: Actor, keepId: string, dropIds: string[]) {
+  const keep = await requirePerson(actor, keepId, "write");
+  const drops: (typeof schema.persons.$inferSelect)[] = [];
+  for (const id of [...new Set(dropIds)].filter((x) => x !== keepId)) {
+    const p = await requirePerson(actor, id, "write");
+    if (p.accountId !== keep.accountId) throw new ValidationError("Zusammenführen geht nur innerhalb desselben Kunden.");
+    drops.push(p);
+  }
+  if (!drops.length) throw new ValidationError("Bitte mindestens eine weitere Person zum Zusammenführen wählen.");
+  const ids = drops.map((d) => d.id);
+  const { sql } = await import("drizzle-orm");
+  await db.transaction(async (tx) => {
+    // Kontaktdaten ergänzen
+    const fill = {
+      email: keep.email ?? drops.find((d) => d.email)?.email ?? null,
+      phone: keep.phone ?? drops.find((d) => d.phone)?.phone ?? null,
+      linkedinUrl: keep.linkedinUrl ?? drops.find((d) => d.linkedinUrl)?.linkedinUrl ?? null,
+    };
+    await tx.update(schema.persons).set({ ...fill, updatedAt: new Date(), version: keep.version + 1 }).where(eq(schema.persons.id, keep.id));
+    // Funktionen: umhängen, identische (Titel + Bereich) nur einmal – die mit der ausführlichsten Zuständigkeit bleibt
+    await tx.update(schema.personFunctions).set({ personId: keep.id }).where(inArray(schema.personFunctions.personId, ids));
+    const fns = await tx.query.personFunctions.findMany({ where: eq(schema.personFunctions.personId, keep.id) });
+    const seenFn = new Map<string, typeof fns[number]>();
+    const dropFn: string[] = [];
+    for (const f of fns.sort((a, b) => (b.knownResponsibility ?? "").length - (a.knownResponsibility ?? "").length || b.createdAt.getTime() - a.createdAt.getTime())) {
+      const k = `${f.functionTitle.trim().toLowerCase()}|${f.orgUnitId ?? ""}|${f.validTo ?? ""}`;
+      if (seenFn.has(k)) dropFn.push(f.id);
+      else seenFn.set(k, f);
+    }
+    if (dropFn.length) await tx.delete(schema.personFunctions).where(inArray(schema.personFunctions.id, dropFn));
+    // Beziehungen: umhängen, gleiche (Halter, Setup, Stand) nur einmal; Kontaktweg-Schritte zeigen auf die bleibende
+    await tx.update(schema.relationships).set({ personId: keep.id }).where(inArray(schema.relationships.personId, ids));
+    const rels = await tx.query.relationships.findMany({ where: eq(schema.relationships.personId, keep.id), orderBy: (r, { asc }) => [asc(r.createdAt)] });
+    const seenRel = new Map<string, string>();
+    for (const r of rels) {
+      const k = `${r.holderUserId}|${r.setupId ?? ""}|${r.state}`;
+      const first = seenRel.get(k);
+      if (!first) {
+        seenRel.set(k, r.id);
+        continue;
+      }
+      await tx.update(schema.accessPlanSteps).set({ relationshipId: first }).where(eq(schema.accessPlanSteps.relationshipId, r.id));
+      await tx.delete(schema.relationships).where(eq(schema.relationships.id, r.id));
+    }
+    // Buyingcenter-Einschätzung: je Setup eine – die bewertete bzw. zuletzt geänderte bleibt
+    const assessments = await tx.query.personAssessments.findMany({ where: inArray(schema.personAssessments.personId, [keep.id, ...ids]) });
+    const bySetup = new Map<string, typeof assessments>();
+    for (const a of assessments) bySetup.set(a.setupId, [...(bySetup.get(a.setupId) ?? []), a]);
+    for (const list of bySetup.values()) {
+      const score = (a: (typeof assessments)[number]) => (a.decisionRole ? 4 : 0) + (a.stance !== "UNBEKANNT" ? 2 : 0) + (a.influence !== "UNBEKANNT" ? 1 : 0);
+      const best = [...list].sort((a, b) => score(b) - score(a) || b.updatedAt.getTime() - a.updatedAt.getTime())[0]!;
+      const others = list.filter((a) => a.id !== best.id).map((a) => a.id);
+      if (others.length) await tx.delete(schema.personAssessments).where(inArray(schema.personAssessments.id, others));
+      if (best.personId !== keep.id) await tx.update(schema.personAssessments).set({ personId: keep.id }).where(eq(schema.personAssessments.id, best.id));
+    }
+    // übrige Verweise
+    await tx.update(schema.accessPlans).set({ targetPersonId: keep.id }).where(inArray(schema.accessPlans.targetPersonId, ids));
+    await tx.update(schema.accessPlanSteps).set({ fromPersonId: keep.id }).where(inArray(schema.accessPlanSteps.fromPersonId, ids));
+    await tx.update(schema.accessPlanSteps).set({ toPersonId: keep.id }).where(inArray(schema.accessPlanSteps.toPersonId, ids));
+    await tx.update(schema.decisionParticipations).set({ personId: keep.id }).where(inArray(schema.decisionParticipations.personId, ids));
+    await tx.update(schema.mergeReviewItems).set({ decidedPersonId: keep.id }).where(inArray(schema.mergeReviewItems.decidedPersonId, ids));
+    await tx.update(schema.candidacyEvents).set({ recipientPersonId: keep.id }).where(inArray(schema.candidacyEvents.recipientPersonId, ids));
+    await tx.update(schema.assertions).set({ subjectId: keep.id }).where(and(eq(schema.assertions.subjectType, "PERSON"), inArray(schema.assertions.subjectId, ids)));
+    for (const id of ids) {
+      await tx.execute(sql`update merge_review_items set candidate_person_ids = array_replace(candidate_person_ids, ${id}, ${keep.id}) where ${id} = any(candidate_person_ids)`);
+      await tx.execute(sql`update suggestions set payload = jsonb_set(payload, '{resolved,personId}', to_jsonb(${keep.id}::text)) where payload->'resolved'->>'personId' = ${id}`);
+    }
+    await tx.delete(schema.persons).where(inArray(schema.persons.id, ids));
+    await recordAudit(tx, actor, "person.merged", "PERSON", keep.id, { zusammengefuehrt: ids.length });
+  });
+  return { keptId: keep.id, removed: ids.length };
+}
+
+/**
+ * Person entfernen (falsch angelegt). Hängt sie an einem Kontaktweg oder einer Besetzung, bleibt sie – dann
+ * zusammenführen oder den Kontaktweg zuerst ändern. Funktionen, Beziehungen und Einschätzungen gehen mit.
+ */
+export async function deletePerson(actor: Actor, personId: string) {
+  const p = await requirePerson(actor, personId, "write");
+  const [plan, step, event] = await Promise.all([
+    db.query.accessPlans.findFirst({ where: eq(schema.accessPlans.targetPersonId, p.id), columns: { id: true } }),
+    db.query.accessPlanSteps.findFirst({ where: or(eq(schema.accessPlanSteps.fromPersonId, p.id), eq(schema.accessPlanSteps.toPersonId, p.id)), columns: { id: true } }),
+    db.query.candidacyEvents.findFirst({ where: eq(schema.candidacyEvents.recipientPersonId, p.id), columns: { id: true } }),
+  ]);
+  if (plan || step || event) throw new ValidationError(`${p.displayName} hängt an einem Kontaktweg oder einer Besetzung und kann nicht einfach entfernt werden. Ist sie doppelt angelegt: „Zusammenführen“.`);
+  const { sql } = await import("drizzle-orm");
+  await db.transaction(async (tx) => {
+    const rels = await tx.query.relationships.findMany({ where: eq(schema.relationships.personId, p.id), columns: { id: true } });
+    if (rels.length) await tx.update(schema.accessPlanSteps).set({ relationshipId: null }).where(inArray(schema.accessPlanSteps.relationshipId, rels.map((r) => r.id)));
+    await tx.delete(schema.relationships).where(eq(schema.relationships.personId, p.id));
+    await tx.delete(schema.personFunctions).where(eq(schema.personFunctions.personId, p.id));
+    await tx.delete(schema.personAssessments).where(eq(schema.personAssessments.personId, p.id));
+    await tx.update(schema.decisionParticipations).set({ personId: null }).where(eq(schema.decisionParticipations.personId, p.id));
+    await tx.update(schema.mergeReviewItems).set({ decidedPersonId: null }).where(eq(schema.mergeReviewItems.decidedPersonId, p.id));
+    await tx.execute(sql`update merge_review_items set candidate_person_ids = array_remove(candidate_person_ids, ${p.id}) where ${p.id} = any(candidate_person_ids)`);
+    await tx.execute(sql`update suggestions set payload = payload #- '{resolved,personId}' where payload->'resolved'->>'personId' = ${p.id}`);
+    await tx.delete(schema.persons).where(eq(schema.persons.id, p.id));
+    await recordAudit(tx, actor, "person.deleted", "PERSON", p.id, { accountId: p.accountId });
+  });
+  return { name: p.displayName };
 }

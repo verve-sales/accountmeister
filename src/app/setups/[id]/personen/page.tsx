@@ -6,13 +6,13 @@ import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
 import { requireSetupContext } from "@/modules/setups/service";
 import { canEditSetup, canViewSource } from "@/modules/identity/authz";
-import { listOrgUnits, listPeopleForAccount } from "@/modules/people/service";
+import { duplicateGroups, listOrgUnits, listPeopleForAccount } from "@/modules/people/service";
 import { listAccessPlansForSetup } from "@/modules/accesspaths/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { SetupTabs } from "@/components/SetupTabs";
 import { accessClassLabel, accessPlanStatusLabel, fmtDate, readinessLabel, relationshipStateLabel, stepKindLabel } from "@/lib/labels";
-import { addAccessPlanStepAction, changeAccessPlanStatusAction, createAccessPlanAction, createPersonAction, saveAssessmentAction, setPersonFunctionAction, setPersonLinkedInAction, setRelationshipAction } from "../../../actions";
+import { addAccessPlanStepAction, changeAccessPlanStatusAction, createAccessPlanAction, createPersonAction, deletePersonAction, mergePersonsAction, saveAssessmentAction, setPersonFunctionAction, setPersonLinkedInAction, setRelationshipAction } from "../../../actions";
 import { getBuyingCenter } from "@/modules/people/assessments";
 import { decisionRoleLabel, epistemicLabel, influenceLabel, stanceLabel } from "@/lib/labels";
 
@@ -42,6 +42,15 @@ export default async function PersonenPage({ params, searchParams }: { params: P
   const personName = new Map(people.map((p) => [p.person.id, p.person.displayName]));
   const allRelationships = people.flatMap((p) => p.relationships.map((r) => ({ ...r, personName: p.person.displayName })));
   const openPlans = plans.filter((p) => p.status !== "BEENDET");
+  // Doppelt angelegte Personen: die mit den meisten Angaben bleibt (Beziehungen, Kontaktdaten), sonst die älteste
+  const dupes = duplicateGroups(people.map((p) => p.person)).map((g) => {
+    const info = (pid: string) => {
+      const e = people.find((x) => x.person.id === pid)!;
+      return e.relationships.length * 4 + (e.person.email ? 2 : 0) + (e.person.phone ? 1 : 0) + (e.person.linkedinUrl ? 1 : 0) + (e.currentFunction?.knownResponsibility?.length ?? 0) / 1000;
+    };
+    const keep = [...g].sort((a, b) => info(b.id) - info(a.id) || a.createdAt.getTime() - b.createdAt.getTime())[0]!;
+    return { keep, drops: g.filter((p) => p.id !== keep.id) };
+  });
 
   return (
     <div className="space-y-6">
@@ -58,9 +67,22 @@ export default async function PersonenPage({ params, searchParams }: { params: P
       {/* Personen */}
       <section className="card">
         <h2 className="font-semibold mb-2">Personen beim Kunden ({people.length})</h2>
+        {canEdit && dupes.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {dupes.map((d) => (
+              <form key={d.keep.id} action={mergePersonsAction} className="flex flex-wrap items-center gap-3 text-sm p-2" style={{ borderLeft: "4px solid #b7791f", background: "var(--surface-2)", borderRadius: 6 }}>
+                <input type="hidden" name="keepId" value={d.keep.id} />
+                <input type="hidden" name="dropIds" value={d.drops.map((x) => x.id).join(",")} />
+                <input type="hidden" name="back" value={back} />
+                <span><strong>{d.keep.displayName}</strong> ist {d.drops.length + 1}× angelegt. Zusammenführen behält einen Eintrag mit allen Funktionen, Beziehungen und Einschätzungen.</span>
+                <button className="btn btn-small" type="submit">Zusammenführen</button>
+              </form>
+            ))}
+          </div>
+        )}
         {people.length === 0 ? <p className="muted text-sm">Noch keine Personen erfasst.</p> : (
           <table className="list">
-            <thead><tr><th>Person</th><th>Funktion / Bereich</th><th>Bekannte Zuständigkeit</th><th>Beziehungen in diesem Setup</th><th>Zugriff</th></tr></thead>
+            <thead><tr><th>Person</th><th>Funktion / Bereich</th><th>Bekannte Zuständigkeit</th><th>Beziehungen in diesem Setup</th><th>Zugriff</th>{canEdit && <th></th>}</tr></thead>
             <tbody>
               {people.map(({ person, currentFunction, relationships }) => (
                 <tr key={person.id}>
@@ -81,6 +103,19 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                     ))}
                   </td>
                   <td className="text-sm">{accessClassLabel[person.accessClass]}</td>
+                  {canEdit && (
+                    <td>
+                      <details className="text-sm">
+                        <summary className="muted" style={{ cursor: "pointer" }}>Entfernen</summary>
+                        <form action={deletePersonAction} className="mt-1">
+                          <input type="hidden" name="personId" value={person.id} />
+                          <input type="hidden" name="back" value={back} />
+                          <p className="muted text-xs mb-1" style={{ maxWidth: 220 }}>Für falsch angelegte Personen. Funktionen, Beziehungen und Einschätzungen gehen mit. Bei Dubletten besser „Zusammenführen“.</p>
+                          <button className="btn btn-small" type="submit" style={{ background: "#c0392b", borderColor: "#c0392b" }}>Endgültig entfernen</button>
+                        </form>
+                      </details>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
