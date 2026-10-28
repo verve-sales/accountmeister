@@ -109,8 +109,9 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
           <form action={createAccountAction} className="mt-3 grid sm:grid-cols-2 gap-3">
             <div><label className="label" htmlFor="name">Name der Organisation</label><input id="name" name="name" className="input" required minLength={2} /></div>
             <div>
-              <label className="label" htmlFor="orgType">Organisationstyp</label>
-              <select id="orgType" name="orgType" className="select" defaultValue="SONSTIGE">
+              <label className="label" htmlFor="orgType">Organisationstyp <span style={{ color: "#c0392b" }}>*</span></label>
+              <select id="orgType" name="orgType" className="select" defaultValue="" required>
+                <option value="" disabled>Bitte wählen …</option>
                 {schema.orgTypeEnum.enumValues.map((v) => <option key={v} value={v}>{orgTypeLabel[v] ?? v}</option>)}
               </select>
             </div>

@@ -45,6 +45,18 @@ Köpfe: verschiedene Personen mit laufendem Einsatz am Stichtag. Neukunde: der e
 Die Gesprächsseite folgt dem Ablauf Lage → Zahlen → offene Entscheidungen → Vereinbarungen. Jede Vereinbarung braucht eine Frist und landet als Vorgang beim Principal; offene und überfällige Vereinbarungen stehen in der Übersicht. Der Principal sieht seine Ziele und Vereinbarungen selbst, ändern kann sie nur die Geschäftsführung.`,
   },
   {
+    id: "begriffe",
+    title: "Begriffe: Kunde, Setup, Chance, Aktion, Vorgang",
+    where: "überall – das „?“ neben einem Begriff erklärt ihn",
+    keywords: ["begriff", "setup", "chance", "vorgang", "aktion", "aufgabe", "unterschied", "definition", "was ist", "anlegen"],
+    body: `Kunde: die Organisation (z. B. eine Bank). Unter ihr liegen Setups, Personen und Einsätze.
+Setup: ein Arbeitszusammenhang beim Kunden – Team, Bereich oder Vorhaben. Ein Kunde hat meist mehrere Setups. Ein einzelner Bedarf ist kein Setup, sondern eine Chance.
+Chance: eine mögliche Vermittlung im Setup – Verve-Experte, Freelancer oder Ausschreibung –, von „antizipiert“ bis „beauftragt“. Eine Aufgabe ist keine Chance.
+Aktion: ein vereinbarter nächster Schritt gegenüber dem Kunden (Profile schicken, Termin vereinbaren), mit Frist, im Setup oder an der Chance.
+Vorgang: ein interner Auftrag an dich selbst, eine Kollegin oder ein Team (z. B. Sales Operations), mit Annahme, Frist und Rückmeldung.
+Faustregel: Wer muss etwas tun? Kunde gegenüber → Aktion; jemand bei Verve → Vorgang. Worum geht es? Eine mögliche Besetzung → Chance; ein Team oder Vorhaben beim Kunden → Setup.`,
+  },
+  {
     id: "grundidee",
     title: "Worum es geht: Kunde, Setup, Chance, Wofür",
     where: "Kunden → Kunde → Setup → Chance",

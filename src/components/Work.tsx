@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Term } from "@/components/Term";
 import type { Actor } from "@/modules/identity/actor";
 import { listWorkForSubject, workKindLabel, workStatusLabel, workTargets, type WorkItemView } from "@/modules/work/service";
 import { canComment, listComments, type CommentSubject } from "@/modules/comments/service";
@@ -78,7 +79,7 @@ export async function WorkBlock({ actor, subjectType, subjectId, back, title = "
       )}
       {canCreate && (
         <details className="mt-2">
-          <summary>Vorgang anlegen oder anfragen</summary>
+          <summary>Vorgang anlegen oder anfragen<Term k="VORGANG" /></summary>
           <WorkCreateForm users={targets.users} teams={targets.teams} subjectType={subjectType} subjectId={subjectId} back={`${back}#vorgaenge`} idPrefix={`wb-${subjectType}`} />
         </details>
       )}

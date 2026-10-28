@@ -84,7 +84,8 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
                 <div><label className="label" htmlFor="orgName">Name der Organisation (bei Neuanlage)</label><input id="orgName" name="orgName" className="input" defaultValue={p.organization?.name ?? ""} maxLength={200} />{p.organization && quote(p.organization.evidenceQuote)}</div>
                 <div>
                   <label className="label" htmlFor="orgType">Organisationstyp</label>
-                  <select id="orgType" name="orgType" className="select" defaultValue={p.organization?.orgType ?? "SONSTIGE"}>
+                  <select id="orgType" name="orgType" className="select" defaultValue={p.organization?.orgType && p.organization.orgType !== "SONSTIGE" ? p.organization.orgType : ""}>
+                    <option value="">Bitte wählen … (Pflicht bei Neuanlage)</option>
                     {schema.orgTypeEnum.enumValues.map((v) => <option key={v} value={v}>{orgTypeLabel[v] ?? v}</option>)}
                   </select>
                 </div>

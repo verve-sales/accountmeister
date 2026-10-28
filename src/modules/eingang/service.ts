@@ -418,6 +418,8 @@ export const acceptCardInput = z.object({
   version: z.coerce.number().int().positive(),
   newEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")),
   contractFollowUp: z.string().trim().max(200).optional().or(z.literal("")),
+  /** Organisationstyp beim Anlegen eines neuen Kunden (Pflichtfrage auf der Karte) */
+  orgType: z.enum(schema.orgTypeEnum.enumValues).optional().or(z.literal("")),
   /** Kunde zuordnen, wenn die Karte noch keinem Setup gehört */
   setupId: z.string().optional().or(z.literal("")),
 });
@@ -433,6 +435,7 @@ export async function acceptIntakeCard(actor: Actor, s: SuggestionRow, ctx0: Set
   const payload = s.payload as { item: IntakeItem; resolved: Resolved } | null;
   if (!payload) throw new ValidationError("Die Karte ist unvollständig.");
   const { item, resolved } = payload;
+  if (item.type === "KUNDE" && input.orgType) item.orgType = input.orgType;
   let ctx = ctx0;
   // Karte ohne Setup: gewähltes Setup übernehmen
   if (!ctx && input.setupId) {

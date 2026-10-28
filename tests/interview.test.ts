@@ -74,6 +74,7 @@ describe("Etappe 7A: Interview mit Rückfragen und Folgeaktivitäten", () => {
     // Übernahme: Aktionen/Kontaktaufnahmen werden Vorschläge für die adressierte Rolle; Einschätzung als Hypothese mit Quelle
     const form = formToApplyInput({
       orgName: "Musterwerk GmbH",
+      orgType: "KONZERN",
       setupName: "Erstkontakt Musterwerk (Interview)",
       documentAccessClass: "SETUP",
       "persons.0.include": "on",

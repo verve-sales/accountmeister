@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { DomainError } from "@/lib/errors";
+import { DomainError, ValidationError } from "@/lib/errors";
 import { getCurrentActor, getSession, touchSession } from "@/modules/identity/session";
 import { headers } from "next/headers";
 import { checkRateLimit, LIMITS } from "@/lib/ratelimit";
@@ -135,9 +135,18 @@ export async function logoutAction() {
 export async function createAccountAction(fd: FormData) {
   const data = formToObject(fd);
   return run("/kunden", async (actor) => {
+    if (!data.orgType) throw new ValidationError("Bitte den Organisationstyp wählen (Pflichtfeld).");
     const a = await createAccount(actor, { ...data, responsibleBdUserId: data.responsibleBdUserId || null });
     return `/kunden/${a.id}`;
   }, "Kunde angelegt.");
+}
+
+export async function setAccountOrgTypeAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/kunden/${data.accountId ?? ""}`, async (actor) => {
+    const { setAccountOrgType } = await import("@/modules/accounts/service");
+    await setAccountOrgType(actor, data.accountId ?? "", data.orgType ?? "");
+  }, "Organisationstyp gespeichert.");
 }
 
 export async function reassignAccountBdAction(fd: FormData) {

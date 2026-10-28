@@ -2,7 +2,7 @@ import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { Status } from "@/components/Status";
-import { feedbackReasonLabel, fmtDate, opportunityStatusLabel } from "@/lib/labels";
+import { feedbackReasonLabel, fmtDate, opportunityStatusLabel, orgTypeLabel } from "@/lib/labels";
 import { acceptSuggestionAction, suggestionFeedbackAction } from "@/app/actions";
 import { eingangTypeLabel, renewalDefaultsFor } from "@/modules/eingang/service";
 import type { IntakeItem } from "@/modules/ai/schemas";
@@ -79,6 +79,15 @@ export async function EingangCard({ s, canDecide, back }: { s: Suggestion; canDe
               <input type="hidden" name="suggestionId" value={s.id} />
               <input type="hidden" name="version" value={s.version} />
               <input type="hidden" name="back" value={back} />
+              {item.type === "KUNDE" && (
+                <div>
+                  <label className="label" htmlFor={`ot-${s.id}`}>Organisationstyp <span style={{ color: "#c0392b" }}>*</span></label>
+                  <select id={`ot-${s.id}`} name="orgType" className="select" required defaultValue={item.orgType && item.orgType !== "SONSTIGE" ? item.orgType : ""}>
+                    <option value="" disabled>Bitte wählen …</option>
+                    {schema.orgTypeEnum.enumValues.map((v) => <option key={v} value={v}>{orgTypeLabel[v] ?? v}</option>)}
+                  </select>
+                </div>
+              )}
               {renewal && item.type === "VERLAENGERUNG" && item.decision !== "ENDET" && (
                 <>
                   <div><label className="label" htmlFor={`ne-${s.id}`}>Neues Ende{renewal.fromText ? "" : " (nicht im Text – bitte prüfen)"}</label><input id={`ne-${s.id}`} type="date" name="newEnd" className="input" required defaultValue={renewal.newEnd} /></div>

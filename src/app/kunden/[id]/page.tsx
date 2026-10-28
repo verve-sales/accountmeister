@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Term } from "@/components/Term";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getAccount } from "@/modules/accounts/service";
@@ -12,8 +13,10 @@ import { canDeleteAccount } from "@/modules/accounts/deletion";
 import { DomainError } from "@/lib/errors";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
+import { orgTypeLabel } from "@/lib/labels";
+import { hasRoleForAccountWrite } from "@/modules/identity/authz";
 import { accountStatusLabel, fmtDate, setupStatusLabel, visibilityLabel, contributionLabel, opportunityStatusLabel } from "@/lib/labels";
-import { createSetupAction } from "../../actions";
+import { createSetupAction, setAccountOrgTypeAction } from "../../actions";
 import { listPeopleForAccount } from "@/modules/people/service";
 import { relationshipStateLabel, priorityKindLabel, priorityStatusLabel } from "@/lib/labels";
 import { buildAccountPlan, canEditAccountPlan, listAccountPlanSnapshots } from "@/modules/accountplan/service";
@@ -93,11 +96,23 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">{account.name}</h1>
         {account.status === "ARCHIVED" && <Status label={accountStatusLabel.ARCHIVED!} />}
+        <span className="muted text-sm">{orgTypeLabel[account.orgType] ?? account.orgType}</span>
         {mayDelete && <Link href={`/kunden/${account.id}/loeschen`} className="muted text-sm ml-auto">Kunde archivieren oder löschen</Link>}
       </div>
+      {account.orgType === "SONSTIGE" && !ro && (hasRoleForAccountWrite(actor, account) || actor.roles.has("CEO")) && (
+        <form action={setAccountOrgTypeAction} className="flex flex-wrap items-center gap-2 text-sm p-2" style={{ borderLeft: "4px solid #b7791f", background: "var(--surface-2)", borderRadius: 6 }}>
+          <input type="hidden" name="accountId" value={account.id} />
+          <span>Organisationstyp fehlt noch:</span>
+          <select name="orgType" className="select" required defaultValue="" aria-label="Organisationstyp" style={{ width: "14rem" }}>
+            <option value="" disabled>Bitte wählen …</option>
+            {schema.orgTypeEnum.enumValues.filter((v) => v !== "SONSTIGE").map((v) => <option key={v} value={v}>{orgTypeLabel[v] ?? v}</option>)}
+          </select>
+          <button className="btn btn-small" type="submit">Speichern</button>
+        </form>
+      )}
       {account.status === "ARCHIVED" && <p className="text-sm" style={{ background: "#fdf6ec", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ist archiviert. Alles bleibt erhalten; <Link href={`/kunden/${account.id}/loeschen`}>wiederherstellen oder endgültig löschen</Link>.</p>}
       <section className="card">
-        <h2 className="font-semibold mb-2">Wo stehen wir? – je Chance</h2>
+        <h2 className="font-semibold mb-2">Wo stehen wir? – je Chance<Term k="CHANCE" /></h2>
         <ChancenUebersicht chances={chanceRows} showSetup={setups.length > 1} emptyText="Noch keine Chance benannt. Worauf läuft es bei diesem Kunden hinaus? Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten." back={`/kunden/${id}`} />
         {runs.filter((r) => r.status === "AKTIV").map((r) => {
           const cur = r.steps.find((x) => x.status === "OFFEN");
@@ -365,7 +380,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
 
       {mayCreate && (
         <details className="card" open={setups.length === 0}>
-          <summary>Setup anlegen</summary>
+          <summary>Setup anlegen<Term k="SETUP" /></summary>
           <form action={createSetupAction} className="mt-3 grid sm:grid-cols-2 gap-3">
             <input type="hidden" name="accountId" value={account.id} />
             <div className="sm:col-span-2"><label className="label" htmlFor="name">Verständlicher Setup-Name</label><input id="name" name="name" className="input" required minLength={3} placeholder="z. B. Plattformteam" /></div>

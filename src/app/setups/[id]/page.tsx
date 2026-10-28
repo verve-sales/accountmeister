@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Term } from "@/components/Term";
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
@@ -299,7 +300,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
         {d.canEdit && (
           <details className="mt-3">
-            <summary>Chance erfassen</summary>
+            <summary>Chance erfassen<Term k="CHANCE" /></summary>
             <form action={createOpportunityAction} className="mt-2 grid sm:grid-cols-2 gap-3">
               <input type="hidden" name="setupId" value={id} />
               <input type="hidden" name="back" value={back} />
@@ -381,7 +382,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
         {d.canEdit && (
           <details className="mt-3">
-            <summary className="text-sm">Aktion vereinbaren</summary>
+            <summary className="text-sm">Aktion vereinbaren<Term k="AKTION" /></summary>
             <form action={createActionAction} className="mt-2 grid sm:grid-cols-2 gap-3">
               <input type="hidden" name="setupId" value={d.setup.id} />
               <input type="hidden" name="back" value={back} />

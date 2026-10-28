@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Term } from "@/components/Term";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { ensureStandardTasksSafe } from "@/modules/focus/standardTasks";
@@ -100,7 +101,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         </nav>
         <WorkList items={tabItems} empty={filter === "alle" ? "Nichts offen." : "Nichts in diesem Filter."} perspective={tab === "mir" ? "assignee" : tab === "beauftragt" ? "requester" : "queue"} />
         <details className="mt-3">
-          <summary>Neuer Vorgang</summary>
+          <summary>Neuer Vorgang<Term k="VORGANG" /></summary>
           <WorkCreateForm users={targets.users} teams={targets.teams} back="/meine-arbeit?v=beauftragt#vorgaenge" idPrefix="ma" />
         </details>
       </section>

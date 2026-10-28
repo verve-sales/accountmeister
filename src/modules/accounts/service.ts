@@ -128,3 +128,15 @@ export async function getUsersByIds(userIds: string[]) {
   if (userIds.length === 0) return [];
   return db.query.users.findMany({ where: inArray(schema.users.id, userIds) });
 }
+
+/** Organisationstyp nachtragen oder korrigieren (Etappe 41) – BD, Principal, Anker des Kunden, Sales Operations. */
+export async function setAccountOrgType(actor: Actor, accountId: string, orgType: string) {
+  const account = await getAccount(actor, accountId);
+  const { hasRoleForAccountWrite } = await import("@/modules/identity/authz");
+  if (!hasRoleForAccountWrite(actor, account) && !actor.roles.has("CEO")) throw new ForbiddenError("Den Organisationstyp ändern BD, Principal oder Sales Operations des Kunden.");
+  const v = schema.orgTypeEnum.enumValues.find((x) => x === orgType);
+  if (!v) throw new ValidationError("Bitte einen Organisationstyp wählen.");
+  await db.update(schema.accounts).set({ orgType: v, updatedAt: new Date() }).where(eq(schema.accounts.id, account.id));
+  await recordAudit(db, actor, "account.org_type", "ACCOUNT", account.id, { orgType: v });
+  return v;
+}

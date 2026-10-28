@@ -187,7 +187,7 @@ const ownerRoleValues = ["BD", "ANKER", "PRINCIPAL"] as const;
 export const applyIntakeInput = z.object({
   existingAccountId: z.string().optional().or(z.literal("")),
   orgName: z.string().trim().max(200).optional().or(z.literal("")),
-  orgType: z.enum(schema.orgTypeEnum.enumValues).default("SONSTIGE"),
+  orgType: z.enum(schema.orgTypeEnum.enumValues).or(z.literal("")).default(""),
   responsibleBdUserId: z.string().optional().or(z.literal("")),
   setupName: z.string().trim().max(200).optional().or(z.literal("")),
   contextNote: z.string().trim().max(2000).optional().or(z.literal("")),
@@ -264,9 +264,10 @@ export async function applyIntake(actor: Actor, proposalId: string, raw: unknown
   } else {
     if (!input.existingAccountId && (input.orgName ?? "").length < 2) throw new ValidationError("Bitte einen Kundennamen eingeben oder einen bestehenden Kunden wählen.");
     if ((input.setupName ?? "").length < 3) throw new ValidationError("Setup-Name ist zu kurz.");
+    if (!input.existingAccountId && !input.orgType) throw new ValidationError("Bitte den Organisationstyp des neuen Kunden wählen (Pflichtfeld).");
     // 1) Kunde (neu oder bestehend) und Setup – über die geprüften Services, damit alle Rechte- und Rollenregeln gelten
     const bd = input.responsibleBdUserId || actor.userId;
-    accountId = input.existingAccountId || (await createAccount(actor, { name: input.orgName, orgType: input.orgType, responsibleBdUserId: bd })).id;
+    accountId = input.existingAccountId || (await createAccount(actor, { name: input.orgName, orgType: input.orgType || "SONSTIGE", responsibleBdUserId: bd })).id;
     const setup = await createSetup(actor, { accountId, name: input.setupName, contextNote: input.contextNote || `Angelegt aus ${originLabel}.`, bdUserId: bd, creatorContribution: "ANKER_KONTEXT" });
     setupId = setup.id;
     // 2) Quelle dem Setup zuordnen

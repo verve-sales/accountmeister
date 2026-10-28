@@ -9,15 +9,42 @@ import { AdapterError, type FetchedSource, type SelectableItem, type SelectableK
  */
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
-async function graphGet(path: string, accessToken: string, fetchImpl: typeof fetch = fetch): Promise<unknown> {
-  const res = await fetchImpl(`${GRAPH_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.body-content-type="text"' },
-    signal: AbortSignal.timeout(15_000),
-  });
+/** Vorübergehende Fehler von Microsoft (Drosselung, Überlast, Wartung): Microsoft empfiehlt erneut zu versuchen. */
+const TRANSIENT = new Set([429, 502, 503, 504]);
+const MAX_ATTEMPTS = 3;
+
+function retryDelayMs(res: Response, attempt: number): number {
+  const ra = Number(res.headers.get("Retry-After"));
+  // Retry-After (Sekunden) respektieren, aber nicht länger als 8 s warten lassen; sonst 1 s, 2 s
+  if (Number.isFinite(ra) && ra > 0) return Math.min(ra, 8) * 1000;
+  return 1000 * attempt;
+}
+
+export async function graphGet(path: string, accessToken: string, fetchImpl: typeof fetch = fetch, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): Promise<unknown> {
+  let res: Response | null = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      res = await fetchImpl(`${GRAPH_BASE}${path}`, {
+        headers: { Authorization: `Bearer ${accessToken}`, Prefer: 'outlook.body-content-type="text"' },
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch {
+      // Zeitüberschreitung oder Netzfehler: wie ein vorübergehender Fehler behandeln
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(1000 * attempt);
+        continue;
+      }
+      throw new AdapterError("TEMPORARY", "Microsoft 365 antwortet gerade nicht (Zeitüberschreitung). Bitte in ein paar Minuten erneut versuchen.");
+    }
+    if (!TRANSIENT.has(res.status) || attempt === MAX_ATTEMPTS) break;
+    await sleep(retryDelayMs(res, attempt));
+  }
+  if (!res) throw new AdapterError("TEMPORARY", "Microsoft 365 ist gerade nicht erreichbar. Bitte in ein paar Minuten erneut versuchen.");
   if (res.status === 401) throw new AdapterError("AUTH", "Microsoft Graph hat den Zugriff abgelehnt (Token abgelaufen oder widerrufen).");
   if (res.status === 403) throw new AdapterError("AUTH", "Microsoft Graph verweigert den Zugriff (403) – vermutlich fehlt eine Berechtigung (z. B. Chat.Read für Teams-Chats). Bitte unter Einstellungen das Postfach neu verbinden.");
   if (res.status === 404) throw new AdapterError("NOT_FOUND", "Quelle nicht (mehr) zugänglich.");
-  if (res.status === 429) throw new AdapterError("RATE_LIMIT", "Microsoft Graph hat vorübergehend gedrosselt. Bitte später erneut versuchen.");
+  if (res.status === 429) throw new AdapterError("RATE_LIMIT", "Microsoft 365 bremst gerade die Abfragen (zu viele in kurzer Zeit). Bitte in ein bis zwei Minuten erneut versuchen.");
+  if (TRANSIENT.has(res.status)) throw new AdapterError("TEMPORARY", `Microsoft 365 ist gerade nicht erreichbar (Fehler ${res.status} bei Microsoft, drei Versuche). Das liegt nicht am Accountmeister – bitte in ein paar Minuten erneut versuchen; hält es an, im Microsoft 365 Admin Center unter „Dienstintegrität“ nachsehen.`);
   if (!res.ok) throw new AdapterError("TEMPORARY", `Microsoft Graph antwortete mit Fehler ${res.status}.`);
   return res.json();
 }
