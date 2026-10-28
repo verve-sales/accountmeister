@@ -335,6 +335,13 @@ export class TestProvider implements AIProvider {
       const due = /nächster schritt|bis ende (des|der) (monats|woche)|bis (zum )?\d{1,2}\.\d{1,2}\.|bis (montag|dienstag|mittwoch|donnerstag|freitag)/i.test(x);
       if (due && /schicken|senden|zusenden|liefern|vorstellen|melden|rückmeldung/i.test(x)) items.push({ type: "AKTION", title: x.replace(/^nächster schritt:\s*/i, "").slice(0, 200), description: "", ownerRole: "BD", dueHint: x.match(/bis [^.,;]+/i)?.[0] ?? "", dueDate: "", chanceRef: "", purpose: "", evidenceQuote: x });
     }
+    // Initiativen-Bezug: Titelwort einer Kunden-Initiative (I-Kürzel) im Beleg der Karte
+    const inits = refLines("I").map((x) => ({ ref: x.ref, words: x.text.split(" [")[0]!.toLowerCase().split(/[^a-zäöüß0-9-]+/).filter((w) => w.length >= 5) }));
+    for (const it of items) {
+      const quote = String(it.evidenceQuote ?? "").toLowerCase();
+      const hit = inits.find((x) => x.words.some((w) => quote.includes(w)));
+      if (hit) it.initiativeRef = hit.ref;
+    }
     return { items, summary: "", noSuggestionReason: items.length ? "" : "Nichts Belastbares erkannt." };
   }
 

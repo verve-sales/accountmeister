@@ -1,0 +1,2 @@
+ALTER TABLE "suggestions" ADD COLUMN "initiative_id" text;--> statement-breakpoint
+ALTER TABLE "suggestions" ADD CONSTRAINT "suggestions_initiative_id_account_initiatives_id_fk" FOREIGN KEY ("initiative_id") REFERENCES "public"."account_initiatives"("id") ON DELETE no action ON UPDATE no action;

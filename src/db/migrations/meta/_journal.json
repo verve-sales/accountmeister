@@ -274,6 +274,13 @@
       "when": 1793186177609,
       "tag": "0038_kunden_kennungen",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793186888255,
+      "tag": "0039_karte_initiative",
+      "breakpoints": true
     }
   ]
 }

@@ -843,6 +843,8 @@ export const suggestions = pgTable(
     promptVersion: text("prompt_version").notNull(),
     computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
     aiJobId: text("ai_job_id").references(() => aiJobs.id),
+    /** Schlüssel-Initiative der Kundenagenda, auf die die Karte einzahlt (Etappe 43) */
+    initiativeId: text("initiative_id").references(() => accountInitiatives.id),
     status: suggestionStatusEnum("status").notNull().default("NEU"),
     feedbackReason: feedbackReasonEnum("feedback_reason"),
     feedbackNote: text("feedback_note"),

@@ -11,8 +11,8 @@ type Suggestion = typeof schema.suggestions.$inferSelect;
  * Vorschlagskarte (Briefing 14.2): zeigt Beobachtung, getrennt gekennzeichnete Idee, Beleg, Unsicherheit,
  * Warum-jetzt, nächsten Schritt, vorgeschlagene Person, Modell-/Promptversion. Entscheidung bleibt beim Menschen.
  */
-export async function SuggestionCard({ s, ownerName, canDecide, back, users }: { s: Suggestion; ownerName: string | null; canDecide: boolean; back: string; users: { id: string; displayName: string }[] }) {
-  if (s.type === "KARTE") return <EingangCard s={s} canDecide={canDecide} back={back} />;
+export async function SuggestionCard({ s, ownerName, canDecide, back, users, routeLine }: { s: Suggestion; ownerName: string | null; canDecide: boolean; back: string; users: { id: string; displayName: string }[]; routeLine?: boolean }) {
+  if (s.type === "KARTE") return <EingangCard s={s} canDecide={canDecide} back={back} routeLine={routeLine} />;
   const open = s.status === "NEU" || s.status === "GEPRUEFT" || s.status === "ZURUECKGESTELLT";
   const renewal = s.type === "VERLAENGERUNG" ? await renewalDefaults(s) : null;
   return (

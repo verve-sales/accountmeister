@@ -18,6 +18,7 @@ import { hasRoleForAccountWrite } from "@/modules/identity/authz";
 import { accountStatusLabel, fmtDate, setupStatusLabel, visibilityLabel, contributionLabel, opportunityStatusLabel } from "@/lib/labels";
 import { createSetupAction, setAccountKeysAction, setAccountOrgTypeAction } from "../../actions";
 import { suggestedDomains } from "@/modules/accounts/keys";
+import { listCardsByInitiative } from "@/modules/suggestions/service";
 import { listPeopleForAccount } from "@/modules/people/service";
 import { relationshipStateLabel, priorityKindLabel, priorityStatusLabel } from "@/lib/labels";
 import { buildAccountPlan, canEditAccountPlan, listAccountPlanSnapshots } from "@/modules/accountplan/service";
@@ -142,7 +143,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       <Feedback params={sp} />
 
       {sosList.some((x) => x.status !== "GELOEST") && <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} />}
-      <KundenAgenda accountId={account.id} initiatives={initiatives} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} />
+      <KundenAgenda accountId={account.id} initiatives={initiatives} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} cards={ro ? {} : await listCardsByInitiative(actor, account.id).catch(() => ({}))} />
       <WorkBlock actor={actor} subjectType="KUNDE" subjectId={account.id} back={back} canCreate={account.status !== "ARCHIVED"} />
 
       {health && (

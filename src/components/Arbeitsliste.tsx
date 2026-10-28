@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { fmtDate, actionStatusLabel, handoverStatusLabel, supportStatusLabel } from "@/lib/labels";
 import { Status } from "./Status";
 import { WorkList } from "./Work";
@@ -196,8 +196,19 @@ export function Aufgaben({ work, checkins, actions, renewals, support, back, tod
 }
 
 export function Vorschlaege({ suggestions, hints, userNames, users, back, aiEnabled, status }: { suggestions: SuggestionItem[]; hints: HintItem[]; userNames: Map<string, string>; users: { id: string; displayName: string }[]; back: string; aiEnabled: boolean; status?: ReactNode }) {
+  const multi = new Set(suggestions.map((x) => x.accountName ?? "")).size > 1;
   const items: ReactNode[] = [
-    ...suggestions.map((x) => <li key={`v-${x.id}`}><SuggestionCard s={x} ownerName={x.proposedOwnerUserId ? userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide back={back} users={users} /></li>),
+    ...suggestions.map((x, i) => {
+      // Kopfzeile je Kunde, sobald Vorschläge mehrerer Kunden anstehen (Etappe 43)
+      const head = multi && (i === 0 || suggestions[i - 1]!.accountName !== x.accountName);
+      // Karten sind selbst <li> – nicht noch einmal in ein <li> packen (sonst Hydrationsfehler im Browser)
+      return (
+        <Fragment key={`v-${x.id}`}>
+          {head && <li className="text-sm font-semibold mt-2" style={{ listStyle: "none" }}>{x.accountName ? <Link href={x.accountId ? `/kunden/${x.accountId}#agenda` : "/kunden"}>{x.accountName}</Link> : "Kunde noch offen"} <span className="muted font-normal">({suggestions.filter((y) => y.accountName === x.accountName).length})</span></li>}
+          <SuggestionCard s={x} ownerName={x.proposedOwnerUserId ? userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide back={back} users={users} routeLine={!!x.aiJobId && suggestions.findIndex((y) => y.aiJobId === x.aiJobId) === i} />
+        </Fragment>
+      );
+    }),
     ...hints.map((h) => (
       <li key={`m-${h.id}`} className="flex flex-wrap items-baseline gap-2 text-sm">
         <span className="status">{hintKindLabel[h.kind as HintKind] ?? h.kind}</span>

@@ -28,12 +28,13 @@ const AMBER = "#b7791f";
 const decisionRoleText: Record<string, string> = { BEDARFSTRAEGER: "Bedarfsträger", FACHLICHE_BEWERTUNG: "Fachliche Bewertung", BUDGETVERANTWORTUNG: "Budget", EINKAUF_VERTRAGSWEG: "Einkauf/Vertragsweg", ZUSAETZLICHE_FREIGABE: "Zusätzliche Freigabe", UNTERSTUETZER_SPONSOR: "Sponsor" };
 
 /** Karte der Eingangs-Auswertung (Etappe 36): was erkannt wurde, worauf es sich bezieht, ein Klick zum Übernehmen. */
-export async function EingangCard({ s, canDecide, back }: { s: Suggestion; canDecide: boolean; back: string }) {
+export async function EingangCard({ s, canDecide, back, routeLine }: { s: Suggestion; canDecide: boolean; back: string; routeLine?: boolean }) {
   const payload = (s.payload ?? null) as { item: IntakeItem; resolved: Resolved; route?: { reason: string; confident: boolean; byKey: boolean; domains: string[] } } | null;
   if (!payload) return null;
   const { item, resolved } = payload;
   const open = s.status === "NEU" || s.status === "GEPRUEFT" || s.status === "ZURUECKGESTELLT";
-  const showRoute = !!s.aiJobId && !!s.sourceIds[0] && (await firstOfJob(s.aiJobId)) === s.id;
+  // Zuordnung einmal je Eingang: an der ersten angezeigten Karte (vom Aufrufer bestimmt), sonst an der ältesten offenen
+  const showRoute = !!s.aiJobId && !!s.sourceIds[0] && (routeLine ?? (await firstOfJob(s.aiJobId)) === s.id);
   const [opp, action, question, person, account] = await Promise.all([
     resolved.opportunityId ? db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, resolved.opportunityId) }) : null,
     resolved.actionId ? db.query.actions.findFirst({ where: eq(schema.actions.id, resolved.actionId) }) : null,
@@ -41,6 +42,7 @@ export async function EingangCard({ s, canDecide, back }: { s: Suggestion; canDe
     resolved.personId ? db.query.persons.findFirst({ where: eq(schema.persons.id, resolved.personId) }) : null,
     s.accountId ? db.query.accounts.findFirst({ where: eq(schema.accounts.id, s.accountId) }) : null,
   ]);
+  const initiative = s.initiativeId ? await db.query.accountInitiatives.findFirst({ where: eq(schema.accountInitiatives.id, s.initiativeId), columns: { id: true, title: true, accountId: true } }) : null;
   const renewal = item.type === "VERLAENGERUNG" ? await renewalDefaultsFor(resolved.engagementId ?? null, item.newEnd) : null;
   const engagement = item.type === "STIMMUNG" && resolved.engagementId ? await db.query.engagements.findFirst({ where: eq(schema.engagements.id, resolved.engagementId) }) : null;
   const needsCustomer = !s.setupId && !["KUNDE", "EINSORTIERUNG"].includes(item.type) && !(s.accountId && ["PERSON", "INITIATIVE", "BESCHAFFUNG", "RISIKO", "HEBEL", "SOS", "TEAM"].includes(item.type));
@@ -83,6 +85,7 @@ export async function EingangCard({ s, canDecide, back }: { s: Suggestion; canDe
         {!["PERSON", "VERLAENGERUNG", "CHANCE_STATUS", "ERLEDIGT", "STIMMUNG"].includes(item.type) && s.observation && s.observation !== s.evidenceQuote && <p>{s.observation}</p>}
         {resolved.dueDate ? <p>Frist: <strong>{fmtDate(resolved.dueDate)}</strong></p> : item.type === "AKTION" && item.dueHint ? <p>Frist laut Text: {item.dueHint}</p> : null}
         {opp && item.type !== "CHANCE_STATUS" ? <p className="muted">Wofür: <Link href={`/bedarfe/${opp.id}`}>{opp.title}</Link></p> : null}
+        {initiative ? <p><span className="status">Initiative</span> <Link href={`/kunden/${initiative.accountId}#agenda`}>{initiative.title}</Link></p> : null}
         <p className="muted">Beleg: „{s.evidenceQuote.length > 260 ? `${s.evidenceQuote.slice(0, 260)} …` : s.evidenceQuote}“</p>
       </div>
       {open && canDecide && showRoute && (

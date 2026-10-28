@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createInitiativeAction, setInitiativeStatusAction, updateProcurementAction } from "@/app/actions";
 import { initiativeKindLabel, initiativeKindValues, procurementLabel, type InitiativeKind } from "@/modules/agenda/service";
 import { fmtDate, opportunityStatusLabel } from "@/lib/labels";
+import type { schema } from "@/db/client";
+import { EingangCard } from "./EingangCard";
 
 type Initiative = {
   id: string;
@@ -18,7 +20,7 @@ type Initiative = {
 const HEADINGS: Record<InitiativeKind, string> = { PRIORITAET: "Prioritäten des Kunden", INITIATIVE: "Schlüssel-Initiativen", HERAUSFORDERUNG: "Herausforderungen & Problembereiche" };
 
 /** Kundenagenda (Etappe 26): was den Kunden treibt – getrennt von unseren Chancen, aber mit ihnen verknüpft. */
-export function KundenAgenda({ accountId, initiatives, canEdit, back }: { accountId: string; initiatives: Initiative[]; canEdit: boolean; back: string }) {
+export function KundenAgenda({ accountId, initiatives, canEdit, back, cards = {} }: { accountId: string; initiatives: Initiative[]; canEdit: boolean; back: string; cards?: Record<string, (typeof schema.suggestions.$inferSelect)[]> }) {
   const open = initiatives.filter((i) => i.status === "OFFEN");
   const done = initiatives.filter((i) => i.status !== "OFFEN");
   return (
@@ -43,6 +45,12 @@ export function KundenAgenda({ accountId, initiatives, canEdit, back }: { accoun
                       <div className="text-xs mt-1">
                         Zahlt ein: {i.chances.map((c, n) => <span key={c.id}>{n ? " · " : ""}<Link href={`/bedarfe/${c.id}`}>{c.title}</Link> ({opportunityStatusLabel[c.status] ?? c.status})</span>)}
                       </div>
+                    )}
+                    {(cards[i.id]?.length ?? 0) > 0 && (
+                      <details className="mt-1" open>
+                        <summary className="text-xs" style={{ color: "#b7791f", fontWeight: 600, cursor: "pointer" }}>KI-Vorschläge dazu ({cards[i.id]!.length})</summary>
+                        <ul className="space-y-2 mt-1">{cards[i.id]!.map((s) => <EingangCard key={s.id} s={s} canDecide back={`${back}#agenda`} routeLine={false} />)}</ul>
+                      </details>
                     )}
                     {canEdit && (
                       <form action={setInitiativeStatusAction} className="flex gap-1 mt-1">

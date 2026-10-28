@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, count, desc, eq, gte, inArray, ne, or } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNotNull, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
 import type { PriorityCategory, SuggestionStatus } from "@/db/schema";
@@ -527,11 +527,11 @@ export async function listMySuggestions(actor: Actor) {
     where: and(eq(schema.suggestions.workspaceId, actor.workspaceId), or(eq(schema.suggestions.status, "NEU"), eq(schema.suggestions.status, "GEPRUEFT"))),
     orderBy: desc(schema.suggestions.computedAt),
   });
-  const out: (typeof rows[number] & { setupName: string; addressed: boolean })[] = [];
+  const out: (typeof rows[number] & { setupName: string; addressed: boolean; accountName: string | null })[] = [];
   const cache = new Map<string, SetupContext | null>();
   for (const r of rows) {
     if (!r.setupId) {
-      if (r.proposedOwnerUserId === actor.userId) out.push({ ...r, setupName: "Eingang – Kunde noch offen", addressed: true });
+      if (r.proposedOwnerUserId === actor.userId) out.push({ ...r, setupName: "Eingang – Kunde noch offen", addressed: true, accountName: null });
       continue;
     }
     let ctx = cache.get(r.setupId);
@@ -539,7 +539,7 @@ export async function listMySuggestions(actor: Actor) {
       ctx = await loadSetupContext(actor, r.setupId);
       cache.set(r.setupId, ctx);
     }
-    if (ctx && canEditSetup(actor, ctx)) out.push({ ...r, setupName: ctx.setup.name, addressed: r.proposedOwnerUserId === actor.userId });
+    if (ctx && canEditSetup(actor, ctx)) out.push({ ...r, setupName: ctx.setup.name, addressed: r.proposedOwnerUserId === actor.userId, accountName: ctx.account.name });
   }
   // Eingangs-Karten: je Eingang zusammen (neuester zuerst), darin Kunde/Zuordnung zuerst, dann Bestandsänderungen
   const cardRank = (r: (typeof out)[number]) => {
@@ -560,7 +560,11 @@ export async function listMySuggestions(actor: Actor) {
     }
     return Number(b.addressed) - Number(a.addressed) || CATEGORY_ORDER[a.priorityCategory] - CATEGORY_ORDER[b.priorityCategory];
   });
-  return out.slice(0, 30);
+  // Je Kunde zusammen (Etappe 43): Reihenfolge der Kunden nach ihrem wichtigsten Vorschlag, darin unverändert
+  const top = out.slice(0, 30);
+  const groupRank = new Map<string, number>();
+  top.forEach((r, i) => { const k = r.accountName ?? ""; if (!groupRank.has(k)) groupRank.set(k, i); });
+  return top.map((r, i) => ({ r, i })).sort((a, b) => groupRank.get(a.r.accountName ?? "")! - groupRank.get(b.r.accountName ?? "")! || a.i - b.i).map((x) => x.r);
 }
 
 export async function listOpenQuestionsForSetup(setupId: string) {
@@ -662,4 +666,27 @@ async function acceptPersonSuggestion(actor: Actor, s: SuggestionRow, ctx: Setup
     await recordAudit(tx, actor, "person.updated_from_suggestion", "PERSON", hit.id, { funktion: role || null, bereich: unit || null });
   });
   return { personId: hit.id, message: `${hit.displayName.replace(/\(.*?\)/g, "").trim()} ergänzt${role ? `: ${role}` : ""}${unit ? ` (${unit})` : ""}.` };
+}
+
+/** Offene KI-Karten je Kunden-Initiative (Etappe 43) – für die Kundenagenda; nur, was die Person entscheiden darf. */
+export async function listCardsByInitiative(actor: Actor, accountId: string): Promise<Record<string, (typeof schema.suggestions.$inferSelect)[]>> {
+  const rows = await db.query.suggestions.findMany({
+    where: and(eq(schema.suggestions.workspaceId, actor.workspaceId), eq(schema.suggestions.accountId, accountId), isNotNull(schema.suggestions.initiativeId), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT", "ZURUECKGESTELLT"])),
+    orderBy: desc(schema.suggestions.computedAt),
+  });
+  const out: Record<string, (typeof rows)[number][]> = {};
+  const cache = new Map<string, boolean>();
+  for (const r of rows) {
+    let ok: boolean;
+    if (!r.setupId) ok = r.proposedOwnerUserId === actor.userId;
+    else {
+      if (!cache.has(r.setupId)) {
+        const ctx = await loadSetupContext(actor, r.setupId);
+        cache.set(r.setupId, !!ctx && canEditSetup(actor, ctx));
+      }
+      ok = cache.get(r.setupId)!;
+    }
+    if (ok) (out[r.initiativeId!] ??= []).push(r);
+  }
+  return out;
 }

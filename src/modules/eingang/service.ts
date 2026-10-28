@@ -166,10 +166,10 @@ async function pickSetup(actor: Actor, accountId: string, flat: string, engs: (t
 // 2) Lagebild mit Kürzeln
 // ---------------------------------------------------------------------------
 
-export type Refs = { C: Map<string, string>; E: Map<string, string>; A: Map<string, string>; Q: Map<string, string>; P: Map<string, string>; labels: Map<string, string> };
+export type Refs = { C: Map<string, string>; E: Map<string, string>; A: Map<string, string>; Q: Map<string, string>; P: Map<string, string>; I: Map<string, string>; labels: Map<string, string> };
 
 export async function buildLagebild(actor: Actor, route: Route): Promise<{ text: string; refs: Refs }> {
-  const refs: Refs = { C: new Map(), E: new Map(), A: new Map(), Q: new Map(), P: new Map(), labels: new Map() };
+  const refs: Refs = { C: new Map(), E: new Map(), A: new Map(), Q: new Map(), P: new Map(), I: new Map(), labels: new Map() };
   const lines: string[] = [`Heute: ${todayIso()}`, `Angemeldet: ${actor.displayName}`];
   const users = await db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { displayName: true, email: true } });
   lines.push(`Verve-Personen (keine Kundenpersonen): ${users.map((u) => u.displayName.replace(/\s*\(.*?\)\s*/g, " ").trim()).join("; ")}`);
@@ -192,6 +192,10 @@ export async function buildLagebild(actor: Actor, route: Route): Promise<{ text:
   ]);
   const fns = persons.length ? await db.query.personFunctions.findMany({ where: inArray(schema.personFunctions.personId, persons.map((p) => p.id)) }) : [];
   const units = await db.query.orgUnits.findMany({ where: eq(schema.orgUnits.accountId, acc.id) });
+  // Kundenagenda: Initiativen, Prioritäten, Herausforderungen – Karten können darauf einzahlen (Etappe 43)
+  const inits = await db.query.accountInitiatives.findMany({ where: and(eq(schema.accountInitiatives.accountId, acc.id), eq(schema.accountInitiatives.status, "OFFEN")), orderBy: desc(schema.accountInitiatives.updatedAt), limit: 20 });
+  inits.forEach((x, i) => { refs.I.set(`I${i + 1}`, x.id); refs.labels.set(`I${i + 1}`, x.title); });
+  if (inits.length) lines.push(`Kundenagenda (Initiativen):\n${inits.map((x, i) => `- I${i + 1}: ${x.title} [${x.kind}]${x.description ? ` – ${x.description.slice(0, 120)}` : ""}`).join("\n")}`);
   const activeOpps = opps.filter((o) => o.status !== "BEENDET").slice(0, 40);
   activeOpps.forEach((o, i) => { refs.C.set(`C${i + 1}`, o.id); refs.labels.set(`C${i + 1}`, o.title); });
   lines.push(`Chancen:\n${activeOpps.map((o, i) => `- C${i + 1}: ${o.title} [${o.status}, ${o.kind}]${o.needDescription ? ` – ${o.needDescription.slice(0, 120)}` : ""}`).join("\n") || "- keine"}`);
@@ -332,6 +336,9 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
       continue;
     }
     const r = resolveRefs(item, refs);
+    // Initiativen-Kürzel gilt für jede Kartenart und steht deshalb neben dem Kartenschema
+    const iref = (rawItem as { initiativeRef?: unknown }).initiativeRef;
+    if (r && typeof iref === "string" && iref.trim()) r.initiativeId = refs.I.get(iref.trim().toUpperCase()) ?? null;
     if (r === null) {
       rejected++;
       continue;
@@ -347,6 +354,9 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
     if (item.type === "VERLAENGERUNG" && item.newEnd && !ISO.test(item.newEnd)) item.newEnd = "";
     valid.push({ item, resolved: r });
   }
+  // Karte ohne eigenes Initiativen-Kürzel: über die Chance, auf die sie sich bezieht
+  const oppIds = valid.map((v) => v.resolved.opportunityId).filter((x): x is string => !!x);
+  const oppInitiative = new Map((oppIds.length ? await db.query.opportunities.findMany({ where: inArray(schema.opportunities.id, oppIds), columns: { id: true, initiativeId: true } }) : []).filter((o) => o.initiativeId).map((o) => [o.id, o.initiativeId!] as const));
   let created = 0;
   await db.transaction(async (tx) => {
     for (const { item, resolved } of valid) {
@@ -377,6 +387,7 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
         model: usage?.model || taskOpts.model || info.model,
         promptVersion: INTAKE_PROMPT_VERSION,
         aiJobId: job!.id,
+        initiativeId: resolved.initiativeId ?? oppInitiative.get(resolved.opportunityId ?? "") ?? null,
       });
       created++;
     }
@@ -386,7 +397,7 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
   return { created, rejected, setupId: i.route.ctx?.setup.id ?? null, accountName: i.route.account?.name ?? null, reason: i.route.reason, sourceId: i.sourceId, noSuggestionReason: out.data.noSuggestionReason };
 }
 
-type Resolved = { opportunityId?: string | null; engagementId?: string | null; actionId?: string | null; questionId?: string | null; personId?: string | null; dueDate?: string };
+type Resolved = { opportunityId?: string | null; engagementId?: string | null; actionId?: string | null; questionId?: string | null; personId?: string | null; initiativeId?: string | null; dueDate?: string };
 
 /** Kürzel auflösen; unbekanntes Pflichtkürzel → null (Karte verwerfen). */
 function resolveRefs(item: IntakeItem, refs: Refs): Resolved | null {
@@ -556,6 +567,8 @@ export async function acceptIntakeCard(actor: Actor, s: SuggestionRow, ctx0: Set
       }
     }
   }
+  // Neue Chance zahlt auf die Initiative der Karte ein (Etappe 43)
+  if (s.initiativeId && result.id && /OPPORTUNITY|CHANCE/.test(result.type)) await db.update(schema.opportunities).set({ initiativeId: s.initiativeId }).where(and(eq(schema.opportunities.id, result.id), isNull(schema.opportunities.initiativeId)));
   const [updated] = await db
     .update(schema.suggestions)
     .set({ status: "ANGENOMMEN", decidedBy: actor.userId, decidedAt: new Date(), acceptedObjectType: result.type, acceptedObjectId: result.id, setupId: s.setupId ?? ctx?.setup.id ?? null, version: s.version + 1 })
