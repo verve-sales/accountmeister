@@ -615,6 +615,7 @@ async function applyRenewal(actor: Actor, engagementId: string, item: Extract<In
   if (!open || open.proposedTo !== newEnd) await startRenewal(actor, e.id, { newEnd, conditions: "UNVERAENDERT", note: `${quote}${item.conditionsNote ? ` – ${item.conditionsNote}` : ""}`.slice(0, 1000) });
   if (a.commercial) {
     const r = await decideRenewal(actor, e.id, { decision: "BESTAETIGEN", contractFollowUp: contractFollowUp || "Nachtrag", note: item.conditionsNote });
+    if (r.pendingApproval) return { type: "RENEWAL", id: r.decision.id, note: `Verlängerung bis ${de(newEnd)} mit geänderten Konditionen – liegt zur Freigabe bei der Geschäftsführung.` };
     const moco = r.mocoWritten ? " Das Projektende in Moco ist aktualisiert." : r.mocoError ? " Moco konnte nicht aktualisiert werden – Sales Operations ist informiert." : "";
     return { type: "RENEWAL", id: r.decision.id, note: `Verlängerung bis ${de(newEnd)} bestätigt – die offene Klärung ist erledigt.${moco}` };
   }

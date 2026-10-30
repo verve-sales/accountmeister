@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
-import { buildTalk, shiftQuarter } from "@/modules/principals/service";
+import { buildTalk, levelLabel, shiftQuarter } from "@/modules/principals/service";
 import { DomainError } from "@/lib/errors";
 import { Feedback } from "@/components/Feedback";
 import { TargetProgress } from "@/components/TargetProgress";
@@ -37,7 +37,7 @@ export default async function PrincipalTalkPage({ params, searchParams }: { para
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-2xl font-semibold">{canEdit ? `Gespräch mit ${t.principal.name}` : "Meine Ziele als Principal"}</h1>
+        <h1 className="text-2xl font-semibold">{canEdit ? `Gespräch mit ${t.principal.name}` : `Meine Ziele als ${levelLabel[t.principal.level]}`}</h1>
         <span className="muted text-sm">{q.label} · {ref ? (ref === q.end ? `Stichtag ${fmtDate(q.end)}` : `Stand heute, Stichtag ${fmtDate(q.end)}`) : "Quartal hat noch nicht begonnen"}</span>
         <span className="ml-auto text-sm flex gap-3">
           {canEdit && <Link href={`/meine-principals?q=${q.key}`}>Alle Principals</Link>}

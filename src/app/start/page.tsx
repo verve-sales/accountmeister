@@ -38,6 +38,7 @@ import { listVisibleAccounts } from "@/modules/accounts/service";
 import { listSetupsForAccount } from "@/modules/setups/service";
 import { db, schema } from "@/db/client";
 import { buildPrincipalOverview, myPrincipalSummary } from "@/modules/principals/service";
+import { roundTeaser } from "@/modules/rounds/service";
 import { TargetProgress } from "@/components/TargetProgress";
 import { eq } from "drizzle-orm";
 import { Aufgaben, Entscheidungen, Vorschlaege } from "@/components/Arbeitsliste";
@@ -171,6 +172,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   }
   // Principal/GF-Hut: erst „Bei deinen BDs im Blick“, dann die persönliche Arbeitsliste
   const leader = d.view === "PRINCIPAL" || d.view === "CEO";
+  const round = d.view === "CEO" || d.view === "PRINCIPAL" ? await roundTeaser(actor).catch(() => null) : null;
   const principalsQ = d.view === "CEO" ? await buildPrincipalOverview(actor).catch(() => null) : null;
   const mine = d.view === "PRINCIPAL" ? await myPrincipalSummary(actor).catch(() => null) : null;
   const atRisk = healthAll.filter((h) => h.level === "GEFAEHRDET").sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
@@ -250,12 +252,23 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         </section>
       )}
       {leader && !readOnly ? arbeitsliste : null}
+      {round && round.accounts + (round.radar ?? 0) > 0 && (
+        <section className="card flex flex-wrap items-center gap-4 text-sm" aria-label="Kundenrunde">
+          <strong>Kundenrunde</strong>
+          <span>{round.accounts} Bestandskunden</span>
+          {round.red > 0 && <span style={{ color: "#c0392b", fontWeight: 600 }}>{round.red} rot</span>}
+          {round.yellow > 0 && <span style={{ color: "#b7791f", fontWeight: 600 }}>{round.yellow} gelb</span>}
+          <span className={round.prepared < round.accounts ? undefined : "muted"}>{round.prepared < round.accounts ? `${round.accounts - round.prepared} noch vorzubereiten` : "alle vorbereitet"}</span>
+          <span className="muted">{round.lastRound ? `letzte Runde ${fmtDate(round.lastRound.heldOn)}` : "noch keine Runde"}</span>
+          <Link href="/kundenrunde" className="btn btn-small ml-auto">{d.view === "CEO" ? "Zur Kundenrunde" : "Vorbereiten"}</Link>
+        </section>
+      )}
       {d.view === "CEO" && principalsQ && (
         <section className="card" id="ziele" aria-label="Principals im Quartal">
           <div className="flex flex-wrap items-baseline gap-3">
-            <h2 className="font-semibold">Principals {principalsQ.quarter.label}</h2>
+            <h2 className="font-semibold">Kundenverantwortliche {principalsQ.quarter.label}</h2>
             <span className="muted text-xs">Köpfe · Neukunden · Verlängerungsquote gegen Ziel</span>
-            <Link href="/meine-principals" className="text-sm ml-auto">Meine Principals</Link>
+            <Link href="/meine-principals" className="text-sm ml-auto">Kundenverantwortliche</Link>
           </div>
           {principalsQ.rows.length === 0 ? <p className="muted text-sm mt-1">Noch keine Principals zugeordnet.</p> : (
             <table className="list text-sm mt-1">

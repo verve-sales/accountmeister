@@ -147,6 +147,8 @@ export const roleAssignments = pgTable(
     accountId: text("account_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => accounts.id),
     validFrom: date("valid_from").notNull().defaultNow(),
     validTo: date("valid_to"),
+    /** Kundenverantwortung (Etappe 45): bei kundenbezogenem PRINCIPAL die Stufe – ACCOUNT_LEAD oder PRINCIPAL (null = PRINCIPAL) */
+    level: text("level"),
     createdAt: createdAt(),
   },
   (t) => [index("role_assignments_user_idx").on(t.userId)],
@@ -165,6 +167,10 @@ export const accounts = pgTable("accounts", {
   /** Kunden-Kennungen (Etappe 42): Mail-Domänen und Kürzel – eine Treffer-Kennung ordnet Eingänge eindeutig zu. */
   mailDomains: text("mail_domains").array().notNull().default(sql`'{}'::text[]`),
   aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
+  /** Kundenart (Etappe 45): Nebengeschäft (kleine Serviceaufträge, Durchreiche) – nicht in der Kundenrunde, Köpfe zählen nicht */
+  sideBusiness: boolean("side_business").notNull().default(false),
+  /** Prospect oder Ex-Kunde „auf dem Radar“ der Kundenrunde */
+  onRadar: boolean("on_radar").notNull().default(false),
   parentAccountId: text("parent_account_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => accounts.id),
   status: accountStatusEnum("status").notNull().default("ACTIVE"),
   responsibleBdUserId: text("responsible_bd_user_id").references(() => users.id),
@@ -2301,6 +2307,31 @@ export const principalAgreements = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("principal_agreements_idx").on(t.principalUserId, t.quarter)],
+);
+
+/** Kundenrunde (Etappe 45): alle zwei Wochen Geschäftsführung mit den Kundenverantwortlichen. Eine Zeile je abgehaltener Runde. */
+export const customerRounds = pgTable("customer_rounds", {
+  id: id(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  heldOn: date("held_on").notNull(),
+  note: text("note"),
+  createdBy: text("created_by").notNull().references(() => users.id),
+  createdAt: createdAt(),
+});
+
+/** Vorbereitung je Kunde: bestätigt und kommentiert vom Kundenverantwortlichen; mit dem Abschluss der Runde festgeschrieben. */
+export const roundNotes = pgTable(
+  "round_notes",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    accountId: text("account_id").notNull().references(() => accounts.id),
+    roundId: text("round_id").references(() => customerRounds.id), // null = Vorbereitung der nächsten Runde
+    authorUserId: text("author_user_id").notNull().references(() => users.id),
+    note: text("note"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("round_notes_account_idx").on(t.accountId, t.roundId)],
 );
 
 export const renewalDecisions = pgTable(

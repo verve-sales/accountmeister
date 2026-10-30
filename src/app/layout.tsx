@@ -9,6 +9,7 @@ import { logoutAction, setHatAction } from "./actions";
 import { loadHat, viewLabel, viewDescription } from "@/modules/dashboard/service";
 import { splitNav } from "@/modules/dashboard/hat";
 import { canSetTargets } from "@/modules/principals/service";
+import { canSeeRound } from "@/modules/rounds/service";
 import { roleLabel } from "@/lib/labels";
 import { AssistantPanel } from "@/components/AssistantPanel";
 import { provisionAccess } from "@/modules/provision/access";
@@ -52,6 +53,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const allowed = new Set<string>(["start", "arbeit", "kunden", "eingang", "ziele"]);
   if (actor && canBrowsePortfolio(actor)) allowed.add("bds");
   if (actor && canSetTargets(actor)) allowed.add("principals");
+  if (actor && canSeeRound(actor)) allowed.add("runde");
   if (actor && staffing && (staffingNav(actor) || coachNav(actor))) allowed.add("einsaetze");
   if (actor && staffing && staffingNav(actor)) allowed.add("besetzung");
   const nav = splitNav(hat, allowed);

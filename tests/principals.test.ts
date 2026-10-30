@@ -9,6 +9,7 @@ import { createOpportunity } from "@/modules/opportunities/service";
 import { quickFill } from "@/modules/staffing/service";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 import { addAgreement, buildPrincipalOverview, buildTalk, computeActuals, headsAt, listPrincipals, loadTargets, quarterFromKey, quarterOf, referenceDate, saveTargets, shiftQuarter } from "@/modules/principals/service";
+import { assignRole } from "@/modules/governance/service";
 import { actorFor, ensureSeed } from "./helpers";
 
 type Eng = typeof schema.engagements.$inferSelect;
@@ -51,6 +52,10 @@ describe("Etappe 38 (Use Case 7): Meine Principals – Ziele je Quartal und Gesp
     const s = await ensureSeed();
     const [clemens, petra, david] = await Promise.all([actorFor("clemens"), actorFor("petra"), actorFor("david")]);
     const q = quarterOf(todayIso());
+    const admin = await actorFor("admin");
+    // Kundenverantwortung ist kundenbezogen (Etappe 45): die arbeitsraumweite Rolle zählt keine Kunden
+    expect((await listPrincipals(s.workspaceId)).some((x) => x.userId === petra.userId)).toBe(false);
+    await assignRole(admin, { userId: petra.userId, role: "PRINCIPAL", accountId: s.accountId });
     const p = (await listPrincipals(s.workspaceId)).find((x) => x.userId === petra.userId)!;
     expect(p.accountIds).toContain(s.accountId);
     const before = await computeActuals(p.accountIds, q);
@@ -61,6 +66,7 @@ describe("Etappe 38 (Use Case 7): Meine Principals – Ziele je Quartal und Gesp
     const acc = await createAccount(david, { name: `Neukunde ${Date.now().toString(36)} (fiktiv)`, responsibleBdUserId: david.userId });
     const setup = await createSetup(david, { accountId: acc.id, name: "Neukunden-Setup", contextNote: "Kontext", bdUserId: david.userId });
     const newEng = await placeHead(david, setup.id, "Erstkopf");
+    await assignRole(admin, { userId: petra.userId, role: "PRINCIPAL", accountId: acc.id, level: "PRINCIPAL" });
     // Verlängerungen: eine bestätigt, eine abgelehnt – heute entschieden
     for (const status of ["BESTAETIGT", "ABGELEHNT"]) await db.insert(schema.renewalDecisions).values({ workspaceId: s.workspaceId, engagementId: newEng, status, decidedAt: new Date(), decidedBy: clemens.userId, createdBy: clemens.userId });
 

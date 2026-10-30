@@ -270,7 +270,7 @@ export async function listUsersWithRoles(actor: Actor) {
   // Beendete Rollen (validTo in der Vergangenheit) und Rollen deaktivierter Zugänge werden nicht mehr gezeigt
   return users.map((u) => ({
     ...u,
-    roles: u.status === "ACTIVE" ? roles.filter((r) => r.userId === u.id && (!r.validTo || r.validTo >= today)).map((r) => ({ id: r.id, role: r.role, scope: r.scope, accountName: r.accountId ? an.get(r.accountId) ?? "?" : null, accountId: r.accountId })) : [],
+    roles: u.status === "ACTIVE" ? roles.filter((r) => r.userId === u.id && (!r.validTo || r.validTo >= today)).map((r) => ({ id: r.id, role: r.role, scope: r.scope, level: r.level, accountName: r.accountId ? an.get(r.accountId) ?? "?" : null, accountId: r.accountId })) : [],
   }));
 }
 
@@ -278,6 +278,8 @@ export const roleInput = z.object({
   userId: z.string().min(1),
   role: z.enum(schema.roleEnum.enumValues),
   accountId: z.string().optional().or(z.literal("")),
+  /** Kundenverantwortung (Etappe 45): Stufe bei kundenbezogenem Principal */
+  level: z.enum(["PRINCIPAL", "ACCOUNT_LEAD"]).optional().or(z.literal("")),
 });
 
 /** Rolle zuweisen (ADMIN). Kundenbezogene Rollen (BD/PRINCIPAL) brauchen einen Kunden. */
@@ -296,7 +298,17 @@ export async function assignRole(actor: Actor, raw: unknown) {
   if (scope === "WORKSPACE" && input.role === "BD") throw new ValidationError("BD wird immer kundenbezogen vergeben – bitte einen Kunden wählen. „Arbeitsraumweit“ ist für BD nicht vorgesehen (sonst wären alle Kunden sichtbar).");
   const existing = await db.query.roleAssignments.findMany({ where: and(eq(schema.roleAssignments.userId, user.id), eq(schema.roleAssignments.role, input.role)) });
   if (existing.some((r) => (r.accountId ?? null) === (input.accountId || null))) throw new ValidationError("Diese Rolle ist bereits zugewiesen.");
-  const [r] = await db.insert(schema.roleAssignments).values({ workspaceId: actor.workspaceId, userId: user.id, role: input.role, scope, accountId: input.accountId || null }).returning();
+  // Kundenverantwortung: genau eine Person je Kunde (Account Lead oder Principal)
+  if (input.role === "PRINCIPAL" && scope === "ACCOUNT") {
+    const today = new Date().toISOString().slice(0, 10);
+    const other = (await db.query.roleAssignments.findMany({ where: and(eq(schema.roleAssignments.accountId, input.accountId!), eq(schema.roleAssignments.role, "PRINCIPAL")) })).find((r) => r.userId !== user.id && (!r.validTo || r.validTo >= today));
+    if (other) {
+      const [holder, acc] = await Promise.all([db.query.users.findFirst({ where: eq(schema.users.id, other.userId), columns: { displayName: true } }), db.query.accounts.findFirst({ where: eq(schema.accounts.id, input.accountId!), columns: { name: true } })]);
+      throw new ValidationError(`${acc?.name ?? "Der Kunde"} hat schon eine Kundenverantwortung: ${holder?.displayName ?? "?"} (${other.level === "ACCOUNT_LEAD" ? "Account Lead" : "Principal"}). Je Kunde gibt es genau eine – bitte dort zuerst entziehen.`);
+    }
+  }
+  const level = input.role === "PRINCIPAL" && scope === "ACCOUNT" ? input.level || "PRINCIPAL" : null;
+  const [r] = await db.insert(schema.roleAssignments).values({ workspaceId: actor.workspaceId, userId: user.id, role: input.role, scope, accountId: input.accountId || null, level }).returning();
   await recordAudit(db, actor, "role.assigned", "USER", user.id, { role: input.role, scope });
   return r;
 }

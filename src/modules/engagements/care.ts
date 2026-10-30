@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db, schema, type Db, type Tx } from "@/db/client";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
-import type { Actor } from "@/modules/identity/actor";
+import { hasRole, type Actor } from "@/modules/identity/actor";
 import { notify } from "@/modules/notifications/service";
 import { createWorkItem, FINAL as WORK_FINAL } from "@/modules/work/service";
 import { ensureDefaultTeams } from "@/modules/work/teams";
@@ -438,7 +438,22 @@ export const renewalDecideInput = z.object({
   targetUserId: opt(100),
 });
 
-export type RenewalDecideResult = { decision: typeof schema.renewalDecisions.$inferSelect; mocoWritten: boolean; mocoError: string | null };
+export type RenewalDecideResult = { decision: typeof schema.renewalDecisions.$inferSelect; mocoWritten: boolean; mocoError: string | null; pendingApproval?: boolean };
+
+/**
+ * Vier-Augen bei Account Leads (Etappe 45): Ist der Kunde einem Account Lead zugeordnet, bestätigt dort niemand außer der
+ * Geschäftsführung eine Verlängerung mit geänderten Konditionen – sie geht zur Freigabe an die Geschäftsführung.
+ * Unveränderte Konditionen bestätigt der Account Lead (bzw. BD) selbst.
+ */
+async function gfApprover(actor: Actor, accountId: string, conditionsNote: string | null): Promise<string | null> {
+  if (hasRole(actor, "CEO")) return null;
+  if (!(conditionsNote ?? "").startsWith("Neue Konditionen")) return null;
+  const t = todayIso();
+  const lead = (await db.query.roleAssignments.findMany({ where: and(eq(schema.roleAssignments.accountId, accountId), eq(schema.roleAssignments.role, "PRINCIPAL"), eq(schema.roleAssignments.scope, "ACCOUNT")) })).find((r) => !r.validTo || r.validTo >= t);
+  if (!lead || lead.level !== "ACCOUNT_LEAD") return null;
+  const ceo = (await db.query.roleAssignments.findMany({ where: and(eq(schema.roleAssignments.workspaceId, actor.workspaceId), eq(schema.roleAssignments.role, "CEO")) })).find((r) => !r.validTo || r.validTo >= t);
+  return ceo?.userId ?? null;
+}
 
 /** Entscheidung mit einem Klick: Bestätigen schreibt Periode, Einsatz- und Auftragsende und das Projektende nach Moco; Ablehnen geht mit Notiz zurück; Weitergeben verschiebt die Karte. */
 export async function decideRenewal(actor: Actor, engagementId: string, raw: unknown, client?: MocoClient): Promise<RenewalDecideResult> {
@@ -474,6 +489,15 @@ export async function decideRenewal(actor: Actor, engagementId: string, raw: unk
   }
   // BESTAETIGEN
   if (!current.proposedTo) throw new ValidationError("Für diese Verlängerung ist noch kein neues Ende vorgeschlagen – bitte zuerst anstoßen.");
+  const approver = await gfApprover(actor, e.accountId, current.conditionsNote);
+  if (approver && current.commercialOwnerUserId !== approver) {
+    return db.transaction(async (tx) => {
+      const [row] = await tx.update(schema.renewalDecisions).set({ commercialOwnerUserId: approver, availabilityNote: `${current.availabilityNote ? `${current.availabilityNote}\n` : ""}Zur Freigabe an die Geschäftsführung (geänderte Konditionen, Account-Lead-Kunde) – von ${actor.displayName}${i.note ? `: ${i.note}` : ""}`, version: current.version + 1, updatedAt: new Date() }).where(eq(schema.renewalDecisions.id, current.id)).returning();
+      await recordAudit(tx, actor, "renewal.approval_requested", "ENGAGEMENT", engagementId, { an: approver });
+      await notify(tx, { workspaceId: actor.workspaceId, userIds: [approver], kind: "ZUGEWIESEN", title: `Freigabe: Verlängerung mit neuen Konditionen – ${e.title} bis ${current.proposedTo}`, link: `/start#entscheidungen`, actorUserId: actor.userId });
+      return { decision: row!, mocoWritten: false, mocoError: null, pendingApproval: true };
+    });
+  }
   const last = await latestPeriod(engagementId);
   const m = /EK ([^ /]+) \/ VK ([^ )]+) je (Stunde|Tag)/.exec(current.conditionsNote ?? "");
   const num = (x: string | undefined | null) => (x && x !== "–" ? x : "");

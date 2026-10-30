@@ -45,6 +45,16 @@ Köpfe: verschiedene Personen mit laufendem Einsatz am Stichtag. Neukunde: der e
 Die Gesprächsseite folgt dem Ablauf Lage → Zahlen → offene Entscheidungen → Vereinbarungen. Jede Vereinbarung braucht eine Frist und landet als Vorgang beim Principal; offene und überfällige Vereinbarungen stehen in der Übersicht. Der Principal sieht seine Ziele und Vereinbarungen selbst, ändern kann sie nur die Geschäftsführung.`,
   },
   {
+    id: "kundenrunde",
+    title: "Kundenverantwortung und Kundenrunde",
+    where: "Hut „Geschäftsführung“ oder „Principal“ → Kundenrunde · Verwaltung → Rolle zuweisen → Principal (Stufe, Kunde)",
+    keywords: ["kundenrunde", "runde", "account lead", "principal", "kundenverantwortung", "nebengeschaeft", "radar", "prospect", "ex-kunde", "bestandskunde", "ampel", "vorbereiten", "freigabe"],
+    body: `Jeder Kunde hat genau eine Kundenverantwortung: Account Lead oder Principal (Verwaltung → Rolle „Principal“ mit Stufe und Kunde). Eine arbeitsraumweite Principal-Rolle gibt Rechte bei allen Kunden, zählt aber keine Kunden – gezählt (Ziele, Kundenrunde) wird nur die kundenbezogene Zuordnung.
+Kundenart: Bestandskunde (laufende Einsätze), Prospect (noch nie ein Einsatz), Ex-Kunde (früher Einsätze) ergeben sich automatisch; „Nebengeschäft“ (kleine Serviceaufträge, Durchreiche) wird am Kunden von Hand markiert – nicht in der Kundenrunde, Köpfe zählen nicht für Ziele. Prospects und Ex-Kunden lassen sich „auf das Radar“ setzen.
+Die Kundenrunde (alle zwei Wochen) zeigt je Kundenverantwortlichem seine Bestandskunden: Sattelfestigkeit (Health-Check), Nachhaltigkeit (Köpfe, Einsätze mit Ende in 90 Tagen, Verlängerungsstand), Interessantes seit der letzten Runde (neue Chancen, KI-Vorschläge, neue Personen). Rot und Gelb stehen oben, Grün wird nur bestätigt; am Ende „Auf dem Radar“. Die Verantwortlichen bestätigen je Kunde vorher (optional mit einem Satz); die Geschäftsführung schließt die Runde ab.
+Vier-Augen bei Account Leads: Eine Verlängerung mit geänderten Konditionen geht bei einem Account-Lead-Kunden zur Freigabe an die Geschäftsführung; unveränderte Konditionen werden direkt bestätigt.`,
+  },
+  {
     id: "kundenansicht",
     title: "Kundenansicht: Grundlagen, Strategie, Operativ",
     where: "Kunden → Kunde → Reiter 1 Grundlagen · 2 Strategie · 3 Operativ",

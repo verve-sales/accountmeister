@@ -71,7 +71,8 @@ function assertCanView(actor: Actor, principalUserId: string) {
 
 // --- Principals und ihre Kunden ---------------------------------------------
 
-export type PrincipalRef = { userId: string; name: string; accountIds: string[]; workspaceWide: boolean };
+export type PrincipalRef = { userId: string; name: string; accountIds: string[]; workspaceWide: boolean; level: "PRINCIPAL" | "ACCOUNT_LEAD" };
+export const levelLabel = { PRINCIPAL: "Principal", ACCOUNT_LEAD: "Account Lead" } as const;
 
 export async function listPrincipals(workspaceId: string): Promise<PrincipalRef[]> {
   const t = todayIso();
@@ -80,13 +81,18 @@ export async function listPrincipals(workspaceId: string): Promise<PrincipalRef[
   const users = await db.query.users.findMany({ where: and(inArray(schema.users.id, [...new Set(roles.map((r) => r.userId))]), eq(schema.users.status, "ACTIVE")), columns: { id: true, displayName: true } });
   const accounts = await db.query.accounts.findMany({ where: and(eq(schema.accounts.workspaceId, workspaceId), inArray(schema.accounts.status, ["ACTIVE", "DORMANT"])), columns: { id: true } });
   const live = new Set(accounts.map((a) => a.id));
+  // Kundenverantwortung (Etappe 45): gezählt werden nur kundenbezogene Zuordnungen – eine arbeitsraumweite
+  // Principal-Rolle gibt Rechte bei allen Kunden, macht aber nicht für alle verantwortlich
   return users
     .map((u) => {
       const mine = roles.filter((r) => r.userId === u.id);
       const workspaceWide = mine.some((r) => r.scope === "WORKSPACE");
-      const accountIds = workspaceWide ? [...live] : [...new Set(mine.map((r) => r.accountId).filter((x): x is string => !!x && live.has(x)))];
-      return { userId: u.id, name: u.displayName, accountIds, workspaceWide };
+      const own = mine.filter((r) => r.scope === "ACCOUNT" && r.accountId && live.has(r.accountId));
+      const accountIds = [...new Set(own.map((r) => r.accountId!))];
+      const level: PrincipalRef["level"] = own.length && own.every((r) => r.level === "ACCOUNT_LEAD") ? "ACCOUNT_LEAD" : "PRINCIPAL";
+      return { userId: u.id, name: u.displayName, accountIds, workspaceWide, level };
     })
+    .filter((p) => p.accountIds.length > 0)
     .sort((a, b) => a.name.localeCompare(b.name, "de"));
 }
 
@@ -125,10 +131,12 @@ export async function computeActuals(accountIds: string[], q: Quarter, today = t
   if (!accountIds.length || !ref) return empty;
   const [engs, accounts] = await Promise.all([
     db.query.engagements.findMany({ where: inArray(schema.engagements.accountId, accountIds) }),
-    db.query.accounts.findMany({ where: inArray(schema.accounts.id, accountIds), columns: { id: true, name: true } }),
+    db.query.accounts.findMany({ where: inArray(schema.accounts.id, accountIds), columns: { id: true, name: true, sideBusiness: true } }),
   ]);
+  // Köpfe aus Nebengeschäft (kleine Serviceaufträge, Durchreiche) zählen nicht (Etappe 45)
+  const side = new Set(accounts.filter((a) => a.sideBusiness).map((a) => a.id));
   const heads = new Map<string, number>();
-  for (const id of accountIds) heads.set(id, headsAt(engs.filter((e) => e.accountId === id), ref));
+  for (const id of accountIds) heads.set(id, side.has(id) ? 0 : headsAt(engs.filter((e) => e.accountId === id), ref));
   // Neukunde: erster zählender Einsatz des Kunden beginnt im Quartal (bis zum Stichtag)
   const newCustomers: Actuals["newCustomers"] = [];
   for (const a of accounts) {

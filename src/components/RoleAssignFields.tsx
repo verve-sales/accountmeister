@@ -37,12 +37,21 @@ export function RoleAssignFields({
           ))}
         </select>
       </div>
+      {role === "PRINCIPAL" && (
+        <div>
+          <label className="label" htmlFor="rLevel">Kundenverantwortung – Stufe</label>
+          <select id="rLevel" name="level" className="select" defaultValue="PRINCIPAL">
+            <option value="PRINCIPAL">Principal</option>
+            <option value="ACCOUNT_LEAD">Account Lead</option>
+          </select>
+        </div>
+      )}
       <div>
         <label className="label" htmlFor="rAccount">
           Kunde {accountRequired ? "(bei BD zwingend – arbeitsraumweit ist für BD nicht vorgesehen)" : role === "COACH" ? "(Coach: kundenbezogen = nur diese Kunden; arbeitsraumweit = alle Kunden, nur lesen)" : "(nur BD/Principal/Coach kundenbezogen)"}
         </label>
         <select id="rAccount" name="accountId" className="select" required={accountRequired} defaultValue="">
-          {!accountRequired && <option value="">– arbeitsraumweit –</option>}
+          {!accountRequired && <option value="">{role === "PRINCIPAL" ? "– arbeitsraumweit (Rechte bei allen Kunden, zählt keine Kunden) –" : "– arbeitsraumweit –"}</option>}
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>{a.name}</option>
           ))}

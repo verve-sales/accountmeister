@@ -17,8 +17,10 @@ import { Status } from "@/components/Status";
 import { orgTypeLabel } from "@/lib/labels";
 import { hasRoleForAccountWrite } from "@/modules/identity/authz";
 import { accountStatusLabel, fmtDate, setupStatusLabel, visibilityLabel, contributionLabel, opportunityStatusLabel } from "@/lib/labels";
-import { createInitiativeAction, createSetupAction, linkChanceInitiativeAction, setAccountKeysAction, setAccountOrgTypeAction } from "../../actions";
+import { createInitiativeAction, createSetupAction, linkChanceInitiativeAction, setAccountFlagsAction, setAccountKeysAction, setAccountOrgTypeAction } from "../../actions";
 import { suggestedDomains } from "@/modules/accounts/keys";
+import { accountKindLabel, accountKinds, responsibles } from "@/modules/rounds/service";
+import { levelLabel } from "@/modules/principals/service";
 import { listCardsByInitiative } from "@/modules/suggestions/service";
 import { listPeopleForAccount } from "@/modules/people/service";
 import { relationshipStateLabel, priorityKindLabel, priorityStatusLabel } from "@/lib/labels";
@@ -105,6 +107,9 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const openWork = (iid: string) => iniWork.filter((w) => w.subjectId === iid && !["ERLEDIGT", "VERWORFEN", "ABGELEHNT"].includes(w.status)).length;
   const unassignedChances = opportunities.filter((o) => !o.initiativeId && !["BEENDET", "BEAUFTRAGT"].includes(o.status));
   const openSos = sosList.filter((x) => x.status !== "GELOEST");
+  const kind = (await accountKinds([account.id])).get(account.id) ?? "PROSPECT";
+  const responsible = (await responsibles(actor.workspaceId)).get(account.id) ?? null;
+  const mayFlags = !ro && (mayKeys || responsible?.userId === actor.userId);
   const tabs: { key: Bucket; label: string; hint: string }[] = [
     { key: "grundlagen", label: "1 Grundlagen", hint: `Health-Check, Kundenagenda, laufende Vorgehen` },
     { key: "strategie", label: "2 Strategie", hint: `${keyInitiatives.length} Schlüssel-Initiative(n)${iniCards + otherCards.length ? ` · ${iniCards + otherCards.length} KI-Vorschläge` : ""}` },
@@ -118,7 +123,18 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         <h1 className="text-2xl font-semibold">{account.name}</h1>
         {health && <Link href={`/kunden/${account.id}?b=grundlagen`} className="no-underline" title="Health-Check"><HealthBadge score={health.score} level={health.level} coverage={health.coverage} /></Link>}
         {account.status === "ARCHIVED" && <Status label={accountStatusLabel.ARCHIVED!} />}
-        <span className="muted text-sm">{orgTypeLabel[account.orgType] ?? account.orgType}{currentBdName ? ` · BD ${currentBdName}` : ""}</span>
+        <span className="muted text-sm">{orgTypeLabel[account.orgType] ?? account.orgType}{currentBdName ? ` · BD ${currentBdName}` : ""}{responsible ? ` · ${levelLabel[responsible.level]} ${responsible.name}` : ""}</span>
+        <span className="text-sm flex flex-wrap items-center gap-2">
+          <Status label={account.sideBusiness ? "Nebengeschäft" : accountKindLabel[kind]} />
+          {kind === "BESTAND" && !account.sideBusiness && <Link href="/kundenrunde" className="muted text-xs">in der Kundenrunde</Link>}
+          {account.onRadar && kind !== "BESTAND" && !account.sideBusiness && <span className="text-xs" style={{ color: "#b7791f" }}>auf dem Radar</span>}
+          {mayFlags && (
+            <>
+              <form action={setAccountFlagsAction}><input type="hidden" name="accountId" value={account.id} /><input type="hidden" name="back" value={back} /><input type="hidden" name="sideBusiness" value={account.sideBusiness ? "false" : "true"} /><button className="btn btn-secondary btn-small" type="submit" title="Kleine Serviceaufträge oder Durchreiche: nicht in der Kundenrunde, Köpfe zählen nicht für Ziele">{account.sideBusiness ? "Kein Nebengeschäft" : "Als Nebengeschäft markieren"}</button></form>
+              {kind !== "BESTAND" && !account.sideBusiness && <form action={setAccountFlagsAction}><input type="hidden" name="accountId" value={account.id} /><input type="hidden" name="back" value={back} /><input type="hidden" name="onRadar" value={account.onRadar ? "false" : "true"} /><button className="btn btn-secondary btn-small" type="submit" title="In der Kundenrunde unter „Auf dem Radar“ zeigen">{account.onRadar ? "Vom Radar nehmen" : "Auf das Radar setzen"}</button></form>}
+            </>
+          )}
+        </span>
         {mayDelete && <Link href={`/kunden/${account.id}/loeschen`} className="muted text-sm ml-auto">Kunde archivieren oder löschen</Link>}
       </div>
       {account.orgType === "SONSTIGE" && !ro && (hasRoleForAccountWrite(actor, account) || actor.roles.has("CEO")) && (

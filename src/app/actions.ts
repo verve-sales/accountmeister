@@ -1740,6 +1740,7 @@ export async function decideRenewalAction(fd: FormData) {
     requireStaffingFlag();
     const { decideRenewal } = await import("@/modules/engagements/care");
     const r = await decideRenewal(actor, data.engagementId ?? "", data);
+    if (data.decision === "BESTAETIGEN" && r.pendingApproval) throw new PendingInfo("Geänderte Konditionen bei einem Account-Lead-Kunden: Die Verlängerung liegt jetzt zur Freigabe bei der Geschäftsführung.");
     if (data.decision === "BESTAETIGEN") throw new PendingInfo(`Verlängerung bestätigt bis ${r.decision.proposedTo} – Periode, Einsatz- und Auftragsende gesetzt${r.mocoWritten ? ", Projektende in Moco aktualisiert" : r.mocoError ? `; Moco konnte nicht geschrieben werden (${r.mocoError.slice(0, 120)}) – Aufgabe an Sales Operations` : ""}.`);
     if (data.decision === "ABLEHNEN") throw new PendingInfo("Verlängerung abgelehnt – Rückmeldung geht an die anstoßende Person.");
     throw new PendingInfo("Entscheidung weitergegeben.");
@@ -1920,4 +1921,32 @@ export async function addPrincipalAgreementAction(fd: FormData) {
     const { addAgreement } = await import("@/modules/principals/service");
     await addAgreement(actor, pid, data);
   }, "Vereinbarung festgehalten – sie liegt als Vorgang mit Frist beim Principal.");
+}
+
+// --- Kundenrunde (Etappe 45) -----------------------------------------------------
+
+export async function prepareRoundNoteAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/kundenrunde#k-${data.accountId ?? ""}`, async (actor) => {
+    const { prepareRoundNote } = await import("@/modules/rounds/service");
+    const r = await prepareRoundNote(actor, data.accountId ?? "", data.note ?? "");
+    throw new PendingInfo(`${r.name}: für die Runde bestätigt.`);
+  }, "");
+}
+
+export async function closeRoundAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/kundenrunde", async (actor) => {
+    const { closeRound } = await import("@/modules/rounds/service");
+    await closeRound(actor, data);
+  }, "Runde abgeschlossen – „seit der letzten Runde“ zählt ab heute neu.");
+}
+
+export async function setAccountFlagsAction(fd: FormData) {
+  const data = formToObject(fd);
+  const back = data.back || `/kunden/${data.accountId ?? ""}`;
+  return run(back, async (actor) => {
+    const { setAccountFlags } = await import("@/modules/rounds/service");
+    await setAccountFlags(actor, data.accountId ?? "", { sideBusiness: data.sideBusiness === undefined ? undefined : data.sideBusiness === "true", onRadar: data.onRadar === undefined ? undefined : data.onRadar === "true" });
+  }, "Kundenart gespeichert.");
 }

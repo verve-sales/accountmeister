@@ -79,7 +79,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
                   <ul className="space-y-1">
                     {u.roles.map((r) => (
                       <li key={r.id} className="flex gap-2 items-center">
-                        <span>{roleLabel[r.role] ?? r.role}{r.accountName && <span className="muted"> · {r.accountName}</span>}</span>
+                        <span>{r.role === "PRINCIPAL" && r.level === "ACCOUNT_LEAD" ? "Account Lead" : roleLabel[r.role] ?? r.role}{r.accountName && <span className="muted"> · {r.accountName}</span>}{r.role === "PRINCIPAL" && r.scope === "WORKSPACE" && <span style={{ color: "#b7791f" }}> · arbeitsraumweit: Rechte bei allen Kunden, zählt aber keine Kunden</span>}</span>
                         <form action={revokeRoleAction}><input type="hidden" name="roleAssignmentId" value={r.id} /><button className="btn btn-secondary btn-small" type="submit" aria-label={`Rolle ${r.role} entziehen`}>entziehen</button></form>
                       </li>
                     ))}

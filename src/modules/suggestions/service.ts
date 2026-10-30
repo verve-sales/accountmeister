@@ -623,6 +623,7 @@ async function acceptRenewalSuggestion(actor: Actor, s: SuggestionRow, newEnd: s
   if (!open || open.proposedTo !== newEnd) await startRenewal(actor, e.id, { newEnd, conditions: "UNVERAENDERT", note: quote.slice(0, 1000) });
   if (a.commercial) {
     const r = await decideRenewal(actor, e.id, { decision: "BESTAETIGEN", contractFollowUp: contractFollowUp || "Nachtrag", note: s.conditionsNote ?? "" });
+    if (r.pendingApproval) return { decisionId: r.decision.id, message: "Verlängerung mit geänderten Konditionen – liegt zur Freigabe bei der Geschäftsführung." };
     const moco = r.mocoWritten ? " Das Projektende in Moco ist aktualisiert." : r.mocoError ? " Moco konnte nicht aktualisiert werden – Sales Operations ist informiert." : "";
     return { decisionId: r.decision.id, message: `Verlängerung bis ${newEnd.split("-").reverse().join(".")} bestätigt – die offene Klärung ist erledigt.${moco}` };
   }
