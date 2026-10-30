@@ -23,7 +23,7 @@ import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { inArray, or } from "drizzle-orm";
 import { getProviderStatus, listOpenQuestionsForSetup, listSuggestionsForSetup } from "@/modules/suggestions/service";
 import { SuggestionCard } from "@/components/SuggestionCard";
-import { Feedback, type SearchParams } from "@/components/Feedback";
+import { Feedback } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { SuggestButton } from "@/components/SuggestButton";
 import { SetupTabs } from "@/components/SetupTabs";
@@ -61,7 +61,7 @@ import {
   updateSetupAction,
 } from "../../actions";
 
-export default async function SetupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
+export default async function SetupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; umbenennen?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const actor = await getCurrentActor();
@@ -122,7 +122,11 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         {d.members.filter((m) => m.contribution === "PRINCIPAL_ZUSTAENDIG").map((m) => <span key={m.userId} className="muted text-sm">Principal: {m.displayName}</span>)}
         {d.setup.mocoProjectGroupId && <span className="muted text-xs">Moco-Projektgruppe {d.setup.mocoProjectGroupId}</span>}
         {!d.canEdit && <span className="muted text-sm">(nur lesend)</span>}
+        {d.canEdit && <a href="?umbenennen=1#bearbeiten" className="muted text-sm">umbenennen</a>}
       </div>
+      {d.canEdit && /ohne bereich|^erstkontakt |– account$/i.test(d.setup.name) && (
+        <p className="text-sm p-2" style={{ borderLeft: "4px solid #b7791f", background: "var(--surface-2)", borderRadius: 6 }}>Der Name stammt von der KI und sagt noch nicht, um welches Team oder Vorhaben es geht. <a href="?umbenennen=1#bearbeiten">Jetzt umbenennen</a></p>
+      )}
       <SetupTabs setupId={id} active="ueberblick" />
       {analysis && (
         <section className="card">
@@ -215,11 +219,12 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           </details>
         )}
         {d.canEdit && (
-          <details className="mt-3">
-            <summary className="text-sm">Kontext oder Status bearbeiten</summary>
+          <details className="mt-3" id="bearbeiten" open={!!sp.umbenennen}>
+            <summary className="text-sm">Name, Kontext oder Status bearbeiten</summary>
             <form action={updateSetupAction} className="mt-2 grid sm:grid-cols-3 gap-3">
               <input type="hidden" name="setupId" value={d.setup.id} />
               <input type="hidden" name="version" value={d.setup.version} />
+              <div className="sm:col-span-3"><label className="label" htmlFor="setupName">Name des Setups (Team, Bereich oder Vorhaben beim Kunden)</label><input id="setupName" name="name" className="input" required minLength={3} maxLength={200} defaultValue={d.setup.name} /></div>
               <div className="sm:col-span-3"><label className="label" htmlFor="contextNote">Kontextsatz</label><textarea id="contextNote" name="contextNote" className="textarea" defaultValue={d.setup.contextNote ?? ""} /></div>
               <div>
                 <label className="label" htmlFor="status">Status</label>

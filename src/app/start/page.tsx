@@ -39,6 +39,7 @@ import { listSetupsForAccount } from "@/modules/setups/service";
 import { db, schema } from "@/db/client";
 import { buildPrincipalOverview, myPrincipalSummary } from "@/modules/principals/service";
 import { roundTeaser } from "@/modules/rounds/service";
+import { drillHref } from "@/modules/opportunities/drilldown";
 import { TargetProgress } from "@/components/TargetProgress";
 import { eq } from "drizzle-orm";
 import { Aufgaben, Entscheidungen, Vorschlaege } from "@/components/Arbeitsliste";
@@ -328,6 +329,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               detail: "Chance(n)",
             }))}
           />
+          <p className="text-sm mt-2 flex flex-wrap gap-x-4 gap-y-1">{[...CHANCE_STEPS, "ZURUECKGESTELLT"].filter((st) => (chanceCounts[st] ?? 0) > 0).map((st) => <Link key={st} href={drillHref({ sicht: d.view, stufe: st })}>{opportunityStatusLabel[st] ?? st}: {chanceCounts[st]}</Link>)}</p>
           <p className="muted text-xs mt-2">Jede Chance zählt mit ihrem eigenen Stand – ein Kunde mit drei Chancen erscheint dreimal. Sicht: {viewLabel[d.view]} – jede Rolle sieht nur ihren eigenen Zuordnungsbereich.</p>
         </details>
       )}
@@ -378,10 +380,10 @@ export default async function StartPage({ searchParams }: { searchParams: Search
           <summary className="font-semibold">Freelancer-Hebel <span className="muted text-xs font-normal">– strategischer Fokus, 90 Tage · <Link href="/vorgehen#fokus">Was ist der Fokus?</Link></span></summary>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             {[
-              { v: fl.openFreelancerChances, l: "offene Freelancer-Chancen" },
-              { v: fl.newFreelancerChances90d, l: "neue Freelancer-Chancen (90 Tage)" },
-              { v: fl.presentedOffers90d, l: "vorgestellte Angebote/Profile (90 Tage)" },
-              { v: `${fl.accountsWithoutFreelancerChance} / ${fl.accountsTotal}`, l: "Kunden ohne Freelancer-Chance" },
+              { v: fl.openFreelancerChances, l: "offene Freelancer-Chancen", href: drillHref({ sicht: d.view, art: "FREELANCER_EXPERTE", stufe: "offen" }) },
+              { v: fl.newFreelancerChances90d, l: "neue Freelancer-Chancen (90 Tage)", href: drillHref({ sicht: d.view, art: "FREELANCER_EXPERTE", neu: "90" }) },
+              { v: fl.presentedOffers90d, l: "vorgestellte Angebote/Profile (90 Tage)", href: drillHref({ sicht: d.view, art: "FREELANCER_EXPERTE", vorgestellt: "90" }) },
+              { v: `${fl.accountsWithoutFreelancerChance} / ${fl.accountsTotal}`, l: "Kunden ohne Freelancer-Chance", href: drillHref({ sicht: d.view, ohne: "FREELANCER_EXPERTE" }) },
               { v: fl.openChecks, l: "offene Freelancer-Standardaufgaben", href: "/meine-arbeit" },
             ].map((t) => (
               <div key={t.l} className="p-3" style={{ background: "var(--surface-2)", borderRadius: 8 }}>

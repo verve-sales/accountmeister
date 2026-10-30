@@ -88,7 +88,7 @@ export default async function PrincipalTalkPage({ params, searchParams }: { para
           <div className="p-3" style={{ background: "var(--surface-2)", borderRadius: 8 }}>
             <div className="muted text-xs mb-1">Neukunden im Quartal</div>
             <TargetProgress actual={ref ? s.actuals.newCustomers.length : null} target={s.targets.newCustomers} />
-            {s.actuals.newCustomers.length > 0 && <div className="text-xs mt-1">{s.actuals.newCustomers.map((n) => `${n.name} (seit ${fmtDate(n.since)})`).join(" · ")}</div>}
+            {s.actuals.newCustomers.length > 0 && <div className="text-xs mt-1">{s.actuals.newCustomers.map((n, k) => <span key={n.accountId}>{k ? " · " : ""}<Link href={`/kunden/${n.accountId}`}>{n.name}</Link> (seit {fmtDate(n.since)})</span>)}</div>}
             {canEdit && <div className="mt-2 text-xs"><label htmlFor="nk">Ziel </label><input id="nk" form={formId} name="newCustomers" type="number" min={0} max={100} className="input" style={{ width: 72, padding: "2px 6px" }} defaultValue={s.targets.newCustomers ?? ""} /></div>}
           </div>
           <div className="p-3" style={{ background: "var(--surface-2)", borderRadius: 8 }}>

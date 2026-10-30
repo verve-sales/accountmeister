@@ -194,10 +194,10 @@ export async function freelancerStatsByBd(workspaceId: string, now = new Date())
   const bdIds = [...new Set(accounts.map((a) => a.responsibleBdUserId).filter((x): x is string => !!x))];
   const users = bdIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, bdIds) }) : [];
   const name = new Map(users.map((u) => [u.id, u.displayName]));
-  const groups = new Map<string, { bdName: string; accounts: string[] }>();
+  const groups = new Map<string, { bdName: string; bdKey: string; accounts: string[] }>();
   for (const a of accounts) {
     const k = a.responsibleBdUserId ?? "";
-    const g = groups.get(k) ?? { bdName: k ? (name.get(k) ?? "?") : "BD offen", accounts: [] };
+    const g = groups.get(k) ?? { bdName: k ? (name.get(k) ?? "?") : "BD offen", bdKey: k || "offen", accounts: [] };
     g.accounts.push(a.id);
     groups.set(k, g);
   }
@@ -208,6 +208,7 @@ export async function freelancerStatsByBd(workspaceId: string, now = new Date())
       const withRecent = new Set(mine.filter((o) => o.createdAt >= since || (o.status !== "BEENDET" && o.status !== "ZURUECKGESTELLT")).map((o) => o.accountId));
       return {
         bdName: g.bdName,
+        bdKey: g.bdKey,
         accounts: g.accounts.length,
         openFreelancerChances: mine.filter((o) => o.status !== "BEENDET" && o.status !== "ZURUECKGESTELLT").length,
         newFreelancerChances90d: mine.filter((o) => o.createdAt >= since).length,

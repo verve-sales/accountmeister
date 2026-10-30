@@ -99,54 +99,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
 
             {q.key === "ENGAGEMENT_MISSING" && (canDecide ? <ExistingEngagementForm accountId={id} setups={activeSetups} open /> : <p className="text-sm">Laufende Einsätze trägt der BD nach. Tipp: per „Unterstützung anfragen“ im Setup einen BD darum bitten.</p>)}
 
-            {q.key === "FEEDBACK" && (
-              <form action={saveHealthAnswerAction} className="grid sm:grid-cols-3 gap-3">
-                <input type="hidden" name="accountId" value={id} />
-                <input type="hidden" name="key" value="FEEDBACK" />
-                <div>
-                  <label className="label" htmlFor="qTone">Zufriedenheit</label>
-                  <select id="qTone" name="tone" className="select" required defaultValue={h.answers.feedback?.tone ?? ""}>
-                    <option value="" disabled>Bitte wählen …</option>
-                    {feedbackToneValues.map((v) => <option key={v} value={v}>{feedbackToneLabel[v]}</option>)}
-                  </select>
-                </div>
-                <div><label className="label" htmlFor="qFbDate">Wann war das letzte Feedback?</label><input id="qFbDate" name="date" type="date" className="input" defaultValue={h.answers.feedback?.date ?? ""} /></div>
-                <div className="sm:col-span-3"><label className="label" htmlFor="qFbNote">Was wurde gesagt? (optional)</label><input id="qFbNote" name="note" className="input" maxLength={1000} defaultValue={h.answers.feedback?.note ?? ""} /></div>
-                <div><button className="btn" type="submit">Speichern und weiter</button></div>
-              </form>
-            )}
-
-            {q.key === "LISTING" && (
-              <form action={saveHealthAnswerAction} className="grid sm:grid-cols-3 gap-3">
-                <input type="hidden" name="accountId" value={id} />
-                <input type="hidden" name="key" value="LISTING" />
-                <div>
-                  <label className="label" htmlFor="qList">Status</label>
-                  <select id="qList" name="status" className="select" required defaultValue={h.answers.listing?.status ?? ""}>
-                    <option value="" disabled>Bitte wählen …</option>
-                    {listingValues.map((v) => <option key={v} value={v}>{listingLabel[v]}</option>)}
-                  </select>
-                </div>
-                <div><label className="label" htmlFor="qValid">Gültig bis (optional)</label><input id="qValid" name="validUntil" type="date" className="input" defaultValue={h.answers.listing?.validUntil ?? ""} /></div>
-                <div className="sm:col-span-3"><label className="label" htmlFor="qListNote">Notiz (z. B. Portal, Ansprechpartner Einkauf)</label><input id="qListNote" name="note" className="input" maxLength={1000} defaultValue={h.answers.listing?.note ?? ""} /></div>
-                <div><button className="btn" type="submit">Speichern und weiter</button></div>
-              </form>
-            )}
-
-            {q.key === "RISKS" && (
-              <form action={saveHealthAnswerAction} className="space-y-2">
-                <input type="hidden" name="accountId" value={id} />
-                <input type="hidden" name="key" value="RISKS" />
-                <div className="grid sm:grid-cols-2 gap-1 text-sm">
-                  {riskValues.map((v) => (
-                    <label key={v} className="flex items-center gap-2"><input type="checkbox" name="items" value={v} defaultChecked={h.answers.risks?.items.includes(v)} /> {riskLabel[v]}</label>
-                  ))}
-                </div>
-                <div><label className="label" htmlFor="qRiskNote">Notiz (optional)</label><input id="qRiskNote" name="note" className="input" maxLength={1000} defaultValue={h.answers.risks?.note ?? ""} /></div>
-                <button className="btn" type="submit">Speichern und weiter</button>
-                <span className="muted text-xs ml-2">Nichts angekreuzt = „keine Risiken bekannt“ – das ist auch eine Antwort.</span>
-              </form>
-            )}
+            {(q.key === "FEEDBACK" || q.key === "LISTING" || q.key === "RISKS") && <AnswerForm k={q.key} h={h} id={id} prefix="q" submitLabel="Speichern und weiter" />}
 
             {q.key === "PEOPLE" && (
               <p className="text-sm">Personen und Beziehungen werden je Setup gepflegt: {activeSetups.length ? activeSetups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/personen`}>{s.name}</Link></span>) : "zuerst ein Setup anlegen"}.</p>
@@ -161,6 +114,23 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
           </ol>
         )}
       </section>
+
+      {may && (
+        <section className="card" id="antworten">
+          <h2 className="font-semibold mb-1">Antworten ändern</h2>
+          <p className="muted text-sm mb-2">Kundenfeedback, Listung und Risiken lassen sich jederzeit korrigieren oder aktualisieren. Einsatzdaten (Ende, Frist, Berater) änderst du unten bei „Einsätze“, Personen im jeweiligen Setup.</p>
+          {([
+            ["FEEDBACK", "Kundenfeedback", h.answers.feedback ? `${feedbackToneLabel[h.answers.feedback.tone as keyof typeof feedbackToneLabel] ?? h.answers.feedback.tone}${h.answers.feedback.date ? ` · ${fmtDate(h.answers.feedback.date)}` : ""}${h.answers.feedback.note ? ` · ${h.answers.feedback.note}` : ""}` : null],
+            ["LISTING", "Listung", h.answers.listing ? `${listingLabel[h.answers.listing.status as keyof typeof listingLabel] ?? h.answers.listing.status}${h.answers.listing.validUntil ? ` · gültig bis ${fmtDate(h.answers.listing.validUntil)}` : ""}${h.answers.listing.note ? ` · ${h.answers.listing.note}` : ""}` : null],
+            ["RISKS", "Risiken", h.answers.risks ? `${h.answers.risks.items.length ? h.answers.risks.items.map((v) => riskLabel[v as keyof typeof riskLabel] ?? v).join(", ") : "keine Risiken bekannt"}${h.answers.risks.note ? ` · ${h.answers.risks.note}` : ""}` : null],
+          ] as const).map(([k, label, current]) => (
+            <details key={k} className="mt-2" style={{ borderTop: "1px solid var(--border)", paddingTop: ".5rem" }}>
+              <summary className="text-sm" style={{ cursor: "pointer" }}><strong>{label}:</strong> {current ?? <span className="muted">noch nicht beantwortet</span>} <span className="muted">· ändern</span></summary>
+              <div className="mt-2"><AnswerForm k={k} h={h} id={id} prefix={`e${k}`} submitLabel="Speichern" edit /></div>
+            </details>
+          ))}
+        </section>
+      )}
 
       <section className="card">
         <h2 className="font-semibold mb-2">Einsätze ({h.engagements.length})</h2>
@@ -299,5 +269,58 @@ function ExistingEngagementForm({ accountId, setups, open = false }: { accountId
         <div><button className="btn" type="submit">Einsatz nachtragen</button></div>
       </form>
     </details>
+  );
+}
+
+/** Antwort-Formulare des Health-Checks – im Interview und unter „Antworten ändern“ (jederzeit änderbar). */
+function AnswerForm({ k, h, id, prefix, submitLabel, edit = false }: { k: "FEEDBACK" | "LISTING" | "RISKS"; h: Awaited<ReturnType<typeof getHealth>>; id: string; prefix: string; submitLabel: string; edit?: boolean }) {
+  if (k === "FEEDBACK") return (
+              <form action={saveHealthAnswerAction} className="grid sm:grid-cols-3 gap-3">
+                <input type="hidden" name="accountId" value={id} />
+                {edit && <input type="hidden" name="mode" value="edit" />}
+                <input type="hidden" name="key" value="FEEDBACK" />
+                <div>
+                  <label className="label" htmlFor={`${prefix}qTone`}>Zufriedenheit</label>
+                  <select id={`${prefix}qTone`} name="tone" className="select" required defaultValue={h.answers.feedback?.tone ?? ""}>
+                    <option value="" disabled>Bitte wählen …</option>
+                    {feedbackToneValues.map((v) => <option key={v} value={v}>{feedbackToneLabel[v]}</option>)}
+                  </select>
+                </div>
+                <div><label className="label" htmlFor={`${prefix}qFbDate`}>Wann war das letzte Feedback?</label><input id={`${prefix}qFbDate`} name="date" type="date" className="input" defaultValue={h.answers.feedback?.date ?? ""} /></div>
+                <div className="sm:col-span-3"><label className="label" htmlFor={`${prefix}qFbNote`}>Was wurde gesagt? (optional)</label><input id={`${prefix}qFbNote`} name="note" className="input" maxLength={1000} defaultValue={h.answers.feedback?.note ?? ""} /></div>
+                <div><button className="btn" type="submit">{submitLabel}</button></div>
+              </form>
+  );
+  if (k === "LISTING") return (
+              <form action={saveHealthAnswerAction} className="grid sm:grid-cols-3 gap-3">
+                <input type="hidden" name="accountId" value={id} />
+                {edit && <input type="hidden" name="mode" value="edit" />}
+                <input type="hidden" name="key" value="LISTING" />
+                <div>
+                  <label className="label" htmlFor={`${prefix}qList`}>Status</label>
+                  <select id={`${prefix}qList`} name="status" className="select" required defaultValue={h.answers.listing?.status ?? ""}>
+                    <option value="" disabled>Bitte wählen …</option>
+                    {listingValues.map((v) => <option key={v} value={v}>{listingLabel[v]}</option>)}
+                  </select>
+                </div>
+                <div><label className="label" htmlFor={`${prefix}qValid`}>Gültig bis (optional)</label><input id={`${prefix}qValid`} name="validUntil" type="date" className="input" defaultValue={h.answers.listing?.validUntil ?? ""} /></div>
+                <div className="sm:col-span-3"><label className="label" htmlFor={`${prefix}qListNote`}>Notiz (z. B. Portal, Ansprechpartner Einkauf)</label><input id={`${prefix}qListNote`} name="note" className="input" maxLength={1000} defaultValue={h.answers.listing?.note ?? ""} /></div>
+                <div><button className="btn" type="submit">{submitLabel}</button></div>
+              </form>
+  );
+  return (
+              <form action={saveHealthAnswerAction} className="space-y-2">
+                <input type="hidden" name="accountId" value={id} />
+                {edit && <input type="hidden" name="mode" value="edit" />}
+                <input type="hidden" name="key" value="RISKS" />
+                <div className="grid sm:grid-cols-2 gap-1 text-sm">
+                  {riskValues.map((v) => (
+                    <label key={v} className="flex items-center gap-2"><input type="checkbox" name="items" value={v} defaultChecked={h.answers.risks?.items.includes(v)} /> {riskLabel[v]}</label>
+                  ))}
+                </div>
+                <div><label className="label" htmlFor={`${prefix}qRiskNote`}>Notiz (optional)</label><input id={`${prefix}qRiskNote`} name="note" className="input" maxLength={1000} defaultValue={h.answers.risks?.note ?? ""} /></div>
+                <button className="btn" type="submit">{submitLabel}</button>
+                <span className="muted text-xs ml-2">Nichts angekreuzt = „keine Risiken bekannt“ – das ist auch eine Antwort.</span>
+              </form>
   );
 }

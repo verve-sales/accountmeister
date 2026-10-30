@@ -888,7 +888,11 @@ export async function purgeExpiredLogsAction() {
 export async function assignRoleAction(fd: FormData) {
   const data = formToObject(fd);
   return run("/verwaltung", async (actor) => {
-    await assignRole(actor, data);
+    // Account Lead = Kundenverantwortung (PRINCIPAL kundenbezogen) mit Stufe ACCOUNT_LEAD
+    if (data.role === "ACCOUNT_LEAD") {
+      if (!data.accountId) throw new ValidationError("Account Lead wird je Kunde vergeben – bitte einen Kunden wählen.");
+      await assignRole(actor, { ...data, role: "PRINCIPAL", level: "ACCOUNT_LEAD" });
+    } else await assignRole(actor, { ...data, level: data.role === "PRINCIPAL" ? "PRINCIPAL" : "" });
   }, "Rolle zugewiesen.");
 }
 
@@ -1231,9 +1235,9 @@ export async function saveHealthAnswerAction(fd: FormData) {
   const data = formToObject(fd);
   const id = data.accountId ?? "";
   const items = fd.getAll("items").filter((x): x is string => typeof x === "string");
-  return run(`/kunden/${id}/health`, async (actor) => {
+  return run(`/kunden/${id}/health${data.mode === "edit" ? "#antworten" : ""}`, async (actor) => {
     await saveHealthAnswer(actor, id, { ...data, items });
-  }, "Antwort gespeichert – nächste Frage.");
+  }, data.mode === "edit" ? "Antwort geändert – der Health-Check ist neu berechnet." : "Antwort gespeichert – nächste Frage.");
 }
 
 export async function updateOrderDatesAction(fd: FormData) {

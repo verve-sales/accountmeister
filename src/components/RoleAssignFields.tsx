@@ -18,7 +18,9 @@ export function RoleAssignFields({
   accounts: { id: string; name: string }[];
 }) {
   const [role, setRole] = useState<string>(roleLabelEntries[0]?.[0] ?? "");
-  const accountRequired = role === "BD";
+  // „Account Lead“ ist eigene Auswahl (Kundenverantwortung, Stufe Account Lead) – serverseitig PRINCIPAL mit Stufe
+  const entries: [string, string][] = roleLabelEntries.flatMap(([k, v]) => (k === "PRINCIPAL" ? [[k, "Principal (Kundenverantwortung)"], ["ACCOUNT_LEAD", "Account Lead (Kundenverantwortung)"]] : [[k, v]]) as [string, string][]);
+  const accountRequired = role === "BD" || role === "ACCOUNT_LEAD";
   return (
     <>
       <div>
@@ -32,23 +34,15 @@ export function RoleAssignFields({
       <div>
         <label className="label" htmlFor="rRole">Rolle</label>
         <select id="rRole" name="role" className="select" value={role} onChange={(e) => setRole(e.target.value)}>
-          {roleLabelEntries.map(([k, v]) => (
+          {entries.map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
           ))}
         </select>
       </div>
-      {role === "PRINCIPAL" && (
-        <div>
-          <label className="label" htmlFor="rLevel">Kundenverantwortung – Stufe</label>
-          <select id="rLevel" name="level" className="select" defaultValue="PRINCIPAL">
-            <option value="PRINCIPAL">Principal</option>
-            <option value="ACCOUNT_LEAD">Account Lead</option>
-          </select>
-        </div>
-      )}
+
       <div>
         <label className="label" htmlFor="rAccount">
-          Kunde {accountRequired ? "(bei BD zwingend – arbeitsraumweit ist für BD nicht vorgesehen)" : role === "COACH" ? "(Coach: kundenbezogen = nur diese Kunden; arbeitsraumweit = alle Kunden, nur lesen)" : "(nur BD/Principal/Coach kundenbezogen)"}
+          Kunde {role === "ACCOUNT_LEAD" ? "(zwingend – je Kunde einzeln zuweisen)" : accountRequired ? "(bei BD zwingend – arbeitsraumweit ist für BD nicht vorgesehen)" : role === "COACH" ? "(Coach: kundenbezogen = nur diese Kunden; arbeitsraumweit = alle Kunden, nur lesen)" : "(nur BD/Principal/Coach kundenbezogen)"}
         </label>
         <select id="rAccount" name="accountId" className="select" required={accountRequired} defaultValue="">
           {!accountRequired && <option value="">{role === "PRINCIPAL" ? "– arbeitsraumweit (Rechte bei allen Kunden, zählt keine Kunden) –" : "– arbeitsraumweit –"}</option>}

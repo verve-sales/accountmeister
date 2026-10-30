@@ -11,6 +11,7 @@ import { getFocus } from "@/modules/focus/service";
 import { freelancerStatsByBd } from "@/modules/focus/standardTasks";
 import { computeHealthFor } from "@/modules/health/service";
 import { HealthBadge } from "@/components/HealthBadge";
+import { drillHref } from "@/modules/opportunities/drilldown";
 
 export default async function CeoDashboardPage() {
   const actor = await getCurrentActor();
@@ -78,12 +79,12 @@ export default async function CeoDashboardPage() {
             <tbody>
               {flByBd.map((r) => (
                 <tr key={r.bdName}>
-                  <td>{r.bdName}</td>
-                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.accounts}</td>
-                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.openFreelancerChances}</td>
-                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.newFreelancerChances90d}</td>
-                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.presentedOffers90d}</td>
-                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{r.accountsWithoutFreelancerChance}</td>
+                  <td>{r.bdKey !== "offen" ? <Link href={drillHref({ bd: r.bdKey, kunden: "alle" })}>{r.bdName}</Link> : r.bdName}</td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}><Link href={drillHref({ bd: r.bdKey, kunden: "alle" })}>{r.accounts}</Link></td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}><Link href={drillHref({ bd: r.bdKey, art: "FREELANCER_EXPERTE", stufe: "offen" })}>{r.openFreelancerChances}</Link></td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}><Link href={drillHref({ bd: r.bdKey, art: "FREELANCER_EXPERTE", neu: "90" })}>{r.newFreelancerChances90d}</Link></td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}><Link href={drillHref({ bd: r.bdKey, art: "FREELANCER_EXPERTE", vorgestellt: "90" })}>{r.presentedOffers90d}</Link></td>
+                  <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}><Link href={drillHref({ bd: r.bdKey, ohne: "FREELANCER_EXPERTE" })}>{r.accountsWithoutFreelancerChance}</Link></td>
                 </tr>
               ))}
             </tbody>
@@ -137,7 +138,7 @@ export default async function CeoDashboardPage() {
                     <ul className="space-y-1">
                       {a.topOpportunities.map((o) => (
                         <li key={o.id}>
-                          {o.title} <span className="muted">· {maturityLabel[o.maturity]}{o.headcount > 1 ? ` · ${o.headcount} Positionen` : ""}</span>
+                          <Link href={`/bedarfe/${o.id}`}>{o.title}</Link> <span className="muted">· {maturityLabel[o.maturity]}{o.headcount > 1 ? ` · ${o.headcount} Positionen` : ""}</span>
                         </li>
                       ))}
                     </ul>
