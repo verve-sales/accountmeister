@@ -129,6 +129,12 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
               <div className="mt-2"><AnswerForm k={k} h={h} id={id} prefix={`e${k}`} submitLabel="Speichern" edit /></div>
             </details>
           ))}
+          {canDecide && q?.key !== "ENGAGEMENT_MISSING" && (
+            <div className="mt-2" style={{ borderTop: "1px solid var(--border)", paddingTop: ".5rem" }}>
+              <p className="text-sm"><strong>Einsätze:</strong> {h.engagements.length ? `${h.engagements.length} erfasst` : "noch keiner erfasst"} – weitere laufende Assignments hier nachtragen.</p>
+              <ExistingEngagementForm accountId={id} setups={activeSetups} />
+            </div>
+          )}
         </section>
       )}
 
@@ -235,7 +241,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
         })}
         </details>
         <p className="muted text-xs mt-2">Verlängerungsregel: 3 Monate vor Ende bekommt der BD einen Ping („Verlängerung ansprechen“). Am Auslösetag (Verlängerungsfrist − 14 Tage, sonst Einsatzende − 8 Wochen) startet automatisch „Verlängerung vor Einsatzende“ an der Chance; der erste Schritt kommt als Vorschlag zum BD. Vier Wochen vor Ende ohne Fortschritt erscheint der Einsatz bei Principal und CEO als Eskalation.</p>
-        {canDecide && may && q?.key !== "ENGAGEMENT_MISSING" && <ExistingEngagementForm accountId={id} setups={activeSetups} />}
+        {canDecide && may && q?.key !== "ENGAGEMENT_MISSING" && <p className="text-sm mt-2"><a href="#antworten">Weiteren laufenden Einsatz nachtragen</a></p>}
       </section>
 
       <section className="card">

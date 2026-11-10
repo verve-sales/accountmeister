@@ -117,6 +117,32 @@ export function headsAt(engs: Eng[], ref: string): number {
   return people.size;
 }
 
+/**
+ * Aufträge aus dem Health-Check (Etappe 47): Laufende Einsätze, die im Health-Check nachgetragen wurden, stehen als
+ * bestätigter Auftrag ohne Einsatzakte im Tool. Sie zählen für Köpfe, Kundenart und Kundenrunde mit – Aufträge mit
+ * Einsatzakte nicht doppelt.
+ */
+export type OrderSlot = { accountId: string; orderId: string; title: string; start: string | null; end: string | null; ended: boolean; heads: number; person: string | null };
+
+export async function orderSlots(accountIds: string[]): Promise<OrderSlot[]> {
+  if (!accountIds.length) return [];
+  const rows = await db
+    .select({ o: schema.orders, accountId: schema.opportunities.accountId, title: schema.opportunities.title, headcount: schema.opportunities.headcount })
+    .from(schema.orders)
+    .innerJoin(schema.opportunities, eq(schema.opportunities.id, schema.orders.opportunityId))
+    .where(and(inArray(schema.opportunities.accountId, accountIds), eq(schema.orders.status, "BEAUFTRAGUNG_BESTAETIGT")));
+  if (!rows.length) return [];
+  const withAkte = new Set((await db.query.engagements.findMany({ where: inArray(schema.engagements.orderId, rows.map((r) => r.o.id)), columns: { orderId: true } })).map((e) => e.orderId));
+  return rows
+    .filter((r) => !withAkte.has(r.o.id))
+    .map((r) => ({ accountId: r.accountId, orderId: r.o.id, title: r.title, start: r.o.plannedStart ?? (r.o.startedAt ? r.o.startedAt.toISOString().slice(0, 10) : null), end: r.o.plannedEnd, ended: r.o.engagementStatus === "BEENDET", heads: Math.max(1, r.headcount ?? 1), person: r.o.consultantName }));
+}
+
+/** Köpfe aus Aufträgen ohne Einsatzakte am Stichtag. */
+export function orderHeadsAt(slots: OrderSlot[], accountId: string, ref: string): number {
+  return slots.filter((s) => s.accountId === accountId && (!s.start || s.start <= ref) && (!s.end || s.end >= ref) && !(s.ended && (!s.end || s.end < ref))).reduce((n, s) => n + s.heads, 0);
+}
+
 export type Actuals = {
   ref: string | null;
   heads: Map<string, number>;
@@ -129,18 +155,19 @@ export async function computeActuals(accountIds: string[], q: Quarter, today = t
   const ref = referenceDate(q, today);
   const empty: Actuals = { ref, heads: new Map(), headsTotal: 0, newCustomers: [], renewals: { confirmed: 0, rejected: 0, quote: null } };
   if (!accountIds.length || !ref) return empty;
-  const [engs, accounts] = await Promise.all([
+  const [engs, accounts, slots] = await Promise.all([
     db.query.engagements.findMany({ where: inArray(schema.engagements.accountId, accountIds) }),
     db.query.accounts.findMany({ where: inArray(schema.accounts.id, accountIds), columns: { id: true, name: true, sideBusiness: true } }),
+    orderSlots(accountIds),
   ]);
   // Köpfe aus Nebengeschäft (kleine Serviceaufträge, Durchreiche) zählen nicht (Etappe 45)
   const side = new Set(accounts.filter((a) => a.sideBusiness).map((a) => a.id));
   const heads = new Map<string, number>();
-  for (const id of accountIds) heads.set(id, side.has(id) ? 0 : headsAt(engs.filter((e) => e.accountId === id), ref));
+  for (const id of accountIds) heads.set(id, side.has(id) ? 0 : headsAt(engs.filter((e) => e.accountId === id), ref) + orderHeadsAt(slots, id, ref));
   // Neukunde: erster zählender Einsatz des Kunden beginnt im Quartal (bis zum Stichtag)
   const newCustomers: Actuals["newCustomers"] = [];
   for (const a of accounts) {
-    const starts = engs.filter((e) => e.accountId === a.id && COUNTING(e) && startOf(e)).map((e) => startOf(e)!).sort();
+    const starts = [...engs.filter((e) => e.accountId === a.id && COUNTING(e) && startOf(e)).map((e) => startOf(e)!), ...slots.filter((x) => x.accountId === a.id && x.start).map((x) => x.start!)].sort();
     const first = starts[0];
     if (first && first >= q.start && first <= ref) newCustomers.push({ accountId: a.id, name: a.name, since: first });
   }
@@ -305,6 +332,7 @@ export async function buildTalk(actor: Actor, principalUserId: string, quarterKe
   const summary = await summarize(p, q, today);
   const accounts = p.accountIds.length ? await db.query.accounts.findMany({ where: inArray(schema.accounts.id, p.accountIds), columns: { id: true, name: true, responsibleBdUserId: true } }) : [];
   const engs = p.accountIds.length ? await db.query.engagements.findMany({ where: inArray(schema.engagements.accountId, p.accountIds) }) : [];
+  const talkSlots = await orderSlots(p.accountIds);
   const bdIds = [...new Set(accounts.map((a) => a.responsibleBdUserId).filter((x): x is string => !!x))];
   const users = await db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { id: true, displayName: true } });
   const un = new Map(users.map((u) => [u.id, u.displayName]));
@@ -329,7 +357,7 @@ export async function buildTalk(actor: Actor, principalUserId: string, quarterKe
         accountId: a.id,
         name: a.name,
         bdName: a.responsibleBdUserId ? un.get(a.responsibleBdUserId) ?? "?" : null,
-        headsNow: headsAt(engs.filter((e) => e.accountId === a.id), today),
+        headsNow: headsAt(engs.filter((e) => e.accountId === a.id), today) + orderHeadsAt(talkSlots, a.id, today),
         headsRef: ref ? summary.actuals.heads.get(a.id) ?? 0 : null,
         headsTarget: summary.targets.heads.get(a.id) ?? null,
         nextEnd: mine[0]?.plannedEnd ?? null,

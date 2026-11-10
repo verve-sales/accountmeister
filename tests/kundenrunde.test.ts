@@ -12,6 +12,7 @@ import { loadActor, type Actor } from "@/modules/identity/actor";
 import { computeActuals, listPrincipals, quarterOf } from "@/modules/principals/service";
 import { accountKinds, buildRound, closeRound, prepareRoundNote, setAccountFlags } from "@/modules/rounds/service";
 import { decideRenewal, startRenewal } from "@/modules/engagements/care";
+import { recordExistingEngagement } from "@/modules/health/service";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 import { actorFor, ensureSeed } from "./helpers";
 
@@ -125,5 +126,23 @@ describe("Etappe 45: Kundenverantwortung (Account Lead/Principal), Kundenart, Ku
     const ok = await decideRenewal(clemens, k.engagementId!, { decision: "BESTAETIGEN" });
     expect(ok.pendingApproval).toBeFalsy();
     expect(ok.decision.status).toBe("BESTAETIGT");
+  });
+
+  it("R04: Im Health-Check nachgetragener Einsatz macht den Kunden zum Bestandskunden und zählt Köpfe", async () => {
+    process.env.FEATURE_BESETZUNG = "true";
+    resetConfigCacheForTests();
+    const s = await ensureSeed();
+    const [admin, david, clemens] = await Promise.all([actorFor("admin"), actorFor("david"), actorFor("clemens")]);
+    const k = await customer(david, "Nachtragkunde");
+    expect((await accountKinds([k.acc.id])).get(k.acc.id)).toBe("PROSPECT");
+    const enno = await newUser(s.workspaceId, "Enno");
+    await assignRole(admin, { userId: enno.id, role: "PRINCIPAL", accountId: k.acc.id });
+    await recordExistingEngagement(k.bd, k.acc.id, { setupId: k.setup.id, title: "Testmanagement Bestand", headcount: "2", plannedStart: plusDaysIso(todayIso(), -100), plannedEnd: plusDaysIso(todayIso(), 20) });
+    expect((await accountKinds([k.acc.id])).get(k.acc.id)).toBe("BESTAND");
+    expect((await computeActuals([k.acc.id], quarterOf(todayIso()))).heads.get(k.acc.id)).toBe(2);
+    const row = (await buildRound(clemens)).groups.find((g) => g.userId === enno.id)!.accounts.find((x) => x.accountId === k.acc.id)!;
+    expect(row.headsNow).toBe(2);
+    expect(row.ampel).toBe("ROT");
+    expect(row.ending[0]!.renewal).toMatch(/Health-Check/);
   });
 });

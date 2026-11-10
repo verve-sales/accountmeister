@@ -5,7 +5,7 @@ import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { hasRoleForAccountWrite } from "@/modules/identity/authz";
 import { computeHealthFor, type Level } from "@/modules/health/service";
-import { headsAt } from "@/modules/principals/service";
+import { headsAt, orderHeadsAt, orderSlots } from "@/modules/principals/service";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 
 /**
@@ -25,10 +25,14 @@ const NOT_COUNTING = ["VORBEREITUNG", "ABGEBROCHEN"];
 export async function accountKinds(accountIds: string[]): Promise<Map<string, AccountKind>> {
   const out = new Map<string, AccountKind>();
   if (!accountIds.length) return out;
-  const engs = await db.query.engagements.findMany({ where: inArray(schema.engagements.accountId, accountIds), columns: { accountId: true, status: true } });
+  const [engs, slots] = await Promise.all([db.query.engagements.findMany({ where: inArray(schema.engagements.accountId, accountIds), columns: { accountId: true, status: true } }), orderSlots(accountIds)]);
+  const t = todayIso();
   for (const id of accountIds) {
     const mine = engs.filter((e) => e.accountId === id && !NOT_COUNTING.includes(e.status));
-    out.set(id, mine.some((e) => RUNNING.includes(e.status)) ? "BESTAND" : mine.length ? "EX" : "PROSPECT");
+    // auch im Health-Check nachgetragene Aufträge (Etappe 47)
+    const orders = slots.filter((s) => s.accountId === id);
+    const orderRunning = orders.some((s) => !s.ended && (!s.end || s.end >= t));
+    out.set(id, mine.some((e) => RUNNING.includes(e.status)) || orderRunning ? "BESTAND" : mine.length || orders.length ? "EX" : "PROSPECT");
   }
   return out;
 }
@@ -95,7 +99,7 @@ export async function buildRound(actor: Actor, today = todayIso()) {
   const ids = inRound.map((a) => a.id);
   const allIds = [...ids, ...radar.map((a) => a.id)];
   const sinceDate = new Date(`${since}T00:00:00Z`);
-  const [health, engs, opps, cards, persons, notes, users] = await Promise.all([
+  const [health, engs, opps, cards, persons, notes, users, slots] = await Promise.all([
     computeHealthFor(inRound.map((a) => ({ id: a.id, name: a.name }))).catch(() => []),
     ids.length ? db.query.engagements.findMany({ where: inArray(schema.engagements.accountId, ids) }) : Promise.resolve([]),
     allIds.length ? db.query.opportunities.findMany({ where: inArray(schema.opportunities.accountId, allIds), columns: { id: true, accountId: true, title: true, status: true, createdAt: true } }) : Promise.resolve([]),
@@ -103,6 +107,7 @@ export async function buildRound(actor: Actor, today = todayIso()) {
     ids.length ? db.query.persons.findMany({ where: and(inArray(schema.persons.accountId, ids), gte(schema.persons.createdAt, sinceDate)), columns: { accountId: true, displayName: true } }) : Promise.resolve([]),
     allIds.length ? db.query.roundNotes.findMany({ where: and(inArray(schema.roundNotes.accountId, allIds), isNull(schema.roundNotes.roundId)), orderBy: desc(schema.roundNotes.createdAt) }) : Promise.resolve([]),
     db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { id: true, displayName: true } }),
+    orderSlots(ids),
   ]);
   const un = new Map(users.map((u) => [u.id, u.displayName]));
   const running = engs.filter((e) => RUNNING.includes(e.status));
@@ -118,8 +123,8 @@ export async function buildRound(actor: Actor, today = todayIso()) {
   const rows: RoundAccount[] = inRound.map((a) => {
     const h = health.find((x) => x.accountId === a.id) ?? null;
     const mine = engs.filter((e) => e.accountId === a.id);
-    const headsNow = headsAt(mine, today);
-    const headsBefore = headsAt(mine, since);
+    const headsNow = headsAt(mine, today) + orderHeadsAt(slots, a.id, today);
+    const headsBefore = headsAt(mine, since) + orderHeadsAt(slots, a.id, since);
     const ending = running
       .filter((e) => e.accountId === a.id && e.plannedEnd && e.plannedEnd >= today && e.plannedEnd <= plusDaysIso(today, 90))
       .map((e) => {
@@ -127,6 +132,11 @@ export async function buildRound(actor: Actor, today = todayIso()) {
         const person = e.freelancerId ? fls.find((f) => f.id === e.freelancerId)?.displayName ?? "?" : e.internalUserId ? un.get(e.internalUserId) ?? "?" : e.title;
         return { engagementId: e.id, person, plannedEnd: e.plannedEnd!, daysToEnd: day(e.plannedEnd!, today), renewal: d ? renewalText[d.status] ?? d.status : "Verlängerung noch nicht angestoßen", decided: d?.status === "BESTAETIGT" || d?.status === "ABGELEHNT" || d?.status === "ERLEDIGT", inProgress: d?.status === "IN_ABSTIMMUNG" || d?.status === "ANGEBOTEN" };
       })
+      .concat(
+        slots
+          .filter((o) => o.accountId === a.id && !o.ended && o.end && o.end >= today && o.end <= plusDaysIso(today, 90))
+          .map((o) => ({ engagementId: "", person: o.person ?? o.title, plannedEnd: o.end!, daysToEnd: day(o.end!, today), renewal: "Verlängerung noch nicht angestoßen (Auftrag aus dem Health-Check)", decided: false, inProgress: false })),
+      )
       .sort((x, y) => x.daysToEnd - y.daysToEnd);
     const reasons: string[] = [];
     let ampel: Ampel = "GRUEN";

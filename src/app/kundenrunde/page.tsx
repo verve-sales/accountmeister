@@ -88,7 +88,7 @@ export default async function KundenrundePage({ searchParams }: { searchParams: 
                       <div>
                         <div className="muted text-xs">Nachhaltigkeit</div>
                         <div>Köpfe {a.headsNow}{a.headsNow !== a.headsBefore ? <span style={{ color: a.headsNow < a.headsBefore ? COLOR.ROT : COLOR.GRUEN }}> ({a.headsNow > a.headsBefore ? "+" : ""}{a.headsNow - a.headsBefore})</span> : <span className="muted"> (unverändert)</span>}</div>
-                        {a.ending.map((e) => <div key={e.engagementId}><Link href={`/einsaetze/${e.engagementId}#verlaengerung`}>{e.person}</Link> <span className="muted">· Ende {fmtDate(e.plannedEnd)} (in {e.daysToEnd} T.) · {e.renewal}</span></div>)}
+                        {a.ending.map((e, n) => <div key={e.engagementId || `o${n}`}><Link href={e.engagementId ? `/einsaetze/${e.engagementId}#verlaengerung` : `/kunden/${a.accountId}/health`}>{e.person}</Link> <span className="muted">· Ende {fmtDate(e.plannedEnd)} (in {e.daysToEnd} T.) · {e.renewal}</span></div>)}
                         {a.ending.length === 0 && <div className="muted">kein Einsatzende in den nächsten 90 Tagen</div>}
                       </div>
                       <Interesting a={a} />
