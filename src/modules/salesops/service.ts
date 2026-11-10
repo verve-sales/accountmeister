@@ -8,7 +8,7 @@ import { todayIso, plusDaysIso } from "@/modules/work/calendar";
 import { quickFill } from "@/modules/staffing/service";
 import { listEngagements } from "@/modules/engagements/service";
 import { listRenewalCards } from "@/modules/engagements/care";
-import { approachValues } from "@/modules/engagements/contacts";
+import { approachValues, ensureContactPerson } from "@/modules/engagements/contacts";
 
 /**
  * Sales-Ops-Sicht (e37): ein Arbeitsplatz für Sales Operations – was ist anzustoßen, wo fehlen Ansprechpartner oder
@@ -82,6 +82,8 @@ export const captureInput = z.object({
   renewalContactPersonId: z.string().optional().default(""),
   orderContactPersonId: z.string().optional().default(""),
   renewalApproach: z.union([z.enum(approachValues), z.literal("")]).optional().default(""),
+  newRenewalName: z.string().trim().max(200).optional().default(""),
+  newRenewalEmail: z.string().trim().max(200).optional().default(""),
   note: z.string().trim().max(2000).optional().default(""),
 });
 
@@ -107,6 +109,7 @@ export async function captureAssignment(actor: Actor, raw: unknown) {
     const ok = await db.query.persons.findFirst({ where: and(eq(schema.persons.id, pid), eq(schema.persons.accountId, account.id)), columns: { id: true } });
     if (!ok) throw new ValidationError("Ansprechpartner müssen Personen dieses Kunden sein.");
   }
+  const renewalContactId = i.newRenewalName ? await ensureContactPerson(actor, account.id, i.newRenewalName, i.newRenewalEmail) : i.renewalContactPersonId;
   const t = todayIso();
   const started = !!i.start && i.start <= t;
   const [opp] = await db
@@ -147,7 +150,7 @@ export async function captureAssignment(actor: Actor, raw: unknown) {
     .set({
       orderId: order!.id,
       renewalDeadline: i.renewalDeadline || null,
-      renewalContactPersonId: i.renewalContactPersonId || null,
+      renewalContactPersonId: renewalContactId || null,
       orderContactPersonId: i.orderContactPersonId || null,
       renewalApproach: i.renewalApproach || null,
       ...(started ? { status: "AKTIV", actualStart: i.start } : { status: "GEPLANT" }),

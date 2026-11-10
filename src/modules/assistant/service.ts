@@ -177,7 +177,58 @@ export async function computeMissing(actor: Actor, res: Resolved): Promise<strin
 }
 
 /** Berechtigter Kontext als Text für das Modell – nur, was die Person selbst sieht. */
-export async function buildContextText(actor: Actor, res: Resolved): Promise<string> {
+const RUNNING = ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT", "ENDET"];
+const nameKey = (n: string) => n.toLowerCase().replace(/\(.*?\)/g, " ").replace(/[^a-zäöüß\- ]/g, " ").replace(/\s+/g, " ").trim();
+
+export type RunningEngagementRef = { id: string; person: string; accountId: string; accountName: string; setupId: string; setupName: string; end: string | null; contact: string | null; orderContact: string | null; approach: string | null; canEdit: boolean };
+
+/**
+ * Laufende Einsätze, die der Akteur sieht – im Kunden-/Setup-Kontext alle des Kunden, sonst die der im Text genannten
+ * Personen (Nachname genügt). Damit kennt der Assistent Kunde und Setup eines Einsatzes, ohne danach zu fragen.
+ */
+export async function findRunningEngagements(actor: Actor, opts: { accountId?: string | null; mention?: string; personName?: string }): Promise<RunningEngagementRef[]> {
+  const rows = await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, actor.workspaceId), inArray(schema.engagements.status, RUNNING), opts.accountId ? eq(schema.engagements.accountId, opts.accountId) : undefined) });
+  if (!rows.length) return [];
+  const [fls, users] = await Promise.all([
+    db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(rows.map((r) => r.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+    db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { id: true, displayName: true } }),
+  ]);
+  const fn = new Map(fls.map((f) => [f.id, f.displayName]));
+  const un = new Map(users.map((u) => [u.id, u.displayName]));
+  const personOf = (r: (typeof rows)[number]) => (r.freelancerId ? fn.get(r.freelancerId) : r.internalUserId ? un.get(r.internalUserId) : null) ?? "";
+  const text = opts.mention ? ` ${nameKey(opts.mention)} ` : null;
+  const wanted = opts.personName ? nameKey(opts.personName) : null;
+  const hit = rows.filter((r) => {
+    const k = nameKey(personOf(r));
+    if (!k) return false;
+    const last = k.split(" ").pop()!;
+    if (wanted) return k === wanted || (wanted.split(" ").pop() === last && (wanted.split(" ").length === 1 || k.split(" ")[0] === wanted.split(" ")[0]));
+    if (text) return last.length >= 3 && text.includes(` ${last} `);
+    return true;
+  }).slice(0, 30);
+  if (!hit.length) return [];
+  const { engagementAccess } = await import("@/modules/engagements/authz");
+  const { loadRenewalContacts } = await import("@/modules/engagements/contacts");
+  const visible: { r: (typeof rows)[number]; canEdit: boolean }[] = [];
+  for (const r of hit) {
+    const a = await engagementAccess(actor, r);
+    if (a) visible.push({ r, canEdit: a.manage || a.care });
+  }
+  if (!visible.length) return [];
+  const [accounts, setups, contacts] = await Promise.all([
+    db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(visible.map((v) => v.r.accountId))]), columns: { id: true, name: true } }),
+    db.query.projectSetups.findMany({ where: inArray(schema.projectSetups.id, [...new Set(visible.map((v) => v.r.setupId))]), columns: { id: true, name: true } }),
+    loadRenewalContacts(visible.map((v) => v.r)),
+  ]);
+  const an = new Map(accounts.map((a) => [a.id, a.name]));
+  const sn = new Map(setups.map((x) => [x.id, x.name]));
+  return visible.map(({ r, canEdit }) => {
+    const c = contacts.get(r.id);
+    return { id: r.id, person: personOf(r), accountId: r.accountId, accountName: an.get(r.accountId) ?? "?", setupId: r.setupId, setupName: sn.get(r.setupId) ?? "?", end: r.actualEnd ?? r.plannedEnd, contact: c?.renewal?.name ?? null, orderContact: c?.order?.name ?? null, approach: c?.approach ?? null, canEdit };
+  });
+}
+
+export async function buildContextText(actor: Actor, res: Resolved, mention?: string): Promise<string> {
   const lines: string[] = [`Angemeldet: ${actor.displayName} (Rollen: ${[...actor.roles].join(", ") || "keine"})`];
   if (res.ref.type === "GLOBAL") {
     // Einsortierung (Etappe 14): nur so kann das Modell einen eingefügten Text/E-Mail-Text einem bekannten Kunden zuordnen.
@@ -210,6 +261,13 @@ export async function buildContextText(actor: Actor, res: Resolved): Promise<str
     }
     if (visible.length) lines.push(`Setups: ${visible.join("; ")}`);
     if (persons.length) lines.push(`Bekannte Personen: ${persons.map((p) => p.displayName).join("; ")}`);
+  }
+  if (mention !== undefined) {
+    const engs = await findRunningEngagements(actor, res.account ? { accountId: res.account.id } : { mention }).catch(() => []);
+    if (engs.length) {
+      lines.push("Laufende Einsätze (Kunde und Setup sind damit bekannt – nicht danach fragen):");
+      for (const e of engs) lines.push(`- ${e.person} – Kunde ${e.accountName}, Setup „${e.setupName}“, Ende ${e.end ?? "offen"}; Verlängerung fachlich über: ${e.contact ?? "offen"}; Bestellung/Vertrag über: ${e.orderContact ?? "offen"}; spricht an: ${e.approach ?? "offen"}`);
+    }
   }
   return lines.join("\n");
 }
@@ -248,7 +306,7 @@ export async function sendMessage(actor: Actor, raw: unknown, deps: { provider?:
   const history = [...prior.map((m) => ({ role: (m.role === "NUTZER" ? "NUTZER" : "ASSISTENT") as "NUTZER" | "ASSISTENT", text: m.text })), { role: "NUTZER" as const, text }];
   // Hilfe-Wissen (Etappe 25): Suche über die letzte und die vorletzte Nutzernachricht (Rückfragen wie „und wer darf das?“)
   const prevUser = [...prior].reverse().find((m) => m.role === "NUTZER")?.text ?? "";
-  const [contextText, openPoints, missingNow, help] = await Promise.all([buildContextText(actor, res), computeOpenPoints(actor, res), computeMissing(actor, res), buildHelpText(actor, text.split(/\s+/).length < 8 && prevUser ? `${text}\n${prevUser}` : text)]);
+  const [contextText, openPoints, missingNow, help] = await Promise.all([buildContextText(actor, res, [...prior.filter((m) => m.role === "NUTZER").map((m) => m.text), text].join("\n")), computeOpenPoints(actor, res), computeMissing(actor, res), buildHelpText(actor, text.split(/\s+/).length < 8 && prevUser ? `${text}\n${prevUser}` : text)]);
   const howTo = looksLikeHowTo(text) && help.sections.length > 0;
   const openPointsText = [...openPoints.map((p) => `- ${p.text}`), ...missingNow.map((m) => `- Fehlt: ${m}`)].join("\n");
 
@@ -528,6 +586,30 @@ export async function applyCard(actor: Actor, res: Resolved, item: AssistantItem
     if (!hasRole(actor, "PRINCIPAL") && !hasRole(actor, "CEO")) throw new ForbiddenError("Accountziele legen Principal oder CEO an.");
     const goal = await createAccountGoal(actor, { accountId: res.account.id, title: item.title, desiredOutcome: item.desiredOutcome, roleFamily: item.roleFamily ?? "", targetHeadcount: item.targetHeadcount ?? undefined, horizon: item.horizon, successCriterion: item.successCriterion });
     return { type: "GOAL", id: goal.id, note: `Accountziel „${goal.title}“ als Entwurf angelegt – zur Abstimmung mit dem CEO bereit (Ziele → „${goal.title}“).` };
+  }
+  if (item.type === "ANSPRECHPARTNER") {
+    // Rechte hängen am Einsatz (BD-Kontext, Sales Operations, Betreuung, CEO) – nicht am Gesprächskontext
+    const found = await findRunningEngagements(actor, { accountId: res.account?.id ?? null, personName: item.engagementPerson });
+    if (!found.length) throw new ValidationError(`Kein laufender Einsatz von „${item.engagementPerson}“ gefunden${res.account ? ` bei ${res.account.name}` : ""}.`);
+    const accountsHit = new Set(found.map((f) => f.accountId));
+    if (accountsHit.size > 1) throw new ValidationError(`„${item.engagementPerson}“ hat laufende Einsätze bei mehreren Kunden (${[...new Set(found.map((f) => f.accountName))].join(", ")}) – bitte sag, welcher gemeint ist, oder trage es am Einsatz ein.`);
+    const editable = found.filter((f) => f.canEdit);
+    if (!editable.length) throw new ForbiddenError("Die Ansprechpartner dieses Einsatzes pflegen BD, Principal am Kunden, Sales Operations, die Betreuung oder die Geschäftsführung.");
+    const { ensureContactPerson, setEngagementContacts, approachLabel } = await import("@/modules/engagements/contacts");
+    const before = await db.query.persons.findMany({ where: eq(schema.persons.accountId, editable[0]!.accountId), columns: { id: true } });
+    const personId = await ensureContactPerson(actor, editable[0]!.accountId, item.contactName, item.email, item.functionTitle);
+    const created = !before.some((p) => p.id === personId);
+    for (const f of editable) {
+      const e = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, f.id) }))!;
+      await setEngagementContacts(actor, f.id, {
+        renewalContactPersonId: item.role === "FACHLICH" ? personId : e.renewalContactPersonId ?? "",
+        orderContactPersonId: item.role === "BESTELLUNG" ? personId : e.orderContactPersonId ?? "",
+        renewalApproach: item.approach || e.renewalApproach || "",
+      });
+    }
+    await env.sourceFor(editable[0]!.setupId).catch(() => null);
+    const f = editable[0]!;
+    return { type: "ENGAGEMENT", id: f.id, note: `${item.contactName} ${created ? `bei ${f.accountName} neu angelegt und ` : ""}als Ansprechpartner (${item.role === "FACHLICH" ? "fachlich" : "Bestellung/Vertrag"}) für die Verlängerung von ${f.person} eingetragen – ${f.accountName}, Setup „${f.setupName}“${item.approach ? `; spricht an: ${approachLabel[item.approach]}` : ""}${editable.length > 1 ? ` (${editable.length} Einsätze)` : ""}. /einsaetze/${f.id}#ansprechpartner` };
   }
   if (item.type === "EINSORTIERUNG") {
     const accounts = await listVisibleAccounts(actor);

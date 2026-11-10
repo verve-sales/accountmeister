@@ -1966,10 +1966,19 @@ export async function mocoUnignoreAction(fd: FormData) {
 
 // --- e37: Verlängerungs-Ansprechpartner, Bereinigung -------------------------
 
+function contactFields(fd: FormData): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of ["renewalContactPersonId", "orderContactPersonId", "renewalApproach", "asSetupDefault", "newRenewalName", "newRenewalEmail", "newRenewalFunction", "newOrderName", "newOrderEmail", "newOrderFunction"]) {
+    const v = fd.get(k);
+    if (typeof v === "string") out[k] = v;
+  }
+  return out;
+}
+
 export async function engagementContactsAction(engagementId: string, fd: FormData) {
   return run(`/einsaetze/${engagementId}#ansprechpartner`, async (actor) => {
     const { setEngagementContacts } = await import("@/modules/engagements/contacts");
-    await setEngagementContacts(actor, engagementId, { renewalContactPersonId: fd.get("renewalContactPersonId") ?? "", orderContactPersonId: fd.get("orderContactPersonId") ?? "", renewalApproach: fd.get("renewalApproach") ?? "", asSetupDefault: fd.get("asSetupDefault") ?? "" });
+    await setEngagementContacts(actor, engagementId, contactFields(fd));
   }, "Ansprechpartner für die Verlängerung gespeichert.");
 }
 
@@ -1977,7 +1986,7 @@ export async function setupContactsAction(setupId: string, fd: FormData) {
   const back = typeof fd.get("back") === "string" && String(fd.get("back")).startsWith("/") ? String(fd.get("back")) : `/setups/${setupId}#verlaengerung`;
   return run(back, async (actor) => {
     const { setSetupContacts } = await import("@/modules/engagements/contacts");
-    await setSetupContacts(actor, setupId, { renewalContactPersonId: fd.get("renewalContactPersonId") ?? "", orderContactPersonId: fd.get("orderContactPersonId") ?? "", renewalApproach: fd.get("renewalApproach") ?? "" });
+    await setSetupContacts(actor, setupId, contactFields(fd));
   }, "Vorgabe für die Verlängerung gespeichert – gilt für alle Einsätze des Setups ohne eigene Angabe.");
 }
 

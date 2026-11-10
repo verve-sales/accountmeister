@@ -24,13 +24,15 @@ type View = {
   ai: { enabled: boolean; description: string };
 };
 
-const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Hebel / Vorhaben", TEAM: "Verve-Team", VORGANG: "Vorgang / Anfrage", BESETZUNG: "Besetzung (Position)" };
+const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung", ANSPRECHPARTNER: "Verlängerung läuft über", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Hebel / Vorhaben", TEAM: "Verve-Team", VORGANG: "Vorgang / Anfrage", BESETZUNG: "Besetzung (Position)" };
 const INITIATIVE_LABEL: Record<string, string> = { PRIORITAET: "Priorität des Kunden", INITIATIVE: "Schlüssel-Initiative", HERAUSFORDERUNG: "Herausforderung" };
 const LEVER_LABEL: Record<string, string> = { VERLAENGERN: "Verlängern", AUSWEITEN: "Ausweiten", VERTIEFEN: "Vertiefen", UEBERTRAGEN: "Übertragen", REAKTIVIEREN: "Reaktivieren" };
 const RISK_LABEL: Record<string, string> = { UMSTRUKTURIERUNG: "Umstrukturierung", BUDGETKUERZUNG: "Budgetkürzung", WETTBEWERBER: "Wettbewerber aktiv", FUERSPRECHER_WEG: "Fürsprecher geht", INSOURCING: "Insourcing", EINKAUF_VERSCHAERFT: "Einkauf verschärft", NACHBARTEAM: "Nachbarteam stellt sich quer" };
 const PROCUREMENT_LABEL: Record<string, string> = { DIREKT: "direkt", VERMITTLER: "über Vermittler", RAHMENVERTRAG: "über Rahmenvertrag" };
 /** Reihenfolge für „Alle übernehmen“: erst Kunde/Einsortierung (bindet das Gespräch), dann Team, dann der Rest. */
-const APPLY_ORDER = ["KUNDE", "EINSORTIERUNG", "SETUP", "TEAM", "BESCHAFFUNG", "INITIATIVE", "PERSON", "EINSATZ", "CHANCE", "HEBEL", "RISIKO", "SOS", "SIGNAL", "AKTION", "KONTAKT", "FRAGE", "ACCOUNTZIEL", "VORGANG", "BESETZUNG"];
+/** Karten, deren Recht nicht am Gesprächskontext hängt (geprüft wird beim Übernehmen am betroffenen Objekt). */
+const OWN_RIGHTS = new Set(["ANSPRECHPARTNER", "EINSORTIERUNG"]);
+const APPLY_ORDER = ["KUNDE", "EINSORTIERUNG", "ANSPRECHPARTNER", "SETUP", "TEAM", "BESCHAFFUNG", "INITIATIVE", "PERSON", "EINSATZ", "CHANCE", "HEBEL", "RISIKO", "SOS", "SIGNAL", "AKTION", "KONTAKT", "FRAGE", "ACCOUNTZIEL", "VORGANG", "BESETZUNG"];
 const ROLE_FAMILY_LABEL: Record<string, string> = { DELIVERY_MANAGEMENT: "Delivery Management", AGILE_LEADERSHIP: "Agile Leadership", BUSINESS_ANALYSE: "Business Analyse & Beratung", SOLUTION_ARCHITEKTUR: "Solution & Architektur", TEST_QS: "Test & Qualitätssicherung" };
 
 function contextFromPath(pathname: string): { type: string; id: string } {
@@ -64,6 +66,8 @@ function cardTitle(item: Item): string {
       return s("question");
     case "EINSORTIERUNG":
       return `→ ${s("accountName")}${s("setupName") ? ` · ${s("setupName")}` : ""}`;
+    case "ANSPRECHPARTNER":
+      return `${s("engagementPerson")}: ${s("role") === "BESTELLUNG" ? "Bestellung/Vertrag" : "fachlich"} über ${s("contactName")}`;
     case "INITIATIVE":
       return `${INITIATIVE_LABEL[s("kind")] ?? s("kind")}: ${s("title")}`;
     case "BESCHAFFUNG":
@@ -129,6 +133,8 @@ function cardDetail(item: Item): string {
       return s("contextNote");
     case "EINSORTIERUNG":
       return s("reasoning");
+    case "ANSPRECHPARTNER":
+      return [s("functionTitle"), s("email"), s("approach") ? `spricht an: ${({ SALES_OPS: "Sales Operations", BD: "BD", BERATER: "Berater:in selbst" } as Record<string, string>)[s("approach")] ?? s("approach")}` : "", "Wird am laufenden Einsatz eingetragen; der Ansprechpartner wird bei Bedarf beim Kunden angelegt."].filter(Boolean).join(" · ");
     case "INITIATIVE":
       return s("description");
     case "BESCHAFFUNG":
@@ -416,13 +422,13 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
                         {cardDetail(c.item) && <div className="muted text-xs mt-1" style={{ whiteSpace: "pre-wrap" }}>{cardDetail(c.item)}</div>}
                         {"purpose" in c.item && (c.item.purpose ? <div className="text-xs mt-1"><span className="muted">Wofür: </span>{String(c.item.purpose)}</div> : <div className="text-xs mt-1" style={{ color: "#8a6d1f" }}>Wofür unklar – nur übernehmen, wenn du den Zweck kennst.</div>)}
                         <div className="muted text-xs mt-1">Textstelle: „{c.item.evidenceQuote.length > 120 ? c.item.evidenceQuote.slice(0, 117) + "…" : c.item.evidenceQuote}“</div>
-                        {c.status === "NEU" && view?.context.canWrite && (
+                        {c.status === "NEU" && (view?.context.canWrite || OWN_RIGHTS.has(c.item.type)) && (
                           <div className="flex gap-2 mt-2">
                             <button type="button" className="btn btn-small" onClick={() => decide(m.id, c.id, "UEBERNEHMEN")}>Übernehmen</button>
                             <button type="button" className="btn btn-secondary btn-small" onClick={() => decide(m.id, c.id, "VERWERFEN")}>Verwerfen</button>
                           </div>
                         )}
-                        {c.status === "NEU" && view && !view.context.canWrite && <div className="muted text-xs mt-1">Zum Übernehmen fehlt das Bearbeitungsrecht in diesem Kontext.</div>}
+                        {c.status === "NEU" && view && !view.context.canWrite && !OWN_RIGHTS.has(c.item.type) && <div className="muted text-xs mt-1">{view.context.label === "Allgemein" ? "Hier fehlt noch der Kunde – übernimm zuerst die Einsortierung oder öffne den Assistenten beim Kunden bzw. im Setup." : "Zum Übernehmen fehlt dir das Bearbeitungsrecht an diesem Kunden bzw. Setup."}</div>}
                         {c.status !== "NEU" && <div className="text-xs mt-1">{c.status === "UEBERNOMMEN" ? <>Übernommen. <NoteText text={c.note ?? ""} /></> : "Verworfen."}</div>}
                       </li>
                     ))}

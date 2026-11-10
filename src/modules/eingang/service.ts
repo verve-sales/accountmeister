@@ -435,7 +435,7 @@ function cardKey(item: IntakeItem): unknown {
 }
 
 const typeLabel: Record<string, string> = {
-  KUNDE: "Neuer Kunde", SETUP: "Neues Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Neue Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Aufgabe", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Vorhaben", VORGANG: "Vorgang", BESETZUNG: "Besetzung", TEAM: "Team", EINSORTIERUNG: "Kunde zuordnen",
+  KUNDE: "Neuer Kunde", SETUP: "Neues Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Neue Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Aufgabe", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Vorhaben", VORGANG: "Vorgang", BESETZUNG: "Besetzung", TEAM: "Team", EINSORTIERUNG: "Kunde zuordnen", ANSPRECHPARTNER: "Verlängerung läuft über",
   VERLAENGERUNG: "Verlängerung", CHANCE_STATUS: "Chance: neuer Stand", ERLEDIGT: "Erledigt", STIMMUNG: "Stimmung", FREELANCER: "Freelancer",
 };
 export const eingangTypeLabel = typeLabel;
@@ -462,6 +462,7 @@ export function describeCard(item: IntakeItem, labels: Map<string, string> = new
     case "FREELANCER": return { title: `${t}: ${item.displayName}`, detail: [item.skills, item.availableFrom && `verfügbar ab ${item.availableFrom}`, item.ekRate && `EK ${item.ekRate}`, item.email].filter(Boolean).join(" · "), purpose: "", priority: "NEUE_INFORMATION" };
     case "BESETZUNG": return { title: `${t}: ${item.title}`, detail: [item.personName && `Person: ${item.personName}`, item.desiredStart && `Start ${item.desiredStart}`, item.mustHave].filter(Boolean).join(" · "), purpose: item.chanceTitle, priority: "KONKRETE_ANFRAGE" };
     case "EINSATZ": return { title: `${t}: ${item.title}`, detail: [item.consultantName, item.plannedEnd && `Ende ${item.plannedEnd}`, item.endHint].filter(Boolean).join(" · "), purpose: "", priority: "PLANUNGSANLASS" };
+    case "ANSPRECHPARTNER": return { title: `${t}: ${item.engagementPerson} → ${item.contactName}`, detail: [item.functionTitle, item.email].filter(Boolean).join(" · "), purpose: "", priority: "NEUE_INFORMATION" };
     case "EINSORTIERUNG": return { title: `${t}: ${item.accountName}${item.setupName ? ` · ${item.setupName}` : ""}`, detail: item.reasoning, purpose: "", priority: "NEUE_INFORMATION" };
     case "VORGANG": return { title: `${t}: ${item.title}`, detail: item.description, purpose: "", priority: "KONKRETE_ANFRAGE" };
     case "INITIATIVE": case "HEBEL": return { title: `${t}: ${item.title}`, detail: "", purpose: "", priority: "PLANUNGSANLASS" };

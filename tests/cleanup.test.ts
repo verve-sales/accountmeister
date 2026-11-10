@@ -9,6 +9,7 @@ import { loadRenewalContacts, setEngagementContacts, setSetupContacts } from "@/
 import { cleanInternalAccount, cleanupReport, closeOverdueEngagements, mergeEngagements, mergeSetups } from "@/modules/cleanup/service";
 import { mergePersons } from "@/modules/people/service";
 import { captureAssignment, salesOpsOverview } from "@/modules/salesops/service";
+import { decideCard, getThreadView, sendMessage } from "@/modules/assistant/service";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 import { ForbiddenError } from "@/lib/errors";
 import { actorFor, ensureSeed } from "./helpers";
@@ -151,5 +152,39 @@ describe("e37: Bereinigung und Verlängerungs-Ansprechpartner", () => {
     expect(o.kpis.laufend).toBeGreaterThan(0);
     await db.delete(schema.roleAssignments).where(eq(schema.roleAssignments.userId, s.users.nina));
     await db.insert(schema.roleAssignments).values({ workspaceId: s.workspaceId, userId: s.users.nina, role: "ANKER" });
+  });
+  it("C07: Assistent kennt den laufenden Einsatz – fragt nicht nach Kunde/Setup, CEO übernimmt die Karte im allgemeinen Kontext, Ansprechpartner wird angelegt", async () => {
+    env();
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const s = await ensureSeed();
+    const ceo = await actorFor("clemens");
+    const e = await engagement("Projektleitung C07", plusDaysIso(todayIso(), -30), plusDaysIso(todayIso(), 70));
+    const fl = (await db.query.freelancers.findFirst({ where: eq(schema.freelancers.id, e.freelancerId!) }))!;
+    await db.update(schema.freelancers).set({ displayName: "Martina Kraussbeispiel (fiktiv)" }).where(eq(schema.freelancers.id, fl.id));
+    const view = await getThreadView(ceo, { type: "GLOBAL" });
+    expect(view.context.canWrite).toBe(false);
+    const r = await sendMessage(ceo, { threadId: view.thread.id, text: "die fachliche verlängerung von martina kraussbeispiel läuft über einen neuen Ansprechpartner: Fabian Langbeispiel" });
+    expect(r.message.text).toMatch(/Beispielkonzern/);
+    expect(r.missing).toHaveLength(0);
+    const card = r.cards.find((c) => c.item.type === "ANSPRECHPARTNER")!;
+    expect(card).toBeTruthy();
+    const d = await decideCard(ceo, { threadId: view.thread.id, messageId: r.message.id, cardId: card.id, decision: "UEBERNEHMEN" });
+    expect(d.card.note).toMatch(/neu angelegt/);
+    const after = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, e.id) }))!;
+    const p = (await db.query.persons.findFirst({ where: eq(schema.persons.id, after.renewalContactPersonId!) }))!;
+    expect(p.displayName).toBe("Fabian Langbeispiel");
+    expect(p.accountId).toBe(s.accountId);
+    // Anker ohne Bezug zum Einsatz sieht ihn nicht – keine Karte, keine Preisgabe
+    const lars = await actorFor("lars");
+    const lv = await getThreadView(lars, { type: "GLOBAL" });
+    const lr = await sendMessage(lars, { threadId: lv.thread.id, text: "die fachliche verlängerung von martina kraussbeispiel läuft über einen neuen Ansprechpartner: Fabian Langbeispiel" });
+    expect(lr.cards.some((c) => c.item.type === "ANSPRECHPARTNER")).toBe(false);
+    expect(lr.message.text).not.toMatch(/Beispielkonzern/);
+    // Formular: neuen Ansprechpartner direkt anlegen
+    await setEngagementContacts(await actorFor("david"), e.id, { newOrderName: "Erika Einkaufbeispiel", newOrderEmail: "erika@beispiel.example", renewalContactPersonId: p.id });
+    const again = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, e.id) }))!;
+    expect((await db.query.persons.findFirst({ where: eq(schema.persons.id, again.orderContactPersonId!) }))?.email).toBe("erika@beispiel.example");
+    expect(again.renewalContactPersonId).toBe(p.id);
   });
 });

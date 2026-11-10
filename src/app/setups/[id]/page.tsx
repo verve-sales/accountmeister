@@ -167,9 +167,20 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                 <label className="space-y-1"><span className="block muted text-xs">wer spricht an</span>
                   <select name="renewalApproach" className="input" defaultValue={d.setup.renewalApproach ?? ""}><option value="">– offen –</option>{approachValues.map((v) => <option key={v} value={v}>{approachLabel[v]}</option>)}</select>
                 </label>
+                <fieldset className="flex flex-wrap gap-2 items-end" style={{ flexBasis: "100%", border: 0, padding: 0 }}>
+                  <legend className="muted text-xs">Noch nicht erfasst? Fachlichen Ansprechpartner direkt neu anlegen (hat Vorrang vor der Auswahl):</legend>
+                  <input name="newRenewalName" className="input" placeholder="Vor- und Nachname" aria-label="Neuer fachlicher Ansprechpartner: Name" />
+                  <input name="newRenewalFunction" className="input" placeholder="Funktion (optional)" aria-label="Funktion" />
+                  <input name="newRenewalEmail" className="input" type="email" placeholder="E-Mail (optional)" aria-label="E-Mail" />
+                </fieldset>
+                <fieldset className="flex flex-wrap gap-2 items-end" style={{ flexBasis: "100%", border: 0, padding: 0 }}>
+                  <legend className="muted text-xs">Neuer Ansprechpartner für Bestellung/Vertrag:</legend>
+                  <input name="newOrderName" className="input" placeholder="Vor- und Nachname" aria-label="Neuer Ansprechpartner Bestellung: Name" />
+                  <input name="newOrderFunction" className="input" placeholder="Funktion (optional)" aria-label="Funktion" />
+                  <input name="newOrderEmail" className="input" type="email" placeholder="E-Mail (optional)" aria-label="E-Mail" />
+                </fieldset>
                 <button className="btn btn-small" type="submit">Speichern</button>
               </form>
-              {accountPersons.length === 0 && <p className="muted text-xs mt-1">Noch keine Personen beim Kunden – <Link href={`/setups/${id}/personen`}>Personen erfassen</Link>.</p>}
             </details>
           )}
         </section>

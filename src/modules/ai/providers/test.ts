@@ -630,6 +630,21 @@ export class TestProvider implements AIProvider {
       onDelta?.(out);
       return out;
     }
+    // Verlängerungs-Ansprechpartner (e37): „die Verlängerung von X läuft über Y“ – X steht in „Laufende Einsätze“
+    const ap = /verl[aä]ngerung von (.+?) l[aä]uft (?:jetzt |künftig )?über (?:einen neuen ansprechpartner:?\s*|den einkauf:?\s*)?([A-ZÄÖÜ][^.,\n]+)/i.exec(lastUser);
+    if (ap) {
+      const engLines = input.contextText.split("\n").filter((l) => /^- .+ – Kunde .+, Setup „/.test(l));
+      const last = ap[1]!.trim().toLowerCase().split(/\s+/).pop()!;
+      const line = engLines.find((l) => l.toLowerCase().split(" – kunde ")[0]!.includes(last));
+      if (line) {
+        const person = line.slice(2).split(" – Kunde ")[0]!;
+        const where = line.split(" – ")[1]!.split(", Ende")[0]!;
+        const item = { type: "ANSPRECHPARTNER", engagementPerson: person, contactName: ap[2]!.trim(), role: /einkauf|bestell|vertrag/i.test(lastUser) && !/fachlich/i.test(lastUser) ? "BESTELLUNG" : "FACHLICH", functionTitle: "", email: "", approach: "", evidenceQuote: ap[0]!.trim() };
+        const out = `Der Einsatz von ${person} läuft bei ${where}. Ich schlage vor, ${item.contactName} dort als Ansprechpartner für die Verlängerung einzutragen (Karte unten).\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items: [item], missing: [] })}`;
+        onDelta?.(out);
+        return out;
+      }
+    }
     // Eingefügte Account-Seite (Etappe 26): Kundenagenda, Stakeholder, Beschaffung, Einsatzende, Hebel, Team, SOS
     const page = extractAccountPage(lastUser, { hasCustomer: /Kunde:/.test(input.contextText) });
     if (page.recognized) {

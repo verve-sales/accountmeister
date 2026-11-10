@@ -261,6 +261,8 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
     ...q,
   }),
   z.object({ type: z.literal("TEAM"), bdName: z.string().max(200).optional().default(""), ankerNames: z.array(z.string().max(200)).max(5).optional().default([]), principalName: z.string().max(200).optional().default(""), consultantName: z.string().max(200).optional().default(""), ...q }),
+  /** Verlängerungs-Ansprechpartner an einem laufenden Einsatz (e37): engagementPerson = Berater:in/Freelancer wie in der Einsatzliste. */
+  z.object({ type: z.literal("ANSPRECHPARTNER"), engagementPerson: z.string().min(2).max(200), contactName: z.string().min(2).max(200), role: z.enum(["FACHLICH", "BESTELLUNG"]).optional().default("FACHLICH"), functionTitle: z.string().max(200).optional().default(""), email: z.string().max(200).optional().default(""), approach: z.enum(["SALES_OPS", "BD", "BERATER", ""]).optional().default(""), ...q }),
   z.object({
     type: z.literal("EINSORTIERUNG"),
     /** Name exakt wie in der Liste der bekannten Kunden – nie erfunden. */

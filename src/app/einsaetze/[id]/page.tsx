@@ -391,10 +391,21 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
                   {approachValues.map((v) => <option key={v} value={v}>{approachLabel[v]}</option>)}
                 </select>
               </label>
+              <fieldset className="flex flex-wrap gap-2 items-end" style={{ flexBasis: "100%", border: 0, padding: 0 }}>
+                <legend className="muted text-xs">Noch nicht erfasst? Fachlichen Ansprechpartner direkt neu anlegen (hat Vorrang vor der Auswahl):</legend>
+                <input name="newRenewalName" className="input" placeholder="Vor- und Nachname" aria-label="Neuer fachlicher Ansprechpartner: Name" />
+                <input name="newRenewalFunction" className="input" placeholder="Funktion (optional)" aria-label="Funktion" />
+                <input name="newRenewalEmail" className="input" type="email" placeholder="E-Mail (optional)" aria-label="E-Mail" />
+              </fieldset>
+              <fieldset className="flex flex-wrap gap-2 items-end" style={{ flexBasis: "100%", border: 0, padding: 0 }}>
+                <legend className="muted text-xs">Neuer Ansprechpartner für Bestellung/Vertrag:</legend>
+                <input name="newOrderName" className="input" placeholder="Vor- und Nachname" aria-label="Neuer Ansprechpartner Bestellung: Name" />
+                <input name="newOrderFunction" className="input" placeholder="Funktion (optional)" aria-label="Funktion" />
+                <input name="newOrderEmail" className="input" type="email" placeholder="E-Mail (optional)" aria-label="E-Mail" />
+              </fieldset>
               {a.manage && <label className="flex gap-1 items-center"><input type="checkbox" name="asSetupDefault" value="1" /> als Vorgabe für alle Einsätze des Setups</label>}
               <button className="btn btn-small" type="submit">Speichern</button>
             </form>
-            {d.persons.length === 0 && <p className="muted text-xs mt-1">Beim Kunden sind noch keine Personen erfasst – <Link href={`/kunden/${e.accountId}`}>beim Kunden anlegen</Link>.</p>}
           </details>
         )}
       </section>

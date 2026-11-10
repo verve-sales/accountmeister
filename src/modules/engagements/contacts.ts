@@ -5,6 +5,7 @@ import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { requireEditableSetup } from "@/modules/setups/service";
+import { findExistingPerson } from "@/modules/people/service";
 import { requireEngagement, isSalesOps, type EngagementRow } from "./authz";
 
 /**
@@ -60,7 +61,42 @@ const contactsInput = z.object({
   renewalApproach: z.union([z.enum(approachValues), z.literal("")]).optional().default(""),
   /** zusätzlich als Vorgabe für alle Einsätze des Setups speichern */
   asSetupDefault: z.union([z.literal("1"), z.literal("on"), z.literal(""), z.boolean()]).optional(),
+  /** Ansprechpartner direkt neu anlegen (hat Vorrang vor der Auswahl) */
+  newRenewalName: z.string().trim().max(200).optional().default(""),
+  newRenewalEmail: z.string().trim().max(200).optional().default(""),
+  newRenewalFunction: z.string().trim().max(200).optional().default(""),
+  newOrderName: z.string().trim().max(200).optional().default(""),
+  newOrderEmail: z.string().trim().max(200).optional().default(""),
+  newOrderFunction: z.string().trim().max(200).optional().default(""),
 });
+
+/**
+ * Ansprechpartner beim Kunden finden oder anlegen. Wer die Ansprechpartner eines Einsatzes pflegen darf, darf die
+ * Person dafür auch erfassen (Name genügt; E-Mail und Funktion optional). Gleicher Name/gleiche E-Mail → bestehende Person.
+ */
+export async function ensureContactPerson(actor: Actor, accountId: string, name: string, email = "", functionTitle = ""): Promise<string> {
+  const displayName = name.trim();
+  if (displayName.length < 2) throw new ValidationError("Bitte den Namen des Ansprechpartners angeben.");
+  const mail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? email.trim() : "";
+  if (email.trim() && !mail) throw new ValidationError("Die E-Mail-Adresse des Ansprechpartners ist ungültig.");
+  const existing = await findExistingPerson(db, accountId, displayName, mail);
+  if (existing) {
+    if (mail && !existing.email) await db.update(schema.persons).set({ email: mail, updatedAt: new Date() }).where(eq(schema.persons.id, existing.id));
+    return existing.id;
+  }
+  return db.transaction(async (tx) => {
+    const [person] = await tx.insert(schema.persons).values({ workspaceId: actor.workspaceId, accountId, displayName, email: mail || null, accessClass: "ACCOUNT_TEAM", createdBy: actor.userId }).returning();
+    if (functionTitle.trim()) await tx.insert(schema.personFunctions).values({ personId: person!.id, functionTitle: functionTitle.trim() });
+    await recordAudit(tx, actor, "person.created", "PERSON", person!.id, { accountId, ueber: "Verlängerungs-Ansprechpartner" });
+    return person!.id;
+  });
+}
+
+async function resolveContactIds(actor: Actor, accountId: string, i: z.infer<typeof contactsInput>) {
+  const renewal = i.newRenewalName ? await ensureContactPerson(actor, accountId, i.newRenewalName, i.newRenewalEmail, i.newRenewalFunction) : i.renewalContactPersonId;
+  const order = i.newOrderName ? await ensureContactPerson(actor, accountId, i.newOrderName, i.newOrderEmail, i.newOrderFunction) : i.orderContactPersonId;
+  return { renewalContactPersonId: renewal || null, orderContactPersonId: order || null, renewalApproach: i.renewalApproach || null };
+}
 
 async function assertPersonsOfAccount(accountId: string, ids: string[]) {
   const want = ids.filter(Boolean);
@@ -77,7 +113,7 @@ export async function setEngagementContacts(actor: Actor, engagementId: string, 
   if (!a.manage && !a.care) throw new ForbiddenError("Die Ansprechpartner pflegen BD, Sales Operations oder die Betreuung des Einsatzes.");
   const i = p.data;
   await assertPersonsOfAccount(a.engagement.accountId, [i.renewalContactPersonId, i.orderContactPersonId]);
-  const vals = { renewalContactPersonId: i.renewalContactPersonId || null, orderContactPersonId: i.orderContactPersonId || null, renewalApproach: i.renewalApproach || null };
+  const vals = await resolveContactIds(actor, a.engagement.accountId, i);
   const asDefault = i.asSetupDefault === true || i.asSetupDefault === "1" || i.asSetupDefault === "on";
   await db.transaction(async (tx) => {
     if (asDefault) {
@@ -103,7 +139,7 @@ export async function setSetupContacts(actor: Actor, setupId: string, raw: unkno
   if (!isSalesOps(actor) && !hasRole(actor, "CEO")) await requireEditableSetup(actor, setupId);
   const i = p.data;
   await assertPersonsOfAccount(setup.accountId, [i.renewalContactPersonId, i.orderContactPersonId]);
-  const vals = { renewalContactPersonId: i.renewalContactPersonId || null, orderContactPersonId: i.orderContactPersonId || null, renewalApproach: i.renewalApproach || null };
+  const vals = await resolveContactIds(actor, setup.accountId, i);
   await db.update(schema.projectSetups).set({ ...vals, updatedAt: new Date() }).where(eq(schema.projectSetups.id, setupId));
   await recordAudit(db, actor, "setup.renewal_contacts", "SETUP", setupId, vals);
   return vals;
