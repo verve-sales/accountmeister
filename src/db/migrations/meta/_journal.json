@@ -302,6 +302,13 @@
       "when": 1794328221277,
       "tag": "0042_mail_eingang",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794330481236,
+      "tag": "0043_mail_ordner",
+      "breakpoints": true
     }
   ]
 }

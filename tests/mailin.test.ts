@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { getConfig, resetConfigCacheForTests } from "@/lib/config";
-import { forwardedParticipants, looksLikeApplication, runMailInbox, type InboxClient, type InboxMeta } from "@/modules/mailin/service";
+import { forwardedParticipants, looksLikeApplication, runFolderInbox, runMailInbox, setWatchFolder, type FolderClient, type FolderMeta, type InboxClient, type InboxMeta } from "@/modules/mailin/service";
 import { DEMO_USERS } from "@/db/seed";
 import { ensureSeed } from "./helpers";
 
@@ -79,5 +79,41 @@ describe("Etappe 49: Mail-Eingang (Weiterleitung an das Accountmeister-Postfach)
     resetConfigCacheForTests();
     const inbox = new MemoryInbox([{ id: "x", messageId: "<x@x>", subject: "s", fromEmail: DEMO_USERS.david.email, fromName: "", receivedAt: now(), internal: true, body: FWD }]);
     expect((await runMailInbox({ client: inbox, cfg: getConfig() })).gesehen).toBe(0);
+  });
+  it("ME04: Ordner „Accountmeister“ im eigenen Postfach – eingeschaltet wird ausgewertet (Kärtchen beim Postfach-Inhaber), je Person eigene Zählung, idempotent; ausgeschaltet nicht", async () => {
+    process.env.AI_PROVIDER = "test";
+    resetConfigCacheForTests();
+    const s = await ensureSeed();
+    const mk = async (userId: string) => {
+      await db.delete(schema.integrationConnections).where(eq(schema.integrationConnections.userId, userId));
+      return (await db.insert(schema.integrationConnections).values({ workspaceId: s.workspaceId, userId, provider: "MICROSOFT_GRAPH", tokenRef: "x", status: "VERBUNDEN", fixtureMode: false }).returning())[0]!;
+    };
+    const cDavid = await mk(s.users.david);
+    const cLars = await mk(s.users.lars);
+    const mail: FolderMeta = { id: "f1", messageId: "<f1@x>", subject: "Testautomatisierung ab Januar", receivedAt: new Date(Date.now() - 40 * 86400000).toISOString(), from: { name: "Anne Keller", email: "anne.keller@beispielkonzern.example" }, to: [{ name: "David Demo", email: DEMO_USERS.david.email }] };
+    const bodies: string[] = [];
+    const clientFor = async (conn: { userId: string }): Promise<FolderClient> => ({
+      findFolder: async () => (conn.userId === s.users.david ? "folder-1" : null),
+      list: async () => [mail, { ...mail, id: "f2", messageId: "<f2@x>", subject: "Bewerbung als Berater", from: { name: "Bea Bewerberin (fiktiv)", email: "bea@extern.example" } }],
+      body: async (id: string) => { bodies.push(id); return id === "f1" ? "Hallo Herr Demo, für die Migration der Schadenplattform beim Beispielkonzern suchen wir ab März eine erfahrene Business Analystin. Bitte melden Sie sich bis Mittwoch mit einem Vorschlag. Viele Grüße, Anne Keller" : "Sehr geehrte Damen und Herren, anbei meine Bewerbung und mein Lebenslauf."; },
+    });
+    // ausgeschaltet: nichts
+    expect((await runFolderInbox({ clientFor })).postfaecher).toBe(0);
+    expect((await setWatchFolder(s.users.david, true, { clientFor })).folderFound).toBe(true);
+    expect((await setWatchFolder(s.users.lars, true, { clientFor })).folderFound).toBe(false);
+    const r = await runFolderInbox({ clientFor });
+    expect(r).toMatchObject({ postfaecher: 1, gesehen: 2, ausgewertet: 1, abgelehnt: 1, fehler: 0 });
+    expect(r.karten).toBeGreaterThan(0);
+    const item = (await db.query.mailInboxItems.findFirst({ where: eq(schema.mailInboxItems.messageId, `${s.users.david}:<f1@x>`) }))!;
+    expect(item.status).toBe("AUSGEWERTET");
+    const src = (await db.query.sources.findFirst({ where: eq(schema.sources.id, item.sourceId!) }))!;
+    expect(src.ownerUserId).toBe(s.users.david);
+    expect(src.body).toMatch(/Von: Anne Keller \(anne\.keller@beispielkonzern\.example\)/);
+    expect(src.setupId).toBeTruthy();
+    expect((await runFolderInbox({ clientFor })).gesehen).toBe(0);
+    await setWatchFolder(s.users.david, false);
+    expect((await runFolderInbox({ clientFor })).postfaecher).toBe(0);
+    await db.delete(schema.integrationConnections).where(eq(schema.integrationConnections.id, cDavid.id));
+    await db.delete(schema.integrationConnections).where(eq(schema.integrationConnections.id, cLars.id));
   });
 });

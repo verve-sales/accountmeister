@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { PendingButton } from "@/components/PendingButton";
 import { redirect } from "next/navigation";
-import { schema } from "@/db/client";
+import { db, schema } from "@/db/client";
+import { and, eq } from "drizzle-orm";
 import { getCurrentActor } from "@/modules/identity/session";
 import { listMySetups, listSetupsWithOpenAssignment } from "@/modules/setups/service";
 import { getMyConnection, listSelectable } from "@/modules/integrations/service";
 import { listMyImports } from "@/modules/imports/service";
 import { getProviderStatus } from "@/modules/suggestions/service";
 import { Feedback } from "@/components/Feedback";
-import { mailInboxAddress, myMailInbox } from "@/modules/mailin/service";
+import { mailInboxAddress, myMailInbox, WATCH_FOLDER_NAME } from "@/modules/mailin/service";
 import { Status } from "@/components/Status";
 import { accessClassLabel, fmtDate, fmtDateTime, importKindLabel, importStatusLabel } from "@/lib/labels";
 import { confirmImportAction, decideMergeAction, importMailboxItemAction, importProtocolAction, reevaluateSourceAction } from "../actions";
@@ -31,7 +32,8 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
   }
   const editableSetups = mySetups;
   const inboxAddress = mailInboxAddress();
-  const forwarded = inboxAddress ? await myMailInbox(actor.userId) : [];
+  const forwarded = await myMailInbox(actor.userId);
+  const folderOn = !!(await db.query.integrationConnections.findFirst({ where: and(eq(schema.integrationConnections.userId, actor.userId), eq(schema.integrationConnections.watchFolder, true)), columns: { id: true } }));
   const pending = imports.filter((j) => j.status !== "BESTAETIGT" && j.status !== "VERWORFEN");
 
   return (
@@ -39,11 +41,13 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
       <h1 className="text-2xl font-semibold">Eingang</h1>
       <Feedback params={params} />
 
-      {inboxAddress && (
+      {(inboxAddress || folderOn || forwarded.length > 0) && (
         <section className="card space-y-2" id="weiterleiten">
-          <h2 className="font-semibold">Mail weiterleiten</h2>
-          <p className="text-sm">Leite eine Mail an <a href={`mailto:${inboxAddress}`}><strong>{inboxAddress}</strong></a> weiter – nach ein bis zwei Minuten liegen die Vorschläge auf deiner <Link href="/start">Startseite</Link> zur Bestätigung. Ein Satz von dir über der Weiterleitung (z. B. „gehört zu Kunde X“) wird mit ausgewertet.</p>
-          <p className="muted text-xs">Ausgewertet wird nur, was du von deiner Verve-Adresse schickst. Anhänge werden nicht übernommen, Bewerbungen nicht ausgewertet. Das Postfach wird nur gelesen.</p>
+          <h2 className="font-semibold">Mails automatisch auswerten</h2>
+          {folderOn && <p className="text-sm">Verschiebe oder kopiere eine Mail in Outlook in deinen Ordner <strong>„{WATCH_FOLDER_NAME}“</strong> – nach ein bis zwei Minuten liegen die Vorschläge auf deiner <Link href="/start">Startseite</Link> zur Bestätigung.</p>}
+          {inboxAddress && <p className="text-sm">{folderOn ? "Oder leite" : "Leite"} eine Mail an <a href={`mailto:${inboxAddress}`}><strong>{inboxAddress}</strong></a> weiter – ein Satz von dir über der Weiterleitung (z. B. „gehört zu Kunde X“) wird mit ausgewertet.</p>}
+          {!folderOn && <p className="text-sm muted">Ordner statt Weiterleitung: unter <Link href="/einstellungen#ordner">Einstellungen → Mein Postfach</Link> den Ordner „{WATCH_FOLDER_NAME}“ einschalten.</p>}
+          <p className="muted text-xs">Anhänge werden nicht übernommen, Bewerbungen nicht ausgewertet. Postfächer werden nur gelesen.</p>
           {forwarded.length > 0 && (
             <ul className="text-sm space-y-1">
               {forwarded.map((f) => (

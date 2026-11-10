@@ -12,8 +12,9 @@ import { hasRole } from "@/modules/identity/actor";
 import { getMyPrefs, notificationKindLabel, notificationKinds } from "@/modules/notifications/service";
 import { listMyAbsences } from "@/modules/work/teams";
 import { workTargets } from "@/modules/work/service";
-import { addAbsenceAction, connectMailboxAction, createProfileReferenceAction, removeAbsenceAction, revokeMailboxAction, saveNotificationPrefsAction } from "../actions";
+import { addAbsenceAction, connectMailboxAction, createProfileReferenceAction, removeAbsenceAction, revokeMailboxAction, saveNotificationPrefsAction, watchFolderAction } from "../actions";
 
+import { WATCH_FOLDER_NAME } from "@/modules/mailin/service";
 export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const actor = await getCurrentActor();
@@ -85,7 +86,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
       </section>
       <section className="card">
         <h2 className="font-semibold mb-2">Mein Postfach (Microsoft 365 / Outlook)</h2>
-        <p className="muted text-sm mb-2">Lesender Zugriff mit minimalen Berechtigungen. Es wird nie ein ganzes Postfach eingelesen: Sie wählen im <Link href="/eingang">Eingang</Link> einzelne Mails oder Termine aus. Kein Senden, keine Terminbuchung.</p>
+        <p className="muted text-sm mb-2">Lesender Zugriff mit minimalen Berechtigungen. Es wird nie ein ganzes Postfach eingelesen: Sie wählen im <Link href="/eingang">Eingang</Link> einzelne Mails oder Termine aus – oder Sie schalten unten den Ordner „Accountmeister“ ein. Kein Senden, keine Terminbuchung.</p>
         <table className="list">
           <tbody>
             <tr><td>Status</td><td>{conn.connection ? <Status label={integrationStatusLabel[conn.connection.status] ?? conn.connection.status} /> : <Status label="Nicht verbunden" />}{conn.state.accountLabel && <span className="muted text-sm ml-2">{conn.state.accountLabel}</span>}</td></tr>
@@ -106,6 +107,17 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
             <form action={revokeMailboxAction}><button className="btn btn-secondary" type="submit">Verbindung widerrufen</button></form>
           )}
         </div>
+        {conn.state.connected && conn.connection && (
+          <div className="mt-4 space-y-2" id="ordner" style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+            <h3 className="font-semibold text-sm">Ordner „{WATCH_FOLDER_NAME}“ automatisch auswerten</h3>
+            <p className="muted text-sm">Lege in Outlook einen Ordner „{WATCH_FOLDER_NAME}“ an (oberste Ebene oder unter dem Posteingang) und verschiebe oder kopiere Mails hinein. Nach ein bis zwei Minuten liegen die Vorschläge auf deiner Startseite zur Bestätigung. Gelesen wird nur dieser eine Ordner; nichts wird verändert, Anhänge werden nicht übernommen, Bewerbungen nicht ausgewertet.</p>
+            <p className="text-sm">Stand: {conn.connection.watchFolder ? (conn.connection.watchFolderId ? <strong>eingeschaltet, Ordner gefunden</strong> : <strong style={{ color: "#b7791f" }}>eingeschaltet, Ordner noch nicht gefunden</strong>) : "ausgeschaltet"}</p>
+            <form action={watchFolderAction}>
+              <input type="hidden" name="on" value={conn.connection.watchFolder ? "0" : "1"} />
+              <button className={`btn btn-small${conn.connection.watchFolder ? " btn-secondary" : ""}`} type="submit">{conn.connection.watchFolder ? "Ausschalten" : "Einschalten"}</button>
+            </form>
+          </div>
+        )}
       </section>
       <section className="card">
         <h2 className="font-semibold mb-2">Status der Anbindungen</h2>

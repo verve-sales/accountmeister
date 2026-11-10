@@ -76,6 +76,16 @@ export function startNotificationWorker(): void {
           await runJob("mail-eingang", async () => { throw e; });
         }
       }
+      // Ordner „Accountmeister“ in den verbundenen Postfächern (Etappe 50), alle zwei Minuten
+      if (new Date().getMinutes() % 2 === 1) {
+        const { runFolderInbox } = await import("@/modules/mailin/service");
+        try {
+          const counts = (await runFolderInbox()) as unknown as Record<string, number>;
+          if ((counts.gesehen ?? 0) > 0 || (counts.fehler ?? 0) > 0) await runJob("mail-ordner", async () => counts);
+        } catch (e) {
+          await runJob("mail-ordner", async () => { throw e; });
+        }
+      }
       await dispatchPendingEmails(cfg);
       if (hour >= cfg.MAIL_DIGEST_HOUR && lastDigestDate !== date) {
         lastDigestDate = date;

@@ -1,4 +1,19 @@
-# Mail-Eingang: Weiterleitungen an das Accountmeister-Postfach
+# Mail-Eingang
+
+Zwei Wege, eine Mail ohne Umweg über die Oberfläche auswerten zu lassen. Die Auswertung ist dieselbe wie im Eingang; die Vorschläge liegen danach auf der Startseite zur Bestätigung.
+
+## Weg 1: Ordner „Accountmeister“ im eigenen Postfach (keine IT-Einrichtung)
+
+1. Unter Einstellungen → Mein Postfach das Postfach verbinden (falls noch nicht geschehen).
+2. In Outlook einen Ordner „Accountmeister“ anlegen – oberste Ebene oder unter dem Posteingang.
+3. Unter Einstellungen → Mein Postfach „Ordner automatisch auswerten“ einschalten.
+4. Mails in den Ordner verschieben oder kopieren.
+
+Der Accountmeister liest dann alle zwei Minuten mit der persönlichen Verbindung (`Mail.Read`) ausschließlich diesen Ordner – die neuesten 50 Nachrichten, höchstens fünf neue je Lauf. Nichts wird verändert oder verschoben; Anhänge werden nicht übernommen; Bewerbungen werden nicht ausgewertet. Ausschalten jederzeit an derselben Stelle. Läuft die Verbindung ab, kommt ein Hinweis „Postfach neu verbinden“.
+
+Dies ist der einzige Abruf im Hintergrund aus einem persönlichen Postfach, und nur für Personen, die ihn selbst eingeschaltet haben.
+
+## Weg 2: Weiterleitung an ein zentrales Postfach (einmalige IT-Einrichtung)
 
 Wer eine Mail an das Postfach weiterleitet (z. B. `sales@verveconsulting.de`), findet die Vorschläge nach ein bis zwei Minuten auf seiner Startseite zur Bestätigung.
 

@@ -72,11 +72,12 @@ Die Einsatzliste zeigt standardmäßig nur laufende Einsätze; Einsätze mit üb
   },
   {
     id: "mail-eingang",
-    title: "Mail an den Accountmeister weiterleiten",
-    where: "Eingang → „Mail weiterleiten“ (zeigt die Adresse) · Vorschläge erscheinen auf Start",
-    keywords: ["mail weiterleiten", "e-mail weiterleiten", "forward", "postfach", "sales postfach", "bewerbung", "funktionspostfach"],
-    body: `Leite eine Mail von deiner Verve-Adresse an das Accountmeister-Postfach weiter (die Adresse steht unter Eingang). Nach ein bis zwei Minuten liegen die Vorschläge auf deiner Startseite zur Bestätigung; du bekommst dazu einen Hinweis. Ein Satz von dir über der Weiterleitung (z. B. „gehört zu Kunde X“) wird mit ausgewertet. Der Kunde wird wie im Eingang über Absender-Domäne, Kürzel und Namen erkannt.
-Ausgewertet wird nur, was ein aktiver Accountmeister-Nutzer aus dem eigenen Mandanten schickt – Mails von außen, die direkt im Postfach landen (z. B. Bewerbungen), werden übersprungen, ihr Inhalt wird nicht abgerufen. Weitergeleitete Bewerbungen werden nicht ausgewertet. Anhänge werden nicht übernommen. Das Postfach wird nur gelesen.`,
+    title: "Mails automatisch auswerten: Ordner „Accountmeister“ oder Weiterleitung",
+    where: "Einstellungen → Mein Postfach → Ordner „Accountmeister“ einschalten · Eingang → „Mails automatisch auswerten“",
+    keywords: ["mail weiterleiten", "e-mail weiterleiten", "forward", "postfach", "ordner accountmeister", "outlook ordner", "mail verschieben", "sales postfach", "bewerbung", "funktionspostfach"],
+    body: `Ordner: Verbinde dein Postfach (Einstellungen → Mein Postfach), lege in Outlook einen Ordner „Accountmeister“ an (oberste Ebene oder unter dem Posteingang) und schalte in den Einstellungen die Ordner-Auswertung ein. Jede Mail, die du in den Ordner verschiebst oder kopierst, wird nach ein bis zwei Minuten ausgewertet; die Vorschläge liegen auf deiner Startseite zur Bestätigung, dazu kommt ein Hinweis. Gelesen wird nur dieser Ordner, nichts wird verändert.
+Weiterleitung: Ist ein zentrales Postfach eingerichtet (die Adresse steht dann unter Eingang), kannst du Mails auch dorthin weiterleiten; ausgewertet wird nur, was ein aktiver Nutzer aus dem eigenen Mandanten schickt.
+In beiden Fällen: Anhänge werden nicht übernommen, Bewerbungen nicht ausgewertet. Der Kunde wird wie im Eingang über Absender-Domäne, Kürzel und Namen erkannt.`,
   },
   {
     id: "kundenansicht",

@@ -2048,3 +2048,15 @@ export async function captureAssignmentAction(fd: FormData) {
     return `/einsaetze/${e.id}#vertraege`;
   }, "Assignment erfasst – Vertrag oder Bestellung jetzt hier unter „Verträge“ hinterlegen.");
 }
+
+export async function watchFolderAction(fd: FormData) {
+  const on = fd.get("on") === "1";
+  return run("/einstellungen#ordner", async (actor) => {
+    const { setWatchFolder, WATCH_FOLDER_NAME } = await import("@/modules/mailin/service");
+    const r = await setWatchFolder(actor.userId, on).catch((e) => {
+      throw e instanceof DomainError ? e : new ValidationError(e instanceof Error ? e.message : "Der Ordner konnte nicht geprüft werden.");
+    });
+    if (!r.on) throw new PendingInfo("Ordner-Auswertung ausgeschaltet.");
+    throw new PendingInfo(r.folderFound ? `Eingeschaltet – Mails im Ordner „${WATCH_FOLDER_NAME}“ werden ab jetzt ausgewertet (alle zwei Minuten, höchstens fünf je Lauf).` : `Eingeschaltet, aber in deinem Postfach gibt es noch keinen Ordner „${WATCH_FOLDER_NAME}“. Lege ihn in Outlook an (oberste Ebene oder unter dem Posteingang) – er wird dann innerhalb von zehn Minuten gefunden.`);
+  }, "");
+}

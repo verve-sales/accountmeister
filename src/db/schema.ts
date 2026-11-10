@@ -921,6 +921,10 @@ export const integrationConnections = pgTable(
     lastSuccessfulFetchAt: timestamp("last_successful_fetch_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     lastError: text("last_error"),
+    /** Mail-Eingang über Ordner (Etappe 50): Mails im Ordner „Accountmeister“ des eigenen Postfachs automatisch auswerten */
+    watchFolder: boolean("watch_folder").notNull().default(false),
+    watchFolderId: text("watch_folder_id"),
+    watchFolderCheckedAt: timestamp("watch_folder_checked_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
