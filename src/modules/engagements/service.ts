@@ -7,6 +7,7 @@ import type { Actor } from "@/modules/identity/actor";
 import { notify } from "@/modules/notifications/service";
 import { todayIso } from "@/modules/work/calendar";
 import { renewalPingDate, renewalTriggerDate } from "@/modules/health/service";
+import { loadRenewalContacts, type RenewalContacts } from "./contacts";
 import { engagementAccess, requireEngagement, requireManagedEngagement, type EngagementRow } from "./authz";
 
 /**
@@ -434,7 +435,7 @@ export async function linkContractDocument(actor: Actor, engagementId: string, d
 // ---------------------------------------------------------------------------
 
 export type MoodMark = { mood: "POSITIV" | "MITTEL" | "NEGATIV"; at: string; note: string | null };
-export type EngagementView = EngagementRow & { accountName: string; freelancerName: string; personName: string; bdName: string; careNames: string[]; daysToEnd: number | null; nextCheckin: string | null; checkinOverdue: boolean; procurement: ProcurementCheck; renewalStatus: string | null; renewalTo: string | null; pingDate: string | null; triggerDate: string | null; moodKunde: MoodMark | null; moodFreelancer: MoodMark | null };
+export type EngagementView = EngagementRow & { accountName: string; freelancerName: string; personName: string; bdName: string; careNames: string[]; daysToEnd: number | null; nextCheckin: string | null; checkinOverdue: boolean; procurement: ProcurementCheck; renewalStatus: string | null; renewalTo: string | null; pingDate: string | null; triggerDate: string | null; moodKunde: MoodMark | null; moodFreelancer: MoodMark | null; contacts: RenewalContacts; endDate: string | null; overdue: boolean };
 
 /** Letzte Stimmung je Seite aus erledigten Check-ins (Schnellerfassung „Stimmung: …“ oder Notiz). */
 function moodOf(rows: { side: string; status: string; heldAt: Date | null; note: string | null; dueDate: string }[], side: "KUNDE" | "FREELANCER"): MoodMark | null {
@@ -458,6 +459,7 @@ async function decorate(actor: Actor, rows: EngagementRow[]): Promise<Engagement
     db.query.checkins.findMany({ where: and(inArray(schema.checkins.engagementId, ids), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT", "ERLEDIGT"])) }),
     db.query.renewalDecisions.findMany({ where: inArray(schema.renewalDecisions.engagementId, ids), orderBy: desc(schema.renewalDecisions.createdAt) }),
   ]);
+  const contacts = await loadRenewalContacts(rows);
   const an = new Map(accounts.map((a) => [a.id, a.name]));
   const fn = new Map(fls.map((f) => [f.id, f.displayName]));
   const un = new Map(users.map((u) => [u.id, u.displayName]));
@@ -484,15 +486,26 @@ async function decorate(actor: Actor, rows: EngagementRow[]): Promise<Engagement
       renewalStatus: ren?.status ?? null,
       pingDate: renewalPingDate(r),
       triggerDate: renewalTriggerDate(r),
+      contacts: contacts.get(r.id) ?? { renewal: null, order: null, approach: null, source: null },
+      endDate: r.actualEnd ?? r.plannedEnd ?? null,
+      overdue: isOverdueEngagement(r, t),
     });
   }
   return out;
 }
 
-export const engagementFilterValues = ["alle", "aktiv", "vertrag_offen", "enden_30", "enden_60", "enden_90", "checkin_ueberfaellig", "betreuung", "abgeschlossen"] as const;
+/** Laufend im Sinne der Übersicht: noch nicht beendet und Ende nicht überschritten. */
+export const RUNNING_STATUSES = ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT", "ENDET"] as const;
+/** Ende (bestätigt oder geplant) liegt zurück, der Einsatz ist aber nicht abgeschlossen. */
+export function isOverdueEngagement(r: Pick<EngagementRow, "status" | "actualEnd" | "plannedEnd">, today = todayIso()): boolean {
+  const end = r.actualEnd ?? r.plannedEnd;
+  return ["AKTIV", "PAUSIERT", "ENDET"].includes(r.status) && !!end && end < today;
+}
+
+export const engagementFilterValues = ["laufend", "ende_ueberschritten", "ohne_ansprechpartner", "alle", "aktiv", "vertrag_offen", "enden_30", "enden_60", "enden_90", "checkin_ueberfaellig", "betreuung", "abgeschlossen"] as const;
 export type EngagementFilter = (typeof engagementFilterValues)[number];
 
-export async function listEngagements(actor: Actor, filter: EngagementFilter = "alle", q = "") {
+export async function listEngagements(actor: Actor, filter: EngagementFilter = "laufend", q = "") {
   const rows = await db.query.engagements.findMany({ where: eq(schema.engagements.workspaceId, actor.workspaceId), orderBy: [asc(schema.engagements.plannedEnd), desc(schema.engagements.createdAt)] });
   const visible: EngagementRow[] = [];
   const mine = new Set<string>();
@@ -505,10 +518,14 @@ export async function listEngagements(actor: Actor, filter: EngagementFilter = "
   let v = await decorate(actor, visible);
   const needle = q.trim().toLowerCase();
   if (needle) v = v.filter((x) => [x.personName, x.accountName, x.title, x.bdName, String(x.mocoProjectId ?? "")].some((f) => f.toLowerCase().includes(needle)));
-  const active = (x: EngagementView) => ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET", "VORBEREITUNG"].includes(x.status);
+  const active = (x: EngagementView) => (RUNNING_STATUSES as readonly string[]).includes(x.status) && !x.overdue;
+  const noContact = (x: EngagementView) => active(x) && !x.contacts.renewal;
   const counts = {
+    laufend: v.filter(active).length,
+    ende_ueberschritten: v.filter((x) => x.overdue).length,
+    ohne_ansprechpartner: v.filter(noContact).length,
     alle: v.length,
-    aktiv: v.filter((x) => x.status === "AKTIV").length,
+    aktiv: v.filter((x) => x.status === "AKTIV" && !x.overdue).length,
     vertrag_offen: v.filter((x) => active(x) && x.procurement.complete !== true && !x.procurementException).length,
     enden_30: v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= 30).length,
     enden_60: v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= 60).length,
@@ -518,7 +535,10 @@ export async function listEngagements(actor: Actor, filter: EngagementFilter = "
     abgeschlossen: v.filter((x) => ["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(x.status)).length,
   };
   const items =
-    filter === "aktiv" ? v.filter((x) => x.status === "AKTIV")
+    filter === "laufend" ? v.filter(active)
+    : filter === "ende_ueberschritten" ? v.filter((x) => x.overdue)
+    : filter === "ohne_ansprechpartner" ? v.filter(noContact)
+    : filter === "aktiv" ? v.filter((x) => x.status === "AKTIV" && !x.overdue)
     : filter === "vertrag_offen" ? v.filter((x) => active(x) && x.procurement.complete !== true && !x.procurementException)
     : filter === "enden_30" ? v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= 30)
     : filter === "enden_60" ? v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= 60)

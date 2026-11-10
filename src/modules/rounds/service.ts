@@ -69,7 +69,7 @@ export type RoundAccount = {
   health: { score: number | null; level: Level; coverage: number } | null;
   headsNow: number;
   headsBefore: number;
-  ending: { engagementId: string; person: string; plannedEnd: string; daysToEnd: number; renewal: string }[];
+  ending: { engagementId: string; person: string; plannedEnd: string; daysToEnd: number; renewal: string; contact: string | null }[];
   interesting: { newChances: { id: string; title: string }[]; openCards: number; newPersons: string[] };
   prep: { note: string | null; authorName: string; at: Date } | null;
   mayPrepare: boolean;
@@ -118,6 +118,8 @@ export async function buildRound(actor: Actor, today = todayIso()) {
     return n ? { note: n.note, authorName: un.get(n.authorUserId) ?? "?", at: n.createdAt } : null;
   };
   const mayPrep = (accountId: string) => isGf || resp.get(accountId)?.userId === actor.userId;
+  const { loadRenewalContacts } = await import("@/modules/engagements/contacts");
+  const contactMap = await loadRenewalContacts(running);
   const day = (a: string, b: string) => Math.round((new Date(a).getTime() - new Date(b).getTime()) / 86400000);
 
   const rows: RoundAccount[] = inRound.map((a) => {
@@ -130,12 +132,12 @@ export async function buildRound(actor: Actor, today = todayIso()) {
       .map((e) => {
         const d = decisions.find((x) => x.engagementId === e.id);
         const person = e.freelancerId ? fls.find((f) => f.id === e.freelancerId)?.displayName ?? "?" : e.internalUserId ? un.get(e.internalUserId) ?? "?" : e.title;
-        return { engagementId: e.id, person, plannedEnd: e.plannedEnd!, daysToEnd: day(e.plannedEnd!, today), renewal: d ? renewalText[d.status] ?? d.status : "Verlängerung noch nicht angestoßen", decided: d?.status === "BESTAETIGT" || d?.status === "ABGELEHNT" || d?.status === "ERLEDIGT", inProgress: d?.status === "IN_ABSTIMMUNG" || d?.status === "ANGEBOTEN" };
+        return { engagementId: e.id, person, plannedEnd: e.plannedEnd!, daysToEnd: day(e.plannedEnd!, today), renewal: d ? renewalText[d.status] ?? d.status : "Verlängerung noch nicht angestoßen", decided: d?.status === "BESTAETIGT" || d?.status === "ABGELEHNT" || d?.status === "ERLEDIGT", inProgress: d?.status === "IN_ABSTIMMUNG" || d?.status === "ANGEBOTEN", contact: contactMap.get(e.id)?.renewal?.name ?? null as string | null };
       })
       .concat(
         slots
           .filter((o) => o.accountId === a.id && !o.ended && o.end && o.end >= today && o.end <= plusDaysIso(today, 90))
-          .map((o) => ({ engagementId: "", person: o.person ?? o.title, plannedEnd: o.end!, daysToEnd: day(o.end!, today), renewal: "Verlängerung noch nicht angestoßen (Auftrag aus dem Health-Check)", decided: false, inProgress: false })),
+          .map((o) => ({ engagementId: "", person: o.person ?? o.title, plannedEnd: o.end!, daysToEnd: day(o.end!, today), renewal: "Verlängerung noch nicht angestoßen (Auftrag aus dem Health-Check)", decided: false, inProgress: false, contact: null as string | null })),
       )
       .sort((x, y) => x.daysToEnd - y.daysToEnd);
     const reasons: string[] = [];
@@ -148,6 +150,8 @@ export async function buildRound(actor: Actor, today = todayIso()) {
       if (e.daysToEnd <= 28 && !e.inProgress) red(`${e.person}: Einsatz endet in ${e.daysToEnd} Tagen, ${e.renewal.toLowerCase()}`);
       else yellow(`${e.person}: endet in ${e.daysToEnd} Tagen – ${e.renewal}`);
     }
+    const noContact = ending.filter((e) => !e.decided && e.engagementId && !e.contact);
+    if (noContact.length) yellow(`Ansprechpartner für Verlängerung fehlt: ${noContact.map((e) => e.person).join(", ")}`);
     if (h?.level === "WACKELIG") yellow(`Health-Check wackelig (${h.score ?? "–"})`);
     if (h?.level === "UNKLAR") yellow("Health-Check: zu wenig Daten");
     if (headsNow < headsBefore) yellow(`Köpfe gesunken: ${headsBefore} → ${headsNow}`);
@@ -161,7 +165,7 @@ export async function buildRound(actor: Actor, today = todayIso()) {
       health: h ? { score: h.score, level: h.level, coverage: h.coverage } : null,
       headsNow,
       headsBefore,
-      ending: ending.map(({ engagementId, person, plannedEnd, daysToEnd, renewal }) => ({ engagementId, person, plannedEnd, daysToEnd, renewal })),
+      ending: ending.map(({ engagementId, person, plannedEnd, daysToEnd, renewal, contact }) => ({ engagementId, person, plannedEnd, daysToEnd, renewal, contact })),
       interesting: { newChances, openCards: cards.filter((c) => c.accountId === a.id).length, newPersons: persons.filter((p) => p.accountId === a.id).map((p) => p.displayName) },
       prep: prepOf(a.id),
       mayPrepare: mayPrep(a.id),

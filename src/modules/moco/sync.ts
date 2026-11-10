@@ -7,7 +7,7 @@ import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
 import { notify } from "@/modules/notifications/service";
 import { todayIso } from "@/modules/work/calendar";
-import { getMocoClient, isFreelancerMocoUser, isIgnoredMocoUser, mocoEnabled, type MocoClient, type MocoProject } from "./client";
+import { getMocoClient, isFreelancerMocoUser, isIgnoredMocoUser, isInternalMocoCompany, mocoEnabled, type MocoClient, type MocoProject } from "./client";
 import { canRunMocoImport } from "./import";
 
 /**
@@ -110,11 +110,18 @@ export async function runMocoSync(opts: { since?: string; client?: MocoClient; w
   const projects = await client.projects({ includeArchived: true, updatedFrom: since });
   const engagements = await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, ws), inArray(schema.engagements.status, ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT", "ENDET"])) });
   const linkedProjectIds = new Set(engagements.map((e) => e.mocoProjectId).filter((x): x is number => x != null));
+  const ignoredKeys = new Set((await db.query.mocoIgnores.findMany({ where: eq(schema.mocoIgnores.workspaceId, ws), columns: { itemKey: true } })).map((x) => x.itemKey));
+  // bereits gemeldete interne Projekte aufräumen
+  for (const h of await db.query.mocoHints.findMany({ where: and(eq(schema.mocoHints.workspaceId, ws), eq(schema.mocoHints.kind, "NEUES_PROJEKT"), eq(schema.mocoHints.status, "OFFEN")) })) {
+    if (isInternalMocoCompany((h.payload as { customer?: string | null } | null)?.customer)) await db.update(schema.mocoHints).set({ status: "VERWORFEN" }).where(eq(schema.mocoHints.id, h.id));
+  }
   for (const p of projects) {
     counts.projekteGeprueft++;
     const mine = engagements.filter((e) => e.mocoProjectId === p.id);
     if (!mine.length) {
       // Unbekanntes aktives Projekt mit aktiven Zuweisungen → Hinweis zur Übernahme über einen neuen Importlauf
+      // Interne Projekte (Kunde = Verve) und bewusst ignorierte Zuweisungen nie als neu melden (Etappe 48)
+      if (isInternalMocoCompany(p.customer?.name) || p.contracts.filter((c) => c.active).every((c) => ignoredKeys.has(`einsatz:${c.id}`))) continue;
       if (p.active && p.contracts.some((c) => c.active)) counts.hinweise += await upsertHint(ws, { subjectType: "PROJECT", subjectId: String(p.id), kind: "NEUES_PROJEKT", title: `„${p.name}“ (${p.customer?.name ?? "ohne Kunde"}) ist in Moco neu – per Import übernehmen`, payload: { mocoProjectId: p.id, customer: p.customer?.name ?? null, contracts: p.contracts.filter((c) => c.active).map((c) => `${c.firstname} ${c.lastname}`) }, dedupeKey: `new-project:${p.id}` });
       continue;
     }

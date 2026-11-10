@@ -562,6 +562,8 @@ export type RenewalCard = {
   bdName: string | null;
   /** Hut (Etappe 37): gehört die Karte in meine persönliche Arbeitsliste? Sonst nur „Bei deinen BDs im Blick“. */
   forMe: boolean;
+  /** über wen beim Kunden, wer spricht an (e37) */
+  contacts: import("./contacts").RenewalContacts;
 };
 
 /** Verlängerungskarten für die Startseite: offene Entscheidungen (in Abstimmung) für kommerziell Zuständige, zu klärende für Sales Operations/Betreuung. */
@@ -579,6 +581,8 @@ export async function listRenewalCards(actor: Actor): Promise<RenewalCard[]> {
   const an = new Map(accounts.map((a) => [a.id, a.name]));
   const fn = new Map(fls.map((f) => [f.id, f.displayName]));
   const un = new Map(users.map((u) => [u.id, u.displayName]));
+  const { loadRenewalContacts } = await import("./contacts");
+  const contacts = await loadRenewalContacts(engs);
   const out: RenewalCard[] = [];
   for (const d of open) {
     const e = en.get(d.engagementId);
@@ -620,6 +624,7 @@ export async function listRenewalCards(actor: Actor): Promise<RenewalCard[]> {
       bdUserId: e.bdUserId,
       bdName: e.bdUserId ? un.get(e.bdUserId) ?? null : null,
       forMe,
+      contacts: contacts.get(e.id) ?? { renewal: null, order: null, approach: null, source: null },
     });
   }
   return out.sort((x, y) => (x.mode === y.mode ? (x.daysToEnd ?? 9999) - (y.daysToEnd ?? 9999) : x.mode === "ENTSCHEIDEN" ? -1 : 1));

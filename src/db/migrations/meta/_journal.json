@@ -288,6 +288,13 @@
       "when": 1793350065022,
       "tag": "0040_kundenrunde",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794319854226,
+      "tag": "0041_verlaengerung_kontakte",
+      "breakpoints": true
     }
   ]
 }

@@ -55,6 +55,22 @@ Die Kundenrunde (alle zwei Wochen) zeigt je Kundenverantwortlichem seine Bestand
 Vier-Augen bei Account Leads: Eine Verlängerung mit geänderten Konditionen geht bei einem Account-Lead-Kunden zur Freigabe an die Geschäftsführung; unveränderte Konditionen werden direkt bestätigt.`,
   },
   {
+    id: "sales-ops",
+    title: "Sales-Ops-Sicht und Verlängerungs-Ansprechpartner",
+    where: "Hut „Sales Operations“ → Sales-Ops-Sicht · Einsatz → „Verlängerung läuft über“ · Setup → „Verlängerung läuft über“",
+    keywords: ["sales operations", "sales ops", "verlaengerung", "ansprechpartner", "bestellung", "vertrag", "assignment", "erfassen", "anstossen", "einkauf", "wer spricht an"],
+    body: `Je Einsatz steht, über wen die Verlängerung beim Kunden fachlich läuft, über wen Bestellung/Vertrag laufen und wer bei Verve anspricht (Sales Operations, BD oder Berater:in selbst). Die Vorgabe steht am Setup und gilt für alle seine Einsätze; am Einsatz lässt sie sich je Feld abweichend setzen (leer = Vorgabe). Pflegen dürfen BD, Principal, Sales Operations und die Betreuung des Einsatzes.
+Die Sales-Ops-Sicht zeigt: Verlängerungen zum Anstoßen, Einsätze ohne Ansprechpartner, offene Unterlagen, Einsätze mit überschrittenem Ende und offene Moco-Hinweise – dazu alle Einsätze mit Ende in den nächsten 120 Tagen samt Ansprechpartner. Mit „Neues Assignment erfassen“ legt Sales Operations in einem Schritt Chance (beauftragt), Auftrag/Bestellung und Einsatzakte an und lädt danach Vertrag oder Bestellung am Einsatz hoch. Die Verlängerung bestätigt weiter der BD-Kontext.`,
+  },
+  {
+    id: "bereinigung",
+    title: "Bereinigung: Dubletten und Altlasten aufräumen",
+    where: "Mehr → Bereinigung (Geschäftsführung, Sales Operations, Administration)",
+    keywords: ["bereinigung", "aufraeumen", "dublette", "doppelt", "zusammenfuehren", "beendet", "ende ueberschritten", "intern", "verve consulting", "moco", "setup doppelt", "person doppelt"],
+    body: `Die Bereinigung sammelt Unstimmigkeiten; geändert wird nur, was du freigibst. Ende überschritten: Einsätze, deren Ende zurückliegt, werden zum Enddatum abgeschlossen (bei offener Verlängerung nur „endet“). Doppelte Einsätze: gleiche Person beim gleichen Kunden mit überlappender Laufzeit (z. B. aus Moco und zusätzlich von Hand) – der gewählte bleibt, Moco-Verknüpfung, Check-ins, Unterlagen und Verlängerung ziehen um. Interne Moco-Projekte (Kunde „Verve Consulting“): Einsätze werden entfernt, der Kunde archiviert. Doppelte Setups und Personen je Kunde werden zusammengeführt.
+Die Einsatzliste zeigt standardmäßig nur laufende Einsätze; Einsätze mit überschrittenem Ende stehen im eigenen Filter, mögliche Dubletten sind markiert. Der Moco-Abgleich zeigt nur noch Änderungen; was dort übersprungen wird, kommt nicht wieder, bis es unter Moco → „Beim Import übersprungen“ zurückgeholt wird.`,
+  },
+  {
     id: "kundenansicht",
     title: "Kundenansicht: Grundlagen, Strategie, Operativ",
     where: "Kunden → Kunde → Reiter 1 Grundlagen · 2 Strategie · 3 Operativ",

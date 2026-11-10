@@ -14,7 +14,8 @@ import { MocoHintList } from "@/components/MocoHints";
 import { DeleteBlock } from "@/components/DeleteBlock";
 import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
-import { addContractDocumentAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction } from "../../actions";
+import { approachLabel, approachValues, loadRenewalContacts } from "@/modules/engagements/contacts";
+import { addContractDocumentAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction } from "../../actions";
 
 const eur = (v: string | null, unit: string) => (v ? `${Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${rateUnitLabel[unit] ?? unit}` : "offen");
 const RED = "#c0392b";
@@ -54,6 +55,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const today = new Date().toISOString().slice(0, 10);
   const firstMissing = e.procurement.required.find((r) => !r.ok) ?? null;
   const vertrag = e.procurement.complete === true ? "vollständig" : e.procurementException ? `Ausnahme: ${e.procurementException}` : e.procurement.complete === false ? `unvollständig (${e.procurement.required.filter((r) => r.ok).length}/${e.procurement.required.length})` : "kein freigegebenes Beschaffungsprofil – Stand unbestimmt";
+  const setupDefault = (await loadRenewalContacts([{ ...e, renewalContactPersonId: null, orderContactPersonId: null, renewalApproach: null }])).get(e.id)!;
+  const canContacts = (a.manage || a.care) && !final;
   const nextDue = [e.nextCheckin, openRenewal ? e.pingDate : null, e.status === "PAUSIERT" ? e.reviewDate : null].filter((x): x is string => !!x).sort()[0] ?? null;
 
   return (
@@ -351,6 +354,48 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
             <input name="note" className="input" placeholder="Anlass (optional)" />
             <button className="btn btn-secondary btn-small" type="submit">Check-in anlegen</button>
           </form>
+        )}
+      </section>
+
+      {/* Ansprechpartner für Verlängerung und Bestellung */}
+      <section className="card space-y-2" id="ansprechpartner">
+        <h2 className="font-semibold">Verlängerung läuft über</h2>
+        <dl className="text-sm grid gap-x-4 gap-y-1" style={{ gridTemplateColumns: "max-content 1fr" }}>
+          <dt className="muted">fachlich beim Kunden</dt>
+          <dd>{e.contacts.renewal ? <>{e.contacts.renewal.name}{e.contacts.renewal.role ? <span className="muted"> · {e.contacts.renewal.role}</span> : null}{e.contacts.renewal.email ? <> · <a href={`mailto:${e.contacts.renewal.email}`}>{e.contacts.renewal.email}</a></> : null}{e.contacts.renewal.phone ? <> · {e.contacts.renewal.phone}</> : null}</> : <span style={{ color: "#b7791f" }}>offen</span>}</dd>
+          <dt className="muted">Bestellung/Vertrag</dt>
+          <dd>{e.contacts.order ? <>{e.contacts.order.name}{e.contacts.order.email ? <> · <a href={`mailto:${e.contacts.order.email}`}>{e.contacts.order.email}</a></> : null}</> : <span className="muted">wie fachlich bzw. offen</span>}</dd>
+          <dt className="muted">bei Verve spricht an</dt>
+          <dd>{e.contacts.approach ? approachLabel[e.contacts.approach] : <span className="muted">offen</span>}</dd>
+        </dl>
+        <p className="muted text-xs">{e.contacts.source === "EINSATZ" ? "Am Einsatz abweichend festgelegt; leere Felder folgen der Vorgabe des Setups." : e.contacts.source === "SETUP" ? "Vorgabe des Setups." : "Weder am Einsatz noch am Setup hinterlegt."}{" "}<Link href={`/setups/${e.setupId}#verlaengerung`}>Vorgabe im Setup</Link></p>
+        {canContacts && (
+          <details>
+            <summary className="text-sm cursor-pointer">Ändern</summary>
+            <form action={engagementContactsAction.bind(null, e.id)} className="flex flex-wrap gap-3 items-end text-sm mt-2">
+              <label className="space-y-1"><span className="block muted text-xs">fachlich über</span>
+                <select name="renewalContactPersonId" className="input" defaultValue={e.renewalContactPersonId ?? ""}>
+                  <option value="">{setupDefault.renewal ? `Vorgabe: ${setupDefault.renewal.name}` : "– Vorgabe des Setups (leer) –"}</option>
+                  {d.persons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1"><span className="block muted text-xs">Bestellung/Vertrag über</span>
+                <select name="orderContactPersonId" className="input" defaultValue={e.orderContactPersonId ?? ""}>
+                  <option value="">{setupDefault.order ? `Vorgabe: ${setupDefault.order.name}` : "– Vorgabe des Setups (leer) –"}</option>
+                  {d.persons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
+                </select>
+              </label>
+              <label className="space-y-1"><span className="block muted text-xs">wer spricht an</span>
+                <select name="renewalApproach" className="input" defaultValue={e.renewalApproach ?? ""}>
+                  <option value="">{setupDefault.approach ? `Vorgabe: ${approachLabel[setupDefault.approach]}` : "– Vorgabe des Setups (leer) –"}</option>
+                  {approachValues.map((v) => <option key={v} value={v}>{approachLabel[v]}</option>)}
+                </select>
+              </label>
+              {a.manage && <label className="flex gap-1 items-center"><input type="checkbox" name="asSetupDefault" value="1" /> als Vorgabe für alle Einsätze des Setups</label>}
+              <button className="btn btn-small" type="submit">Speichern</button>
+            </form>
+            {d.persons.length === 0 && <p className="muted text-xs mt-1">Beim Kunden sind noch keine Personen erfasst – <Link href={`/kunden/${e.accountId}`}>beim Kunden anlegen</Link>.</p>}
+          </details>
         )}
       </section>
 

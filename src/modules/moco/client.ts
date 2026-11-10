@@ -411,6 +411,13 @@ export function isIgnoredMocoUser(u: { email: string | null; firstname: string; 
   return /accountmeister|salesagent/i.test(`${u.firstname} ${u.lastname}`);
 }
 
+/** Interner Moco-Kunde (Verve selbst)? Interne Projekte werden nie importiert oder als neu gemeldet (Etappe 48). */
+export function isInternalMocoCompany(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const n = name.toLowerCase().replace(/\b(gmbh|ag|se|kg|co)\b/g, " ").replace(/[^a-zäöüß0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  return getConfig().MOCO_INTERNAL_COMPANIES.split(",").map((x) => x.trim().toLowerCase().replace(/\b(gmbh|ag|se|kg|co)\b/g, " ").replace(/[^a-zäöüß0-9 ]/g, " ").replace(/\s+/g, " ").trim()).filter(Boolean).some((x) => n === x || n.startsWith(`${x} `));
+}
+
 export function mocoEnabled(): boolean {
   const c = getConfig();
   return c.MOCO_MODE === "fixture" || (c.MOCO_MODE === "http" && !!c.MOCO_SUBDOMAIN && !!c.MOCO_API_KEY);

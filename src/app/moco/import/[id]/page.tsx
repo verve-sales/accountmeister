@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { DomainError } from "@/lib/errors";
-import { getImport, importerChoices, type ImportDecisions, type ImportItem } from "@/modules/moco/import";
-import { Feedback, type SearchParams } from "@/components/Feedback";
+import { getImport, importerChoices, type ImportDecisions, type ImportItem, type ItemFlags } from "@/modules/moco/import";
+import { Feedback } from "@/components/Feedback";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { mocoApplyImportAction, mocoDiscardImportAction, mocoSaveDecisionsAction } from "../../../actions";
 
@@ -31,7 +31,7 @@ function ActionSelect({ item, decisions }: { item: ImportItem; decisions: Import
   );
 }
 
-export default async function MocoImportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
+export default async function MocoImportPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; alle?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const actor = await getCurrentActor();
@@ -46,17 +46,26 @@ export default async function MocoImportPage({ params, searchParams }: { params:
   const choices = await importerChoices(actor);
   const items = imp.items;
   const decisions = imp.decisions;
-  const by = <T extends ImportItem["type"]>(t: T) => items.filter((i): i is Extract<ImportItem, { type: T }> => i.type === t);
+  // Abgleich (Etappe 48): nur zeigen, was neu ist oder sich geändert hat; Unverändertes und Ignoriertes bleibt für die Übernahme im Hintergrund
+  const showAll = sp.alle === "1";
+  const flagged = items as (ImportItem & ItemFlags)[];
+  const unchangedN = flagged.filter((x) => x.unchanged).length;
+  const ignoredN = flagged.filter((x) => x.ignored).length;
+  const by = <T extends ImportItem["type"]>(t: T) => flagged.filter((i): i is Extract<ImportItem, { type: T }> & ItemFlags => i.type === t && (showAll || (!i.unchanged && !i.ignored)));
+  const allSetups = flagged.filter((i): i is Extract<ImportItem, { type: "SETUP" }> => i.type === "SETUP");
+  const allKunden = flagged.filter((i): i is Extract<ImportItem, { type: "KUNDE" }> => i.type === "KUNDE");
+  const allPersons = flagged.filter((i): i is Extract<ImportItem, { type: "PERSON" }> => i.type === "PERSON");
   const persons = by("PERSON");
   const teams = by("TEAM");
   const kunden = by("KUNDE");
   const setups = by("SETUP");
   const einsaetze = by("EINSATZ");
+  const nothing = persons.length + teams.length + kunden.length + setups.length + einsaetze.length === 0;
   const result = imp.result as { ok?: string[]; skipped?: string[]; errors?: { key: string; message: string }[]; created?: Record<string, number> } | null;
   const editable = imp.status === "ENTWURF";
   const back = `/moco/import/${id}`;
-  const setupName = (key: string) => setups.find((s) => s.key === key)?.name ?? key;
-  const kundeName = (mocoId: number) => kunden.find((k) => k.mocoId === mocoId)?.name ?? String(mocoId);
+  const setupName = (key: string) => allSetups.find((s) => s.key === key)?.name ?? key;
+  const kundeName = (mocoId: number) => allKunden.find((k) => k.mocoId === mocoId)?.name ?? String(mocoId);
 
   return (
     <div className="space-y-5">
@@ -80,23 +89,27 @@ export default async function MocoImportPage({ params, searchParams }: { params:
       <form action={editable ? mocoApplyImportAction : mocoSaveDecisionsAction} className="space-y-5">
         <input type="hidden" name="importId" value={id} />
         <input type="hidden" name="back" value={back} />
+        <section className="card text-sm">
+          {nothing ? <p><strong>Keine Änderungen seit dem letzten Import.</strong> Alles aus Moco ist bereits verknüpft oder bewusst übersprungen.</p> : <p><strong>Nur Änderungen:</strong> neue oder geänderte Kunden, Setups, Einsätze und Personen.</p>}
+          <p className="muted text-xs mt-1">{unchangedN} bereits verknüpfte und {ignoredN} früher übersprungene Objekte sind ausgeblendet{showAll ? " – hier gerade eingeblendet" : ""}. Interne Projekte (Kunde Verve) werden nie übernommen. Was du jetzt überspringst, erscheint künftig nicht wieder (auf der Moco-Seite wieder aufnehmbar). <Link href={showAll ? back : `${back}?alle=1`}>{showAll ? "Nur Änderungen zeigen" : "Alles zeigen"}</Link></p>
+        </section>
         <p className="text-sm muted">Regel: Moco führt Namen und Stammdaten (verknüpfte Kunden und Setups bekommen den Moco-Namen). Sales-Rollen kommen nicht aus Moco – BD und Principal setzt du je Setup. Einsätze aus laufenden Zuweisungen werden sofort „aktiv“; Freelancer-Einsätze bekommen Check-ins mit Kunde und Freelancer alle sechs Wochen, interne nicht.</p>
 
-        <section className="card">
+        {kunden.length > 0 && <section className="card">
           <h2 className="font-semibold mb-2">Kunden ({kunden.length})</h2>
           <ul className="space-y-1 text-sm">
             {kunden.map((k) => (
               <li key={k.key} className="flex flex-wrap items-center gap-2"><strong>{k.name}</strong><span className="muted text-xs">{k.note}</span>{editable ? <ActionSelect item={k} decisions={decisions} /> : <span className="status">{ACTION_LABEL[(decisions[k.key]?.action ?? k.proposal) as keyof typeof ACTION_LABEL]}{k.targetLabel ? ` → ${k.targetLabel}` : ""}</span>}</li>
             ))}
           </ul>
-        </section>
+        </section>}
 
-        <section className="card">
+        {setups.length > 0 && <section className="card">
           <h2 className="font-semibold mb-2">Setups aus Projektgruppen ({setups.length})</h2>
           <ul className="space-y-2 text-sm">
             {setups.map((s) => {
               const d = decisions[s.key] ?? {};
-              const principalDefault = d.principalUserId ?? (s.principalMocoId ? persons.find((p) => p.mocoId === s.principalMocoId)?.targetId ?? "" : "");
+              const principalDefault = d.principalUserId ?? (s.principalMocoId ? allPersons.find((p) => p.mocoId === s.principalMocoId)?.targetId ?? "" : "");
               return (
                 <li key={s.key} className="flex flex-wrap items-center gap-2">
                   <strong>{s.name}</strong><span className="muted text-xs">Kunde {kundeName(s.companyMocoId)} · {s.note}</span>
@@ -111,9 +124,9 @@ export default async function MocoImportPage({ params, searchParams }: { params:
               );
             })}
           </ul>
-        </section>
+        </section>}
 
-        <section className="card">
+        {einsaetze.length > 0 && <section className="card">
           <h2 className="font-semibold mb-2">Einsätze aus Zuweisungen ({einsaetze.length})</h2>
           <ul className="space-y-1 text-sm">
             {einsaetze.map((e) => (
@@ -124,9 +137,9 @@ export default async function MocoImportPage({ params, searchParams }: { params:
               </li>
             ))}
           </ul>
-        </section>
+        </section>}
 
-        <section className="card">
+        {persons.length + teams.length > 0 && <section className="card">
           <h2 className="font-semibold mb-2">Personen ({persons.length}) und Teams ({teams.length})</h2>
           <ul className="space-y-1 text-sm">
             {persons.map((p) => (
@@ -147,11 +160,11 @@ export default async function MocoImportPage({ params, searchParams }: { params:
             ))}
           </ul>
           <p className="muted text-xs mt-2">Freelancer erkennt der Import am Moco-Team (Standard „Freelancer“, sonst alles mit „Freelancer/Extern/Freiberufler“ im Namen) oder am Extern-Kennzeichen in Moco – hier je Person korrigierbar; die Einsätze dieser Person folgen der Auswahl. Neue Zugänge erhalten die Rolle Anker; BD, Principal und Sales Operations vergibt die Verwaltung. Teamleiter werden Leitung ihres Teams (Dashboard „Mein Team“), bleiben fachlich Anker.</p>
-        </section>
+        </section>}
 
         {editable && (
           <div className="flex flex-wrap gap-3">
-            <button className="btn" type="submit">Prüfliste so übernehmen</button>
+            <button className="btn" type="submit">{nothing ? "Abgleich abschließen" : "Änderungen so übernehmen"}</button>
             <button className="btn btn-secondary" type="submit" formAction={mocoSaveDecisionsAction}>Nur Entscheidungen speichern</button>
             <button className="btn btn-secondary" type="submit" formAction={mocoDiscardImportAction}>Verwerfen</button>
           </div>

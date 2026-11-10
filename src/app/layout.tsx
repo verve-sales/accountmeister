@@ -32,6 +32,9 @@ function coachNav(actor: Actor): boolean {
 }
 
 export const metadata: Metadata = { title: "Accountmeister – Verve AI", description: "Interne Sales-Arbeitsumgebung von Verve Consulting", icons: { icon: "/verve-ai-lockup.png" } };
+import { canUseSalesOps } from "@/modules/salesops/service";
+import { canClean } from "@/modules/cleanup/service";
+
 export const dynamic = "force-dynamic";
 
 /** Weitere Bereiche – immer unter „Mehr“. Die erste Reihe folgt dem Hut (Etappe 37, modules/dashboard/hat.ts). */
@@ -56,6 +59,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (actor && canSeeRound(actor)) allowed.add("runde");
   if (actor && staffing && (staffingNav(actor) || coachNav(actor))) allowed.add("einsaetze");
   if (actor && staffing && staffingNav(actor)) allowed.add("besetzung");
+  if (actor && staffing && canUseSalesOps(actor)) allowed.add("salesops");
+  if (actor && canClean(actor)) allowed.add("bereinigung");
   const nav = splitNav(hat, allowed);
   const unread = actor ? await unreadCount(actor).catch(() => 0) : 0;
   // Moco (Etappe 31): Link für Importberechtigte, wenn die Anbindung an ist, oder bei offenen Hinweisen für die Person

@@ -207,6 +207,10 @@ export const projectSetups = pgTable(
     status: setupStatusEnum("status").notNull().default("ENTWURF"),
     visibility: setupVisibilityEnum("visibility").notNull().default("MITGLIEDER"),
     bdUserId: text("bd_user_id").references(() => users.id), // null = „Zuordnung offen“
+    /** Verlängerung (Etappe 48): Vorgabe für alle Einsätze dieses Setups – fachlich über, Bestellung/Vertrag über, wer spricht an */
+    renewalContactPersonId: text("renewal_contact_person_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => persons.id, { onDelete: "set null" }),
+    orderContactPersonId: text("order_contact_person_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => persons.id, { onDelete: "set null" }),
+    renewalApproach: text("renewal_approach"), // SALES_OPS | BD | BERATER
     createdBy: text("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -2132,6 +2136,10 @@ export const engagements = pgTable(
     externalRef: text("external_ref"), // z. B. Moco-Projekt-Link (nur Referenz)
     mocoProjectId: integer("moco_project_id"),
     mocoContractId: integer("moco_contract_id"),
+    /** Verlängerung (Etappe 48): weicht dieser Einsatz von der Setup-Vorgabe ab? null = Vorgabe des Setups */
+    renewalContactPersonId: text("renewal_contact_person_id").references(() => persons.id, { onDelete: "set null" }),
+    orderContactPersonId: text("order_contact_person_id").references(() => persons.id, { onDelete: "set null" }),
+    renewalApproach: text("renewal_approach"),
     createdBy: text("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -2367,6 +2375,20 @@ export const renewalDecisions = pgTable(
 export const mocoImportStatusEnum = pgEnum("moco_import_status", ["ENTWURF", "UEBERNOMMEN", "VERWORFEN"]);
 
 /** Ein Importlauf: Momentaufnahme aus Moco, Vorschläge je Zeile, Entscheidungen der prüfenden Person, Ergebnis. */
+/** Moco (Etappe 48): beim Import bewusst übersprungene Objekte – erscheinen in späteren Prüflisten nicht wieder. */
+export const mocoIgnores = pgTable(
+  "moco_ignores",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    itemKey: text("item_key").notNull(),
+    label: text("label").notNull(),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("moco_ignores_uq").on(t.workspaceId, t.itemKey)],
+);
+
 export const mocoImports = pgTable("moco_imports", {
   id: id(),
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id),

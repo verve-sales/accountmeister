@@ -59,7 +59,9 @@ import {
   uploadDocumentAction,
   startInterviewAction,
   updateSetupAction,
+  setupContactsAction,
 } from "../../actions";
+import { approachLabel, approachValues } from "@/modules/engagements/contacts";
 
 export default async function SetupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; umbenennen?: string }> }) {
   const { id } = await params;
@@ -108,6 +110,11 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   // Kunden-Vorgehen dieses Setups werden hier ebenfalls gezeigt; Chancen-Vorgehen auf der jeweiligen Chance.
   // Alle Vorgehen dieses Setups – auch die an einer Chance hängenden (die Karte nennt dann die Chance).
   const setupRuns = runs;
+  // Verlängerungs-Vorgabe (e37): nur zeigen, wenn es Einsätze gibt oder gepflegt werden darf
+  const setupEngs = await db.query.engagements.findMany({ where: eq(schema.engagements.setupId, id), columns: { id: true, status: true } });
+  const accountPersons = await db.query.persons.findMany({ where: eq(schema.persons.accountId, d.account.id), columns: { id: true, displayName: true, email: true }, orderBy: (p, { asc }) => [asc(p.displayName)] });
+  const mayContacts = d.canEdit || actor.roles.has("SALES_OPS") || actor.roles.has("CEO");
+  const pName = (pid: string | null) => (pid ? accountPersons.find((p) => p.id === pid)?.displayName ?? "?" : null);
 
   return (
     <div className="space-y-6">
@@ -140,6 +147,33 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         </section>
       )}
       <Feedback params={sp} />
+
+      {(setupEngs.length > 0 || d.setup.renewalContactPersonId) && (
+        <section className="card space-y-2" id="verlaengerung">
+          <h2 className="font-semibold">Verlängerung läuft über <span className="muted text-sm font-normal">– Vorgabe für {setupEngs.filter((x) => !["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(x.status)).length} laufende Einsätze; am Einsatz abweichend möglich</span></h2>
+          <p className="text-sm">
+            fachlich: {pName(d.setup.renewalContactPersonId) ?? <span style={{ color: "#b7791f" }}>offen</span>} · Bestellung/Vertrag: {pName(d.setup.orderContactPersonId) ?? <span className="muted">–</span>} · spricht an: {d.setup.renewalApproach ? approachLabel[d.setup.renewalApproach] : <span className="muted">–</span>}
+          </p>
+          {mayContacts && (
+            <details open={!d.setup.renewalContactPersonId}>
+              <summary className="text-sm cursor-pointer">Vorgabe ändern</summary>
+              <form action={setupContactsAction.bind(null, id)} className="flex flex-wrap gap-3 items-end text-sm mt-2">
+                <label className="space-y-1"><span className="block muted text-xs">fachlich über</span>
+                  <select name="renewalContactPersonId" className="input" defaultValue={d.setup.renewalContactPersonId ?? ""}><option value="">– offen –</option>{accountPersons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select>
+                </label>
+                <label className="space-y-1"><span className="block muted text-xs">Bestellung/Vertrag über</span>
+                  <select name="orderContactPersonId" className="input" defaultValue={d.setup.orderContactPersonId ?? ""}><option value="">– wie fachlich / offen –</option>{accountPersons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select>
+                </label>
+                <label className="space-y-1"><span className="block muted text-xs">wer spricht an</span>
+                  <select name="renewalApproach" className="input" defaultValue={d.setup.renewalApproach ?? ""}><option value="">– offen –</option>{approachValues.map((v) => <option key={v} value={v}>{approachLabel[v]}</option>)}</select>
+                </label>
+                <button className="btn btn-small" type="submit">Speichern</button>
+              </form>
+              {accountPersons.length === 0 && <p className="muted text-xs mt-1">Noch keine Personen beim Kunden – <Link href={`/setups/${id}/personen`}>Personen erfassen</Link>.</p>}
+            </details>
+          )}
+        </section>
+      )}
 
       {(setupRuns.length > 0 || d.canEdit || mayReassign) && (
         <PlaybookRuns

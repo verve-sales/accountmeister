@@ -364,6 +364,11 @@ export async function mergePersons(actor: Actor, keepId: string, dropIds: string
       linkedinUrl: keep.linkedinUrl ?? drops.find((d) => d.linkedinUrl)?.linkedinUrl ?? null,
     };
     await tx.update(schema.persons).set({ ...fill, updatedAt: new Date(), version: keep.version + 1 }).where(eq(schema.persons.id, keep.id));
+    // Verlängerungs-/Bestell-Ansprechpartner an Setups und Einsätzen umhängen
+    for (const t of [schema.projectSetups, schema.engagements] as const) {
+      await tx.update(t).set({ renewalContactPersonId: keep.id }).where(inArray(t.renewalContactPersonId, ids));
+      await tx.update(t).set({ orderContactPersonId: keep.id }).where(inArray(t.orderContactPersonId, ids));
+    }
     // Funktionen: umhängen, identische (Titel + Bereich) nur einmal – die mit der ausführlichsten Zuständigkeit bleibt
     await tx.update(schema.personFunctions).set({ personId: keep.id }).where(inArray(schema.personFunctions.personId, ids));
     const fns = await tx.query.personFunctions.findMany({ where: eq(schema.personFunctions.personId, keep.id) });

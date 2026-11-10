@@ -1,12 +1,12 @@
 import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db, schema } from "@/db/client";
+import { db, schema, type Tx } from "@/db/client";
 import { getConfig } from "@/lib/config";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
-import { getMocoClient, isFreelancerMocoUser, isIgnoredMocoUser, mocoProjectUrl, type MocoClient, type MocoCompany, type MocoProject, type MocoProjectGroup, type MocoUser } from "./client";
+import { getMocoClient, isFreelancerMocoUser, isIgnoredMocoUser, isInternalMocoCompany, mocoProjectUrl, type MocoClient, type MocoCompany, type MocoProject, type MocoProjectGroup, type MocoUser } from "./client";
 
 /**
  * Moco-Startimport mit Prüfliste (Etappe 31).
@@ -43,6 +43,9 @@ export type ImportItem =
       candidates: { id: string; label: string }[];
       note: string;
     };
+
+/** Abgleich (Etappe 48): unverändert = in Moco und AM schon verknüpft, nichts zu tun; ignoriert = früher bewusst übersprungen. */
+export type ItemFlags = { unchanged?: boolean; ignored?: boolean };
 
 export type ImportDecision = { action?: ImportAction; targetId?: string; bdUserId?: string; principalUserId?: string; personKind?: "NUTZER" | "FREELANCER" };
 export type ImportDecisions = Record<string, ImportDecision>;
@@ -153,9 +156,10 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
   }
 
   // Kunden: nur Companies mit aktiven Projekten (plus solche, die schon verknüpft sind)
-  const activeProjects = mProjects.filter((p) => p.active && p.customer);
+  // Interne Projekte (Kunde = Verve selbst) nie übernehmen oder vorschlagen
+  const activeProjects = mProjects.filter((p) => p.active && p.customer && !isInternalMocoCompany(p.customer.name));
   const companyIds = new Set(activeProjects.map((p) => p.customer!.id));
-  const companies: MocoCompany[] = mCompanies.filter((c) => companyIds.has(c.id) || accounts.some((a) => a.mocoCompanyId === c.id));
+  const companies: MocoCompany[] = mCompanies.filter((c) => !isInternalMocoCompany(c.name) && (companyIds.has(c.id) || accounts.some((a) => a.mocoCompanyId === c.id)));
   for (const c of companies) {
     const byId = accounts.find((a) => a.mocoCompanyId === c.id);
     const byName = !byId ? best(accounts, (a) => nameSimilarity(a.name, c.name), 0.6) : null;
@@ -249,10 +253,27 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
     }
   }
 
+  // Abgleich: Unverändertes und bewusst Ignoriertes ausblenden – die Prüfliste zeigt nur, was neu ist oder sich geändert hat
+  const ignores = new Set((await db.query.mocoIgnores.findMany({ where: eq(schema.mocoIgnores.workspaceId, ws), columns: { itemKey: true } })).map((x) => x.itemKey));
+  const flagged = items as (ImportItem & ItemFlags)[];
+  for (const it of flagged) {
+    if (it.note === "bereits verknüpft" || (it.type === "TEAM" && teams.some((t) => t.mocoUnitId === it.mocoId))) it.unchanged = true;
+    if (!it.unchanged && ignores.has(it.key)) {
+      it.ignored = true;
+      it.proposal = "SKIP";
+    }
+  }
+  // Setups ohne Projektgruppe haben keine Moco-ID: per Name verknüpft und ohne neuen Einsatz gilt das als unverändert
+  const neededSetups = new Set(flagged.filter((x) => x.type === "EINSATZ" && !x.unchanged && !x.ignored).map((x) => (x as Extract<ImportItem, { type: "EINSATZ" }>).setupKey));
+  for (const it of flagged) if (it.type === "SETUP" && !it.unchanged && !it.ignored && it.proposal === "LINK" && it.mocoId === null && !neededSetups.has(it.key)) it.unchanged = true;
+  // Personen nur zeigen, wenn sie neu sind oder an einem neuen Einsatz hängen
+  const neededPersons = new Set(flagged.filter((x) => x.type === "EINSATZ" && !x.unchanged && !x.ignored).map((x) => (x as Extract<ImportItem, { type: "EINSATZ" }>).personMocoId));
+  for (const it of flagged) if (it.type === "PERSON" && !it.unchanged && !it.ignored && it.proposal === "SKIP" && !neededPersons.has(it.mocoId)) it.ignored = true;
+  const changed = flagged.filter((x) => !x.unchanged && !x.ignored);
   const counts = { personen: items.filter((i) => i.type === "PERSON").length, teams: items.filter((i) => i.type === "TEAM").length, kunden: items.filter((i) => i.type === "KUNDE").length, setups: items.filter((i) => i.type === "SETUP").length, einsaetze: items.filter((i) => i.type === "EINSATZ").length };
   const [row] = await db
     .insert(schema.mocoImports)
-    .values({ workspaceId: ws, items, createdBy: actor.userId, summary: `Vorschau ${todayIso()}: ${counts.personen} Personen, ${counts.teams} Teams, ${counts.kunden} Kunden, ${counts.setups} Setups, ${counts.einsaetze} Einsätze (Quelle: ${client.kind})` })
+    .values({ workspaceId: ws, items, createdBy: actor.userId, summary: changed.length ? `Abgleich ${todayIso()}: ${changed.length} Änderung(en) – ${changed.filter((x) => x.type === "EINSATZ").length} Einsätze, ${changed.filter((x) => x.type === "SETUP").length} Setups, ${changed.filter((x) => x.type === "KUNDE").length} Kunden, ${changed.filter((x) => x.type === "PERSON").length} Personen; unverändert ${flagged.filter((x) => x.unchanged).length} (Quelle: ${client.kind})` : `Abgleich ${todayIso()}: keine Änderungen seit dem letzten Import (Quelle: ${client.kind})` })
     .returning();
   await recordAudit(db, actor, "moco.preview", "MOCO_IMPORT", row!.id, counts);
   return row!;
@@ -557,6 +578,9 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
     }
   }
 
+  // Bewusst Übersprungenes merken – erscheint in späteren Prüflisten nicht wieder (wieder aufnehmen auf der Moco-Seite)
+  const skippedItems = (items as (ImportItem & ItemFlags)[]).filter((x) => !x.unchanged && !x.ignored && actionOf(x) === "SKIP");
+  if (skippedItems.length) await db.insert(schema.mocoIgnores).values(skippedItems.map((x) => ({ workspaceId: ws, itemKey: x.key, label: ignoreLabel(x), createdBy: actor.userId }))).onConflictDoNothing();
   await db.update(schema.mocoImports).set({ status: "UEBERNOMMEN", decisions, result: res as unknown as Record<string, unknown>, appliedAt: new Date() }).where(eq(schema.mocoImports.id, id));
   // Andere offene Vorschauen sind jetzt veraltet (ihre Vorschläge kennen die neuen Verknüpfungen nicht) → verwerfen
   await db.update(schema.mocoImports).set({ status: "VERWORFEN", summary: sql`coalesce(summary, '') || ' – verworfen: durch neueren Import überholt'` }).where(and(eq(schema.mocoImports.workspaceId, ws), eq(schema.mocoImports.status, "ENTWURF")));
@@ -680,33 +704,62 @@ export async function removeDuplicateEngagements(actor: Actor, engagementIds: st
     const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, id) });
     if (!e) continue;
     await db.transaction(async (tx) => {
-      const { Cascade, loadForeignKeys } = await import("@/modules/accounts/deletion");
-      const { OPP_DETACH, cascadeOpportunity } = await import("@/modules/deletion/objects");
-      const cascade = new Cascade(tx, await loadForeignKeys(tx), OPP_DETACH);
-      await tx.delete(schema.mocoHints).where(and(eq(schema.mocoHints.subjectType, "ENGAGEMENT"), eq(schema.mocoHints.subjectId, id)));
-      await cascade.deleteRows("engagements", [id]);
-      await tx.update(schema.staffingPositions).set({ filledCandidacyId: null }).where(eq(schema.staffingPositions.id, e.positionId));
-      await cascade.deleteRows("candidacies", [e.candidacyId]);
-      const otherCands = await tx.query.candidacies.findMany({ where: eq(schema.candidacies.positionId, e.positionId), columns: { id: true } });
-      if (!otherCands.length) await cascade.deleteRows("staffing_positions", [e.positionId]);
-      if (e.orderId) {
-        const otherEng = await tx.query.engagements.findMany({ where: eq(schema.engagements.orderId, e.orderId), columns: { id: true } });
-        if (!otherEng.length) await cascade.deleteRows("orders", [e.orderId]);
-      }
-      // Import-Chance ohne weitere Inhalte geht mit (inkl. Verlängerungs-Vorgehen und daraus erzeugter Aktionen)
-      const opp = await tx.query.opportunities.findFirst({ where: eq(schema.opportunities.id, e.opportunityId) });
-      if (opp?.mocoProjectId) {
-        const [engs, poss, ords, offs] = await Promise.all([
-          tx.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id), columns: { id: true } }),
-          tx.query.staffingPositions.findMany({ where: eq(schema.staffingPositions.opportunityId, opp.id), columns: { id: true } }),
-          tx.query.orders.findMany({ where: eq(schema.orders.opportunityId, opp.id), columns: { id: true } }),
-          tx.query.offers.findMany({ where: eq(schema.offers.opportunityId, opp.id), columns: { id: true } }),
-        ]);
-        if (!engs.length && !poss.length && !ords.length && !offs.length) await cascadeOpportunity(tx, cascade, opp.id);
-      }
+      await deleteEngagementTx(tx, e);
       await recordAudit(tx, actor, "engagement.duplicate_removed", "ENGAGEMENT", id, { contract: e.mocoContractId, titel: e.title });
     });
     removed++;
   }
   return { removed };
+}
+
+/** Entfernt einen Einsatz samt Anhang (Check-ins, Perioden, Betreuung, Verknüpfungen, Kandidatur, Position, Auftrag,
+ *  Import-Chance – letztere nur, wenn sonst nichts an ihnen hängt). Ohne Rechteprüfung: Aufrufer prüft. */
+export async function deleteEngagementTx(tx: Tx, e: typeof schema.engagements.$inferSelect) {
+  const id = e.id;
+  const { Cascade, loadForeignKeys } = await import("@/modules/accounts/deletion");
+  const { OPP_DETACH, cascadeOpportunity } = await import("@/modules/deletion/objects");
+  const cascade = new Cascade(tx, await loadForeignKeys(tx), OPP_DETACH);
+  await tx.delete(schema.mocoHints).where(and(eq(schema.mocoHints.subjectType, "ENGAGEMENT"), eq(schema.mocoHints.subjectId, id)));
+  await cascade.deleteRows("engagements", [id]);
+  await tx.update(schema.staffingPositions).set({ filledCandidacyId: null }).where(eq(schema.staffingPositions.id, e.positionId));
+  await cascade.deleteRows("candidacies", [e.candidacyId]);
+  const otherCands = await tx.query.candidacies.findMany({ where: eq(schema.candidacies.positionId, e.positionId), columns: { id: true } });
+  if (!otherCands.length) await cascade.deleteRows("staffing_positions", [e.positionId]);
+  if (e.orderId) {
+    const otherEng = await tx.query.engagements.findMany({ where: eq(schema.engagements.orderId, e.orderId), columns: { id: true } });
+    if (!otherEng.length) await cascade.deleteRows("orders", [e.orderId]);
+  }
+  // Import-Chance ohne weitere Inhalte geht mit (inkl. Verlängerungs-Vorgehen und daraus erzeugter Aktionen)
+  const opp = await tx.query.opportunities.findFirst({ where: eq(schema.opportunities.id, e.opportunityId) });
+  if (opp?.mocoProjectId) {
+    const [engs, poss, ords, offs] = await Promise.all([
+      tx.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id), columns: { id: true } }),
+      tx.query.staffingPositions.findMany({ where: eq(schema.staffingPositions.opportunityId, opp.id), columns: { id: true } }),
+      tx.query.orders.findMany({ where: eq(schema.orders.opportunityId, opp.id), columns: { id: true } }),
+      tx.query.offers.findMany({ where: eq(schema.offers.opportunityId, opp.id), columns: { id: true } }),
+    ]);
+    if (!engs.length && !poss.length && !ords.length && !offs.length) await cascadeOpportunity(tx, cascade, opp.id);
+  }
+}
+
+function ignoreLabel(x: ImportItem): string {
+  if (x.type === "EINSATZ") return `Einsatz: ${x.projectName} – ${x.personName}`;
+  if (x.type === "PERSON") return `Person: ${x.name}`;
+  if (x.type === "TEAM") return `Team: ${x.name}`;
+  if (x.type === "KUNDE") return `Kunde: ${x.name}`;
+  return `Setup: ${x.name}`;
+}
+
+export async function listMocoIgnores(actor: Actor) {
+  requireImporter(actor);
+  return db.query.mocoIgnores.findMany({ where: eq(schema.mocoIgnores.workspaceId, actor.workspaceId), orderBy: (t, { asc }) => [asc(t.label)] });
+}
+
+/** Ignorierte Objekte wieder aufnehmen – erscheinen beim nächsten Abgleich wieder in der Prüfliste. */
+export async function unignoreMoco(actor: Actor, ids: string[]) {
+  requireImporter(actor);
+  if (!ids.length) return 0;
+  const rows = await db.delete(schema.mocoIgnores).where(and(eq(schema.mocoIgnores.workspaceId, actor.workspaceId), inArray(schema.mocoIgnores.id, ids))).returning();
+  await recordAudit(db, actor, "moco.unignored", "MOCO_IMPORT", actor.workspaceId, { anzahl: rows.length });
+  return rows.length;
 }

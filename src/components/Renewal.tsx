@@ -2,10 +2,25 @@ import Link from "next/link";
 import { fmtDate } from "@/lib/labels";
 import { plusDaysIso } from "@/modules/work/calendar";
 import type { RenewalCard as Card } from "@/modules/engagements/care";
+import { approachLabel } from "@/modules/engagements/contacts";
 import { decideRenewalAction, startRenewalAction } from "@/app/actions";
 
 const RED = "#c0392b";
 const AMBER = "#b7791f";
+
+
+/** Über wen läuft die Verlängerung (e37) – eine Zeile auf der Karte. */
+function RenewalContactLine({ c }: { c: Card }) {
+  const k = c.contacts;
+  return (
+    <p className="text-xs mt-1">
+      <span className="muted">Verlängerung über </span>
+      {k.renewal ? <><strong>{k.renewal.name}</strong>{k.renewal.role ? <span className="muted"> ({k.renewal.role})</span> : null}{k.renewal.email ? <> · <a href={`mailto:${k.renewal.email}`}>{k.renewal.email}</a></> : null}{k.renewal.phone ? <> · {k.renewal.phone}</> : null}</> : <Link href={`/einsaetze/${c.engagementId}#ansprechpartner`} style={{ color: "#b7791f" }}>Ansprechpartner hinterlegen</Link>}
+      {k.order && k.order.id !== k.renewal?.id ? <><span className="muted"> · Bestellung über </span>{k.order.name}</> : null}
+      {k.approach ? <><span className="muted"> · spricht an: </span>{approachLabel[k.approach]}</> : null}
+    </p>
+  );
+}
 
 function addMonths(iso: string, months: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -64,6 +79,7 @@ export function RenewalDecisionCard({ c, back }: { c: Card; back: string }) {
         <Link href={`/einsaetze/${c.engagementId}#verlaengerung`} className="muted text-xs">{c.engagementTitle}</Link>
         <span className="muted text-xs ml-auto">angestoßen von {c.requestedBy}</span>
       </div>
+      <RenewalContactLine c={c} />
       <p className="text-sm mt-1">
         Ende heute <strong>{c.currentEnd ? fmtDate(c.currentEnd) : "offen"}</strong>{c.daysToEnd !== null ? ` (${c.daysToEnd} Tage)` : ""} → neu <strong>{c.proposedTo ? fmtDate(c.proposedTo) : "?"}</strong> · {c.conditionsNote ?? "Konditionen unverändert"}
         {c.note ? <><br /><span className="muted">Notiz: {c.note}</span></> : null}
@@ -109,6 +125,7 @@ export function RenewalStartCard({ c, back }: { c: Card; back: string }) {
         <Link href={`/einsaetze/${c.engagementId}#verlaengerung`} className="muted text-xs">{c.engagementTitle}</Link>
         <span className="muted text-xs ml-auto">Ende {c.currentEnd ? fmtDate(c.currentEnd) : "offen"}{c.daysToEnd !== null ? ` · noch ${c.daysToEnd} Tage` : ""}</span>
       </div>
+      <RenewalContactLine c={c} />
       <div className="mt-2"><RenewalStartForm engagementId={c.engagementId} currentEnd={c.currentEnd} back={back} compact /></div>
     </li>
   );

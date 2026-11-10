@@ -1954,3 +1954,88 @@ export async function setAccountFlagsAction(fd: FormData) {
     await setAccountFlags(actor, data.accountId ?? "", { sideBusiness: data.sideBusiness === undefined ? undefined : data.sideBusiness === "true", onRadar: data.onRadar === undefined ? undefined : data.onRadar === "true" });
   }, "Kundenart gespeichert.");
 }
+
+export async function mocoUnignoreAction(fd: FormData) {
+  const ids = fd.getAll("ignoreId").filter((x): x is string => typeof x === "string");
+  return run("/moco#ignoriert", async (actor) => {
+    const { unignoreMoco } = await import("@/modules/moco/import");
+    const n = await unignoreMoco(actor, ids);
+    throw new PendingInfo(`${n} Objekt(e) wieder aufgenommen – sie erscheinen beim nächsten Abgleich in der Prüfliste.`);
+  }, "");
+}
+
+// --- e37: Verlängerungs-Ansprechpartner, Bereinigung -------------------------
+
+export async function engagementContactsAction(engagementId: string, fd: FormData) {
+  return run(`/einsaetze/${engagementId}#ansprechpartner`, async (actor) => {
+    const { setEngagementContacts } = await import("@/modules/engagements/contacts");
+    await setEngagementContacts(actor, engagementId, { renewalContactPersonId: fd.get("renewalContactPersonId") ?? "", orderContactPersonId: fd.get("orderContactPersonId") ?? "", renewalApproach: fd.get("renewalApproach") ?? "", asSetupDefault: fd.get("asSetupDefault") ?? "" });
+  }, "Ansprechpartner für die Verlängerung gespeichert.");
+}
+
+export async function setupContactsAction(setupId: string, fd: FormData) {
+  const back = typeof fd.get("back") === "string" && String(fd.get("back")).startsWith("/") ? String(fd.get("back")) : `/setups/${setupId}#verlaengerung`;
+  return run(back, async (actor) => {
+    const { setSetupContacts } = await import("@/modules/engagements/contacts");
+    await setSetupContacts(actor, setupId, { renewalContactPersonId: fd.get("renewalContactPersonId") ?? "", orderContactPersonId: fd.get("orderContactPersonId") ?? "", renewalApproach: fd.get("renewalApproach") ?? "" });
+  }, "Vorgabe für die Verlängerung gespeichert – gilt für alle Einsätze des Setups ohne eigene Angabe.");
+}
+
+export async function cleanupCloseOverdueAction(fd: FormData) {
+  const ids = fd.getAll("id").filter((x): x is string => typeof x === "string");
+  return run("/bereinigung#ende", async (actor) => {
+    const { closeOverdueEngagements } = await import("@/modules/cleanup/service");
+    const r = await closeOverdueEngagements(actor, ids);
+    throw new PendingInfo(`${r.closed} abgeschlossen${r.ended ? `, ${r.ended} auf „endet“ gesetzt (Verlängerung noch offen)` : ""}${r.skipped.length ? ` · nicht möglich: ${r.skipped.slice(0, 3).join("; ")}${r.skipped.length > 3 ? " …" : ""}` : ""}.`);
+  }, "");
+}
+
+export async function cleanupMergeEngagementsAction(fd: FormData) {
+  const keep = String(fd.get("keep") ?? "");
+  const all = fd.getAll("ids").filter((x): x is string => typeof x === "string");
+  return run("/bereinigung#einsaetze", async (actor) => {
+    const { mergeEngagements } = await import("@/modules/cleanup/service");
+    const r = await mergeEngagements(actor, keep, all.filter((x) => x !== keep));
+    throw new PendingInfo(`Zusammengeführt: ${r.removed} doppelte(r) Einsatz/Einsätze entfernt, Check-ins, Unterlagen und Verlängerung hängen am behaltenen.`);
+  }, "");
+}
+
+export async function cleanupMergeSetupsAction(fd: FormData) {
+  const keep = String(fd.get("keep") ?? "");
+  const all = fd.getAll("ids").filter((x): x is string => typeof x === "string");
+  return run("/bereinigung#setups", async (actor) => {
+    const { mergeSetups } = await import("@/modules/cleanup/service");
+    const r = await mergeSetups(actor, keep, all.filter((x) => x !== keep));
+    throw new PendingInfo(`Setups zusammengeführt (${r.removed} entfernt).`);
+  }, "");
+}
+
+export async function cleanupMergePersonsAction(fd: FormData) {
+  const keep = String(fd.get("keep") ?? "");
+  const drops = fd.getAll("drop").filter((x): x is string => typeof x === "string");
+  return run("/bereinigung#personen", async (actor) => {
+    const { mergePersonDuplicates } = await import("@/modules/cleanup/service");
+    await mergePersonDuplicates(actor, keep, drops);
+    throw new PendingInfo("Personen zusammengeführt.");
+  }, "");
+}
+
+export async function cleanupInternalAction(fd: FormData) {
+  const accountId = String(fd.get("accountId") ?? "");
+  return run("/bereinigung#intern", async (actor) => {
+    const { cleanInternalAccount } = await import("@/modules/cleanup/service");
+    const r = await cleanInternalAccount(actor, accountId);
+    throw new PendingInfo(`Interne Firma bereinigt: ${r.removed} Einsatz/Einsätze entfernt, Kunde archiviert.`);
+  }, "");
+}
+
+export async function captureAssignmentAction(fd: FormData) {
+  const setupId = String(fd.get("setupId") ?? "");
+  return run(`/vertragsbuero?setup=${encodeURIComponent(setupId)}#erfassen`, async (actor) => {
+    const { captureAssignment } = await import("@/modules/salesops/service");
+    const raw: Record<string, string> = {};
+    for (const [k, v] of fd.entries()) if (typeof v === "string") raw[k] = v;
+    const e = await captureAssignment(actor, raw);
+    return `/einsaetze/${e.id}#vertraege`;
+  }, "Assignment erfasst – Vertrag oder Bestellung jetzt hier unter „Verträge“ hinterlegen.");
+}

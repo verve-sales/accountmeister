@@ -56,6 +56,8 @@ const envSchema = z.object({
   MOCO_TEAMLEAD_ROLE: z.string().default("Teamleiter"),
   /** Moco-Nutzer, die beim Personen-Import/Sync ignoriert werden (technische Konten), kommagetrennt */
   MOCO_IGNORE_EMAILS: z.string().default("salesagent@verveconsulting.de"),
+  /** Moco-Kunden, die Verve selbst sind (interne Projekte) – werden nie importiert oder vorgeschlagen (kommagetrennt) */
+  MOCO_INTERNAL_COMPANIES: z.string().default("Verve Consulting"),
   /** Verzeichnis der Fixture-Dateien im Modus fixture */
   MOCO_FIXTURE_DIR: z.string().default("./tests/fixtures/moco"),
 });

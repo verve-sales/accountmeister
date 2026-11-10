@@ -7,16 +7,20 @@ import { renewalStatusLabel } from "@/modules/engagements/care";
 import { Feedback } from "@/components/Feedback";
 import { fmtDate } from "@/lib/labels";
 import { isReadOnlyFor } from "@/modules/identity/actor";
+import { approachLabel } from "@/modules/engagements/contacts";
+import { canClean, findEngagementDuplicates } from "@/modules/cleanup/service";
 
 const FILTERS: { key: EngagementFilter; label: string }[] = [
-  { key: "alle", label: "alle" },
-  { key: "aktiv", label: "aktiv" },
+  { key: "laufend", label: "laufend" },
   { key: "betreuung", label: "meine Betreuung" },
   { key: "enden_90", label: "enden ≤ 90 Tage" },
   { key: "enden_30", label: "≤ 30" },
   { key: "checkin_ueberfaellig", label: "Check-in überfällig" },
   { key: "vertrag_offen", label: "Unterlagen offen" },
+  { key: "ohne_ansprechpartner", label: "ohne Verlängerungs-Ansprechpartner" },
+  { key: "ende_ueberschritten", label: "Ende überschritten" },
   { key: "abgeschlossen", label: "abgeschlossen" },
+  { key: "alle", label: "alle" },
 ];
 const RED = "#c0392b";
 const MOOD: Record<MoodMark["mood"], { label: string; color: string }> = { POSITIV: { label: "positiv", color: "#2f7d32" }, MITTEL: { label: "mittel", color: "#b7791f" }, NEGATIV: { label: "negativ", color: RED } };
@@ -32,10 +36,13 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
-  const filter = (engagementFilterValues as readonly string[]).includes(sp.f ?? "") ? (sp.f as EngagementFilter) : "alle";
+  const filter = (engagementFilterValues as readonly string[]).includes(sp.f ?? "") ? (sp.f as EngagementFilter) : "laufend";
   const q = (sp.q ?? "").trim();
   const { items, counts } = await listEngagements(actor, filter, q);
   const qs = q ? `&q=${encodeURIComponent(q)}` : "";
+  const dups = await findEngagementDuplicates(actor, items);
+  const dupIds = new Set(dups.flatMap((g) => [g.keep.id, ...g.drop.map((d) => d.id)]));
+  const cleaner = canClean(actor);
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
@@ -57,13 +64,20 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
           </Link>
         ))}
       </nav>
+      {(counts.ende_ueberschritten > 0 || dups.length > 0) && (
+        <p className="text-sm" style={{ color: "#8a5a00" }}>
+          {counts.ende_ueberschritten > 0 && <><Link href={`/einsaetze?f=ende_ueberschritten${qs}`}>{counts.ende_ueberschritten} Einsatz/Einsätze mit überschrittenem Ende</Link> stehen nicht mehr unter „laufend“. </>}
+          {dups.length > 0 && <>{dups.length} mögliche Dublette(n) in dieser Liste (markiert). </>}
+          {cleaner ? <Link href="/bereinigung">In der Bereinigung abschließen bzw. zusammenführen →</Link> : <span className="muted">Abschließen und Zusammenführen machen Sales Operations oder Geschäftsführung in der Bereinigung.</span>}
+        </p>
+      )}
       <section className="card">
         {items.length === 0 ? (
           <p className="muted text-sm">{q ? `Nichts gefunden für „${q}“.` : "Keine Einsätze in diesem Filter. Einsätze entstehen mit der bestätigten Auswahl an einer Position oder aus Moco."}</p>
         ) : (
           <table className="list text-sm">
             <thead>
-              <tr><th>Person · Kunde</th><th>Einsatz</th><th>Ende</th><th>Stimmung</th><th>Verlängerung</th><th>Betreuung</th></tr>
+              <tr><th>Person · Kunde</th><th>Einsatz</th><th>Ende</th><th>Stimmung</th><th>Verlängerung · über</th><th>Betreuung</th></tr>
             </thead>
             <tbody>
               {items.map((e) => {
@@ -72,7 +86,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
                 return (
                   <tr key={e.id} style={{ borderLeft: `3px solid ${e.checkinOverdue || endSoon ? RED : e.status === "AKTIV" ? "#2f7d32" : "var(--border)"}` }}>
                     <td>
-                      <Link href={`/einsaetze/${e.id}`}><strong>{e.personName}</strong></Link>{e.internalUserId ? <span className="muted text-xs"> (intern)</span> : null}
+                      <Link href={`/einsaetze/${e.id}`}><strong>{e.personName}</strong></Link>{e.internalUserId ? <span className="muted text-xs"> (intern)</span> : null}{dupIds.has(e.id) ? <span className="status" style={{ marginLeft: 6, background: "#fdf2e0", color: "#8a5a00" }} title="gleiche Person beim gleichen Kunden mit überlappender Laufzeit">Dublette?</span> : null}{e.overdue ? <span className="status" style={{ marginLeft: 6, background: "#fdecea", color: RED }}>Ende überschritten</span> : null}
                       <div className="muted text-xs">{e.accountName} · BD {e.bdName}</div>
                     </td>
                     <td>
@@ -89,6 +103,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
                     </td>
                     <td className="text-xs">
                       {e.renewalStatus ? <>{renewalStatusLabel[e.renewalStatus] ?? e.renewalStatus}{e.renewalTo && e.renewalStatus !== "ZU_KLAEREN" ? <> bis {fmtDate(e.renewalTo)}</> : null}</> : <span className="muted">–</span>}
+                      <div>{e.contacts.renewal ? <span title={[e.contacts.renewal.role, e.contacts.renewal.email, e.contacts.renewal.phone].filter(Boolean).join(" · ") || undefined}>{e.contacts.renewal.name}</span> : <span style={{ color: "#b7791f" }}>Ansprechpartner offen</span>}{e.contacts.approach ? <span className="muted"> · spricht an: {approachLabel[e.contacts.approach]}</span> : null}</div>
                       {renewalOpen && !isReadOnlyFor(actor, e.accountId) && ["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status) && <div><Link href={`/einsaetze/${e.id}#verlaengerung`}>anstoßen</Link></div>}
                     </td>
                     <td className="text-xs">{e.careNames.length ? e.careNames.map((n) => n.replace(/ \((Kundenbetreuung|Freelancer-Betreuung)\)$/, "")).join(", ") : <span style={{ color: "#b7791f" }}>offen</span>}</td>

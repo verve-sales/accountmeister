@@ -134,6 +134,16 @@ async function requireOpportunityForStaffing(actor: Actor, opportunityId: string
   return { opp, ctx };
 }
 
+/** Ohne Sichtprüfung – nur für Aufrufer, die die Berechtigung selbst geprüft haben. */
+async function trustedOpportunity(actor: Actor, opportunityId: string) {
+  const opp = await db.query.opportunities.findFirst({ where: and(eq(schema.opportunities.id, opportunityId), eq(schema.opportunities.workspaceId, actor.workspaceId)) });
+  if (!opp) throw new NotFoundError("Chance");
+  const account = await db.query.accounts.findFirst({ where: eq(schema.accounts.id, opp.accountId) });
+  const setup = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, opp.setupId) });
+  if (!account || !setup) throw new NotFoundError("Chance");
+  return { opp, ctx: { account, setup } };
+}
+
 /** Darf der Akteur an dieser Chance Positionen anlegen/pflegen? (BD-Kontext, Principal, CEO – nicht Sales Operations, nicht Anker) */
 export async function canManageStaffingAt(actor: Actor, opportunityId: string): Promise<boolean> {
   try {
@@ -144,11 +154,11 @@ export async function canManageStaffingAt(actor: Actor, opportunityId: string): 
   }
 }
 
-export async function createPosition(actor: Actor, opportunityId: string, raw: unknown, extra: { sourceId?: string | null; copiedFromId?: string | null; replacesPositionId?: string | null; tx?: Tx } = {}) {
+export async function createPosition(actor: Actor, opportunityId: string, raw: unknown, extra: { sourceId?: string | null; copiedFromId?: string | null; replacesPositionId?: string | null; tx?: Tx; /** Aufrufer hat die Berechtigung selbst geprüft (Sales-Ops-Erfassung) */ trusted?: boolean } = {}) {
   const p = positionInput.safeParse(raw);
   if (!p.success) throw new ValidationError(issues(p.error));
-  const { opp, ctx } = await requireOpportunityForStaffing(actor, opportunityId);
-  const manager = isStaffingManager(actor, ctx.account, ctx.setup.bdUserId, opp.ownerUserId === actor.userId ? actor.userId : null);
+  const { opp, ctx } = extra.trusted ? await trustedOpportunity(actor, opportunityId) : await requireOpportunityForStaffing(actor, opportunityId);
+  const manager = extra.trusted || isStaffingManager(actor, ctx.account, ctx.setup.bdUserId, opp.ownerUserId === actor.userId ? actor.userId : null);
   if (!manager) throw new ForbiddenError("Positionen legt der zuständige BD, der Setup-BD, Principal oder CEO an.");
   if (opp.status === "BEENDET") throw new TransitionError("An einer beendeten Chance werden keine Positionen angelegt.");
   const bdUserId = p.data.bdUserId || (opp.ownerUserId ?? ctx.setup.bdUserId ?? ctx.account.responsibleBdUserId ?? actor.userId);
@@ -793,7 +803,7 @@ export const quickFillInput = z.object({
  * Freelancer. Legt bei Bedarf die Position an, erzeugt die Kandidatur direkt als „ausgewählt“, setzt die Position
  * „besetzt“, schließt offene Suchaufträge und legt die Einsatzakte an. Intern: keine Einkaufskonditionen; VK optional.
  */
-export async function quickFill(actor: Actor, opportunityId: string, raw: unknown) {
+export async function quickFill(actor: Actor, opportunityId: string, raw: unknown, opts: { trusted?: boolean } = {}) {
   const p = quickFillInput.safeParse(raw);
   if (!p.success) throw new ValidationError(issues(p.error));
   const i = p.data;
@@ -815,7 +825,7 @@ export async function quickFill(actor: Actor, opportunityId: string, raw: unknow
         actor,
         opportunityId,
         { title: i.title, roleId: i.roleId, resourceKind: i.resourceKind ?? (i.internalUserId ? "INTERN" : "FREELANCER"), desiredStart: i.desiredStart, plannedEnd: i.plannedEnd, endOpen: i.endOpen, scopeAmount: i.scopeAmount, scopeUnit: i.scopeUnit, location: i.location, tasks: i.tasks, mustHave: i.mustHave, bdUserId: i.bdUserId, internalNotes: "Schnellbesetzung (Person stand fest, kein Suchauftrag).", vkMin: i.vkRate, rateUnit: i.rateUnit },
-        { tx },
+        { tx, trusted: opts.trusted },
       );
     }
     const intern = position.resourceKind === "INTERN";

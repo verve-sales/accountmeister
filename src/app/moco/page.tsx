@@ -3,10 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { canRunMocoImport } from "@/modules/moco/import";
 import { hintKindLabel, listHints, mocoStatus, type HintKind } from "@/modules/moco/sync";
-import { findDuplicateEngagements, findMisclassifiedFreelancers, listImports } from "@/modules/moco/import";
+import { findDuplicateEngagements, findMisclassifiedFreelancers, listImports, listMocoIgnores } from "@/modules/moco/import";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDateTime } from "@/lib/labels";
-import { mocoDiscardImportAction, mocoHintsBulkAction, mocoPreviewAction, mocoPushLeadsAction, mocoRemoveDuplicatesAction, mocoRepairFreelancersAction, mocoSyncNowAction } from "../actions";
+import { mocoDiscardImportAction, mocoHintsBulkAction, mocoPreviewAction, mocoPushLeadsAction, mocoRemoveDuplicatesAction, mocoRepairFreelancersAction, mocoSyncNowAction, mocoUnignoreAction } from "../actions";
 import { listLeadCandidates, type LeadOverview } from "@/modules/moco/leads";
 import { opportunityStatusLabel } from "@/lib/labels";
 import { Status } from "@/components/Status";
@@ -19,7 +19,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
   const importer = canRunMocoImport(actor);
-  const [status, hints, imports] = await Promise.all([mocoStatus(actor), listHints(actor, { status: "OFFEN" }), importer ? listImports(actor) : Promise.resolve([])]);
+  const [status, hints, imports, ignores] = await Promise.all([mocoStatus(actor), listHints(actor, { status: "OFFEN" }), importer ? listImports(actor) : Promise.resolve([]), importer ? listMocoIgnores(actor) : Promise.resolve([])]);
   if (!importer && hints.length === 0) notFound();
   const repair = importer && status.enabled ? await findMisclassifiedFreelancers(actor).catch(() => []) : [];
   const dupes = importer ? await findDuplicateEngagements(actor).catch(() => []) : [];
@@ -52,7 +52,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
             <div className="flex flex-wrap gap-3 items-end">
               <form action={mocoPreviewAction}>
                 <input type="hidden" name="back" value="/moco" />
-                <button className="btn btn-small" type="submit">Vorschau aus Moco laden (Prüfliste)</button>
+                <button className="btn btn-small" type="submit">Abgleich mit Moco (nur Änderungen)</button>
               </form>
               <form action={mocoSyncNowAction} className="flex gap-2 items-end">
                 <input type="hidden" name="back" value="/moco" />
@@ -165,6 +165,16 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
           </ul>
         )}
       </section>
+
+      {importer && ignores.length > 0 && (
+        <details className="card" id="ignoriert">
+          <summary className="font-semibold">Beim Import übersprungen ({ignores.length}) – erscheinen nicht mehr in der Prüfliste</summary>
+          <form action={mocoUnignoreAction} className="mt-2 space-y-1 text-sm">
+            {ignores.map((x) => <label key={x.id} className="flex items-center gap-2"><input type="checkbox" name="ignoreId" value={x.id} /> {x.label} <span className="muted text-xs">seit {fmtDateTime(x.createdAt)}</span></label>)}
+            <button className="btn btn-secondary btn-small mt-2" type="submit">Markierte wieder aufnehmen</button>
+          </form>
+        </details>
+      )}
 
       {importer && (
         <section className="card">
