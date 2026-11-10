@@ -71,6 +71,14 @@ Die Sales-Ops-Sicht zeigt: Verlängerungen zum Anstoßen, Einsätze ohne Ansprec
 Die Einsatzliste zeigt standardmäßig nur laufende Einsätze; Einsätze mit überschrittenem Ende stehen im eigenen Filter, mögliche Dubletten sind markiert. Der Moco-Abgleich zeigt nur noch Änderungen; was dort übersprungen wird, kommt nicht wieder, bis es unter Moco → „Beim Import übersprungen“ zurückgeholt wird.`,
   },
   {
+    id: "mail-eingang",
+    title: "Mail an den Accountmeister weiterleiten",
+    where: "Eingang → „Mail weiterleiten“ (zeigt die Adresse) · Vorschläge erscheinen auf Start",
+    keywords: ["mail weiterleiten", "e-mail weiterleiten", "forward", "postfach", "sales postfach", "bewerbung", "funktionspostfach"],
+    body: `Leite eine Mail von deiner Verve-Adresse an das Accountmeister-Postfach weiter (die Adresse steht unter Eingang). Nach ein bis zwei Minuten liegen die Vorschläge auf deiner Startseite zur Bestätigung; du bekommst dazu einen Hinweis. Ein Satz von dir über der Weiterleitung (z. B. „gehört zu Kunde X“) wird mit ausgewertet. Der Kunde wird wie im Eingang über Absender-Domäne, Kürzel und Namen erkannt.
+Ausgewertet wird nur, was ein aktiver Accountmeister-Nutzer aus dem eigenen Mandanten schickt – Mails von außen, die direkt im Postfach landen (z. B. Bewerbungen), werden übersprungen, ihr Inhalt wird nicht abgerufen. Weitergeleitete Bewerbungen werden nicht ausgewertet. Anhänge werden nicht übernommen. Das Postfach wird nur gelesen.`,
+  },
+  {
     id: "kundenansicht",
     title: "Kundenansicht: Grundlagen, Strategie, Operativ",
     where: "Kunden → Kunde → Reiter 1 Grundlagen · 2 Strategie · 3 Operativ",

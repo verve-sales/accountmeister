@@ -46,7 +46,7 @@ export function renderDigest(items: { kind: string; title: string; link: string 
 
 let tokenCache: { token: string; until: number } | null = null;
 
-async function graphToken(cfg: AppConfig): Promise<string> {
+export async function graphToken(cfg: AppConfig): Promise<string> {
   if (tokenCache && tokenCache.until > Date.now() + 60_000) return tokenCache.token;
   const tenant = cfg.MAIL_GRAPH_TENANT_ID ?? cfg.OIDC_ISSUER?.match(/microsoftonline\.com\/([^/]+)/)?.[1];
   if (!tenant || !cfg.OIDC_CLIENT_ID || !cfg.OIDC_CLIENT_SECRET) throw new Error("Graph-Versand: Mandant, OIDC_CLIENT_ID oder OIDC_CLIENT_SECRET fehlt.");

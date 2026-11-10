@@ -38,6 +38,12 @@ const envSchema = z.object({
   MAIL_FILE_DIR: z.string().default("./data/mails"),
   /** Mandant für Graph; Standard: aus OIDC_ISSUER */
   MAIL_GRAPH_TENANT_ID: z.string().min(1).optional(),
+  /** Mail-Eingang (Etappe 49): off (Standard) | graph (Postfach MAIL_INBOX per Microsoft Graph lesen) | fixture (Tests) */
+  MAIL_INBOX_MODE: z.enum(["off", "graph", "fixture"]).default("off"),
+  /** Postfach, an das weitergeleitet wird (UPN, z. B. sales@verveconsulting.de) – wird nur gelesen */
+  MAIL_INBOX: z.string().email().optional(),
+  /** Nur Absender aus dem eigenen Microsoft-Mandanten annehmen (Schutz vor gefälschten Absendern) */
+  MAIL_INBOX_REQUIRE_INTERNAL: z.enum(["true", "false"]).default("true"),
   /** Lieferbereich Besetzung (Etappe 28): Navigation, Seiten und Aktionen; kein Ersatz für serverseitige Rechte */
   FEATURE_BESETZUNG: z.enum(["true", "false"]).default("true"),
   /** Uhrzeit (Europe/Berlin) des Tagesdigests */

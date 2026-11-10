@@ -2493,3 +2493,26 @@ export type AssistantContext = (typeof assistantContextEnum.enumValues)[number];
 export type Influence = (typeof influenceEnum.enumValues)[number];
 export type ChanceKind = (typeof chanceKindEnum.enumValues)[number];
 export type RoleFamily = (typeof roleFamilyEnum.enumValues)[number];
+
+/**
+ * Mail-Eingang (Etappe 49): Weiterleitungen an das Accountmeister-Postfach. Je Nachricht ein Eintrag – verhindert
+ * doppelte Auswertung und hält fest, was mit ihr geschah. Bei abgelehnten Nachrichten wird kein Inhalt gespeichert.
+ */
+export const mailInboxItems = pgTable(
+  "mail_inbox_items",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").references(() => workspaces.id),
+    messageId: text("message_id").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+    /** nur bei bekannten Absendern gesetzt */
+    userId: text("user_id").references(() => users.id),
+    subject: text("subject"),
+    status: text("status").notNull(), // AUSGEWERTET | ABGELEHNT | FEHLER
+    reason: text("reason"),
+    sourceId: text("source_id").references(() => sources.id, { onDelete: "set null" }),
+    cardCount: integer("card_count").notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("mail_inbox_items_msg_uq").on(t.messageId), index("mail_inbox_items_received_idx").on(t.receivedAt)],
+);

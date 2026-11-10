@@ -63,6 +63,19 @@ export function startNotificationWorker(): void {
           });
         }
       }
+      // Mail-Eingang (Etappe 49): Weiterleitungen an das Accountmeister-Postfach, alle zwei Minuten
+      if (cfg.MAIL_INBOX_MODE === "graph" && cfg.MAIL_INBOX && new Date().getMinutes() % 2 === 0) {
+        const { runMailInbox } = await import("@/modules/mailin/service");
+        let seen = 0;
+        let counts: Record<string, number> = {};
+        try {
+          counts = (await runMailInbox()) as unknown as Record<string, number>;
+          seen = counts.gesehen ?? 0;
+          if (seen > 0) await runJob("mail-eingang", async () => counts);
+        } catch (e) {
+          await runJob("mail-eingang", async () => { throw e; });
+        }
+      }
       await dispatchPendingEmails(cfg);
       if (hour >= cfg.MAIL_DIGEST_HOUR && lastDigestDate !== date) {
         lastDigestDate = date;
