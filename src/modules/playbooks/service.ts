@@ -561,7 +561,12 @@ export async function listRuns(actor: Actor, where: { accountId?: string; setupI
   const oppIds = [...new Set(visible.map((r) => r.opportunityId).filter((x): x is string => !!x))];
   const oppRows = oppIds.length ? await db.query.opportunities.findMany({ where: inArray(schema.opportunities.id, oppIds), columns: { id: true, title: true } }) : [];
   const oppTitles = new Map(oppRows.map((o) => [o.id, o.title]));
-  const userIds = [...new Set([...visible.map((r) => r.ownerUserId), ...visible.map((r) => r.salesOpsUserId).filter((x): x is string => !!x), ...acts.map((a) => a.ownerUserId)])];
+  // Wer ist bei der Chance im Einsatz? Der Name der Person macht ein Vorgehen in der Liste erkennbar (e43).
+  const engs = oppIds.length ? await db.query.engagements.findMany({ where: and(inArray(schema.engagements.opportunityId, oppIds), inArray(schema.engagements.status, ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT"])), columns: { opportunityId: true, freelancerId: true, internalUserId: true, plannedEnd: true } }) : [];
+  const flIds = engs.map((e) => e.freelancerId).filter((x): x is string => !!x);
+  const fls = flIds.length ? await db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, flIds), columns: { id: true, displayName: true } }) : [];
+  const flNames = new Map(fls.map((f) => [f.id, f.displayName]));
+  const userIds = [...new Set([...visible.map((r) => r.ownerUserId), ...visible.map((r) => r.salesOpsUserId).filter((x): x is string => !!x), ...acts.map((a) => a.ownerUserId), ...engs.map((e) => e.internalUserId).filter((x): x is string => !!x)])];
   const users = userIds.length ? await db.query.users.findMany({ where: inArray(schema.users.id, userIds) }) : [];
   const names = new Map(users.map((u) => [u.id, u.displayName]));
   return visible.map((r) => ({
@@ -570,6 +575,9 @@ export async function listRuns(actor: Actor, where: { accountId?: string; setupI
     salesOpsName: r.salesOpsUserId ? (names.get(r.salesOpsUserId) ?? "?") : null,
     setupName: setupNames.get(r.setupId) ?? "",
     opportunityTitle: r.opportunityId ? (oppTitles.get(r.opportunityId) ?? null) : null,
+    /** Personen im Einsatz bei dieser Chance, mit dem frühesten geplanten Ende */
+    persons: [...new Set(engs.filter((e) => e.opportunityId === r.opportunityId).map((e) => (e.freelancerId ? flNames.get(e.freelancerId) : e.internalUserId ? names.get(e.internalUserId) : null)).filter((x): x is string => !!x))],
+    engagementEnd: engs.filter((e) => e.opportunityId === r.opportunityId && e.plannedEnd).map((e) => e.plannedEnd!).sort()[0] ?? null,
     canWork: mayWork.get(r.id) ?? false,
     canReassign: mayReassign.get(r.id) ?? false,
     steps: steps

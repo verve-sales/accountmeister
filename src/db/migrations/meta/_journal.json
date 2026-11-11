@@ -316,6 +316,13 @@
       "when": 1794418832783,
       "tag": "0044_konvertierung",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1794438069512,
+      "tag": "0045_vorgang_je_position",
+      "breakpoints": true
     }
   ]
 }

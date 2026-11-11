@@ -62,11 +62,11 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
         <h2 className="font-semibold">Laufende Konvertierungsvorgänge ({o.vorgaenge.length})</h2>
         {o.vorgaenge.length === 0 ? <p className="muted text-sm">Kein laufender Vorgang. Gestartet wird er an der Chance.</p> : (
           <table className="list text-sm">
-            <thead><tr><th>Chance · Kunde</th><th>Jetzt dran</th><th>Was fehlt</th></tr></thead>
+            <thead><tr><th>Position · Chance · Kunde</th><th>Jetzt dran</th><th>Was fehlt</th></tr></thead>
             <tbody>
               {o.vorgaenge.map((x) => (
                 <tr key={x.id}>
-                  <td><Link href={`/bedarfe/${x.opportunityId}/vorgang`}><strong>{x.title}</strong></Link><div className="muted text-xs">{x.accountName}</div></td>
+                  <td><Link href={`/bedarfe/${x.opportunityId}/vorgang?v=${x.id}`}><strong>{x.label}</strong></Link><div className="muted text-xs">{x.title} · {x.accountName}</div></td>
                   <td>{x.step}</td>
                   <td className="text-xs">{x.stepNote}</td>
                 </tr>

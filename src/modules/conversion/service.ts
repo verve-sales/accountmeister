@@ -12,7 +12,7 @@ import { createHandover, type HandoverKind } from "./handover";
  *   1 Anfrage · 2 Klärung · 3 Besetzung · 4 Angebot · 5 Freelancer-Vertrag · 6 Beauftragung
  * Der Stand jedes Schritts ergibt sich aus Chance, Positionen, Unterlagen und den Zeitpunkten am Vorgang.
  * Welche Schritte gelten, bestimmen der Angebotsweg am Setup, der Beschaffungsweg des Kunden und die Besetzungsart
- * je Position. Der Vorgang endet von selbst, wenn die Chance geschlossen wird, und ruht, wenn sie zurückgestellt ist.
+ * der Position. Seit e43 läuft je Position ein eigener Vorgang. Der Vorgang endet von selbst, wenn die Chance geschlossen wird, und ruht, wenn sie zurückgestellt ist.
  */
 
 export const offerPathValues = ["MOCO", "MOCO_KUNDENVORLAGE", "KEIN_ANGEBOT"] as const;
@@ -42,7 +42,13 @@ export type ConversionView = {
   setupName: string;
   channel: string;
   offerPath: OfferPath;
+  /** die Position dieses Vorgangs (leer, solange die Chance noch keine hat) */
+  position: ConversionPosition | null;
   positions: ConversionPosition[];
+  /** „Rolle – Person“ zur Unterscheidung der Vorgänge einer Chance */
+  label: string;
+  /** Angebotsnummer aus einem Parallel-Vorgang derselben Chance, als Vorschlag */
+  siblingOffer: { number: string; label: string } | null;
   steps: Step[];
   canEdit: boolean;
   /** Freelancer bei einem Kunden mit Vermittler: Prüfhinweis nötig und noch nicht bestätigt */
@@ -69,26 +75,84 @@ async function requireEditable(actor: Actor, conversionId: string) {
   return { c, ...a };
 }
 
-/** Vorgang zur Chance starten (einer je Chance). */
-export async function startConversion(actor: Actor, opportunityId: string) {
+type OppRow = typeof schema.opportunities.$inferSelect;
+const RUNNING = ["LAUFEND", "RUHEND"];
+const IN_USE = ["LAUFEND", "RUHEND", "ABGESCHLOSSEN"];
+
+/**
+ * Ein Vorgang je Position (e43): Besetzung, Freelancer-Vertrag, Bestellung und Übergabe gehören zu einer Person.
+ * Anfrage und Klärung kommen von der Chance und werden an neue Vorgänge vererbt. Solange die Chance noch keine
+ * Position hat, läuft ein Vorgang ohne Position; er geht auf die erste Position über. Sobald eine Chance mit dem
+ * Vorgang geführt wird, bekommt jede weitere Position ihren eigenen. Bricht eine Position ab, endet ihr Vorgang.
+ */
+async function ensureConversions(opp: OppRow): Promise<ConversionRow[]> {
+  const load = () => db.query.conversions.findMany({ where: eq(schema.conversions.opportunityId, opp.id), orderBy: asc(schema.conversions.createdAt) });
+  let rows = await load();
+  if (!rows.length) return rows;
+  const positions = await db.query.staffingPositions.findMany({ where: eq(schema.staffingPositions.opportunityId, opp.id), orderBy: asc(schema.staffingPositions.createdAt), columns: { id: true, status: true } });
+  let changed = false;
+  for (const r of rows) {
+    if (!r.positionId || !RUNNING.includes(r.status) || r.orderAt) continue;
+    if (positions.find((p) => p.id === r.positionId)?.status === "ABGEBROCHEN") {
+      await db.update(schema.conversions).set({ status: "ABGEBROCHEN", endedReason: "Position abgebrochen", updatedAt: new Date() }).where(eq(schema.conversions.id, r.id));
+      changed = true;
+    }
+  }
+  const inUse = rows.filter((r) => IN_USE.includes(r.status));
+  if (inUse.length) {
+    const taken = new Set(rows.map((r) => r.positionId).filter(Boolean));
+    const free = positions.filter((p) => p.status !== "ABGEBROCHEN" && !taken.has(p.id));
+    const open = rows.find((r) => !r.positionId && RUNNING.includes(r.status));
+    if (open && free.length) {
+      await db.update(schema.conversions).set({ positionId: free.shift()!.id, updatedAt: new Date() }).where(eq(schema.conversions.id, open.id));
+      changed = true;
+    }
+    if (free.length && !["BEENDET", "ZURUECKGESTELLT"].includes(opp.status)) {
+      const t = open ?? inUse[inUse.length - 1]!;
+      await db
+        .insert(schema.conversions)
+        .values(free.map((p) => ({ workspaceId: opp.workspaceId, opportunityId: opp.id, positionId: p.id, clarifiedAt: t.clarifiedAt, intermediaryCheckedAt: t.intermediaryCheckedAt, intermediaryCheckedBy: t.intermediaryCheckedBy, intermediaryCheckNote: t.intermediaryCheckNote, createdBy: t.createdBy })))
+        .onConflictDoNothing();
+      changed = true;
+    }
+  }
+  if (changed) rows = await load();
+  return rows;
+}
+
+/**
+ * Vorgang starten: je Position der Chance einer; ohne Position zunächst ein Vorgang, der auf die erste Position übergeht.
+ * Mit positionId wird nur der Vorgang dieser Position (wieder) gestartet, z. B. nach einem Abbruch.
+ */
+export async function startConversion(actor: Actor, opportunityId: string, positionId?: string) {
   const { opp, canEdit } = await access(actor, opportunityId);
   if (!canEdit) throw new ForbiddenError("Den Vorgang startet BD, Principal, Sales Operations oder Geschäftsführung.");
   if (["BEENDET", "ZURUECKGESTELLT"].includes(opp.status)) throw new TransitionError("Für eine beendete oder zurückgestellte Chance wird kein Vorgang gestartet.");
-  const existing = await db.query.conversions.findFirst({ where: and(eq(schema.conversions.opportunityId, opp.id), inArray(schema.conversions.status, ["LAUFEND", "RUHEND"])) });
-  if (existing) return existing;
-  const [c] = await db
+  const rows = await ensureConversions(opp);
+  const running = rows.filter((r) => RUNNING.includes(r.status));
+  const positions = (await db.query.staffingPositions.findMany({ where: eq(schema.staffingPositions.opportunityId, opp.id), orderBy: asc(schema.staffingPositions.createdAt), columns: { id: true, status: true } })).filter((p) => p.status !== "ABGEBROCHEN");
+  if (positionId && !positions.some((p) => p.id === positionId)) throw new ValidationError("Diese Position gehört nicht zur Chance oder ist abgebrochen.");
+  if (positionId) {
+    const mine = running.find((r) => r.positionId === positionId);
+    if (mine) return mine;
+  } else if (running.length) return running[0]!;
+  const clarifiedAt = ["BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG", "BEAUFTRAGT"].includes(opp.status) ? new Date() : null;
+  const done = new Set(rows.filter((r) => IN_USE.includes(r.status)).map((r) => r.positionId));
+  const targets: (string | null)[] = positionId ? [positionId] : positions.length ? positions.filter((p) => !done.has(p.id)).map((p) => p.id) : [null];
+  if (!targets.length) throw new TransitionError("Alle Positionen dieser Chance sind bereits beauftragt und übergeben.");
+  const created = await db
     .insert(schema.conversions)
-    .values({ workspaceId: actor.workspaceId, opportunityId: opp.id, clarifiedAt: ["BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG", "BEAUFTRAGT"].includes(opp.status) ? new Date() : null, createdBy: actor.userId })
+    .values(targets.map((pid) => ({ workspaceId: actor.workspaceId, opportunityId: opp.id, positionId: pid, clarifiedAt, createdBy: actor.userId })))
     .returning();
-  await recordAudit(db, actor, "conversion.started", "OPPORTUNITY", opp.id, { vorgang: c!.id });
-  return c!;
+  await recordAudit(db, actor, "conversion.started", "OPPORTUNITY", opp.id, { vorgaenge: created.length });
+  return created[0]!;
 }
 
 /** Vorgang an den Stand der Chance anpassen: geschlossen → abgebrochen, zurückgestellt → ruht, wieder offen → läuft. */
 async function syncWithOpportunity(c: ConversionRow, oppStatus: string): Promise<ConversionRow> {
   let next: string | null = null;
   let reason: string | null = null;
-  if (oppStatus === "BEENDET" && ["LAUFEND", "RUHEND"].includes(c.status) && !c.orderAt) {
+  if (oppStatus === "BEENDET" && RUNNING.includes(c.status) && !c.orderAt) {
     next = "ABGEBROCHEN";
     reason = "Chance geschlossen";
   } else if (oppStatus === "ZURUECKGESTELLT" && c.status === "LAUFEND") next = "RUHEND";
@@ -98,18 +162,17 @@ async function syncWithOpportunity(c: ConversionRow, oppStatus: string): Promise
   return u ?? c;
 }
 
-export async function getConversion(actor: Actor, opportunityId: string): Promise<ConversionView | null> {
+/** Alle Vorgänge einer Chance, in der Reihenfolge der Positionen; abgebrochene nur, wenn die Position keinen neueren hat. */
+export async function listConversions(actor: Actor, opportunityId: string): Promise<ConversionView[]> {
   const { opp, canEdit } = await access(actor, opportunityId);
-  const found = await db.query.conversions.findFirst({ where: eq(schema.conversions.opportunityId, opp.id), orderBy: desc(schema.conversions.createdAt) });
-  if (!found) return null;
-  const c = await syncWithOpportunity(found, opp.status);
+  const all = await ensureConversions(opp);
+  if (!all.length) return [];
   const [account, setup, positions, engs] = await Promise.all([
     db.query.accounts.findFirst({ where: eq(schema.accounts.id, opp.accountId) }),
     db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, opp.setupId) }),
     db.query.staffingPositions.findMany({ where: eq(schema.staffingPositions.opportunityId, opp.id), orderBy: asc(schema.staffingPositions.createdAt) }),
     db.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id) }),
   ]);
-  const live = positions.filter((p) => p.status !== "ABGEBROCHEN");
   const [fls, users, links, handovers] = await Promise.all([
     db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...engs.map((e) => e.freelancerId).filter((x): x is string => !!x), "-"]), columns: { id: true, displayName: true } }),
     db.query.users.findMany({ where: inArray(schema.users.id, [...engs.map((e) => e.internalUserId).filter((x): x is string => !!x), "-"]), columns: { id: true, displayName: true } }),
@@ -118,73 +181,98 @@ export async function getConversion(actor: Actor, opportunityId: string): Promis
   ]);
   const docs = links.length ? await db.query.contractDocuments.findMany({ where: and(inArray(schema.contractDocuments.id, links.map((l) => l.documentId)), eq(schema.contractDocuments.side, "FREELANCER")) }) : [];
   const rank: Record<string, number> = { ENTWURF: 1, VERSENDET: 2, UNTERSCHRIEBEN: 3 };
-  const pos: ConversionPosition[] = live.map((p) => {
-    const e = engs.find((x) => x.positionId === p.id) ?? null;
-    const mine = e ? docs.filter((d) => links.some((l) => l.engagementId === e.id && l.documentId === d.id) && ["EINZELBEAUFTRAGUNG", "RAHMENVERTRAG"].includes(d.docType) && d.signedStatus !== "GEKUENDIGT") : [];
-    const best = mine.sort((a, b) => (rank[b.signedStatus] ?? 0) - (rank[a.signedStatus] ?? 0))[0] ?? null;
-    return {
-      id: p.id,
-      title: p.title,
-      resourceKind: p.resourceKind,
-      status: p.status,
-      personName: e ? (e.freelancerId ? fls.find((f) => f.id === e.freelancerId)?.displayName : users.find((u) => u.id === e.internalUserId)?.displayName) ?? null : null,
-      engagementId: e?.id ?? null,
-      freelancerId: e?.freelancerId ?? null,
-      contractStatus: best?.signedStatus ?? null,
-    };
-  });
   const channel = account?.procurementChannel ?? "DIREKT";
   const offerPath = ((setup?.offerPath as OfferPath) ?? "MOCO") as OfferPath;
-  const hasFreelancer = pos.some((p) => p.resourceKind === "FREELANCER");
-  const intermediaryCheckOpen = hasFreelancer && channel === "VERMITTLER" && !c.intermediaryCheckedAt;
-
-  // Schritte
-  const done2 = !!c.clarifiedAt;
-  const done3 = pos.length > 0 && pos.every((p) => p.status === "BESETZT" && p.engagementId);
   const noOffer = offerPath === "KEIN_ANGEBOT";
-  const done4 = !!c.offerSentAt && !!c.commitAt;
-  const freelancerPos = pos.filter((p) => p.resourceKind === "FREELANCER");
-  const skip5 = freelancerPos.length === 0;
-  // Schritt 5 gilt mit „versendet“ als weiterführbar; die Unterschrift wird nachgehalten
-  const done5 = !skip5 && freelancerPos.every((p) => p.contractStatus === "VERSENDET" || p.contractStatus === "UNTERSCHRIEBEN");
-  const signed5 = !skip5 && freelancerPos.every((p) => p.contractStatus === "UNTERSCHRIEBEN");
-  const openHandover = handovers.some((h) => h.status === "OFFEN");
-  const done6 = !!c.orderAt && !!c.orderReference && handovers.length > 0 && !openHandover;
-  const raw: { key: Step["key"]; title: string; done: boolean; skip?: boolean; note: string }[] = [
-    { key: "ANFRAGE", title: "Anfrage", done: true, note: "Chance ist angelegt." },
-    { key: "KLAERUNG", title: "Klärung", done: done2, note: done2 ? "Anforderung ist klar." : "Anforderung klären und Pflichtunterlagen des Kunden prüfen." },
-    { key: "BESETZUNG", title: "Besetzung", done: done3, note: pos.length === 0 ? "Noch keine Position – an der Chance eine Position anlegen." : done3 ? "Alle Positionen sind besetzt." : `${pos.filter((p) => p.status === "BESETZT").length} von ${pos.length} Positionen besetzt.` },
-    { key: "ANGEBOT", title: noOffer ? "Konditionen an den Vermittler" : "Angebot", done: done4, note: done4 ? "Abgegeben, Kunde hat zugesagt." : c.offerSentAt ? "Abgegeben – Zusage des Kunden steht aus." : noOffer ? "Profil und Konditionen per Mail an den Vermittler." : "Angebot in Moco anlegen und Nummer hier eintragen." },
-    { key: "VERTRAG", title: "Freelancer-Vertrag", done: done5, skip: skip5, note: skip5 ? "Entfällt bei interner Besetzung." : signed5 ? "Unterschrieben." : done5 ? "Versendet – Unterschrift steht aus." : c.commitAt ? "Kunde hat zugesagt: Vertrag jetzt erzeugen und versenden." : "Wird fällig, sobald der Kunde zugesagt hat." },
-    { key: "BEAUFTRAGUNG", title: "Beauftragung", done: done6, note: done6 ? "Bestellung liegt vor, Backoffice hat quittiert." : c.orderAt && c.orderReference ? "Bestellung liegt vor – Quittung des Backoffice steht aus." : c.provisionalStart ? "Start mit Zusage per Mail – Bestellung offen." : "Bestellnummer eintragen; die Übergabe ans Backoffice geht dann raus." },
-  ];
-  let currentSet = false;
-  const steps: Step[] = raw.map((s, i) => {
-    let state: StepState = s.skip ? "ENTFAELLT" : s.done ? "ERLEDIGT" : "OFFEN";
-    if (state === "OFFEN" && !currentSet) {
-      state = "AKTUELL";
-      currentSet = true;
+  // je Position der jüngste Vorgang; Vorgänge ohne Position hinten
+  const latest = new Map<string, ConversionRow>();
+  for (const r of all) latest.set(r.positionId ?? `ohne:${r.id}`, r);
+  const order = (r: ConversionRow) => (r.positionId ? positions.findIndex((p) => p.id === r.positionId) : 9999);
+  const chosen = [...latest.values()].sort((x, y) => order(x) - order(y));
+  const out: ConversionView[] = [];
+  for (const row of chosen) {
+    const c = await syncWithOpportunity(row, opp.status);
+    const p = c.positionId ? positions.find((x) => x.id === c.positionId) ?? null : null;
+    const e = p ? engs.find((x) => x.positionId === p.id) ?? null : null;
+    const mine = e ? docs.filter((d) => links.some((l) => l.engagementId === e.id && l.documentId === d.id) && ["EINZELBEAUFTRAGUNG", "RAHMENVERTRAG"].includes(d.docType) && d.signedStatus !== "GEKUENDIGT") : [];
+    const best = mine.sort((a, b) => (rank[b.signedStatus] ?? 0) - (rank[a.signedStatus] ?? 0))[0] ?? null;
+    const position: ConversionPosition | null = p
+      ? {
+          id: p.id,
+          title: p.title,
+          resourceKind: p.resourceKind,
+          status: p.status,
+          personName: e ? (e.freelancerId ? fls.find((f) => f.id === e.freelancerId)?.displayName : users.find((u) => u.id === e.internalUserId)?.displayName) ?? null : null,
+          engagementId: e?.id ?? null,
+          freelancerId: e?.freelancerId ?? null,
+          contractStatus: best?.signedStatus ?? null,
+        }
+      : null;
+    const own = e ? handovers.filter((h) => h.engagementId === e.id) : [];
+    const isFreelancer = position?.resourceKind === "FREELANCER";
+    const intermediaryCheckOpen = isFreelancer && channel === "VERMITTLER" && !c.intermediaryCheckedAt;
+
+    const done2 = !!c.clarifiedAt;
+    const done3 = !!position && position.status === "BESETZT" && !!position.engagementId;
+    const done4 = !!c.offerSentAt && !!c.commitAt;
+    const skip5 = !isFreelancer;
+    // Schritt 5 gilt mit „versendet“ als weiterführbar; die Unterschrift wird nachgehalten
+    const signed5 = isFreelancer && position?.contractStatus === "UNTERSCHRIEBEN";
+    const done5 = isFreelancer && (position?.contractStatus === "VERSENDET" || signed5);
+    const done6 = !!c.orderAt && !!c.orderReference && own.length > 0 && !own.some((h) => h.status === "OFFEN");
+    const raw: { key: Step["key"]; title: string; done: boolean; skip?: boolean; note: string }[] = [
+      { key: "ANFRAGE", title: "Anfrage", done: true, note: "Chance ist angelegt." },
+      { key: "KLAERUNG", title: "Klärung", done: done2, note: done2 ? "Anforderung ist klar." : "Anforderung klären und Pflichtunterlagen des Kunden prüfen." },
+      { key: "BESETZUNG", title: "Besetzung", done: done3, note: !position ? "Noch keine Position – an der Chance eine Position anlegen." : done3 ? `Besetzt mit ${position.personName ?? "?"}.` : "Noch nicht besetzt – Kandidaten prüfen, vorstellen, auswählen." },
+      { key: "ANGEBOT", title: noOffer ? "Konditionen an den Vermittler" : "Angebot", done: done4, note: done4 ? "Abgegeben, Kunde hat zugesagt." : c.offerSentAt ? "Abgegeben – Zusage des Kunden steht aus." : noOffer ? "Profil und Konditionen per Mail an den Vermittler." : "Angebot in Moco anlegen und Nummer hier eintragen." },
+      { key: "VERTRAG", title: "Freelancer-Vertrag", done: done5, skip: skip5, note: !position ? "Ergibt sich aus der Besetzung." : skip5 ? "Entfällt bei interner Besetzung." : signed5 ? "Unterschrieben." : done5 ? "Versendet – Unterschrift steht aus." : c.commitAt ? "Kunde hat zugesagt: Vertrag jetzt erzeugen und versenden." : "Wird fällig, sobald der Kunde zugesagt hat." },
+      { key: "BEAUFTRAGUNG", title: "Beauftragung", done: done6, note: done6 ? "Bestellung liegt vor, Backoffice hat quittiert." : c.orderAt && c.orderReference ? "Bestellung liegt vor – Quittung des Backoffice steht aus." : c.provisionalStart ? "Start mit Zusage per Mail – Bestellung offen." : "Bestellnummer eintragen; die Übergabe ans Backoffice geht dann raus." },
+    ];
+    let currentSet = false;
+    const steps: Step[] = raw.map((s, i) => {
+      let state: StepState = s.skip ? "ENTFAELLT" : s.done ? "ERLEDIGT" : "OFFEN";
+      if (state === "OFFEN" && !currentSet) {
+        state = "AKTUELL";
+        currentSet = true;
+      }
+      return { no: i + 1, key: s.key, title: s.title, state, note: s.note };
+    });
+    let conv = c;
+    if (done6 && c.status === "LAUFEND") {
+      const [u] = await db.update(schema.conversions).set({ status: "ABGESCHLOSSEN", updatedAt: new Date() }).where(eq(schema.conversions.id, c.id)).returning();
+      conv = u ?? c;
     }
-    return { no: i + 1, key: s.key, title: s.title, state, note: s.note };
-  });
-  let conv = c;
-  if (done6 && c.status === "LAUFEND") {
-    const [u] = await db.update(schema.conversions).set({ status: "ABGESCHLOSSEN", updatedAt: new Date() }).where(eq(schema.conversions.id, c.id)).returning();
-    conv = u ?? c;
+    out.push({
+      conversion: conv,
+      opportunity: opp,
+      accountName: account?.name ?? "?",
+      setupName: setup?.name ?? "?",
+      channel,
+      offerPath,
+      position,
+      positions: position ? [position] : [],
+      label: position ? `${position.title}${position.personName ? ` – ${position.personName}` : " – noch offen"}` : "Position noch nicht angelegt",
+      siblingOffer: null,
+      steps,
+      canEdit: canEdit && conv.status === "LAUFEND",
+      intermediaryCheckOpen,
+      handovers: own.map((h) => ({ id: h.id, kind: h.kind, status: h.status, createdAt: h.createdAt, engagementId: h.engagementId })),
+    });
   }
-  return {
-    conversion: conv,
-    opportunity: opp,
-    accountName: account?.name ?? "?",
-    setupName: setup?.name ?? "?",
-    channel,
-    offerPath,
-    positions: pos,
-    steps,
-    canEdit: canEdit && conv.status === "LAUFEND",
-    intermediaryCheckOpen,
-    handovers: handovers.map((h) => ({ id: h.id, kind: h.kind, status: h.status, createdAt: h.createdAt, engagementId: h.engagementId })),
-  };
+  // Angebotsnummer eines Parallel-Vorgangs als Vorschlag (ein Angebot kann mehrere Personen abdecken)
+  for (const v of out) {
+    if (v.conversion.offerNumber) continue;
+    const sib = out.find((x) => x !== v && x.conversion.offerNumber && x.conversion.status !== "ABGEBROCHEN");
+    if (sib) v.siblingOffer = { number: sib.conversion.offerNumber!, label: sib.label };
+  }
+  return out;
+}
+
+/** Ein Vorgang der Chance: der genannte, sonst der erste laufende, sonst der erste. */
+export async function getConversion(actor: Actor, opportunityId: string, conversionId?: string): Promise<ConversionView | null> {
+  const all = await listConversions(actor, opportunityId);
+  if (conversionId) return all.find((v) => v.conversion.id === conversionId) ?? null;
+  return all.find((v) => v.conversion.status === "LAUFEND") ?? all[0] ?? null;
 }
 
 export async function markClarified(actor: Actor, conversionId: string) {
@@ -244,7 +332,7 @@ const orderInput = z.object({
 });
 
 /**
- * Beauftragung festhalten und die Übergabe ans Backoffice auslösen – je Einsatz der Chance eine.
+ * Beauftragung festhalten und die Übergabe ans Backoffice auslösen – für den Einsatz dieser Position.
  *  - mit Bestellnummer: „beauftragt“ (oder „Bestellung nachgereicht“, wenn vorher vorläufig gestartet wurde)
  *  - ohne Bestellnummer, mit vereinbarter Zusage per Mail: „vorläufig beauftragt“, Vermerk „Bestellung offen“
  */
@@ -257,17 +345,21 @@ export async function recordOrder(actor: Actor, conversionId: string, raw: unkno
   if (!i.orderReference && !provisional) throw new ValidationError("Bitte die Bestellnummer eintragen – oder „Start mit Zusage per Mail“ wählen.");
   if (provisional && i.evidence.length < 5) throw new ValidationError("Für den Start ohne Bestellung bitte die Zusage-Mail festhalten (wer, wann, was).");
   if (!c.commitAt) throw new ValidationError("Erst die Zusage des Kunden festhalten.");
-  const engs = await db.query.engagements.findMany({ where: and(eq(schema.engagements.opportunityId, opp.id), inArray(schema.engagements.status, ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT"])) });
-  if (!engs.length) throw new ValidationError("Es gibt noch keinen Einsatz zu dieser Chance – erst die Position besetzen.");
+  if (!c.positionId) throw new ValidationError("Zu diesem Vorgang gibt es noch keine Position – erst an der Chance die Position anlegen und besetzen.");
+  const engs = await db.query.engagements.findMany({ where: and(eq(schema.engagements.positionId, c.positionId), inArray(schema.engagements.status, ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT"])) });
+  if (!engs.length) throw new ValidationError("Zu dieser Position gibt es noch keinen Einsatz – erst die Position besetzen.");
   const kind: HandoverKind = provisional ? "VORLAEUFIG" : c.provisionalStart && !c.orderAt ? "BESTELLUNG_NACHGEREICHT" : "BEAUFTRAGT";
   await db.transaction(async (tx) => {
     await tx
       .update(schema.conversions)
       .set({ orderReference: i.orderReference || null, orderLink: i.orderLink || c.orderLink, orderAt: provisional ? null : new Date(), provisionalStart: provisional ? true : c.provisionalStart, commitNote: provisional ? `${c.commitNote ?? ""}\nStart mit Zusage per Mail: ${i.evidence}`.trim().slice(0, 1000) : c.commitNote, updatedAt: new Date() })
       .where(eq(schema.conversions.id, c.id));
-    // Auftrag der Chance führen (Bestellnummer, bestätigt), damit Startseite und Health-Check denselben Stand zeigen
-    let order = await tx.query.orders.findFirst({ where: and(eq(schema.orders.opportunityId, opp.id), inArray(schema.orders.status, ["IN_VORBEREITUNG", "NACHWEISE_UNVOLLSTAENDIG", "BEAUFTRAGUNG_BESTAETIGT"])), orderBy: desc(schema.orders.createdAt) });
+    // Auftrag führen (Bestellnummer, bestätigt), damit Startseite und Health-Check denselben Stand zeigen: der Auftrag des
+    // Einsatzes, sonst ein Auftrag der Chance mit derselben Bestellnummer (eine Bestellung für mehrere Personen), sonst neu
     const first = engs[0]!;
+    const active = ["IN_VORBEREITUNG", "NACHWEISE_UNVOLLSTAENDIG", "BEAUFTRAGUNG_BESTAETIGT"] as const;
+    let order = first.orderId ? await tx.query.orders.findFirst({ where: and(eq(schema.orders.id, first.orderId), inArray(schema.orders.status, active)) }) : undefined;
+    if (!order && i.orderReference) order = await tx.query.orders.findFirst({ where: and(eq(schema.orders.opportunityId, opp.id), eq(schema.orders.orderReference, i.orderReference), inArray(schema.orders.status, active)) });
     if (!order) {
       [order] = await tx
         .insert(schema.orders)
@@ -302,15 +394,17 @@ export async function cancelConversion(actor: Actor, conversionId: string, reaso
   return u;
 }
 
-/** Laufende Vorgänge, die der Akteur führen darf – für Start und Sales-Ops-Sicht. */
+/** Laufende Vorgänge, die der Akteur führen darf – für Start und Sales-Ops-Sicht. Je Position eine Zeile. */
 export async function listRunningConversions(actor: Actor) {
-  const rows = await db.query.conversions.findMany({ where: and(eq(schema.conversions.workspaceId, actor.workspaceId), eq(schema.conversions.status, "LAUFEND")), orderBy: desc(schema.conversions.updatedAt), limit: 200 });
-  const out: { id: string; opportunityId: string; title: string; accountName: string; step: string; stepNote: string }[] = [];
-  for (const r of rows) {
-    const v = await getConversion(actor, r.opportunityId).catch(() => null);
-    if (!v || v.conversion.status !== "LAUFEND") continue;
-    const cur = v.steps.find((s) => s.state === "AKTUELL");
-    out.push({ id: r.id, opportunityId: r.opportunityId, title: v.opportunity.title, accountName: v.accountName, step: cur ? `${cur.no} ${cur.title}` : "–", stepNote: cur?.note ?? "" });
+  const rows = await db.query.conversions.findMany({ where: and(eq(schema.conversions.workspaceId, actor.workspaceId), eq(schema.conversions.status, "LAUFEND")), orderBy: desc(schema.conversions.updatedAt), limit: 300, columns: { opportunityId: true } });
+  const out: { id: string; opportunityId: string; title: string; label: string; accountName: string; step: string; stepNote: string }[] = [];
+  for (const oid of [...new Set(rows.map((r) => r.opportunityId))]) {
+    const views = await listConversions(actor, oid).catch(() => []);
+    for (const v of views) {
+      if (v.conversion.status !== "LAUFEND") continue;
+      const cur = v.steps.find((s) => s.state === "AKTUELL");
+      out.push({ id: v.conversion.id, opportunityId: oid, title: v.opportunity.title, label: v.label, accountName: v.accountName, step: cur ? `${cur.no} ${cur.title}` : "–", stepNote: cur?.note ?? "" });
+    }
   }
   return out;
 }

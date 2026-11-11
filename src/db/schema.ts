@@ -2555,6 +2555,8 @@ export const conversions = pgTable(
     id: id(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
+    /** Ein Vorgang je Position (e43); leer nur, solange an der Chance noch keine Position angelegt ist */
+    positionId: text("position_id").references(() => staffingPositions.id, { onDelete: "set null" }),
     status: text("status").notNull().default("LAUFEND"), // LAUFEND | RUHEND | ABGEBROCHEN | ABGESCHLOSSEN
     /** 2 Klärung */
     clarifiedAt: timestamp("clarified_at", { withTimezone: true }),
@@ -2582,7 +2584,12 @@ export const conversions = pgTable(
     updatedAt: updatedAt(),
     version: version(),
   },
-  (t) => [uniqueIndex("conversions_running_uq").on(t.opportunityId).where(sql`status in ('LAUFEND', 'RUHEND')`), index("conversions_ws_idx").on(t.workspaceId, t.status)],
+  (t) => [
+    uniqueIndex("conversions_running_pos_uq").on(t.positionId).where(sql`status in ('LAUFEND', 'RUHEND') and position_id is not null`),
+    uniqueIndex("conversions_running_open_uq").on(t.opportunityId).where(sql`status in ('LAUFEND', 'RUHEND') and position_id is null`),
+    index("conversions_opp_idx").on(t.opportunityId),
+    index("conversions_ws_idx").on(t.workspaceId, t.status),
+  ],
 );
 
 /**

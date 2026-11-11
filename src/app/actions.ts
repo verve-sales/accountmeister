@@ -2069,17 +2069,18 @@ function fdObject(fd: FormData): Record<string, string> {
   return out;
 }
 
-export async function startConversionAction(opportunityId: string) {
+export async function startConversionAction(opportunityId: string, positionId?: string | FormData) {
   return run(`/bedarfe/${opportunityId}/vorgang`, async (actor) => {
     const { startConversion } = await import("@/modules/conversion/service");
-    await startConversion(actor, opportunityId);
+    const c = await startConversion(actor, opportunityId, typeof positionId === "string" ? positionId : undefined);
+    return `/bedarfe/${opportunityId}/vorgang?v=${c.id}`;
   }, "Vorgang gestartet.");
 }
 
 export async function conversionStepAction(opportunityId: string, conversionId: string, fd: FormData) {
   const data = fdObject(fd);
   const op = data.op ?? "";
-  return run(`/bedarfe/${opportunityId}/vorgang#schritt-${data.step ?? ""}`, async (actor) => {
+  return run(`/bedarfe/${opportunityId}/vorgang?v=${conversionId}#schritt-${data.step ?? ""}`, async (actor) => {
     const c = await import("@/modules/conversion/service");
     if (op === "clarify") {
       await c.markClarified(actor, conversionId);

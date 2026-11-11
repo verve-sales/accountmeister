@@ -5,12 +5,12 @@ import { db, schema } from "@/db/client";
 import { resetConfigCacheForTests } from "@/lib/config";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
 import { createOpportunity, changeOpportunityStatus } from "@/modules/opportunities/service";
-import { quickFill, requireFreelancer } from "@/modules/staffing/service";
+import { createPosition, quickFill, requireFreelancer } from "@/modules/staffing/service";
 import { setContractDocumentStatus } from "@/modules/engagements/service";
 import { renderContract, type ContractData } from "@/modules/conversion/contract";
 import { contractDefaults, generateFreelancerContract } from "@/modules/conversion/contractService";
 import { ensureBackofficeTeam, getFreelancerProfile, saveFreelancerProfile } from "@/modules/conversion/profile";
-import { cancelConversion, getConversion, markClarified, recordCommit, recordOrder, saveOffer, startConversion } from "@/modules/conversion/service";
+import { cancelConversion, getConversion, listConversions, listRunningConversions, markClarified, recordCommit, recordOrder, saveOffer, startConversion } from "@/modules/conversion/service";
 import { acknowledgeHandover, getHandover, listHandovers, remindOpenHandovers } from "@/modules/conversion/handover";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 import { actorFor, ensureSeed } from "./helpers";
@@ -211,5 +211,61 @@ describe("Etappe 51: Konvertierungsvorgang, Freelancer-Profil, Vertrag aus Vorla
     expect(v.conversion.id).toBe(c2.id);
     expect(v.conversion.status).toBe("ABGEBROCHEN");
     expect(v.conversion.endedReason).toBe("Chance geschlossen");
+  });
+  it("K06: je Position ein eigener Vorgang – zwei besetzt und einzeln beauftragt, die dritte bleibt in der Besetzung; Abbruch und Neustart nur für eine Position", async () => {
+    env();
+    const { s, david, opp } = await setupCase("Vorgang K06");
+    const c0 = await startConversion(david, opp.id);
+    await markClarified(david, c0.id);
+    const fill = (n: string) => quickFill(david, opp.id, { title: "Scrum Master", resourceKind: "FREELANCER", newName: `${n} ${Date.now().toString(36)} (fiktiv)`, ekRate: "600", vkRate: "960", desiredStart: plusDaysIso(todayIso(), 14), plannedEnd: plusDaysIso(todayIso(), 200) });
+    const q1 = await fill("Mara Eins");
+    const q2 = await fill("Timo Zwei");
+    const open = await createPosition(david, opp.id, { title: "Scrum Master", resourceKind: "FREELANCER" });
+    let all = await listConversions(david, opp.id);
+    expect(all).toHaveLength(3);
+    expect(all[0]!.conversion.id).toBe(c0.id); // der erste Vorgang geht auf die erste Position über
+    expect(all.map((v) => v.position?.id)).toEqual([q1.engagement.positionId, q2.engagement.positionId, open.id]);
+    expect(all.every((v) => v.conversion.clarifiedAt)).toBe(true); // Klärung wird vererbt
+    expect(all.map((v) => v.steps.find((x) => x.state === "AKTUELL")!.key)).toEqual(["ANGEBOT", "ANGEBOT", "BESETZUNG"]);
+    expect(all[0]!.label).toMatch(/Scrum Master – Mara Eins/);
+    expect(all[2]!.label).toMatch(/noch offen/);
+    // erste Person: Angebot, Zusage, Bestellung → genau eine Übergabe, nur für ihren Einsatz
+    const [a, b, c] = all.map((v) => v.conversion.id) as [string, string, string];
+    await saveOffer(david, a, { offerNumber: "A2611-020", sent: "1" });
+    await recordCommit(david, a, "Zusage für Mara Eins am Telefon.");
+    all = await listConversions(david, opp.id);
+    expect(all[1]!.siblingOffer?.number).toBe("A2611-020"); // Vorschlag, nicht gespeichert
+    expect(all[1]!.conversion.offerNumber).toBeNull();
+    const team = await ensureBackofficeTeam(s.workspaceId);
+    await db.insert(schema.teamMembers).values({ teamId: team.id, userId: s.users.admin, role: "MITGLIED" }).onConflictDoNothing();
+    const r1 = await recordOrder(david, a, { orderReference: "4500000001" });
+    expect(r1.handoverIds).toHaveLength(1);
+    expect((await getHandover(await actorFor("admin"), r1.handoverIds[0]!)).handover.engagementId).toBe(q1.engagement.id);
+    await expect(recordOrder(david, b, { orderReference: "4500000002" })).rejects.toThrow(/Zusage/);
+    await expect(recordOrder(david, c, { orderReference: "4500000003" })).rejects.toThrow(/Zusage/);
+    // zweite Person mit eigener Bestellnummer → eigener Auftrag
+    await saveOffer(david, b, { offerNumber: "A2611-020", sent: "1" });
+    await recordCommit(david, b, "Zusage für Timo Zwei per Mail.");
+    await recordOrder(david, b, { orderReference: "4500000002" });
+    const e1 = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, q1.engagement.id) }))!;
+    const e2 = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, q2.engagement.id) }))!;
+    expect(e1.orderId).toBeTruthy();
+    expect(e2.orderId).toBeTruthy();
+    expect(e1.orderId).not.toBe(e2.orderId);
+    await acknowledgeHandover(await actorFor("admin"), r1.handoverIds[0]!, { mocoProjectId: "7061" });
+    all = await listConversions(david, opp.id);
+    expect(all.map((v) => v.conversion.status)).toEqual(["ABGESCHLOSSEN", "LAUFEND", "LAUFEND"]);
+    expect((await getConversion(david, opp.id))!.conversion.id).toBe(b); // Standard: der erste laufende
+    expect((await listRunningConversions(david)).filter((x) => x.opportunityId === opp.id).map((x) => x.id).sort()).toEqual([b, c].sort());
+    // dritte Position: Abbruch nur dieses Vorgangs, Neustart für die Position
+    await cancelConversion(david, c, "Kunde sucht den dritten Platz später");
+    all = await listConversions(david, opp.id);
+    expect(all.map((v) => v.conversion.status)).toEqual(["ABGESCHLOSSEN", "LAUFEND", "ABGEBROCHEN"]);
+    const again = await startConversion(david, opp.id, open.id);
+    expect(again.id).not.toBe(c);
+    all = await listConversions(david, opp.id);
+    expect(all).toHaveLength(3);
+    expect(all[2]!.conversion.id).toBe(again.id);
+    expect(all[2]!.conversion.status).toBe("LAUFEND");
   });
 });

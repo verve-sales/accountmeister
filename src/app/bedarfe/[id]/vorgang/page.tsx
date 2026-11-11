@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getConfig } from "@/lib/config";
 import { DomainError } from "@/lib/errors";
-import { getConversion, offerPathLabel, type Step } from "@/modules/conversion/service";
+import { listConversions, offerPathLabel, type ConversionView, type Step } from "@/modules/conversion/service";
 import { handoverKindLabel } from "@/modules/conversion/handover";
 import { signedStatusLabel } from "@/modules/engagements/service";
 import { Feedback } from "@/components/Feedback";
@@ -31,19 +31,20 @@ function StepHead({ s }: { s: Step }) {
   );
 }
 
-export default async function VorgangPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string }> }) {
+export default async function VorgangPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; v?: string }> }) {
   if (getConfig().FEATURE_BESETZUNG !== "true") notFound();
   const { id } = await params;
   const sp = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
-  let v;
+  let all: ConversionView[];
   try {
-    v = await getConversion(actor, id);
+    all = await listConversions(actor, id);
   } catch (e) {
     if (e instanceof DomainError) notFound();
     throw e;
   }
+  const v = all.find((x) => x.conversion.id === sp.v) ?? all.find((x) => x.conversion.status === "LAUFEND") ?? all[0];
   if (!v) {
     return (
       <div className="space-y-5">
@@ -51,7 +52,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
         <h1 className="text-2xl font-semibold">Konvertierungsvorgang</h1>
         <Feedback params={sp} />
         <section className="card space-y-2">
-          <p className="text-sm">Der Vorgang führt die Chance in sechs Schritten bis zur Beauftragung: Anfrage, Klärung, Besetzung, Angebot, Freelancer-Vertrag, Beauftragung mit Übergabe ans Backoffice.</p>
+          <p className="text-sm">Der Vorgang führt die Chance in sechs Schritten bis zur Beauftragung: Anfrage, Klärung, Besetzung, Angebot, Freelancer-Vertrag, Beauftragung mit Übergabe ans Backoffice. Sucht die Chance mehrere Personen, läuft je Position ein eigener Vorgang.</p>
           <form action={startConversionAction.bind(null, id)}><PendingButton busy="Starte …">Vorgang starten</PendingButton></form>
         </section>
       </div>
@@ -62,21 +63,43 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
   const act = conversionStepAction.bind(null, id, c.id);
   const noOffer = v.offerPath === "KEIN_ANGEBOT";
   const freelancerPositions = v.positions.filter((p) => p.resourceKind === "FREELANCER");
+  const cur = (x: ConversionView) => x.steps.find((s) => s.state === "AKTUELL");
   return (
     <div className="space-y-5">
       <p className="text-sm"><Link href="/kunden">Kunden</Link> › {v.accountName} › {v.setupName} › <Link href={`/bedarfe/${id}`}>{v.opportunity.title}</Link></p>
       <div className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-2xl font-semibold">Konvertierungsvorgang</h1>
+        <h1 className="text-2xl font-semibold">Konvertierungsvorgang{all.length > 1 || v.position ? <span style={{ fontWeight: 400 }}> · {v.label}</span> : null}</h1>
         <span className="status">{CONV_STATUS[c.status] ?? c.status}</span>
         <span className="muted text-sm">Beschaffungsweg: {CHANNEL[v.channel] ?? v.channel} · Angebotsweg: {offerPathLabel[v.offerPath]} · <Link href={`/setups/${v.opportunity.setupId}#angebotsweg`}>ändern</Link></span>
       </div>
+      {all.length > 1 && (
+        <nav className="card" style={{ padding: ".5rem .9rem" }} aria-label="Vorgänge dieser Chance">
+          <p className="muted text-xs mb-1">Diese Chance sucht {all.length} Personen – je Position ein eigener Vorgang:</p>
+          <table className="list text-sm">
+            <tbody>
+              {all.map((x) => (
+                <tr key={x.conversion.id} style={x === v ? { background: "#e8f0f8" } : undefined}>
+                  <td>{x === v ? <strong>{x.label}</strong> : <Link href={`/bedarfe/${id}/vorgang?v=${x.conversion.id}`}>{x.label}</Link>}</td>
+                  <td>{x.conversion.status === "LAUFEND" ? (cur(x) ? `Schritt ${cur(x)!.no} – ${cur(x)!.title}` : "läuft") : CONV_STATUS[x.conversion.status] ?? x.conversion.status}</td>
+                  <td className="muted text-xs">{x.conversion.status === "LAUFEND" ? cur(x)?.note : x.conversion.status === "ABGEBROCHEN" ? x.conversion.endedReason : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </nav>
+      )}
       <Feedback params={sp} />
-      {c.status === "ABGEBROCHEN" && <p className="text-sm" style={{ color: AMBER }}>Abgebrochen{c.endedReason ? `: ${c.endedReason}` : ""}. Alle Angaben und Unterlagen bleiben einsehbar.</p>}
+      {c.status === "ABGEBROCHEN" && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <span style={{ color: AMBER }}>Abgebrochen{c.endedReason ? `: ${c.endedReason}` : ""}. Alle Angaben und Unterlagen bleiben einsehbar.</span>
+          {v.position && v.position.status !== "ABGEBROCHEN" && !["BEENDET", "ZURUECKGESTELLT"].includes(v.opportunity.status) && <form action={startConversionAction.bind(null, id, v.position.id)}><PendingButton busy="Starte …" className="btn btn-small">Für diese Position neu starten</PendingButton></form>}
+        </div>
+      )}
 
       {v.intermediaryCheckOpen && (
         <section className="card space-y-2" style={{ borderLeft: `3px solid ${AMBER}` }}>
           <h2 className="font-semibold">Prüfhinweis: Freelancer über Vermittler</h2>
-          <p className="text-sm">Der Kunde läuft über einen Vermittler und mindestens eine Position ist mit einem Freelancer vorgesehen. Bei offenen Ausschreibungen eines Vermittlers bieten wir keine Freelancer an – dann die Chance schließen. Ist der Vermittler nur Rahmenvertragspartner, der unsere Bestellung durchreicht, kurz festhalten, warum ein Freelancer zulässig ist.</p>
+          <p className="text-sm">Der Kunde läuft über einen Vermittler und diese Position ist mit einem Freelancer vorgesehen. Bei offenen Ausschreibungen eines Vermittlers bieten wir keine Freelancer an – dann die Chance schließen. Ist der Vermittler nur Rahmenvertragspartner, der unsere Bestellung durchreicht, kurz festhalten, warum ein Freelancer zulässig ist.</p>
           {v.canEdit && (
             <form action={act} className="flex flex-wrap gap-2 items-end text-sm">
               <input type="hidden" name="op" value="intermediary" /><input type="hidden" name="step" value="3" />
@@ -102,7 +125,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
 
       <section className="card space-y-2" id="schritt-3">
         <StepHead s={step("BESETZUNG")} />
-        {v.positions.length === 0 ? <p className="text-sm">Positionen legst du an der <Link href={`/bedarfe/${id}#besetzung`}>Chance</Link> an – intern oder mit Freelancer. Steht die Person fest, genügt die Schnellbesetzung.</p> : (
+        {v.positions.length === 0 ? <p className="text-sm">Die Position legst du an der <Link href={`/bedarfe/${id}#besetzung`}>Chance</Link> an – intern oder mit Freelancer. Steht die Person fest, genügt die Schnellbesetzung.</p> : (
           <table className="list text-sm">
             <thead><tr><th>Position</th><th>Art</th><th>Besetzt mit</th><th>Stand</th></tr></thead>
             <tbody>
@@ -132,7 +155,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
           <div className="space-y-3">
             <form action={act} className="flex flex-wrap gap-2 items-end text-sm">
               <input type="hidden" name="op" value="offer" /><input type="hidden" name="step" value="4" />
-              {!noOffer && <label className="space-y-1"><span className="block muted text-xs">Moco-Angebotsnummer</span><input name="offerNumber" className="input" defaultValue={c.offerNumber ?? ""} placeholder="aus Moco" /></label>}
+              {!noOffer && <label className="space-y-1"><span className="block muted text-xs">Moco-Angebotsnummer{!c.offerNumber && v.siblingOffer ? ` (Vorschlag aus „${v.siblingOffer.label}“ – bitte prüfen)` : ""}</span><input name="offerNumber" className="input" defaultValue={c.offerNumber ?? v.siblingOffer?.number ?? ""} placeholder="aus Moco" /></label>}
               <label className="space-y-1" style={{ flex: "1 1 260px" }}><span className="block muted text-xs">Link zur Datei (SharePoint, optional)</span><input name="offerLink" className="input" defaultValue={c.offerLink ?? ""} /></label>
               {!c.offerSentAt && <label className="flex gap-1 items-center"><input type="checkbox" name="sent" value="1" /> {noOffer ? "Konditionen sind raus" : "ist abgegeben"}</label>}
               {c.offerSentAt && !noOffer && <label className="flex gap-1 items-center"><input type="checkbox" name="newVersion" value="1" /> neue Fassung (Nachverhandlung, andere Besetzung)</label>}
@@ -205,7 +228,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
             <label className="space-y-1" style={{ flex: "1 1 320px" }}><span className="block muted text-xs">Grund</span><input name="reason" className="input" required minLength={3} /></label>
             <button className="btn btn-small btn-secondary" type="submit">Abbrechen</button>
           </form>
-          <p className="muted text-xs mt-1">Die Chance bleibt, wie sie ist. Wird die Chance geschlossen, endet der Vorgang von selbst.</p>
+          <p className="muted text-xs mt-1">Bricht nur diesen Vorgang ab{all.length > 1 ? "; die Vorgänge der anderen Positionen laufen weiter" : ""}. Die Chance bleibt, wie sie ist. Wird die Chance geschlossen, endet der Vorgang von selbst.</p>
         </details>
       )}
     </div>

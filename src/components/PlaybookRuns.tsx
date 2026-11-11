@@ -51,13 +51,14 @@ export function PlaybookRuns({
         <Link href="/vorgehen" className="muted text-sm ml-auto">Alle Vorgehensmuster ansehen</Link>
       </div>
       {runs.length === 0 && <p className="muted text-sm">Hier läuft noch kein Standard-Vorgehen. Ein Vorgehensmuster gibt Schritt für Schritt Orientierung – jeder Schritt wird als Aktion angelegt und darf begründet übersprungen werden.</p>}
-      <div className="space-y-4">
-        {active.map((r) => <RunCard key={r.id} r={r} back={back} users={users} />)}
+      {active.length > 1 && <p className="muted text-xs mb-1">Eine Zeile je Vorgehen – aufklappen für Schritt, Entwürfe und Erledigen.</p>}
+      <div style={{ borderTop: active.length ? "1px solid var(--border)" : undefined }}>
+        {active.map((r) => <RunRow key={r.id} r={r} back={back} users={users} open={active.length === 1} />)}
       </div>
       {other.length > 0 && (
         <details className="mt-3">
           <summary className="text-sm">Abgeschlossene und zurückgestellte Vorgehen ({other.length})</summary>
-          <div className="space-y-4 mt-2">{other.map((r) => <RunCard key={r.id} r={r} back={back} users={users} />)}</div>
+          <div className="mt-2" style={{ borderTop: "1px solid var(--border)" }}>{other.map((r) => <RunRow key={r.id} r={r} back={back} users={users} />)}</div>
         </details>
       )}
       {start && start.playbooks.length > 0 && (
@@ -114,13 +115,36 @@ export function PlaybookRuns({
   );
 }
 
+/**
+ * Ein Vorgehen als eine Zeile (e43): Muster, Person im Einsatz, aktueller Schritt, wer dran ist, Termin.
+ * Alles Weitere (Erläuterung, Schritt-Assistent, Erledigen, Umstellen) steht aufgeklappt.
+ */
+function RunRow({ r, back, users, open = false }: { r: RunView; back: string; users: User[]; open?: boolean }) {
+  const current = r.steps.find((s) => s.status === "OFFEN") ?? null;
+  const due = current?.action?.dueDate ?? null;
+  const overdue = !!due && r.status === "AKTIV" && String(due).slice(0, 10) < new Date().toISOString().slice(0, 10);
+  const who = r.persons.length ? r.persons.join(", ") : r.opportunityTitle ?? r.setupName;
+  return (
+    <details open={open} style={{ borderBottom: "1px solid var(--border)", padding: ".45rem 0" }}>
+      <summary className="text-sm" style={{ cursor: "pointer" }}>
+        <strong>{who}</strong>
+        <span className="muted"> · {r.playbookName}{r.engagementEnd ? ` · Einsatz bis ${fmtDate(r.engagementEnd)}` : ""}</span>
+        {r.status === "AKTIV" && current ? <> · Schritt {current.position}/{r.steps.length}: {current.title}</> : <> · <Status label={playbookRunStatusLabel[r.status] ?? r.status} /></>}
+        <span className="muted"> · {current?.action?.ownerName ?? r.ownerName}</span>
+        {due && r.status === "AKTIV" ? <span style={overdue ? { color: "#b7791f" } : undefined} className={overdue ? "" : "muted"}> · bis {fmtDate(due)}{overdue ? " (überfällig)" : ""}</span> : null}
+      </summary>
+      <div className="mt-2"><RunCard r={r} back={back} users={users} /></div>
+    </details>
+  );
+}
+
 function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }) {
   const current = r.steps.find((s) => s.status === "OFFEN") ?? null;
   const done = r.steps.filter((s) => s.status === "ERLEDIGT" || s.status === "UEBERSPRUNGEN");
   return (
     <div className="border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
       <div className="flex flex-wrap items-baseline gap-2 mb-2">
-        <strong>{r.playbookName}</strong>
+        <strong>{r.playbookName}{r.persons.length ? ` – ${r.persons.join(", ")}` : ""}</strong>
         <Status label={playbookRunStatusLabel[r.status] ?? r.status} />
         <span className="muted text-sm">verantwortlich: {r.ownerName}{r.salesOpsName ? ` · Sales Operations: ${r.salesOpsName}` : ""} · Setup: <Link href={`/setups/${r.setupId}`}>{r.setupName}</Link>{r.opportunityId && r.opportunityTitle ? <> · Chance: <Link href={`/bedarfe/${r.opportunityId}`}>{r.opportunityTitle}</Link></> : null} · gestartet {fmtDate(r.createdAt)}</span>
       </div>
@@ -179,8 +203,11 @@ function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }
         </details>
       )}
 
-      <div className="flex flex-wrap gap-4 mt-3">
-        {r.canReassign && r.status !== "ABGESCHLOSSEN" && (
+      {(r.canReassign || r.canWork) && r.status !== "ABGESCHLOSSEN" && (
+      <details className="mt-3">
+      <summary className="text-sm muted">Verantwortung umstellen, zurückstellen</summary>
+      <div className="flex flex-wrap gap-4 mt-2">
+        {r.canReassign && (
           <form action={reassignRunOwnerAction} className="flex flex-wrap gap-2 items-end text-sm">
             <input type="hidden" name="runId" value={r.id} />
             <input type="hidden" name="version" value={r.version} />
@@ -213,6 +240,8 @@ function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }
           </form>
         )}
       </div>
+      </details>
+      )}
     </div>
   );
 }
