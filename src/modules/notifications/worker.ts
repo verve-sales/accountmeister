@@ -54,6 +54,11 @@ export function startNotificationWorker(): void {
           for (const ws of await db.query.workspaces.findMany({ columns: { id: true } })) beendet += await ensureOrdersEnded(ws.id);
           return { catchups: await ensureCatchups(), checkinHinweise: await notifyDueCheckins(), verlaengerungen: await ensureRenewalDecisions(), auftraegeBeendet: beendet };
         });
+        // Übergaben ans Backoffice (Etappe 51): nach zwei Tagen ohne Quittung erinnern
+        await runJob("uebergaben-erinnerung", async () => {
+          const { remindOpenHandovers } = await import("@/modules/conversion/handover");
+          return { erinnert: await remindOpenHandovers() };
+        });
         // Moco-Abgleich (Etappe 31): stündlich als Rückfallebene zu den Webhooks; nur wenn eingeschaltet
         const { mocoEnabled } = await import("@/modules/moco/client");
         if (mocoEnabled()) {

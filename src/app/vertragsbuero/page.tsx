@@ -51,10 +51,30 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
         <Kpi n={k.ohneAnsprechpartner} label="ohne Verlängerungs-Ansprechpartner" href="/einsaetze?f=ohne_ansprechpartner" warn />
         <Kpi n={k.unterlagenOffen} label="Unterlagen offen" href="/einsaetze?f=vertrag_offen" warn />
         <Kpi n={k.endeUeberschritten} label="Ende überschritten" href={canClean(actor) ? "/bereinigung#ende" : "/einsaetze?f=ende_ueberschritten"} warn />
+        <Kpi n={k.uebergabenOffen} label="Übergaben ans Backoffice offen" href="/uebergaben" warn />
+        <Kpi n={k.vorgaenge} label="laufende Konvertierungsvorgänge" href="#vorgaenge" />
         <Kpi n={k.mocoHinweise} label="Moco-Hinweise offen" href="/moco" warn />
         {canClean(actor) && <Kpi n={cleanN} label="in der Bereinigung" href="/bereinigung" warn />}
         <Kpi n={k.laufend} label="laufende Einsätze" href="/einsaetze" />
       </div>
+
+      <section className="card space-y-2" id="vorgaenge">
+        <h2 className="font-semibold">Laufende Konvertierungsvorgänge ({o.vorgaenge.length})</h2>
+        {o.vorgaenge.length === 0 ? <p className="muted text-sm">Kein laufender Vorgang. Gestartet wird er an der Chance.</p> : (
+          <table className="list text-sm">
+            <thead><tr><th>Chance · Kunde</th><th>Jetzt dran</th><th>Was fehlt</th></tr></thead>
+            <tbody>
+              {o.vorgaenge.map((x) => (
+                <tr key={x.id}>
+                  <td><Link href={`/bedarfe/${x.opportunityId}/vorgang`}><strong>{x.title}</strong></Link><div className="muted text-xs">{x.accountName}</div></td>
+                  <td>{x.step}</td>
+                  <td className="text-xs">{x.stepNote}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       <section className="card space-y-2" id="enden">
         <h2 className="font-semibold">Enden in den nächsten 120 Tagen ({o.ending.length})</h2>

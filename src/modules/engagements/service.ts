@@ -244,6 +244,13 @@ export async function changeEngagementStatus(actor: Actor, id: string, raw: unkn
     const cares = await tx.query.careAssignments.findMany({ where: and(eq(schema.careAssignments.engagementId, e.id), isNull(schema.careAssignments.toDate)) });
     await notify(tx, { workspaceId: actor.workspaceId, userIds: [e.bdUserId, ...cares.map((c) => c.userId)], kind: "KOMMENTAR", title: `Einsatz „${e.title}“: ${engagementStatusLabel[i.status]}`, link: `/einsaetze/${e.id}`, actorUserId: actor.userId });
     return u;
+  }).then(async (u) => {
+    // Übergabe ans Backoffice (Etappe 51): Ende oder Abbruch melden, wenn das Backoffice den Einsatz kennt
+    if (i.status === "ENDET" || i.status === "ABGEBROCHEN") {
+      const { handoverForChange } = await import("@/modules/conversion/handover");
+      await handoverForChange(actor, e.id, "BEENDET", `${i.status === "ENDET" ? `Endet zum ${patch.actualEnd ?? "?"}` : "Abgebrochen"}${i.reason ? ` – ${i.reason}` : ""}.`);
+    }
+    return u;
   });
 }
 

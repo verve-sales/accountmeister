@@ -15,7 +15,8 @@ import { DeleteBlock } from "@/components/DeleteBlock";
 import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { approachLabel, approachValues, loadRenewalContacts } from "@/modules/engagements/contacts";
-import { addContractDocumentAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction } from "../../actions";
+import { addContractDocumentAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
+import { contractDefaults } from "@/modules/conversion/contractService";
 
 const eur = (v: string | null, unit: string) => (v ? `${Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${rateUnitLabel[unit] ?? unit}` : "offen");
 const RED = "#c0392b";
@@ -57,6 +58,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const vertrag = e.procurement.complete === true ? "vollständig" : e.procurementException ? `Ausnahme: ${e.procurementException}` : e.procurement.complete === false ? `unvollständig (${e.procurement.required.filter((r) => r.ok).length}/${e.procurement.required.length})` : "kein freigegebenes Beschaffungsprofil – Stand unbestimmt";
   const setupDefault = (await loadRenewalContacts([{ ...e, renewalContactPersonId: null, orderContactPersonId: null, renewalApproach: null }])).get(e.id)!;
   const canContacts = (a.manage || a.care) && !final;
+  const cd = e.freelancerId && (a.manage || a.care) && !final ? await contractDefaults(actor, e.id).catch(() => null) : null;
   const nextDue = [e.nextCheckin, openRenewal ? e.pingDate : null, e.status === "PAUSIERT" ? e.reviewDate : null].filter((x): x is string => !!x).sort()[0] ?? null;
 
   return (
@@ -200,6 +202,32 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           <h2 className="font-semibold">Verträge und Bestellungen</h2>
           <span className="muted text-xs">Zwei Vertragsseiten, getrennt von den Dokumenten. {e.procurement.profile ? `Pflicht laut Profil: ${e.procurement.required.map((r) => `${docSideLabel[r.side]} ${docTypeLabel[r.docType]}${r.ok ? " ✓" : ""}`).join(", ") || "keine"}.` : <>Kein freigegebenes Beschaffungsprofil – <Link href={`/kunden/${e.accountId}#beschaffungsprofil`}>am Kunden pflegen</Link>.</>}</span>
         </div>
+        {cd && (
+          <details className="mb-3" id="vertrag-erzeugen" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .75rem" }}>
+            <summary className="text-sm cursor-pointer font-semibold">Projekteinzelvertrag mit {cd.freelancerName} erzeugen</summary>
+            <p className="muted text-xs mt-1">Füllt die freigegebene Vorlage ({cd.variant === "GESELLSCHAFT" ? "Gesellschaft" : "Einzelperson"}) und legt das Dokument als Entwurf hier ab. Der Vertrag steht unter dem Vorbehalt, dass der Endkunde beauftragt. Herunterladen, prüfen, unterschreiben, versenden – die Vorlage enthält keine Unterschrift.</p>
+            {cd.missingProfile.length > 0 && <p className="text-sm mt-1" style={{ color: "#b7791f" }}>Im <Link href={`/besetzung/freelancer/${cd.freelancerId}#profil`}>Freelancer-Profil</Link> fehlt noch: {cd.missingProfile.join(", ")}.</p>}
+            <form action={generateContractAction.bind(null, e.id)} className="grid sm:grid-cols-3 gap-2 mt-2 text-sm">
+              <div><label className="label">Rolle</label><input name="rolle" className="input" required defaultValue={cd.rolle} /></div>
+              <div className="sm:col-span-2"><label className="label">Leistungsbereich („im Bereich …“)</label><input name="leistungsbereich" className="input" required defaultValue={cd.leistungsbereich} /></div>
+              <div className="sm:col-span-3"><label className="label">Aufgaben (eine je Zeile)</label><textarea name="aufgaben" className="textarea" rows={5} required defaultValue={cd.aufgaben} /></div>
+              <div className="sm:col-span-2"><label className="label">Endkunde</label><input name="endkunde" className="input" required defaultValue={cd.endkunde} /></div>
+              <div><label className="label">Ort des Endkunden</label><input name="endkundeOrt" className="input" required defaultValue={cd.endkundeOrt} /></div>
+              <div><label className="label">Beginn</label><input type="date" name="beginn" className="input" required defaultValue={cd.beginn} /></div>
+              <div><label className="label">Ende</label><input type="date" name="ende" className="input" required defaultValue={cd.ende} /></div>
+              <div><label className="label">Beauftragung des Endkunden bis</label><input type="date" name="bedingungFrist" className="input" required defaultValue={cd.bedingungFrist} /></div>
+              <div><label className="label">Kontingent (Projekttage)</label><input name="kontingentTage" className="input" inputMode="numeric" required defaultValue={cd.kontingentTage} /></div>
+              <div><label className="label">Stunden je Projekttag</label><input name="stundenJeProjekttag" className="input" inputMode="numeric" required defaultValue={cd.stundenJeProjekttag} /></div>
+              <div><label className="label">Stundensatz (EUR)</label><input name="stundensatz" className="input" inputMode="decimal" required defaultValue={cd.stundensatz} /></div>
+              <div><label className="label">Vor-Ort-Einsätze in</label><input name="einsatzort" className="input" required defaultValue={cd.einsatzort} /></div>
+              <div><label className="label">Zahlungsziel (Tage)</label><input name="zahlungszielTage" className="input" inputMode="numeric" required defaultValue={cd.zahlungszielTage} /></div>
+              <div><label className="label">Kündigungsfrist (Kalendertage)</label><input name="kuendigungsfristTage" className="input" inputMode="numeric" required defaultValue={cd.kuendigungsfristTage} /></div>
+              <div><label className="label">Ort</label><input name="ort" className="input" required defaultValue={cd.ort} /></div>
+              <div><label className="label">Datum</label><input type="date" name="datum" className="input" required defaultValue={cd.datum} /></div>
+              <div className="sm:col-span-3"><button className="btn btn-small" type="submit">Vertrag erzeugen</button></div>
+            </form>
+          </details>
+        )}
         {d.documents.length === 0 ? <p className="muted text-sm">Noch keine Unterlage verknüpft.</p> : (
           <ul className="text-sm space-y-2">
             {d.documents.map((doc) => (

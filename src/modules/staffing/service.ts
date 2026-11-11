@@ -380,9 +380,15 @@ export async function updateFreelancer(actor: Actor, freelancerId: string, raw: 
 }
 
 /** Sichtbar: Pool-Berechtigte oder wer mindestens eine Kandidatur dieses Freelancers an einer eigenen Position sieht. */
-export async function requireFreelancer(actor: Actor, freelancerId: string) {
-  const f = await db.query.freelancers.findFirst({ where: and(eq(schema.freelancers.id, freelancerId), eq(schema.freelancers.workspaceId, actor.workspaceId)) });
-  if (!f) throw new NotFoundError("Freelancer");
+/** Geschützte Profilfelder (Konditionen, Vertragliches) – außerhalb des Profils nie mitgeben (Etappe 51). */
+function hideProtected<T extends typeof schema.freelancers.$inferSelect>(f: T): T {
+  return { ...f, ekRate: null, paymentTermDays: null, taxNumber: null, invoiceNote: null };
+}
+
+export async function requireFreelancer(actor: Actor, freelancerId: string, opts: { raw?: boolean } = {}) {
+  const f0 = await db.query.freelancers.findFirst({ where: and(eq(schema.freelancers.id, freelancerId), eq(schema.freelancers.workspaceId, actor.workspaceId)) });
+  if (!f0) throw new NotFoundError("Freelancer");
+  const f = opts.raw ? f0 : hideProtected(f0);
   if (canBrowseFreelancerPool(actor)) return f;
   const cands = await db.query.candidacies.findMany({ where: eq(schema.candidacies.freelancerId, f.id), columns: { positionId: true } });
   for (const c of [...new Set(cands.map((x) => x.positionId))]) {
@@ -413,7 +419,7 @@ export async function listFreelancerPool(actor: Actor) {
   const rows = await db.query.freelancers.findMany({ where: and(eq(schema.freelancers.workspaceId, actor.workspaceId), isNull(schema.freelancers.mergedIntoId)), orderBy: asc(schema.freelancers.displayName) });
   const counts = await db.select({ freelancerId: schema.candidacies.freelancerId, n: sql<number>`count(*)` }).from(schema.candidacies).where(eq(schema.candidacies.workspaceId, actor.workspaceId)).groupBy(schema.candidacies.freelancerId);
   const cn = new Map(counts.map((c) => [c.freelancerId, Number(c.n)]));
-  return rows.map((r) => ({ ...r, candidacyCount: cn.get(r.id) ?? 0 }));
+  return rows.map((r) => ({ ...hideProtected(r), candidacyCount: cn.get(r.id) ?? 0 }));
 }
 
 // ---------------------------------------------------------------------------

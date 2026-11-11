@@ -2060,3 +2060,82 @@ export async function watchFolderAction(fd: FormData) {
     throw new PendingInfo(r.folderFound ? `Eingeschaltet – Mails im Ordner „${WATCH_FOLDER_NAME}“ werden ab jetzt ausgewertet (alle zwei Minuten, höchstens fünf je Lauf).` : `Eingeschaltet, aber in deinem Postfach gibt es noch keinen Ordner „${WATCH_FOLDER_NAME}“. Lege ihn in Outlook an (oberste Ebene oder unter dem Posteingang) – er wird dann innerhalb von zehn Minuten gefunden.`);
   }, "");
 }
+
+// --- Etappe 51: Konvertierungsvorgang, Freelancer-Profil, Vertrag, Übergabe ----
+
+function fdObject(fd: FormData): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of fd.entries()) if (typeof v === "string") out[k] = v;
+  return out;
+}
+
+export async function startConversionAction(opportunityId: string) {
+  return run(`/bedarfe/${opportunityId}/vorgang`, async (actor) => {
+    const { startConversion } = await import("@/modules/conversion/service");
+    await startConversion(actor, opportunityId);
+  }, "Vorgang gestartet.");
+}
+
+export async function conversionStepAction(opportunityId: string, conversionId: string, fd: FormData) {
+  const data = fdObject(fd);
+  const op = data.op ?? "";
+  return run(`/bedarfe/${opportunityId}/vorgang#schritt-${data.step ?? ""}`, async (actor) => {
+    const c = await import("@/modules/conversion/service");
+    if (op === "clarify") {
+      await c.markClarified(actor, conversionId);
+      throw new PendingInfo("Klärung abgeschlossen.");
+    }
+    if (op === "intermediary") {
+      await c.confirmIntermediaryCheck(actor, conversionId, data.note ?? "");
+      throw new PendingInfo("Prüfhinweis bestätigt.");
+    }
+    if (op === "offer") {
+      await c.saveOffer(actor, conversionId, data);
+      throw new PendingInfo(data.sent ? "Angebot als abgegeben festgehalten." : data.newVersion ? "Neue Angebotsfassung angelegt – bitte erneut abgeben." : "Angebot gespeichert.");
+    }
+    if (op === "commit") {
+      await c.recordCommit(actor, conversionId, data.note ?? "");
+      throw new PendingInfo("Zusage festgehalten.");
+    }
+    if (op === "order") {
+      const r = await c.recordOrder(actor, conversionId, data);
+      throw new PendingInfo(r.kind === "VORLAEUFIG" ? "Start mit Zusage per Mail festgehalten – vorläufige Übergabe ans Backoffice ist raus, „Bestellung offen“ bleibt vermerkt." : r.kind === "BESTELLUNG_NACHGEREICHT" ? "Bestellnummer nachgereicht – das Backoffice ist informiert." : "Beauftragung festgehalten – Übergabe ans Backoffice ist raus.");
+    }
+    if (op === "cancel") {
+      await c.cancelConversion(actor, conversionId, data.reason ?? "");
+      throw new PendingInfo("Vorgang abgebrochen.");
+    }
+    throw new ValidationError("Unbekannter Schritt.");
+  }, "");
+}
+
+export async function saveFreelancerProfileAction(freelancerId: string, fd: FormData) {
+  return run(`/besetzung/freelancer/${freelancerId}#profil`, async (actor) => {
+    const { saveFreelancerProfile } = await import("@/modules/conversion/profile");
+    await saveFreelancerProfile(actor, freelancerId, fdObject(fd));
+  }, "Profil gespeichert.");
+}
+
+export async function generateContractAction(engagementId: string, fd: FormData) {
+  return run(`/einsaetze/${engagementId}#vertraege`, async (actor) => {
+    const { generateFreelancerContract } = await import("@/modules/conversion/contractService");
+    const r = await generateFreelancerContract(actor, engagementId, fdObject(fd));
+    throw new PendingInfo(`Vertrag erzeugt: „${r.fileName}“ liegt als Entwurf unter den Unterlagen. Herunterladen, prüfen, unterschreiben und versenden – danach den Stand auf „versendet“ setzen.`);
+  }, "");
+}
+
+export async function ackHandoverAction(handoverId: string, fd: FormData) {
+  return run(`/uebergaben/${handoverId}`, async (actor) => {
+    const { acknowledgeHandover } = await import("@/modules/conversion/handover");
+    const data = fdObject(fd);
+    const r = await acknowledgeHandover(actor, handoverId, { mocoProjectId: data.mocoProjectIdManual || data.mocoProjectId || "", note: data.note ?? "" });
+    throw new PendingInfo(`Quittiert${r.mocoProjectId ? ` – Moco-Projekt ${r.mocoProjectId} steht am Einsatz` : ""}.`);
+  }, "");
+}
+
+export async function setupOfferPathAction(setupId: string, fd: FormData) {
+  return run(`/setups/${setupId}#angebotsweg`, async (actor) => {
+    const { setSetupOfferPath } = await import("@/modules/conversion/service");
+    await setSetupOfferPath(actor, setupId, String(fd.get("offerPath") ?? ""));
+  }, "Angebotsweg gespeichert.");
+}

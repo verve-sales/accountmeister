@@ -16,6 +16,7 @@ export const ALL_LINKS: Record<string, NavLink> = {
   runde: { href: "/kundenrunde", label: "Kundenrunde" },
   salesops: { href: "/vertragsbuero", label: "Sales-Ops-Sicht" },
   bereinigung: { href: "/bereinigung", label: "Bereinigung" },
+  uebergaben: { href: "/uebergaben", label: "Übergaben" },
 };
 
 export const HAT_NAV: Record<DashboardView, string[]> = {

@@ -533,6 +533,11 @@ export async function decideRenewal(actor: Actor, engagementId: string, raw: unk
     }
   }
   await notify(db, { workspaceId: actor.workspaceId, userIds: [requester], kind: "ERLEDIGT", title: `Verlängerung bestätigt: ${e.title} bis ${current.proposedTo}${mocoWritten ? " (Moco aktualisiert)" : ""}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId });
+  // Übergabe ans Backoffice (Etappe 51): nur die Änderung
+  {
+    const { handoverForChange } = await import("@/modules/conversion/handover");
+    await handoverForChange(actor, engagementId, "VERLAENGERT", `Verlängert bis ${current.proposedTo}. ${current.conditionsNote ?? "Konditionen unverändert"}.${mocoWritten ? " Das Projektende in Moco ist bereits gesetzt." : ""}`);
+  }
   return { decision: row, mocoWritten, mocoError };
 }
 

@@ -60,7 +60,9 @@ import {
   startInterviewAction,
   updateSetupAction,
   setupContactsAction,
+  setupOfferPathAction,
 } from "../../actions";
+import { offerPathLabel, offerPathValues } from "@/modules/conversion/service";
 import { approachLabel, approachValues } from "@/modules/engagements/contacts";
 
 export default async function SetupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; umbenennen?: string }> }) {
@@ -183,6 +185,19 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
               </form>
             </details>
           )}
+        </section>
+      )}
+
+      {mayContacts && (
+        <section className="card space-y-2" id="angebotsweg">
+          <h2 className="font-semibold">Angebotsweg <span className="muted text-sm font-normal">– bestimmt Schritt 4 im Konvertierungsvorgang</span></h2>
+          <form action={setupOfferPathAction.bind(null, id)} className="flex flex-wrap gap-2 items-end text-sm">
+            <select name="offerPath" className="input" defaultValue={d.setup.offerPath} aria-label="Angebotsweg">
+              {offerPathValues.map((v) => <option key={v} value={v}>{offerPathLabel[v]}</option>)}
+            </select>
+            <button className="btn btn-small" type="submit">Speichern</button>
+          </form>
+          <p className="muted text-xs">Das Angebot entsteht immer in Moco. Hat der Kunde eine eigene Vorlage, wird sie mit der Moco-Angebotsnummer gefüllt; an den Kunden geht dann nur die Vorlage. Im Vermittlergeschäft gibt es kein Angebot, nur Konditionen per Mail.</p>
         </section>
       )}
 

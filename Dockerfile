@@ -23,6 +23,7 @@ COPY --from=build --chown=verve:verve /app/public ./public
 COPY --from=build --chown=verve:verve /app/next.config.ts ./
 COPY --from=build --chown=verve:verve /app/src/db/migrations ./src/db/migrations
 COPY --from=build --chown=verve:verve /app/scripts ./scripts
+COPY --from=build --chown=verve:verve /app/templates ./templates
 USER verve
 VOLUME ["/data/uploads"]
 EXPOSE 3000

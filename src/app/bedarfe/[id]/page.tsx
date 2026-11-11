@@ -196,6 +196,11 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       </section>
 
       {/* Chance */}
+      {staffingOn && (
+        <p className="text-sm card" style={{ padding: ".6rem .9rem" }}>
+          <Link href={`/bedarfe/${opp.id}/vorgang`}><strong>Konvertierungsvorgang</strong></Link> <span className="muted">– führt diese Chance in sechs Schritten bis zur Beauftragung: Klärung, Besetzung, Angebot, Freelancer-Vertrag, Übergabe ans Backoffice.</span>
+        </p>
+      )}
       <section className="card" id="chance">
         <h2 className="font-semibold mb-2">Chance</h2>
         <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">

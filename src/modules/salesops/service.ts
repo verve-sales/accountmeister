@@ -27,6 +27,9 @@ export async function salesOpsOverview(actor: Actor) {
     listRenewalCards(actor),
     db.query.mocoHints.findMany({ where: and(eq(schema.mocoHints.workspaceId, actor.workspaceId), eq(schema.mocoHints.status, "OFFEN")), columns: { id: true } }),
   ]);
+  const { openHandoverCount } = await import("@/modules/conversion/handover");
+  const { listRunningConversions } = await import("@/modules/conversion/service");
+  const [uebergabenOffen, vorgaenge] = await Promise.all([openHandoverCount(actor), listRunningConversions(actor)]);
   const t = todayIso();
   const horizon = plusDaysIso(t, 120);
   const ending = running.filter((e) => e.endDate && e.endDate <= horizon).sort((a, b) => (a.endDate ?? "").localeCompare(b.endDate ?? ""));
@@ -41,7 +44,10 @@ export async function salesOpsOverview(actor: Actor) {
       endeUeberschritten: counts.ende_ueberschritten,
       mocoHinweise: hints.length,
       laufend: counts.laufend,
+      uebergabenOffen,
+      vorgaenge: vorgaenge.length,
     },
+    vorgaenge,
     ending,
     renewalCards: toStart,
   };

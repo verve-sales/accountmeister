@@ -207,6 +207,8 @@ export const projectSetups = pgTable(
     status: setupStatusEnum("status").notNull().default("ENTWURF"),
     visibility: setupVisibilityEnum("visibility").notNull().default("MITGLIEDER"),
     bdUserId: text("bd_user_id").references(() => users.id), // null = „Zuordnung offen“
+    /** Angebotsweg (Etappe 51): MOCO | MOCO_KUNDENVORLAGE | KEIN_ANGEBOT (Vermittler: nur Konditionen per Mail) */
+    offerPath: text("offer_path").notNull().default("MOCO"),
     /** Verlängerung (Etappe 48): Vorgabe für alle Einsätze dieses Setups – fachlich über, Bestellung/Vertrag über, wer spricht an */
     renewalContactPersonId: text("renewal_contact_person_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => persons.id, { onDelete: "set null" }),
     orderContactPersonId: text("order_contact_person_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => persons.id, { onDelete: "set null" }),
@@ -2000,6 +2002,27 @@ export const freelancers = pgTable(
     availabilitySource: text("availability_source"),
     externalCvRef: text("external_cv_ref"),
     externalToolRef: text("external_tool_ref"),
+    /** Freelancer-Profil (Etappe 51): Stammdaten für Vertrag und Besetzung */
+    legalForm: text("legal_form").notNull().default("PERSON"), // PERSON | GESELLSCHAFT
+    street: text("street"),
+    postalCity: text("postal_city"),
+    residence: text("residence"), // Wohnort (für Einsatzort/Reise)
+    taxNumber: text("tax_number"),
+    representativeName: text("representative_name"),
+    representativeRole: text("representative_role"),
+    roles: text("roles"),
+    industries: text("industries"),
+    languages: text("languages"),
+    certificates: text("certificates"),
+    availableFrom: date("available_from"),
+    capacityNote: text("capacity_note"),
+    travelNote: text("travel_note"),
+    profileLink: text("profile_link"),
+    /** Konditionen-Block: nur GF, Sales Operations, Backoffice und verantwortlicher BD; jeder Aufruf wird protokolliert */
+    ekRate: numeric("ek_rate", { precision: 10, scale: 2 }),
+    ekUnit: text("ek_unit").notNull().default("STUNDE"), // STUNDE | TAG
+    paymentTermDays: integer("payment_term_days"),
+    invoiceNote: text("invoice_note"),
     mergedIntoId: text("merged_into_id").references((): AnyPgColumn => freelancers.id),
     createdBy: text("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
@@ -2519,4 +2542,72 @@ export const mailInboxItems = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("mail_inbox_items_msg_uq").on(t.messageId), index("mail_inbox_items_received_idx").on(t.receivedAt)],
+);
+
+/**
+ * Konvertierungsvorgang (Etappe 51): führt eine Chance von der Anfrage bis zum laufenden Einsatz. Je Chance höchstens
+ * ein laufender Vorgang. Die Schritte ergeben sich aus dem Stand der Chance, der Positionen, der Unterlagen und den
+ * hier gehaltenen Zeitpunkten – es gibt keinen zweiten Status neben dem der Chance.
+ */
+export const conversions = pgTable(
+  "conversions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    opportunityId: text("opportunity_id").notNull().references(() => opportunities.id),
+    status: text("status").notNull().default("LAUFEND"), // LAUFEND | RUHEND | ABGEBROCHEN | ABGESCHLOSSEN
+    /** 2 Klärung */
+    clarifiedAt: timestamp("clarified_at", { withTimezone: true }),
+    /** Freelancer über Vermittler: Prüfhinweis bestätigt */
+    intermediaryCheckedAt: timestamp("intermediary_checked_at", { withTimezone: true }),
+    intermediaryCheckedBy: text("intermediary_checked_by").references(() => users.id),
+    intermediaryCheckNote: text("intermediary_check_note"),
+    /** 4 Angebot: Moco-Angebotsnummer (bis zur Moco-Anbindung von Hand), Fassung, Abgabe, Link zur Datei */
+    offerNumber: text("offer_number"),
+    offerVersion: integer("offer_version").notNull().default(1),
+    offerSentAt: timestamp("offer_sent_at", { withTimezone: true }),
+    offerLink: text("offer_link"),
+    /** Zusage des Kunden (mündlich oder per Mail): wer, wann, was */
+    commitAt: timestamp("commit_at", { withTimezone: true }),
+    commitNote: text("commit_note"),
+    /** 6 Beauftragung */
+    orderReference: text("order_reference"),
+    orderLink: text("order_link"),
+    orderAt: timestamp("order_at", { withTimezone: true }),
+    /** Start mit Zusage per Mail vor Eingang der Bestellung (individuell vereinbart) */
+    provisionalStart: boolean("provisional_start").notNull().default(false),
+    endedReason: text("ended_reason"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [uniqueIndex("conversions_running_uq").on(t.opportunityId).where(sql`status in ('LAUFEND', 'RUHEND')`), index("conversions_ws_idx").on(t.workspaceId, t.status)],
+);
+
+/**
+ * Übergabe ans Backoffice (Etappe 51): je Ereignis genau eine – vorläufig beauftragt, beauftragt, Bestellung nachgereicht,
+ * verlängert, beendet. Der Vorgang hält alle Angaben (Momentaufnahme); die Benachrichtigung ist nur der Hinweis darauf.
+ * Quittiert wird mit dem Moco-Projekt, damit die Projektnummer am Einsatz steht und kein doppelter Einsatz entsteht.
+ */
+export const backofficeHandovers = pgTable(
+  "backoffice_handovers",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    engagementId: text("engagement_id").notNull().references(() => engagements.id),
+    conversionId: text("conversion_id").references(() => conversions.id, { onDelete: "set null" }),
+    kind: text("kind").notNull(), // VORLAEUFIG | BEAUFTRAGT | BESTELLUNG_NACHGEREICHT | VERLAENGERT | BEENDET
+    /** Momentaufnahme der Pflichtangaben (ohne Dateien; Links zeigen auf die Unterlagen) */
+    payload: jsonb("payload").notNull().default({}).$type<Record<string, unknown>>(),
+    status: text("status").notNull().default("OFFEN"), // OFFEN | QUITTIERT | ZURUECKGEZOGEN
+    mocoProjectId: integer("moco_project_id"),
+    ackNote: text("ack_note"),
+    ackBy: text("ack_by").references(() => users.id),
+    ackAt: timestamp("ack_at", { withTimezone: true }),
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [index("backoffice_handovers_status_idx").on(t.workspaceId, t.status), index("backoffice_handovers_eng_idx").on(t.engagementId)],
 );

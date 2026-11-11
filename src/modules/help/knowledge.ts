@@ -80,6 +80,32 @@ Weiterleitung: Ist ein zentrales Postfach eingerichtet (die Adresse steht dann u
 In beiden Fällen: Anhänge werden nicht übernommen, Bewerbungen nicht ausgewertet. Der Kunde wird wie im Eingang über Absender-Domäne, Kürzel und Namen erkannt.`,
   },
   {
+    id: "konvertierung",
+    title: "Konvertierungsvorgang: von der Anfrage bis zur Beauftragung",
+    where: "Chance → „Konvertierungsvorgang“ · Sales-Ops-Sicht → laufende Vorgänge · Setup → Angebotsweg",
+    keywords: ["konvertierung", "vorgang", "angebot", "angebotsnummer", "zusage", "bestellung", "bestellnummer", "beauftragung", "freelancer vertrag", "projekteinzelvertrag", "vorlage", "abbrechen", "angebotsweg", "vermittler"],
+    body: `Der Vorgang führt eine Chance in sechs Schritten: 1 Anfrage, 2 Klärung, 3 Besetzung, 4 Angebot, 5 Freelancer-Vertrag, 6 Beauftragung. Der Stand jedes Schritts ergibt sich aus Chance, Positionen und Unterlagen; es gibt keinen zweiten Status. Der Vorgang lässt sich jederzeit abbrechen und endet von selbst, wenn die Chance geschlossen wird.
+Angebot: Der Angebotsweg steht am Setup. Das Angebot entsteht in Moco; die Moco-Angebotsnummer trägst du im Vorgang ein. Hat der Kunde eine eigene Vorlage, geht nur sie an den Kunden. Im Vermittlergeschäft gibt es kein Angebot, nur Konditionen per Mail. Nach der Abgabe hältst du die Zusage des Kunden fest (wer, wann, was). Ändert sich Person oder Satz, legst du eine neue Fassung an.
+Freelancer-Vertrag: Sobald der Kunde zugesagt hat, erzeugst du am Einsatz unter „Verträge und Bestellungen“ den Projekteinzelvertrag aus der Vorlage (Einzelperson oder Gesellschaft, je nach Freelancer-Profil). Er liegt als Entwurf am Einsatz, enthält keine Unterschrift und steht unter dem Vorbehalt, dass der Endkunde beauftragt. Mit „versendet“ geht der Vorgang weiter.
+Beauftragung: Mit der Bestellnummer geht die Übergabe ans Backoffice raus. Ist der Start mit Zusage per Mail vereinbart, geht eine vorläufige Übergabe raus und „Bestellung offen“ bleibt vermerkt, bis die Nummer nachgereicht ist. Freelancer bei einem Kunden mit Vermittler: Der Vorgang zeigt einen Prüfhinweis, den du mit Begründung bestätigst.`,
+  },
+  {
+    id: "uebergaben",
+    title: "Übergaben ans Backoffice",
+    where: "Mehr → Übergaben (Backoffice, Sales Operations, Geschäftsführung) · Team „Backoffice“ unter Team",
+    keywords: ["uebergabe", "backoffice", "quittieren", "moco projekt", "projektnummer", "angebot umwandeln", "bestellnummer", "abrechnung"],
+    body: `Beauftragt, vorläufig beauftragt, Bestellung nachgereicht, verlängert, beendet: Jedes dieser Ereignisse erzeugt genau eine Übergabe mit allen Angaben für Moco (Kunde, Person, Rolle, Laufzeit, Bestellnummer, Moco-Angebot, Verkaufssatz, Rechnungsempfänger, bei Freelancern Einkaufssatz und Rechnungsdaten, Unterlagen). Die Benachrichtigung ist nur der Hinweis mit Link und enthält keine Konditionen.
+Das Backoffice wandelt in Moco das Angebot in ein Projekt um, trägt die Bestellnummer ein und quittiert die Übergabe mit dem Moco-Projekt (Auswahl aus dem Abgleich oder Projekt-ID). Damit steht die Projektnummer am Einsatz, und der Moco-Abgleich legt keinen zweiten Einsatz an. Nach zwei Tagen ohne Quittung kommt eine Erinnerung. Wer zum Backoffice gehört, legt die Verwaltung im Team „Backoffice“ fest.`,
+  },
+  {
+    id: "freelancer-profil",
+    title: "Freelancer-Profil und Konditionen",
+    where: "Besetzung → Freelancer → Profil",
+    keywords: ["freelancer", "profil", "konditionen", "einkaufssatz", "ek", "wohnort", "steuernummer", "anschrift", "verfuegbarkeit", "projekte"],
+    body: `Das Profil hält Stammdaten (Vertragspartner Einzelperson oder Gesellschaft, Vertragsanschrift, Wohnort), Fachliches, Verfügbarkeit und die Projekte bei uns (entstehen automatisch aus den Einsätzen). Der Vertrag zieht Anschrift, Firma, Vertretung und Steuernummer aus dem Profil.
+Konditionen (Einkaufssatz, Zahlungsziel) sehen nur Geschäftsführung, Sales Operations, Backoffice und der BD eines Einsatzes dieses Freelancers; jeder Aufruf wird protokolliert. Steuernummer und Rechnungsdaten sehen Geschäftsführung, Sales Operations und Backoffice. Für interne Mitarbeitende gibt es kein Profil.`,
+  },
+  {
     id: "kundenansicht",
     title: "Kundenansicht: Grundlagen, Strategie, Operativ",
     where: "Kunden → Kunde → Reiter 1 Grundlagen · 2 Strategie · 3 Operativ",
