@@ -100,7 +100,7 @@ const LABELS: Record<string, string> = {
 
 export async function renderContract(data: ContractData, opts: { templateDir?: string } = {}): Promise<Buffer> {
   const dir = opts.templateDir ?? path.join(process.cwd(), "templates", "vertrag");
-  const zip = await JSZip.loadAsync(await readFile(path.join(dir, FILES[data.variant])));
+  const zip = await JSZip.loadAsync(await readFile(/* turbopackIgnore: true */ path.join(/* turbopackIgnore: true */ dir, FILES[data.variant])));
   const doc = zip.file("word/document.xml");
   if (!doc) throw new Error("Vertragsvorlage ist beschädigt.");
   zip.file("word/document.xml", fillDocumentXml(await doc.async("string"), data));

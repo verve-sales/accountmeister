@@ -30,9 +30,11 @@ import { groupByFamily } from "@/modules/roles/catalog";
 import { decisionRoleLabel, engagementStatusLabel, epistemicLabel, fmtDate, fmtDateTime, offerStatusLabel, opportunityStatusLabel, orderStatusLabel, requirementStatusLabel, sourceTypeLabel } from "@/lib/labels";
 import { linkedinSearchUrl } from "@/lib/linkedin";
 import { DeleteBlock } from "@/components/DeleteBlock";
+import { PendingButton } from "@/components/PendingButton";
+import { getConversion } from "@/modules/conversion/service";
 import {
   addParticipationAction, addStartRequirementAction, cancelOrderAction, changeOfferStatusAction, changeOpportunityStatusAction, confirmOpportunityAction, confirmOrderAction, createOfferAction,
-  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, reassignOpportunityOwnerAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction, linkChanceInitiativeAction,
+  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, reassignOpportunityOwnerAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction, linkChanceInitiativeAction, startConversionAction,
 } from "../../actions";
 
 /** Reifegradkette dieser Chance – Orientierung, keine Pflichtschleuse (Angebot/Auftrag/Einsatz haben eigene Zustände). */
@@ -146,6 +148,8 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   const staffedByText = staffedBy ? (staffedBy.status === "BESETZT" ? staffedBy.name : null) : null;
   const staffingOn = getConfig().FEATURE_BESETZUNG === "true";
   const oppEngagements = staffingOn ? await db.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id), columns: { id: true } }) : [];
+  const conv = staffingOn ? await getConversion(actor, opp.id).catch(() => null) : null;
+  const convStep = conv?.steps.find((x) => x.state === "AKTUELL") ?? null;
   const staffingManage = staffingOn && !closed ? await canManageStaffingAt(actor, opp.id).catch(() => false) : false;
   const staffingFreelancers = staffingManage ? await freelancerOptions(actor).catch(() => []) : [];
   return (
@@ -197,9 +201,27 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
 
       {/* Chance */}
       {staffingOn && (
-        <p className="text-sm card" style={{ padding: ".6rem .9rem" }}>
-          <Link href={`/bedarfe/${opp.id}/vorgang`}><strong>Konvertierungsvorgang</strong></Link> <span className="muted">– führt diese Chance in sechs Schritten bis zur Beauftragung: Klärung, Besetzung, Angebot, Freelancer-Vertrag, Übergabe ans Backoffice.</span>
-        </p>
+        <section className="card" id="konvertierung" style={{ borderLeft: "4px solid #1f4e79" }}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm" style={{ maxWidth: "46rem" }}>
+              <h2 className="font-semibold">Konvertierungsvorgang</h2>
+              {conv && ["LAUFEND", "RUHEND"].includes(conv.conversion.status) ? (
+                <p className="mt-1">
+                  {conv.conversion.status === "RUHEND" ? "Ruht, solange die Chance zurückgestellt ist." : convStep ? <>Jetzt dran: <strong>Schritt {convStep.no} – {convStep.title}</strong>{convStep.note ? <span className="muted"> · {convStep.note}</span> : null}</> : "Läuft."}
+                </p>
+              ) : conv ? (
+                <p className="mt-1 muted">{conv.conversion.status === "ABGESCHLOSSEN" ? "Abgeschlossen – beauftragt und ans Backoffice übergeben." : "Abgebrochen."}</p>
+              ) : (
+                <p className="mt-1 muted">Führt diese Chance in sechs Schritten bis zur Beauftragung: Anfrage, Klärung, Besetzung, Angebot, Freelancer-Vertrag, Übergabe ans Backoffice. Bereits Erledigtes wird übernommen.</p>
+              )}
+            </div>
+            {conv ? (
+              <Link href={`/bedarfe/${opp.id}/vorgang`} className="btn">Vorgang öffnen</Link>
+            ) : (canEdit || actor.roles.has("CEO") || actor.roles.has("SALES_OPS")) && !closed && opp.status !== "ZURUECKGESTELLT" ? (
+              <form action={startConversionAction.bind(null, opp.id)}><PendingButton busy="Starte …">Konvertierungsvorgang starten</PendingButton></form>
+            ) : null}
+          </div>
+        </section>
       )}
       <section className="card" id="chance">
         <h2 className="font-semibold mb-2">Chance</h2>
