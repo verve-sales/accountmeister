@@ -1733,7 +1733,14 @@ export async function startRenewalAction(fd: FormData) {
   return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#verlaengerung`), async (actor) => {
     requireStaffingFlag();
     const { startRenewal } = await import("@/modules/engagements/care");
-    const r = await startRenewal(actor, data.engagementId ?? "", data);
+    const r = await startRenewal(actor, data.engagementId ?? "", data, { direct: !!data.direct });
+    if (data.direct) {
+      // e44: wer selbst entscheiden darf, verlängert in einem Schritt
+      const { decideRenewal } = await import("@/modules/engagements/care");
+      const d = await decideRenewal(actor, data.engagementId ?? "", { decision: "BESTAETIGEN", contractFollowUp: data.contractFollowUp ?? "", orderReference: data.orderReference ?? "" });
+      if (d.pendingApproval) throw new PendingInfo("Geänderte Konditionen bei einem Account-Lead-Kunden: Die Verlängerung liegt jetzt zur Freigabe bei der Geschäftsführung.");
+      throw new PendingInfo(`Verlängert bis ${d.decision.proposedTo} – Periode, Einsatz- und Auftragsende gesetzt${d.mocoWritten ? ", Projektende in Moco aktualisiert" : d.mocoError ? `; Moco konnte nicht geschrieben werden (${d.mocoError.slice(0, 120)}) – Aufgabe an Sales Operations` : ""}.`);
+    }
     throw new PendingInfo(`Verlängerung bis ${r.proposedTo} angestoßen – die Entscheidung liegt jetzt beim BD (und Principal) auf der Startseite.`);
   }, "Verlängerung angestoßen.");
 }

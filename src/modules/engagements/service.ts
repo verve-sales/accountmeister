@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { engagementLabel } from "./label";
 import { z } from "zod";
 import { db, schema, type Tx } from "@/db/client";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
@@ -242,7 +243,7 @@ export async function changeEngagementStatus(actor: Actor, id: string, raw: unkn
       for (const c of open) await tx.update(schema.checkins).set({ status: "ABGESAGT", note: `${c.note ?? ""}\nEntfallen: Einsatz ${engagementStatusLabel[i.status]}${i.reason ? ` (${i.reason})` : ""}`.trim(), version: c.version + 1, updatedAt: new Date() }).where(eq(schema.checkins.id, c.id));
     }
     const cares = await tx.query.careAssignments.findMany({ where: and(eq(schema.careAssignments.engagementId, e.id), isNull(schema.careAssignments.toDate)) });
-    await notify(tx, { workspaceId: actor.workspaceId, userIds: [e.bdUserId, ...cares.map((c) => c.userId)], kind: "KOMMENTAR", title: `Einsatz „${e.title}“: ${engagementStatusLabel[i.status]}`, link: `/einsaetze/${e.id}`, actorUserId: actor.userId });
+    await notify(tx, { workspaceId: actor.workspaceId, userIds: [e.bdUserId, ...cares.map((c) => c.userId)], kind: "KOMMENTAR", title: `${await engagementLabel(tx, e)}: Einsatz ${engagementStatusLabel[i.status]}`, link: `/einsaetze/${e.id}`, actorUserId: actor.userId });
     return u;
   }).then(async (u) => {
     // Übergabe ans Backoffice (Etappe 51): Ende oder Abbruch melden, wenn das Backoffice den Einsatz kennt

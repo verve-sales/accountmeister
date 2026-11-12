@@ -17,10 +17,10 @@ export function PositionList({ items, empty, showAccount = true }: { items: Row[
         <li key={p.id} className="text-sm" style={{ borderLeft: `3px solid ${p.overdue ? RED : p.status === "BESETZT" ? "#2f7d32" : "var(--border)"}`, paddingLeft: ".6rem" }}>
           <div className="flex flex-wrap items-baseline gap-x-2">
             <Link href={`/besetzung/${p.id}`}>
-              <strong>{p.title}</strong>
+              <strong>{p.filledBy ? `${p.filledBy.name} – ${p.title}` : p.title}</strong>
             </Link>
             <span className="status">{positionStatusLabel[p.status] ?? p.status}</span>
-            {p.filledBy ? <span className="text-xs">besetzt mit <strong>{p.filledBy.name}</strong> ({p.filledBy.kind === "INTERN" ? "intern, Verve" : "Freelancer"})</span> : <span className="muted text-xs">{p.progress}</span>}
+            {p.filledBy ? <span className="muted text-xs">{p.filledBy.kind === "INTERN" ? "intern" : "Freelancer"}</span> : <span className="muted text-xs">{p.progress}</span>}
           </div>
           <div className="muted text-xs">
             {showAccount ? `${p.accountName} · ${p.opportunityTitle} · ` : ""}BD {p.bdName}
@@ -123,7 +123,7 @@ export async function StaffingBlock({ actor, opportunityId, back, users, default
       </div>
       <PositionList items={sum.items} empty="Noch keine Position an dieser Chance." showAccount={false} />
       {sum.filled > 0 && sum.open > 0 && <p className="text-xs muted mt-2">Teilbesetzung: {sum.filled} Platz/Plätze besetzt, {sum.open} weiter offen. Die Chance wird dadurch nicht automatisch „beauftragt“ – der Abschluss läuft wie bisher über <a href="#auftrag">Angebot und Auftrag</a>.</p>}
-      {sum.filled > 0 && sum.open === 0 && <p className="text-xs mt-2">Alle Positionen besetzt. Weiter im bestehenden Abschluss: <a href="#auftrag">Auftrag anlegen bzw. Beauftragung bestätigen</a>.</p>}
+      {sum.filled > 0 && sum.open === 0 && <p className="text-xs mt-2">Alle Positionen besetzt. Weiter im <a href="#konvertierung">Konvertierungsvorgang</a>: Angebot, Zusage, Bestellung.</p>}
       {manage && !closed && (
         <>
           <details className="mt-3" open={sum.total === 0}>

@@ -46,6 +46,14 @@ const envSchema = z.object({
   MAIL_INBOX_REQUIRE_INTERNAL: z.enum(["true", "false"]).default("true"),
   /** Lieferbereich Besetzung (Etappe 28): Navigation, Seiten und Aktionen; kein Ersatz für serverseitige Rechte */
   FEATURE_BESETZUNG: z.enum(["true", "false"]).default("true"),
+  /**
+   * Verlängerungs-Automatik der Auftragsschicht (e44): „on“ legt 90 Tage vor Ende die Aktion „Verlängerung ansprechen“ an und
+   * startet 8 Wochen vor Ende das Vorgehen „Verlängerung vor Einsatzende“. Standard „off“: Die Verlängerung läuft allein über
+   * die Karte am Einsatz (anstoßen, bestätigen); das Vorgehen bleibt als Checkliste von Hand startbar.
+   */
+  RENEWAL_AUTOMATION: z.enum(["on", "off"]).default("off"),
+  /** Vorlagenkatalog „Artefakte“ in Menü, Setup und Chance zeigen (e44: Standard aus) */
+  FEATURE_ARTEFAKTE: z.enum(["true", "false"]).default("false"),
   /** Uhrzeit (Europe/Berlin) des Tagesdigests */
   MAIL_DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(7),
   /** Moco-Anbindung (Etappe 31): off (Standard) | http (echte Moco-API) | fixture (Testdaten aus tests/fixtures/moco, nur Entwicklung/Tests) */

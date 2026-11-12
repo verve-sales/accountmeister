@@ -66,7 +66,7 @@ export async function WorkBlock({ actor, subjectType, subjectId, back, title = "
           {title}
           {list.open.length ? ` (${list.open.length} offen)` : ""}
         </h2>
-        <span className="muted text-xs">Aufgaben und Anfragen an Kolleg:innen oder Teams – mit Annahme, Frist und Rückmeldung.</span>
+        <span className="muted text-xs">Aufgaben und Anfragen an Kolleg:innen oder Teams.</span>
       </div>
       <WorkList items={list.open} empty="Keine offenen Vorgänge." showAccount={false} />
       {list.done.length > 0 && (
@@ -95,7 +95,7 @@ export async function Comments({ actor, subjectType, subjectId, back }: { actor:
     <section className="card" id="kommentare">
       <div className="flex flex-wrap items-baseline gap-2 mb-2">
         <h2 className="font-semibold">Kommentare{list.length ? ` (${list.filter((c) => !c.deletedAt).length})` : ""}</h2>
-        <span className="muted text-xs">Rückfragen und Absprachen direkt am Objekt. Mit „@Vorname Nachname“ erwähnst du jemanden – die Person wird benachrichtigt.</span>
+        <span className="muted text-xs">Mit „@Vorname Nachname“ benachrichtigst du jemanden.</span>
       </div>
       {list.length === 0 && <p className="muted text-sm">Noch keine Kommentare.</p>}
       <ul className="space-y-3">

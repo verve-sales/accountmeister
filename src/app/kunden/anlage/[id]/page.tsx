@@ -1,3 +1,4 @@
+import { getConfig } from "@/lib/config";
 import Link from "next/link";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { notFound, redirect } from "next/navigation";
@@ -228,7 +229,7 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
               </section>
             )}
 
-            {p.artifacts.length > 0 && (
+            {p.artifacts.length > 0 && getConfig().FEATURE_ARTEFAKTE === "true" && (
               <section className="card text-sm">
                 <h2 className="font-semibold mb-2">Empfohlene Artefakte</h2>
                 <ul className="list-disc ml-5">

@@ -1,8 +1,9 @@
 import { openSosByAccount } from "@/modules/sos/service";
 import { procurementLabel } from "@/modules/agenda/service";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
+import { getConfig } from "@/lib/config";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
@@ -114,6 +115,16 @@ export async function renewalRoadmaps(engagements: Engagement[], now = new Date(
   const pb = await db.query.playbooks.findMany({ where: eq(schema.playbooks.code, "VERLAENGERUNG") });
   const runs = pb.length ? await db.query.playbookRuns.findMany({ where: and(inArray(schema.playbookRuns.opportunityId, withEnd.map((e) => e.opportunityId)), inArray(schema.playbookRuns.playbookId, pb.map((p) => p.id))) }) : [];
   const steps = runs.length ? await db.query.playbookRunSteps.findMany({ where: inArray(schema.playbookRunSteps.runId, runs.map((r) => r.id)) }) : [];
+  const autoOff = getConfig().RENEWAL_AUTOMATION !== "on";
+  const decisionOf = new Map<string, string>();
+  if (autoOff) {
+    const engs = await db.query.engagements.findMany({ where: inArray(schema.engagements.orderId, withEnd.map((e) => e.orderId)), columns: { id: true, orderId: true } });
+    const decs = engs.length ? await db.query.renewalDecisions.findMany({ where: inArray(schema.renewalDecisions.engagementId, engs.map((x) => x.id)), orderBy: asc(schema.renewalDecisions.createdAt), columns: { engagementId: true, status: true } }) : [];
+    for (const d of decs) {
+      const o = engs.find((x) => x.id === d.engagementId)?.orderId;
+      if (o) decisionOf.set(o, d.status);
+    }
+  }
   const t = now.toISOString().slice(0, 10);
   const soon = new Date(now.getTime() + 14 * DAY).toISOString().slice(0, 10);
   const add = (d: string, n: number) => new Date(new Date(d).getTime() + n * DAY).toISOString().slice(0, 10);
@@ -125,6 +136,18 @@ export async function renewalRoadmaps(engagements: Engagement[], now = new Date(
     const run = runs.filter((r) => r.opportunityId === e.opportunityId).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
     const st = (pos: number) => (run ? steps.find((s) => s.runId === run.id && s.position === pos) : undefined);
     const doneStep = (pos: number) => { const x = st(pos); return !!x && (x.status === "ERLEDIGT" || x.status === "UEBERSPRUNGEN"); };
+    if (!run && !pingAction && autoOff) {
+      // e44: ohne Automatik führt die Karte am Einsatz – drei Wegmarken statt sieben
+      const d = decisionOf.get(e.orderId);
+      const moved = !!d && d !== "ZU_KLAEREN";
+      const simple = [
+        { key: "KLAEREN", date: ping, label: "Verlängerung klären: Karte auf Start und am Einsatz – anstoßen oder Ende bestätigen", done: moved },
+        { key: "ESKALATION", date: add(end, -28), label: "Spätestens jetzt: Principal/CEO sehen den Einsatz als Eskalation, wenn nichts entschieden ist", done: moved },
+        { key: "ENDE", date: end, label: "Einsatzende – Entscheidung dokumentiert (verlängert oder Ende bestätigt)", done: d === "BESTAETIGT" || d === "ABGELEHNT" },
+      ];
+      out.set(e.orderId, simple.sort((a, b) => a.date.localeCompare(b.date)).map((m) => ({ key: m.key, date: m.date, label: m.label, state: m.done ? "ERLEDIGT" : m.date < t ? "UEBERFAELLIG" : m.date <= soon ? "BALD" : "SPAETER" })));
+      continue;
+    }
     const raw: { key: string; date: string; label: string; done: boolean }[] = [
       { key: "PING", date: ping, label: "Ping an den BD: Verlängerung beim Kunden ansprechen (Zufriedenheit, Anschlussbedarf, Bestellweg)", done: pingAction?.status === "ERLEDIGT" || doneStep(1) },
       { key: "START", date: trig, label: run ? "Vorgehen „Verlängerung vor Einsatzende“ läuft – Schritt 1: Zufriedenheit und Wirkung abfragen" : "Vorgehen „Verlängerung vor Einsatzende“ startet – Zufriedenheit und Wirkung abfragen", done: !!run },

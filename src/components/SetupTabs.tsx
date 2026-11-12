@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getConfig } from "@/lib/config";
 
 /** Reiter eines Setups (Etappe 9): ein Ort für Überblick, Strategiefaden, Personen & Zugang, Artefakte, Weeklys. */
 export function SetupTabs({ setupId, active }: { setupId: string; active: "ueberblick" | "strategie" | "personen" | "artefakte" }) {
@@ -6,9 +7,10 @@ export function SetupTabs({ setupId, active }: { setupId: string; active: "ueber
     { key: "ueberblick", href: `/setups/${setupId}`, label: "Überblick" },
     { key: "strategie", href: `/setups/${setupId}/strategie`, label: "Strategiefaden" },
     { key: "personen", href: `/setups/${setupId}/personen`, label: "Personen & Zugang" },
-    { key: "artefakte", href: `/setups/${setupId}/artefakte`, label: "Artefakte" },
+    // e44: der Vorlagenkatalog ist standardmäßig ausgeblendet (FEATURE_ARTEFAKTE)
+    ...(getConfig().FEATURE_ARTEFAKTE === "true" || active === "artefakte" ? [{ key: "artefakte", href: `/setups/${setupId}/artefakte`, label: "Artefakte" }] : []),
     { key: "weeklys", href: `/weeklys?setup=${setupId}`, label: "Weeklys" },
-  ] as const;
+  ];
   return (
     <nav aria-label="Setup-Bereiche" className="flex flex-wrap gap-1 border-b text-sm" style={{ borderColor: "var(--border)" }}>
       {tabs.map((t) => {

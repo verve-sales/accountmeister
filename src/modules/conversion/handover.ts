@@ -4,7 +4,7 @@ import { db, schema } from "@/db/client";
 import { ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
-import { notify } from "@/modules/notifications/service";
+import { notify, resolveNotifications } from "@/modules/notifications/service";
 import { backofficeUserIds, isBackoffice } from "./profile";
 
 /**
@@ -79,7 +79,8 @@ async function buildPayload(engagementId: string, conversionId: string | null, h
     e.internalUserId ? db.query.users.findFirst({ where: eq(schema.users.id, e.internalUserId), columns: { displayName: true } }) : Promise.resolve(null),
     db.query.engagementPeriods.findMany({ where: and(eq(schema.engagementPeriods.engagementId, e.id), isNull(schema.engagementPeriods.supersededById)), orderBy: desc(schema.engagementPeriods.validFrom) }),
     e.orderId ? db.query.orders.findFirst({ where: eq(schema.orders.id, e.orderId) }) : Promise.resolve(null),
-    conversionId ? db.query.conversions.findFirst({ where: eq(schema.conversions.id, conversionId) }) : db.query.conversions.findFirst({ where: eq(schema.conversions.opportunityId, e.opportunityId), orderBy: desc(schema.conversions.createdAt) }),
+    // ohne ausdrücklichen Vorgang: der Vorgang dieser Position (e43), nicht irgendeiner der Chance
+    conversionId ? db.query.conversions.findFirst({ where: eq(schema.conversions.id, conversionId) }) : db.query.conversions.findFirst({ where: and(eq(schema.conversions.opportunityId, e.opportunityId), eq(schema.conversions.positionId, e.positionId)), orderBy: desc(schema.conversions.createdAt) }),
     db.query.engagementDocuments.findMany({ where: eq(schema.engagementDocuments.engagementId, e.id) }),
   ]);
   const docs = links.length ? await db.query.contractDocuments.findMany({ where: inArray(schema.contractDocuments.id, links.map((l) => l.documentId)) }) : [];
@@ -92,7 +93,8 @@ async function buildPayload(engagementId: string, conversionId: string | null, h
     rolle: position?.title ?? e.title,
     beginn: e.actualStart ?? e.plannedStart,
     ende: e.actualEnd ?? e.plannedEnd,
-    bestellnummer: conv?.orderReference ?? order?.orderReference ?? null,
+    // die aktuelle Nummer am Einsatz (nach einer Verlängerung) geht vor
+    bestellnummer: e.orderReference ?? conv?.orderReference ?? order?.orderReference ?? null,
     bestellungLink: conv?.orderLink ?? order?.contractLink ?? null,
     angebotsnummer: conv?.offerNumber ? `${conv.offerNumber}${conv.offerVersion > 1 ? ` (Fassung ${conv.offerVersion})` : ""}` : null,
     angebotLink: conv?.offerLink ?? null,
@@ -231,14 +233,16 @@ export async function acknowledgeHandover(actor: Actor, id: string, raw: unknown
     }
     await recordAudit(tx, actor, "handover.acknowledged", "ENGAGEMENT", e.id, { uebergabe: h.id, art: h.kind, mocoProjekt: mocoProjectId });
   });
+  await resolveNotifications(db, actor.workspaceId, `/uebergaben/${h.id}`);
   await notify(db, { workspaceId: actor.workspaceId, userIds: [h.createdBy, e.bdUserId], kind: "ERLEDIGT", title: `Backoffice hat quittiert: ${handoverKindLabel[h.kind]} – ${(h.payload as unknown as HandoverPayload).person}${mocoProjectId ? ` (Moco-Projekt ${mocoProjectId})` : ""}`, link: `/einsaetze/${e.id}`, actorUserId: actor.userId, dedupeKey: `handover-ack:${h.id}` });
   return { mocoProjectId, mocoContractId };
 }
 
-/** Erinnerung für Übergaben, die länger als zwei Tage offen sind – höchstens alle zwei Tage. */
+/** Erinnerung für Übergaben, die länger als zwei Tage offen sind – danach höchstens wöchentlich (e44). */
 export async function remindOpenHandovers(now = new Date()): Promise<number> {
   const limit = new Date(now.getTime() - 2 * 86400000);
-  const rows = await db.query.backofficeHandovers.findMany({ where: and(eq(schema.backofficeHandovers.status, "OFFEN"), lt(schema.backofficeHandovers.createdAt, limit), or(isNull(schema.backofficeHandovers.remindedAt), lt(schema.backofficeHandovers.remindedAt, limit))) });
+  const again = new Date(now.getTime() - 7 * 86400000);
+  const rows = await db.query.backofficeHandovers.findMany({ where: and(eq(schema.backofficeHandovers.status, "OFFEN"), lt(schema.backofficeHandovers.createdAt, limit), or(isNull(schema.backofficeHandovers.remindedAt), lt(schema.backofficeHandovers.remindedAt, again))) });
   for (const h of rows) {
     const p = h.payload as unknown as HandoverPayload;
     const recipients = [...new Set([...(await backofficeUserIds(h.workspaceId)), ...(await salesOpsUserIds(h.workspaceId)), h.createdBy])];

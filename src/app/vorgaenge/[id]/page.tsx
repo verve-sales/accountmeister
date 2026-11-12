@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
+import { markSeen } from "@/modules/notifications/service";
 import { DomainError } from "@/lib/errors";
 import { getWorkItemDetail, workKindLabel, workStatusLabel, workTargets } from "@/modules/work/service";
 import { subjectTypeLabel } from "@/modules/work/subjects";
@@ -43,6 +44,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
   const sp = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
+  await markSeen(actor, `/vorgaenge/${id}`);
   let d;
   try {
     d = await getWorkItemDetail(actor, id);

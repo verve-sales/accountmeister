@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
+import { resetConfigCacheForTests } from "@/lib/config";
 import { ForbiddenError, ValidationError } from "@/lib/errors";
 import { loadActor } from "@/modules/identity/actor";
 import { assignRole } from "@/modules/governance/service";
@@ -10,6 +11,10 @@ import { quickFill, topCandidatesForOpportunities } from "@/modules/staffing/ser
 import { actorFor, ensureSeed } from "./helpers";
 
 const inDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+
+// e44: Die Verlängerungs-Automatik ist standardmäßig aus; diese Tests prüfen sie eingeschaltet.
+process.env.RENEWAL_AUTOMATION = "on";
+resetConfigCacheForTests();
 
 describe("Etappe 23: Kunden-Health-Check und Verlängerungsregel", () => {
   it("Auslöser: Frist − 14 Tage, sonst Ende − 8 Wochen", () => {

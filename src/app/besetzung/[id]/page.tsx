@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
+import { markSeen } from "@/modules/notifications/service";
 import { DomainError } from "@/lib/errors";
 import { getConfig } from "@/lib/config";
 import { CANDIDACY_FLOW, CANDIDACY_TERMINAL, candidacyStatusLabel, freelancerOptions, getPositionDetail, positionStatusLabel, rateUnitLabel, resourceKindLabel, scopeUnitLabel, type CandidacyStatus } from "@/modules/staffing/service";
@@ -20,6 +21,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
   const sp = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
+  await markSeen(actor, `/besetzung/${id}`);
   let d;
   try {
     d = await getPositionDetail(actor, id);
@@ -62,6 +64,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
   const searchOpen = !!d.search && !["ERLEDIGT", "VERWORFEN", "ABGELEHNT"].includes(d.search.status);
   const ad = (p.adDraft as AdDraftStored | null) ?? null;
   const activeCands = d.candidacies.filter((c) => c.isActive);
+  const filledName = p.filledCandidacyId ? d.candidacies.find((c) => c.id === p.filledCandidacyId)?.personName ?? null : null;
 
   return (
     <div className="space-y-5">
@@ -70,7 +73,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
           <Link href="/besetzung">Besetzungen</Link> · <Link href={`/bedarfe/${p.opportunityId}#besetzung`}>{v.accountName} · {v.opportunityTitle}</Link>
           {p.copiedFromId && <> · <Link href={`/besetzung/${p.copiedFromId}`}>Kopie</Link></>}
         </p>
-        <h1 className="text-2xl font-semibold mt-1">{p.title}</h1>
+        <h1 className="text-2xl font-semibold mt-1">{filledName ? <>{filledName} <span className="muted font-normal">als</span> {p.title}</> : <>{p.title} <span className="muted font-normal">· noch offen</span></>} <span className="muted font-normal text-base">bei {v.accountName}</span></h1>
         <div className="flex flex-wrap gap-2 items-baseline mt-1">
           <span className="status">{positionStatusLabel[p.status] ?? p.status}</span>
           <span className="status">{resourceKindLabel[p.resourceKind] ?? p.resourceKind}</span>
@@ -179,6 +182,9 @@ export default async function PositionPage({ params, searchParams }: { params: P
               <button className="btn btn-small" type="submit">Wieder öffnen</button>
             </form>
           )}
+          <details style={{ flexBasis: "100%" }}>
+          <summary className="muted" style={{ cursor: "pointer" }}>Pausieren, ohne Besetzung beenden, kopieren</summary>
+          <div className="flex flex-wrap gap-4 items-end mt-2">
           {p.status === "OFFEN" && (
             <form action={changePositionStatusAction} className="flex flex-wrap gap-2 items-end">
               <input type="hidden" name="positionId" value={p.id} /><input type="hidden" name="version" value={p.version} /><input type="hidden" name="back" value={back} /><input type="hidden" name="status" value="PAUSIERT" />
@@ -196,6 +202,8 @@ export default async function PositionPage({ params, searchParams }: { params: P
             <input type="hidden" name="positionId" value={p.id} /><input type="hidden" name="back" value={back} />
             <button className="btn btn-secondary btn-small" type="submit">Kopieren (weiterer Platz)</button>
           </form>
+          </div>
+          </details>
         </section>
       )}
       {final && a.manage && (
@@ -423,12 +431,11 @@ export default async function PositionPage({ params, searchParams }: { params: P
       </section>
 
       {/* Ausschreibungsentwurf */}
-      <section className="card" id="ausschreibung">
-        <div className="flex flex-wrap items-baseline gap-2 mb-1">
-          <h2 className="font-semibold">Ausschreibungsentwurf</h2>
-          <span className="status">{p.adStatus === "FREIGEGEBEN" ? "freigegeben" : p.adStatus === "ENTWURF" ? "Entwurf" : "kein Entwurf"}</span>
-          <span className="muted text-xs">Nur aus freigegebenen Bedarfsfeldern – ohne EK, interne Hinweise oder nicht freigegebenen Kundennamen. Veröffentlichen bleibt manuell (Text kopieren).</span>
-        </div>
+      <details className="card" id="ausschreibung" open={!!ad && !final}>
+        <summary style={{ cursor: "pointer" }}>
+          <span className="font-semibold">Ausschreibungsentwurf</span> <span className="status">{p.adStatus === "FREIGEGEBEN" ? "freigegeben" : p.adStatus === "ENTWURF" ? "Entwurf" : "kein Entwurf"}</span>
+        </summary>
+        <div className="mt-2">
         {ad && (
           <>
             <p className="muted text-xs">{ad.note} · Kanal {ad.channel} · Ton {ad.tone} · {ad.promptVersion} · erzeugt {fmtDateTime(ad.generatedAt)}{p.adApprovedAt ? ` · freigegeben ${fmtDateTime(p.adApprovedAt)}` : ""}</p>
@@ -473,7 +480,8 @@ export default async function PositionPage({ params, searchParams }: { params: P
             <button className="btn btn-small" type="submit">{ad ? "Neu entwerfen" : "Entwurf erzeugen"}</button>
           </form>
         )}
-      </section>
+        </div>
+      </details>
 
       <Comments actor={actor} subjectType="CHANCE" subjectId={p.opportunityId} back={back} />
 

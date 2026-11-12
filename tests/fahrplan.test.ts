@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
+import { resetConfigCacheForTests } from "@/lib/config";
 import { ensureRenewalRuns } from "@/modules/health/renewal";
 import { getHealth, recordExistingEngagement, renewalPingDate, renewalRoadmaps } from "@/modules/health/service";
 import { setContractLink } from "@/modules/agenda/service";
@@ -8,6 +9,10 @@ import { canViewSource, loadSetupContext } from "@/modules/identity/authz";
 import { actorFor, ensureSeed } from "./helpers";
 
 const iso = (days: number) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+
+// e44: Die Verlängerungs-Automatik ist standardmäßig aus; diese Tests prüfen sie eingeschaltet.
+process.env.RENEWAL_AUTOMATION = "on";
+resetConfigCacheForTests();
 
 describe("Pilot-Feedback: Fahrplan Verlängerung, Vertrag am Einsatz, Belege optional", () => {
   it("Ping 3 Monate vor Ende (bzw. 30 Tage vor der Frist)", () => {

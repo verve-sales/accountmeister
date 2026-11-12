@@ -149,6 +149,10 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   const staffingOn = getConfig().FEATURE_BESETZUNG === "true";
   const oppEngagements = staffingOn ? await db.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id), columns: { id: true } }) : [];
   const convs = staffingOn ? await listConversions(actor, opp.id).catch(() => []) : [];
+  // Namen in den Kopf (e44): alle besetzten Positionen, nicht nur die erste
+  const seatNames = convs.filter((x) => x.conversion.status !== "ABGEBROCHEN").map((x) => x.position?.personName).filter((x): x is string => !!x);
+  const staffedNames = seatNames.length ? seatNames : staffedByText ? [staffedByText] : [];
+  const openSeats = convs.filter((x) => ["LAUFEND", "RUHEND"].includes(x.conversion.status) && x.position && !x.position.personName).length;
   const staffingManage = staffingOn && !closed ? await canManageStaffingAt(actor, opp.id).catch(() => false) : false;
   const staffingFreelancers = staffingManage ? await freelancerOptions(actor).catch(() => []) : [];
   return (
@@ -160,14 +164,16 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         <h1 className="text-2xl font-semibold">{opp.title}</h1>
         <Status label={opportunityStatusLabel[opp.status] ?? opp.status} />
         {opp.fastTrack && <Status label="Direkte Anfrage (Fast-Track)" />}
-        {staffedByText && <span className="text-sm">Besetzt mit: <strong>{staffedByText}</strong></span>}
+        {staffedNames.length > 0 && <span className="text-sm">Besetzt mit: <strong>{staffedNames.join(", ")}</strong>{openSeats > 0 ? <span style={{ color: "#b7791f" }}> · {openSeats} noch offen</span> : null}</span>}
         <span className="muted text-sm">Vertrieblich verantwortlich (BD): {name(opp.ownerUserId)} · angelegt {fmtDateTime(opp.createdAt)}{opp.requestedAt && <> · Anfrage eingegangen {fmtDateTime(opp.requestedAt)}</>}</span>
         {!canEdit && <span className="muted text-sm">(nur lesend)</span>}
         {opp.mocoDealId && <span className="muted text-xs">Lead in Moco (#{opp.mocoDealId}){mocoDealUrl(opp.mocoDealId) ? <> · <a href={mocoDealUrl(opp.mocoDealId)!} target="_blank" rel="noreferrer">in Moco öffnen</a></> : null}</span>}
         {!opp.mocoDealId && opp.mocoProjectId && <span className="muted text-xs">Projekt in Moco (#{opp.mocoProjectId})</span>}
       </div>
       {mayReassign && !closed && (
-        <form action={reassignOpportunityOwnerAction} className="flex flex-wrap items-end gap-2 text-sm">
+        <details className="text-sm">
+        <summary className="muted" style={{ cursor: "pointer" }}>Verantwortung umstellen</summary>
+        <form action={reassignOpportunityOwnerAction} className="flex flex-wrap items-end gap-2 text-sm mt-2">
           <input type="hidden" name="opportunityId" value={opp.id} />
           <input type="hidden" name="version" value={opp.version} />
           <div>
@@ -179,6 +185,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
           </div>
           <button className="btn btn-secondary btn-small" type="submit">Umstellen</button>
         </form>
+        </details>
       )}
       <Feedback params={sp} />
 
@@ -195,7 +202,6 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
             <a href={`#${NEXT_CHANCE_STEP[opp.status]!.anchor}`} className="btn btn-small">{NEXT_CHANCE_STEP[opp.status]!.label}</a>
           </p>
         )}
-        <p className="muted text-xs mt-2">Orientierung, keine Pflichtschleuse: Zugangsentwicklung läuft parallel weiter; Angebot, Auftrag und Einsatz haben eigene Zustände.</p>
       </section>
 
       {/* Chance */}
@@ -375,7 +381,6 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       {/* Buyingcenter (8.3) */}
       <section className="card">
         <h2 className="font-semibold mb-2">Buyingcenter für diese Chance ({d.participations.length})</h2>
-        <p className="muted text-sm mb-2">Unbekannte Funktionen ohne erfundene Person anlegen. Eine Person kann mehrere Rollen haben. Ein Titel belegt keine Entscheidungsvollmacht.</p>
         {d.participations.length === 0 ? <p className="muted text-sm">Noch keine Rollen erfasst.</p> : (
           <table className="list">
             <thead><tr><th>Rolle</th><th>Person</th><th>Erkenntnisstatus</th><th>Anmerkung</th>{canEdit && <th></th>}</tr></thead>
@@ -431,7 +436,6 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       {/* Buying-Center-Berater (Etappe 17, Anker-/BD-Wunsch: Rollen durchgehen, beraten, Hinweise zum Lückenfüllen) */}
       <section className="card">
         <h2 className="font-semibold mb-2">Buying-Center-Berater</h2>
-        <p className="muted text-sm mb-2">Geht die sechs Entscheidungsrollen dieser Chance durch und gibt bei Lücken einen Hinweis, wie sie zu schließen sind. Beruht auf dem oben erfassten Buyingcenter – kein zweiter Datenbestand.</p>
         {bcProposalError && <p className="error text-sm" role="alert">{bcProposalError}</p>}
         <table className="list text-sm">
           <thead><tr><th>Rolle</th><th>Status</th><th>Person(en)</th><th></th></tr></thead>
@@ -446,7 +450,6 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
             ))}
           </tbody>
         </table>
-        <p className="muted text-xs mt-1">„Auf LinkedIn suchen“ öffnet die normale LinkedIn-Personensuche mit Kunde und Rolle als Stichwort (auch in Sales Navigator weiterverfolgbar) – keine Anbindung, nur ein Deep-Link im eigenen Browser.</p>
 
         {bc.latest && (
           <div className="mt-4 border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
@@ -529,9 +532,9 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       </section>
 
       {/* MEDDPICC (9.4) */}
-      <section className="card">
-        <h2 className="font-semibold mb-2">Qualifizierungshilfe (MEDDPICC) – optional</h2>
-        <p className="muted text-sm mb-2">Gezielte Hilfe bei Komplexität. Keine Pflicht vor einer Profilvorstellung, keine Bewertung, keine erfundenen Werte oder zugespitzter Leidensdruck.</p>
+      <details className="card" id="meddpicc">
+        <summary className="font-semibold" style={{ cursor: "pointer" }}>Qualifizierungshilfe (MEDDPICC) <span className="muted font-normal text-sm">· optional · {MEDDPICC_KEYS.filter(([k]) => md[k]).length} von {MEDDPICC_KEYS.length} ausgefüllt</span></summary>
+        <div className="mt-3">
         {canEdit && !closed ? (
           <form action={saveMeddpiccAction} className="grid sm:grid-cols-2 gap-3">
             <input type="hidden" name="opportunityId" value={opp.id} />
@@ -547,12 +550,12 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         ) : (
           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">{MEDDPICC_KEYS.map(([k, label]) => <div key={k}><dt className="muted">{label}</dt><dd>{md[k] ?? "–"}</dd></div>)}</dl>
         )}
-      </section>
+        </div>
+      </details>
 
       {/* Angebote (F09, F10) */}
       <section className="card" id="angebote">
         <h2 className="font-semibold mb-2">Angebote / Profilvorstellungen ({d.offers.length})</h2>
-        <p className="muted text-sm mb-2">„Tatsächlich vorgestellt“ setzt ein manuell bestätigtes Vorstellungsereignis voraus (Beleg optional) – ein Entwurf genügt nicht. Ein akzeptiertes Angebot ist noch kein Auftrag.</p>
         {d.offers.length === 0 ? <p className="muted text-sm">Noch kein Angebot.</p> : (
           <ul className="space-y-3">
             {d.offers.map((o) => {
@@ -611,7 +614,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
             <form action={createOfferAction} className="mt-2 grid sm:grid-cols-2 gap-3">
               <input type="hidden" name="opportunityId" value={opp.id} />
               <div className="sm:col-span-2"><label className="label" htmlFor="ofTitle">Titel</label><input id="ofTitle" name="title" className="input" required minLength={3} /></div>
-              <div className="sm:col-span-2"><label className="label" htmlFor="ofSummary">Kurzinhalt (intern; Kundentext als Artefakt A9 Profilangebot)</label><textarea id="ofSummary" name="summary" className="textarea" rows={3} /></div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="ofSummary">Kurzinhalt (intern)</label><textarea id="ofSummary" name="summary" className="textarea" rows={3} /></div>
               <fieldset className="sm:col-span-2">
                 <legend className="label">Freigegebene Profilreferenzen</legend>
                 {d.profileRefs.length === 0 ? <p className="muted text-sm">Keine Profilreferenzen vorhanden – anlegen unter <Link href="/einstellungen">Einstellungen</Link> (BD/Principal/CEO).</p> : (
@@ -627,7 +630,6 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       {/* Aufträge und Startvoraussetzungen (9.3) */}
       <section className="card" id="auftrag">
         <h2 className="font-semibold mb-2">Auftrag und Einsatz ({d.orders.length})</h2>
-        <p className="muted text-sm mb-2">„Beauftragung bestätigt“ braucht prüfbare Bestell-/Vertragsnachweise. „Startbereit“ braucht den bestätigten Stand aller Startvoraussetzungen – eine leere Liste gilt nicht. „Gestartet“ ist ein bestätigtes Ereignis. Ohne freigegebene Regelkonfiguration wird hier nur der dokumentierte Stand gezeigt, keine produktive Einsatzfreigabe behauptet.</p>
         {d.orders.length === 0 ? <p className="muted text-sm">Noch kein Auftrag.</p> : (
           <ul className="space-y-3">
             {d.orders.map((o) => {
@@ -635,7 +637,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
               const confirmed = o.status === "BEAUFTRAGUNG_BESTAETIGT";
               return (
                 <li key={o.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
-                  <div className="flex flex-wrap gap-2 items-baseline"><strong>Auftrag {o.orderReference ?? "(Referenz offen)"}</strong><Status label={orderStatusLabel[o.status] ?? o.status} /><Status label={engagementStatusLabel[o.engagementStatus] ?? o.engagementStatus} /><span className="muted">geplant {fmtDate(o.plannedStart)} – {fmtDate(o.plannedEnd)}{o.renewalDeadline ? ` · Verlängerungsfrist ${fmtDate(o.renewalDeadline)}` : ""}</span></div>
+                  <div className="flex flex-wrap gap-2 items-baseline"><strong>{o.consultantName ? `${o.consultantName} · ` : ""}Auftrag {o.orderReference ?? "(Referenz offen)"}</strong><Status label={orderStatusLabel[o.status] ?? o.status} /><Status label={engagementStatusLabel[o.engagementStatus] ?? o.engagementStatus} /><span className="muted">geplant {fmtDate(o.plannedStart)} – {fmtDate(o.plannedEnd)}{o.renewalDeadline ? ` · Verlängerungsfrist ${fmtDate(o.renewalDeadline)}` : ""}</span></div>
                   {o.confirmedAt && <p className="mt-1">Beauftragung bestätigt am {fmtDateTime(o.confirmedAt)} durch {name(o.confirmedBy)}{o.evidenceSourceId && <> · <Link href={`/quellen/${o.evidenceSourceId}`}>Nachweis</Link></>}{o.evidenceNote && <> · {o.evidenceNote}</>}</p>}
                   {o.startedAt && <p className="mt-1">Gestartet am {fmtDateTime(o.startedAt)}{o.statusReason && <> · {o.statusReason}</>}</p>}
                   {!o.startedAt && o.statusReason && <p className="muted mt-1">{o.statusReason}</p>}
@@ -749,10 +751,12 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         )}
       </section>
 
+      {getConfig().FEATURE_ARTEFAKTE === "true" && (
       <section className="card">
         <h2 className="font-semibold mb-2">Passende Artefakte</h2>
         <p className="text-sm">Klärung der Chance, Profilvorstellung und Auftrags-/Startunterlagen entstehen als Textentwürfe im Setup: <Link href={`/setups/${ctx.setup.id}/artefakte`}>Artefakte des Setups →</Link> (A7 Bedarfsbriefing, A8 Risiko-/Qualifizierungsnotiz, A9 Profilangebot, A10 Auswahl-/Entscheidungsstand, A11 Auftrags-/Startübergabe, A12 Verlängerung/Entwicklung). Kundentexte enthalten keine internen Einordnungen.</p>
       </section>
+      )}
 
       {/* Persönlicher KI-Berater für diese Chance (Etappe 15, BD-Wunsch: „nächste Schritte zur Konvertierung“) */}
       <section className="card">

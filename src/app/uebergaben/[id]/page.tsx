@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
+import { markSeen } from "@/modules/notifications/service";
 import { DomainError } from "@/lib/errors";
 import { getHandover, handoverKindLabel, handoverTask } from "@/modules/conversion/handover";
 import { docTypeLabel, signedStatusLabel } from "@/modules/engagements/service";
@@ -23,6 +24,7 @@ export default async function UebergabePage({ params, searchParams }: { params: 
   const sp = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
+  await markSeen(actor, `/uebergaben/${id}`);
   let v;
   try {
     v = await getHandover(actor, id);

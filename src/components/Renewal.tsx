@@ -29,7 +29,7 @@ function addMonths(iso: string, months: number): string {
 }
 
 /** „Verlängerung anstoßen“ – ein Datum, Konditionen unverändert als Vorgabe, optional Notiz (Use Case 1, Schritt 2). */
-export function RenewalStartForm({ engagementId, currentEnd, back, compact = false, lastRates }: { engagementId: string; currentEnd: string | null; back: string; compact?: boolean; lastRates?: { ek: string | null; vk: string | null; unit: string } | null }) {
+export function RenewalStartForm({ engagementId, currentEnd, back, compact = false, lastRates, canDecide = false }: { engagementId: string; currentEnd: string | null; back: string; compact?: boolean; lastRates?: { ek: string | null; vk: string | null; unit: string } | null; /** darf selbst bestätigen: ein Schritt statt zwei */ canDecide?: boolean }) {
   const base = currentEnd ?? new Date().toISOString().slice(0, 10);
   const plus6 = addMonths(base, 6);
   const idp = `rs-${engagementId.slice(0, 6)}`;
@@ -59,11 +59,18 @@ export function RenewalStartForm({ engagementId, currentEnd, back, compact = fal
           <div><label className="label" htmlFor={`${idp}-vk`}>VK neu</label><input id={`${idp}-vk`} name="vk" className="input" inputMode="decimal" placeholder="nur bei „neu“" /></div>
         </>
       )}
-      <div className={compact ? "" : "sm:col-span-3"}>
-        <label className="label" htmlFor={`${idp}-note`}>Notiz für den BD (optional)</label>
-        <input id={`${idp}-note`} name="note" className="input" placeholder="z. B. Kunde hat mündlich zugesagt, Bestellung folgt" style={{ minWidth: compact ? 220 : undefined }} />
+      <div>
+        <label className="label" htmlFor={`${idp}-po`}>Neue Bestellnummer (falls schon da)</label>
+        <input id={`${idp}-po`} name="orderReference" className="input" maxLength={200} />
       </div>
-      <div><button className="btn btn-small" type="submit">Verlängerung anstoßen</button></div>
+      <div className={compact ? "" : "sm:col-span-2"}>
+        <label className="label" htmlFor={`${idp}-note`}>Notiz (optional)</label>
+        <input id={`${idp}-note`} name="note" className="input" placeholder="z. B. Kunde hat mündlich zugesagt, Bestellung folgt" style={{ minWidth: compact ? 200 : undefined }} />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {canDecide && <button className="btn btn-small" type="submit" name="direct" value="1" style={{ background: "#2f7d32" }}>Verlängern</button>}
+        <button className={canDecide ? "btn btn-secondary btn-small" : "btn btn-small"} type="submit">{canDecide ? "Erst zur Bestätigung geben" : "Verlängerung anstoßen"}</button>
+      </div>
     </form>
   );
 }
@@ -92,6 +99,7 @@ export function RenewalDecisionCard({ c, back }: { c: Card; back: string }) {
             <label className="label" htmlFor={`rd-${c.decisionId}-f`}>Vertragsfolge</label>
             <select id={`rd-${c.decisionId}-f`} name="contractFollowUp" className="input" defaultValue="Nachtrag"><option>Nachtrag</option><option>Neue Bestellung</option><option>Rahmenabruf</option><option>Verlängerungsschreiben</option></select>
           </div>
+          <div><label className="label" htmlFor={`rd-${c.decisionId}-po`}>Neue Bestellnummer</label><input id={`rd-${c.decisionId}-po`} name="orderReference" className="input" defaultValue={c.orderReference ?? ""} placeholder="falls schon da" maxLength={200} style={{ width: 150 }} /></div>
           <div><label className="label" htmlFor={`rd-${c.decisionId}-n`}>Notiz (optional)</label><input id={`rd-${c.decisionId}-n`} name="note" className="input" style={{ minWidth: 200 }} /></div>
           <button className="btn btn-small" type="submit" name="decision" value="BESTAETIGEN" style={{ background: "#2f7d32" }}>Bestätigen</button>
           <button className="btn btn-small" type="submit" name="decision" value="ABLEHNEN" style={{ background: RED }}>Ablehnen</button>
@@ -126,7 +134,7 @@ export function RenewalStartCard({ c, back }: { c: Card; back: string }) {
         <span className="muted text-xs ml-auto">Ende {c.currentEnd ? fmtDate(c.currentEnd) : "offen"}{c.daysToEnd !== null ? ` · noch ${c.daysToEnd} Tage` : ""}</span>
       </div>
       <RenewalContactLine c={c} />
-      <div className="mt-2"><RenewalStartForm engagementId={c.engagementId} currentEnd={c.currentEnd} back={back} compact /></div>
+      <div className="mt-2"><RenewalStartForm engagementId={c.engagementId} currentEnd={c.currentEnd} back={back} compact canDecide={c.canDecide} /></div>
     </li>
   );
 }
@@ -147,7 +155,7 @@ export function RenewalCards({ cards, back }: { cards: Card[]; back: string }) {
       {start.length > 0 && (
         <details open={start.length <= 3 && decide.length === 0}>
           <summary className="font-semibold">Verlängerungen klären ({start.length})</summary>
-          <p className="muted text-xs mt-1 mb-2">90 Tage vor Ende. Anstoßen schickt die Entscheidung an den BD; wird nicht verlängert, den Einsatz zum Ende beenden (Einsatzakte → Status).</p>
+          <p className="muted text-xs mt-1 mb-2">Wird nicht verlängert: den Einsatz zum Ende beenden (am Einsatz unter Status).</p>
           <ul className="space-y-2">{start.map((c) => <RenewalStartCard key={c.decisionId} c={c} back={back} />)}</ul>
         </details>
       )}

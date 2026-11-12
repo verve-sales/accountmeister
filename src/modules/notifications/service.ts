@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNull, like, or } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema, type Db, type Tx } from "@/db/client";
 import { getConfig } from "@/lib/config";
@@ -43,6 +43,13 @@ export const IMMEDIATE_DEFAULT: Record<NotificationKind, boolean> = {
   UEBERFAELLIG: true,
   SOS: true,
 };
+
+/**
+ * Arten, die eine Handlung von mir verlangen – nur sie zählt die Glocke (e44). Alles andere (angenommen, erledigt, Kommentar,
+ * neu im Team-Eingang) steht in der Liste „zur Kenntnis“, treibt die Zahl aber nicht hoch.
+ */
+export const ACTION_KINDS: NotificationKind[] = ["ZUGEWIESEN", "ZUR_PRUEFUNG", "ZURUECKGEGEBEN", "ABGELEHNT", "ERWAEHNT", "UEBERFAELLIG", "SOS"];
+export const needsAction = (kind: string) => (ACTION_KINDS as string[]).includes(kind);
 
 export type Prefs = { email: Partial<Record<NotificationKind, boolean>>; digest: boolean };
 
@@ -110,9 +117,30 @@ export async function listNotifications(actor: Actor, limit = 100) {
   return rows.map((r) => ({ ...r, actorName: r.actorUserId ? un.get(r.actorUserId) ?? null : null }));
 }
 
+/** Zahl an der Glocke: ungelesene Hinweise, die eine Handlung verlangen. */
 export async function unreadCount(actor: Actor): Promise<number> {
-  const [r] = await db.select({ n: count() }).from(schema.notifications).where(and(eq(schema.notifications.userId, actor.userId), isNull(schema.notifications.readAt)));
+  const [r] = await db.select({ n: count() }).from(schema.notifications).where(and(eq(schema.notifications.userId, actor.userId), isNull(schema.notifications.readAt), inArray(schema.notifications.kind, ACTION_KINDS)));
   return Number(r?.n ?? 0);
+}
+
+/**
+ * Die Sache ist erledigt (Übergabe quittiert, Vorgang abgeschlossen, Verlängerung entschieden, Check-in geführt): alle noch
+ * ungelesenen Hinweise darauf gelten für alle Empfänger als gelesen. Vor dem Versand der Abschlussmeldung aufrufen.
+ */
+export async function resolveNotifications(tx: Tx | Db, workspaceId: string, link: string): Promise<void> {
+  await tx.update(schema.notifications).set({ readAt: new Date() }).where(and(eq(schema.notifications.workspaceId, workspaceId), eq(schema.notifications.link, link), isNull(schema.notifications.readAt)));
+}
+
+/** Ich habe die Seite geöffnet: meine ungelesenen Hinweise auf genau diese Seite (auch mit Sprungmarke) sind gelesen. */
+export async function markSeen(actor: Actor, path: string): Promise<void> {
+  try {
+    await db
+      .update(schema.notifications)
+      .set({ readAt: new Date() })
+      .where(and(eq(schema.notifications.userId, actor.userId), isNull(schema.notifications.readAt), or(eq(schema.notifications.link, path), like(schema.notifications.link, `${path}#%`))));
+  } catch (e) {
+    console.error("Benachrichtigungen als gelesen markieren", e);
+  }
 }
 
 export async function markRead(actor: Actor, notificationId?: string | null) {

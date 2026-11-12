@@ -4,7 +4,7 @@ import { db, schema, type Db, type Tx } from "@/db/client";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { isReadOnlyFor, type Actor } from "@/modules/identity/actor";
-import { notify, type NotificationKind } from "@/modules/notifications/service";
+import { notify, resolveNotifications, type NotificationKind } from "@/modules/notifications/service";
 import { addWorkdays, plusDaysIso, todayIso } from "./calendar";
 import { resolveSubject, subjectTypeValues, type ResolvedSubject } from "./subjects";
 import { deputyOf, ensureDefaultTeams, isTeamLead, isTeamMember, teamMemberIds, type ServiceField } from "./teams";
@@ -431,6 +431,8 @@ export async function actOnWorkItem(actor: Actor, id: string, raw: unknown) {
       await activateCareFromWorkItem(tx, actor, u, u.assigneeUserId);
     }
     const watchers = await tx.query.workWatchers.findMany({ where: eq(schema.workWatchers.workItemId, item.id) });
+    // e44: mit dem Abschluss sind alle offenen Hinweise auf diesen Vorgang erledigt (zugewiesen, überfällig, …)
+    if (FINAL.includes(to as WorkStatus)) await resolveNotifications(tx, actor.workspaceId, link(item.id));
     if (event) await notify(tx, { workspaceId: actor.workspaceId, userIds: event.to, kind: event.kind, title: event.title, link: link(item.id), actorUserId: actor.userId });
     if (to === "ERLEDIGT" && watchers.length) await notify(tx, { workspaceId: actor.workspaceId, userIds: watchers.map((w) => w.userId).filter((w) => !event?.to.includes(w)), kind: "ERLEDIGT", title: `Erledigt: ${item.title}`, link: link(item.id), actorUserId: actor.userId });
     return u;
@@ -673,7 +675,7 @@ export async function workTargets(actor: Actor) {
 }
 
 // ---------------------------------------------------------------------------
-// Überfällig-Hinweise (einmal je Vorgang und Tag)
+// Überfällig-Hinweise (einmal je Vorgang und Frist; e44: nicht mehr täglich)
 // ---------------------------------------------------------------------------
 
 export async function generateOverdueNotifications(workspaceId?: string): Promise<number> {
@@ -685,7 +687,7 @@ export async function generateOverdueNotifications(workspaceId?: string): Promis
   let n = 0;
   for (const r of rows) {
     const to = r.assigneeUserId ? [r.assigneeUserId] : r.teamId ? await teamMemberIds((await db.query.teams.findFirst({ where: eq(schema.teams.id, r.teamId) }))!) : [];
-    n += await notify(db, { workspaceId: r.workspaceId, userIds: to, kind: "UEBERFAELLIG", title: `Überfällig seit ${r.dueDate}: ${r.title}`, link: link(r.id), dedupeKey: `ueberfaellig:${r.id}:${today}` });
+    n += await notify(db, { workspaceId: r.workspaceId, userIds: to, kind: "UEBERFAELLIG", title: `Überfällig seit ${r.dueDate}: ${r.title}`, link: link(r.id), dedupeKey: `ueberfaellig:${r.id}:${r.dueDate}` });
   }
   return n;
 }

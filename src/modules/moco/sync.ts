@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { engagementLabel } from "@/modules/engagements/label";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { getConfig } from "@/lib/config";
@@ -103,7 +104,7 @@ export async function runMocoSync(opts: { since?: string; client?: MocoClient; w
   const today = todayIso();
   const overdueEnd = await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, ws), inArray(schema.engagements.status, ["AKTIV", "PAUSIERT"])) });
   for (const e of overdueEnd.filter((x) => x.plannedEnd && x.plannedEnd < today)) {
-    counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "ENDE_UEBERSCHRITTEN", title: `„${e.title}“: geplantes Ende ${e.plannedEnd} liegt zurück – beenden oder Ende verlängern?`, payload: { finishDate: e.plannedEnd }, dedupeKey: `end-passed:${e.id}:${e.plannedEnd}`, notifyUserIds: await careUserIds(e.id, e.bdUserId), link: `/einsaetze/${e.id}` });
+    counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "ENDE_UEBERSCHRITTEN", title: `${await engagementLabel(db, e)}: geplantes Ende ${e.plannedEnd} liegt zurück – beenden oder Ende verlängern?`, payload: { finishDate: e.plannedEnd }, dedupeKey: `end-passed:${e.id}:${e.plannedEnd}`, notifyUserIds: await careUserIds(e.id, e.bdUserId), link: `/einsaetze/${e.id}` });
   }
 
   // --- Projekte -----------------------------------------------------------------------------------------------
@@ -129,19 +130,19 @@ export async function runMocoSync(opts: { since?: string; client?: MocoClient; w
       const who = await careUserIds(e.id, e.bdUserId);
       const link = `/einsaetze/${e.id}`;
       if (!p.active) {
-        counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "PROJEKT_BEENDET", title: `„${e.title}“: Projekt in Moco beendet – Einsatz beenden?`, payload: { mocoProjectId: p.id, finishDate: p.finish_date }, dedupeKey: `project-ended:${p.id}:${e.id}`, notifyUserIds: who, link });
+        counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "PROJEKT_BEENDET", title: `${await engagementLabel(db, e)}: Projekt in Moco beendet – Einsatz beenden?`, payload: { mocoProjectId: p.id, finishDate: p.finish_date }, dedupeKey: `project-ended:${p.id}:${e.id}`, notifyUserIds: who, link });
         continue;
       }
       const contract = p.contracts.find((c) => c.id === e.mocoContractId);
       if (contract && !contract.active && ["AKTIV", "PAUSIERT", "GEPLANT", "VORBEREITUNG"].includes(e.status)) {
-        counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "CONTRACT_INAKTIV", title: `„${e.title}“: Zuweisung in Moco inaktiv – Einsatz beenden?`, payload: { mocoProjectId: p.id, mocoContractId: contract.id, finishDate: p.finish_date }, dedupeKey: `contract-inactive:${contract.id}`, notifyUserIds: who, link });
+        counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "CONTRACT_INAKTIV", title: `${await engagementLabel(db, e)}: Zuweisung in Moco inaktiv – Einsatz beenden?`, payload: { mocoProjectId: p.id, mocoContractId: contract.id, finishDate: p.finish_date }, dedupeKey: `contract-inactive:${contract.id}`, notifyUserIds: who, link });
       }
       if (p.finish_date && e.plannedEnd && p.finish_date !== e.plannedEnd) {
-        counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "ENDE_GEAENDERT", title: `„${e.title}“: Projektende in Moco jetzt ${p.finish_date} (AM: ${e.plannedEnd})`, payload: { mocoProjectId: p.id, finishDate: p.finish_date, previous: e.plannedEnd }, dedupeKey: `end-changed:${p.id}:${e.id}:${p.finish_date}`, notifyUserIds: who, link });
+        counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "ENDE_GEAENDERT", title: `${await engagementLabel(db, e)}: Projektende in Moco jetzt ${p.finish_date} (AM: ${e.plannedEnd})`, payload: { mocoProjectId: p.id, finishDate: p.finish_date, previous: e.plannedEnd }, dedupeKey: `end-changed:${p.id}:${e.id}:${p.finish_date}`, notifyUserIds: who, link });
       }
       const setup = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, e.setupId), columns: { id: true, name: true, mocoProjectGroupId: true } });
       if (setup && p.project_group && setup.mocoProjectGroupId && setup.mocoProjectGroupId !== p.project_group.id) {
-        counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "GRUPPE_GEWECHSELT", title: `„${e.title}“: Projekt liegt in Moco jetzt in „${p.project_group.name}“ (AM-Setup: ${setup.name})`, payload: { mocoProjectId: p.id, groupId: p.project_group.id, groupName: p.project_group.name }, dedupeKey: `group-moved:${p.id}:${p.project_group.id}`, notifyUserIds: who, link });
+        counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "GRUPPE_GEWECHSELT", title: `${await engagementLabel(db, e)}: Projekt liegt in Moco jetzt in „${p.project_group.name}“ (AM-Setup: ${setup.name})`, payload: { mocoProjectId: p.id, groupId: p.project_group.id, groupName: p.project_group.name }, dedupeKey: `group-moved:${p.id}:${p.project_group.id}`, notifyUserIds: who, link });
       }
       // Neue aktive Zuweisung an bekanntem Projekt ohne Einsatz
       for (const c of p.contracts.filter((x) => x.active && !engagements.some((y) => y.mocoContractId === x.id))) {

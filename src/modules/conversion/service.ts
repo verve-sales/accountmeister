@@ -368,7 +368,7 @@ export async function recordOrder(actor: Actor, conversionId: string, raw: unkno
     } else if (!provisional) {
       await tx.update(schema.orders).set({ orderReference: i.orderReference, status: "BEAUFTRAGUNG_BESTAETIGT", confirmedAt: order.confirmedAt ?? new Date(), confirmedBy: order.confirmedBy ?? actor.userId, contractLink: i.orderLink || order.contractLink, updatedAt: new Date() }).where(eq(schema.orders.id, order.id));
     }
-    for (const e of engs) if (!e.orderId) await tx.update(schema.engagements).set({ orderId: order!.id, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
+    for (const e of engs) await tx.update(schema.engagements).set({ orderId: e.orderId ?? order!.id, orderReference: i.orderReference || e.orderReference, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
     if (opp.status !== "BEAUFTRAGT") {
       await tx.update(schema.opportunities).set({ status: "BEAUFTRAGT", version: opp.version + 1, updatedAt: new Date() }).where(eq(schema.opportunities.id, opp.id));
       await recordAudit(tx, actor, "opportunity.status_changed", "OPPORTUNITY", opp.id, { von: opp.status, nach: "BEAUFTRAGT", ueber: "Konvertierungsvorgang" });

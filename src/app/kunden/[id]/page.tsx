@@ -42,6 +42,8 @@ import { SosPanel } from "@/components/SosPanel";
 import { Comments, WorkBlock } from "@/components/Work";
 import { Beschaffungsprofil } from "@/components/Beschaffungsprofil";
 import { getConfig } from "@/lib/config";
+import { listEngagements } from "@/modules/engagements/service";
+import { renewalStatusLabel } from "@/modules/engagements/care";
 
 type Bucket = "grundlagen" | "strategie" | "operativ";
 
@@ -97,6 +99,8 @@ export default async function KundePage({ params, searchParams }: { params: Prom
 
   // Kundenansicht in drei Buckets (Etappe 44): Grundlagen · Strategie · Operativ – nur der gewählte wird gezeigt
   const bucket: Bucket = sp.b === "strategie" || sp.b === "operativ" ? sp.b : "grundlagen";
+  // e44: wer ist hier im Einsatz, bis wann – Namen statt nur einer Zahl
+  const deployed = getConfig().FEATURE_BESETZUNG === "true" ? (await listEngagements(actor, "laufend").catch(() => ({ items: [] }))).items.filter((e) => e.accountId === account.id) : [];
   const back = `/kunden/${id}?b=${bucket}`;
   const keyInitiatives = initiatives.filter((i) => i.kind === "INITIATIVE" && i.status === "OFFEN");
   const cardsByIni = ro ? {} : await listCardsByInitiative(actor, account.id).catch(() => ({} as Record<string, never[]>));
@@ -154,6 +158,29 @@ export default async function KundePage({ params, searchParams }: { params: Prom
           <strong>SOS offen:</strong> {openSos.map((x) => x.title).join(" · ")} – <Link href={`/kunden/${account.id}?b=operativ#sos`}>zum SOS-Protokoll</Link>
         </p>
       )}
+      {deployed.length > 0 && (
+        <section className="card" id="im-einsatz">
+          <div className="flex flex-wrap items-baseline gap-3 mb-1">
+            <h2 className="font-semibold">Im Einsatz ({deployed.length})</h2>
+            <Link href={`/einsaetze?q=${encodeURIComponent(account.name)}`} className="muted text-sm ml-auto">alle Einsätze dieses Kunden</Link>
+          </div>
+          <table className="list text-sm">
+            <tbody>
+              {deployed.map((e) => {
+                const soon = e.daysToEnd !== null && e.daysToEnd <= 60;
+                return (
+                  <tr key={e.id}>
+                    <td><Link href={`/einsaetze/${e.id}`}><strong>{e.personName}</strong></Link>{e.internalUserId ? <span className="muted text-xs"> (intern)</span> : null}</td>
+                    <td className="muted">{e.title}</td>
+                    <td style={{ whiteSpace: "nowrap", color: soon ? "#b7791f" : undefined, fontWeight: soon ? 600 : undefined }}>{e.plannedEnd ? `bis ${fmtDate(e.plannedEnd)}${e.daysToEnd !== null && e.daysToEnd <= 120 ? ` · ${e.daysToEnd} Tage` : ""}` : "Ende offen"}</td>
+                    <td className="text-xs">{e.renewalStatus && e.renewalStatus !== "ZU_KLAEREN" ? `Verlängerung ${renewalStatusLabel[e.renewalStatus] ?? e.renewalStatus}${e.renewalTo ? ` bis ${fmtDate(e.renewalTo)}` : ""}` : soon ? <Link href={`/einsaetze/${e.id}#verlaengerung`}>verlängern</Link> : null}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
       <nav aria-label="Bereiche der Kundenansicht" className="flex flex-wrap gap-2 border-b" style={{ borderColor: "var(--border)" }}>
         {tabs.map((t) => (
           <Link key={t.key} href={`/kunden/${account.id}?b=${t.key}`} aria-current={bucket === t.key ? "page" : undefined} className="no-underline px-3 py-2 text-sm" style={{ borderBottom: bucket === t.key ? "3px solid var(--accent, #1f4e79)" : "3px solid transparent", color: "var(--text)", fontWeight: bucket === t.key ? 600 : 400 }}>
@@ -174,7 +201,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
           </div>
           <HealthBadge score={health.score} level={health.level} coverage={health.coverage} size="large" />
           <p className="text-sm mt-2">
-            {health.engagements.length} Einsatz/Einsätze{health.engagements.filter((e) => e.plannedEnd).length ? ` · nächstes Ende ${fmtDate(health.engagements.find((e) => e.plannedEnd)!.plannedEnd)}` : ""}
+            {deployed.length > 0 ? null : <>{health.engagements.length} Einsatz/Einsätze</>}{deployed.length === 0 && health.engagements.filter((e) => e.plannedEnd).length ? ` · nächstes Ende ${fmtDate(health.engagements.find((e) => e.plannedEnd)!.plannedEnd)}` : ""}
             {health.questions.length > 0 && <span className="muted"> · fehlt: {health.questions.slice(0, 2).map((q) => q.key === "ENGAGEMENT_END" ? "Einsatzende" : q.key === "FEEDBACK" ? "Kundenfeedback" : q.key === "LISTING" ? "Listung" : q.key === "RISKS" ? "Risiken" : q.key === "PEOPLE" ? "Ansprechpartner" : "Einsätze").join(", ")}{health.questions.length > 2 ? " …" : ""}</span>}
           </p>
         </section>

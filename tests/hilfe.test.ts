@@ -31,7 +31,7 @@ describe("Etappe 25: Hilfe-Wissen für den Assistenten", () => {
     const body = (id: string) => HELP_SECTIONS.find((s) => s.id === id)!.body;
     expect(body("chance-status")).toMatch(/Chance bestätigen \(Beleg optional\)/);
     expect(body("chance-status")).toMatch(/In Klärung nehmen/);
-    expect(body("health")).toMatch(/14 Tage vor der Verlängerungsfrist bzw\. 8 Wochen vor dem Einsatzende/);
+    expect(body("health")).toMatch(/90 Tage vor dem Ende \(bzw\. 30 Tage vor der Verlängerungsfrist\) erscheint die Karte/);
     expect(body("ruhend")).toMatch(/180 Tagen/);
     expect(new Set(HELP_SECTIONS.map((s) => s.id)).size).toBe(HELP_SECTIONS.length);
   });

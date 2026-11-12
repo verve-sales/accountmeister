@@ -2145,6 +2145,8 @@ export const engagements = pgTable(
     accountId: text("account_id").notNull().references(() => accounts.id),
     setupId: text("setup_id").notNull().references(() => projectSetups.id),
     orderId: text("order_id").references(() => orders.id),
+    /** Aktuelle Bestellnummer des Einsatzes (e44): wird mit jeder bestätigten Verlängerung fortgeschrieben */
+    orderReference: text("order_reference"),
     title: text("title").notNull(),
     status: text("status").notNull().default("VORBEREITUNG"), // VORBEREITUNG | GEPLANT | AKTIV | PAUSIERT | ENDET | ABGESCHLOSSEN | ABGEBROCHEN
     statusReason: text("status_reason"),
@@ -2380,6 +2382,8 @@ export const renewalDecisions = pgTable(
     proposedFrom: date("proposed_from"),
     proposedTo: date("proposed_to"),
     conditionsNote: text("conditions_note"),
+    /** Neue Bestellnummer zur Verlängerung (e44), sobald sie vorliegt */
+    orderReference: text("order_reference"),
     availabilityNote: text("availability_note"),
     commercialOwnerUserId: text("commercial_owner_user_id").references(() => users.id),
     contractFollowUp: text("contract_follow_up"),

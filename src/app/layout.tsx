@@ -42,7 +42,6 @@ export const dynamic = "force-dynamic";
 const MORE = [
   { href: "/weeklys", label: "Weeklys" },
   { href: "/vorgehen", label: "Vorgehen" },
-  { href: "/artefakte", label: "Artefakte" },
   { href: "/einstellungen", label: "Einstellungen" },
   { href: "/hilfe", label: "Hilfe" },
 ];
@@ -92,7 +91,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <details className="nav-more">
                   <summary>Mehr ▾</summary>
                   <div className="nav-more-menu">
-                    {[...nav.more, ...(actor.roles.has("CEO") ? [{ href: "/ceo", label: "CEO-Dashboard" }] : []), ...MORE.slice(0, 3), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(3)].map((n) => (
+                    {[...nav.more, ...(actor.roles.has("CEO") ? [{ href: "/ceo", label: "CEO-Dashboard" }] : []), ...MORE.slice(0, 2), ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte" }] : []), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(2)].map((n) => (
                       <Link key={n.href} href={n.href}>
                         {n.label}
                       </Link>

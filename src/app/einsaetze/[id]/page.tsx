@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
+import { markSeen } from "@/modules/notifications/service";
 import { DomainError } from "@/lib/errors";
 import { getConfig } from "@/lib/config";
 import { docSideLabel, docTypeLabel, docTypeValues, engagementStatusLabel, getEngagementDetail, signedStatusLabel, careRoleLabel } from "@/modules/engagements/service";
@@ -37,6 +38,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const sp = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
+  await markSeen(actor, `/einsaetze/${id}`);
   let d;
   try {
     d = await getEngagementDetail(actor, id);
@@ -73,13 +75,14 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           <span>Betreuung: {e.careNames.length ? e.careNames.join(", ") : <span style={{ color: RED }}>offen</span>}</span>
           {e.mocoProjectId && <span className="muted text-xs">aus Moco (Projekt {e.mocoProjectId}{e.externalRef ? <> · <a href={e.externalRef} target="_blank" rel="noreferrer">in Moco öffnen</a></> : null}) – Laufzeit und Zuweisung führt Moco</span>}
           <span>Laufzeit: {fmtDate(e.actualStart ?? e.plannedStart)} – {e.plannedEnd ? `${fmtDate(e.plannedEnd)}${e.daysToEnd !== null ? ` (${e.daysToEnd} Tage)` : ""}` : "offen"}</span>
+          {e.orderReference && <span>Bestellnummer: <strong>{e.orderReference}</strong></span>}
           {nextDue && <span style={nextDue < new Date().toISOString().slice(0, 10) ? { color: RED, fontWeight: 600 } : undefined}>nächste Frist {fmtDate(nextDue)}</span>}
           <span className="muted text-xs ml-auto">{a.commercial ? "BD-Kontext" : a.ops ? "Sales Operations" : a.readOnly ? "Coach (nur lesen)" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
         </div>
         {!final && (a.manage || a.care) && !(openRenewal && openRenewal.proposedTo) && (
           <details className="mt-2">
-            <summary className="btn btn-small" style={{ display: "inline-block" }}>Verlängerung anstoßen</summary>
-            <div className="card mt-2"><RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} /></div>
+            <summary className="btn btn-small" style={{ display: "inline-block", color: "#fff" }}>{a.commercial ? "Verlängern" : "Verlängerung anstoßen"}</summary>
+            <div className="card mt-2"><RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} canDecide={!!a.commercial} /></div>
           </details>
         )}
         {renewalCard && renewalCard.mode === "ENTSCHEIDEN" && <ul className="mt-2 list-none p-0"><RenewalDecisionCard c={renewalCard} back={`${back}#verlaengerung`} /></ul>}
@@ -127,8 +130,9 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
 
       {/* Status */}
       {a.manage && !final && (
-        <section className="card text-sm space-y-3">
-          <h2 className="font-semibold">Status</h2>
+        <details className="card text-sm" id="status" open={e.status !== "AKTIV"}>
+          <summary className="font-semibold" style={{ cursor: "pointer" }}>Status: {engagementStatusLabel[e.status] ?? e.status}{e.status === "AKTIV" ? <span className="muted font-normal"> · pausieren, Ende bestätigen, abbrechen</span> : null}</summary>
+          <div className="space-y-3 mt-3">
           <div className="flex flex-wrap gap-4 items-end">
             {["VORBEREITUNG", "GEPLANT"].includes(e.status) && <Btn id={id} version={e.version} back={back} status="AKTIV" label={e.status === "VORBEREITUNG" ? "Start bestätigen → aktiv" : "Start bestätigen"} fields={<div><label className="label">Tatsächlicher Start (heute oder früher)</label><input type="date" name="actualDate" className="input" required defaultValue={e.actualStart ?? (e.plannedStart && e.plannedStart <= today ? e.plannedStart : today)} /></div>} />}
             {e.status === "VORBEREITUNG" && <Btn id={id} version={e.version} back={back} status="GEPLANT" label="Nur auf „geplant“ setzen (Start liegt in der Zukunft)" secondary />}
@@ -145,8 +149,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
               Hinweis: Vertragslage {e.procurement.profile ? `unvollständig – es fehlt laut Beschaffungsprofil: ${e.procurement.required.filter((r) => !r.ok).map((r) => `${docSideLabel[r.side]} ${docTypeLabel[r.docType]}`).join(", ")}` : "unbestimmt (kein freigegebenes Beschaffungsprofil am Kunden)"}. Das blockiert den Status nicht – es bleibt als Hinweis sichtbar, bis die Unterlagen nachgetragen sind (Typ einer vorhandenen Unterlage unten korrigierbar).
             </p>
           )}
-          <p className="muted text-xs">„Aktiv“ ist ein bestätigtes Ereignis (tatsächlicher Start), kein Datumsablauf; „geplant“ ist nur für Einsätze, die noch nicht begonnen haben. Verlängerung ist kein Status – der Einsatz bleibt aktiv, während sie geklärt wird.</p>
-        </section>
+          </div>
+        </details>
       )}
 
       {/* Betreuung */}
@@ -307,7 +311,6 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
             ))}
           </tbody>
         </table>
-        <p className="muted text-xs mt-2">Keine Umsatzhochrechnung: Sätze, Laufzeit und Menge stehen hier getrennt; eine Summe gibt es nur mit bekannter Einsatzmenge.</p>
         {a.manage && !final && (
           <details className="mt-2">
             <summary>Neue Periode (Satzänderung, Verlängerung, Bestätigung)</summary>
@@ -333,7 +336,6 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
       {/* Check-ins */}
       <section className="card" id="checkins">
         <h2 className="font-semibold mb-2">Check-ins</h2>
-        <p className="muted text-xs mb-2">Kunden-Catch-up alle 42 Tage nach dem letzten tatsächlichen Gespräch (Startwert); Freelancer-Check-ins separat. Verschieben ändert nicht den letzten Kontakt.</p>
         {d.checkins.length === 0 && <p className="muted text-sm">Noch keine Check-ins.</p>}
         <ul className="space-y-3 text-sm">
           {d.checkins.map((c) => {
@@ -375,13 +377,16 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           })}
         </ul>
         {!final && (a.manage || a.care) && (
-          <form action={createCheckinAction} className="flex flex-wrap gap-2 items-end mt-3">
+          <details className="mt-3">
+          <summary className="muted text-sm" style={{ cursor: "pointer" }}>Check-in anlegen</summary>
+          <form action={createCheckinAction} className="flex flex-wrap gap-2 items-end mt-2">
             <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="back" value={`${back}#checkins`} />
             <select name="side" className="input" defaultValue="KUNDE" aria-label="Seite"><option value="KUNDE">Kunde</option><option value="FREELANCER">Freelancer</option></select>
             <div><label className="label">Fällig</label><input type="date" name="dueDate" className="input" required /></div>
             <input name="note" className="input" placeholder="Anlass (optional)" />
             <button className="btn btn-secondary btn-small" type="submit">Check-in anlegen</button>
           </form>
+          </details>
         )}
       </section>
 

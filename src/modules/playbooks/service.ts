@@ -340,13 +340,24 @@ async function activateStep(tx: Tx, actor: Actor, run: RunRow, step: RunStepRow,
   const agreement = [step.suggestedAction, step.doneCriterion ? `Erledigt, wenn: ${step.doneCriterion}` : null].filter(Boolean).join("\n");
   // Vorbereitungsschritte übernimmt Sales Operations, sofern dem Vorgehen jemand zugeordnet ist
   const owner = step.assignee === "SALES_OPS" && run.salesOpsUserId ? run.salesOpsUserId : run.ownerUserId;
+  // e44: Person(en) im Einsatz voranstellen, damit die Aufgabe in der Arbeitsliste sagt, um wen es geht
+  let who = "";
+  if (run.opportunityId) {
+    const engs = await tx.query.engagements.findMany({ where: and(eq(schema.engagements.opportunityId, run.opportunityId), inArray(schema.engagements.status, ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT"])), columns: { freelancerId: true, internalUserId: true }, limit: 3 });
+    const names: string[] = [];
+    for (const e of engs) {
+      const n = e.freelancerId ? (await tx.query.freelancers.findFirst({ where: eq(schema.freelancers.id, e.freelancerId), columns: { displayName: true } }))?.displayName : e.internalUserId ? (await tx.query.users.findFirst({ where: eq(schema.users.id, e.internalUserId), columns: { displayName: true } }))?.displayName : null;
+      if (n && !names.includes(n)) names.push(n);
+    }
+    if (names.length) who = `${names.join(", ")}: `;
+  }
   const [a] = await tx
     .insert(schema.actions)
     .values({
       workspaceId: run.workspaceId,
       setupId: run.setupId,
       opportunityId: run.opportunityId,
-      title: `${run.playbookName} · Schritt ${step.position}/${total}: ${step.title}`,
+      title: `${who}${run.playbookName} · Schritt ${step.position}/${total}: ${step.title}`.slice(0, 300),
       agreement: agreement || null,
       ownerUserId: owner,
       status: owner === actor.userId && !proposalOnly ? "ANGENOMMEN" : "VORGESCHLAGEN",

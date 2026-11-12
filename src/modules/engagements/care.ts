@@ -4,7 +4,8 @@ import { db, schema, type Db, type Tx } from "@/db/client";
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
-import { notify } from "@/modules/notifications/service";
+import { notify, resolveNotifications } from "@/modules/notifications/service";
+import { engagementLabel } from "./label";
 import { createWorkItem, FINAL as WORK_FINAL } from "@/modules/work/service";
 import { ensureDefaultTeams } from "@/modules/work/teams";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
@@ -88,7 +89,7 @@ export async function activateCareFromWorkItem(tx: Tx, actor: Actor, item: typeo
   // offene zuständigkeitsabhängige Aufgaben umhängen: fällige Check-ins dieser Seite
   await tx.update(schema.checkins).set({ ownerUserId: assigneeUserId, updatedAt: new Date() }).where(and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.side, role === "CUSTOMER_CARE" ? "KUNDE" : "FREELANCER"), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])));
   await recordAudit(tx, actor, "care.activated", "ENGAGEMENT", e.id, { rolle: role, person: assigneeUserId, vorher: current.map((c) => c.userId) });
-  await notify(tx, { workspaceId: e.workspaceId, userIds: [e.bdUserId, item.requesterUserId], kind: "ANGENOMMEN", title: `${careRoleLabel[role]} übernommen: ${e.title}`, link: `/einsaetze/${e.id}`, actorUserId: actor.userId });
+  await notify(tx, { workspaceId: e.workspaceId, userIds: [e.bdUserId, item.requesterUserId], kind: "ANGENOMMEN", title: `${careRoleLabel[role]} übernommen: ${await engagementLabel(db, e)}`, link: `/einsaetze/${e.id}`, actorUserId: actor.userId });
 }
 
 /** Betreuung direkt vergeben/beenden (BD-Kontext) – ohne Übergabevorgang, z. B. Vertretung oder Korrektur. */
@@ -107,7 +108,7 @@ export async function setCareDirect(actor: Actor, engagementId: string, raw: unk
       if (!u) throw new ValidationError("Person nicht gefunden.");
       await tx.insert(schema.careAssignments).values({ workspaceId: actor.workspaceId, engagementId, role: p.data.role, userId: u.id, fromDate: t, acceptedAt: new Date(), grantedBy: actor.userId });
       await tx.update(schema.checkins).set({ ownerUserId: u.id, updatedAt: new Date() }).where(and(eq(schema.checkins.engagementId, engagementId), eq(schema.checkins.side, p.data.role === "CUSTOMER_CARE" ? "KUNDE" : "FREELANCER"), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])));
-      await notify(tx, { workspaceId: actor.workspaceId, userIds: [u.id], kind: "ZUGEWIESEN", title: `${careRoleLabel[p.data.role]}: ${a.engagement.title}`, link: `/einsaetze/${engagementId}`, actorUserId: actor.userId });
+      await notify(tx, { workspaceId: actor.workspaceId, userIds: [u.id], kind: "ZUGEWIESEN", title: `${careRoleLabel[p.data.role]}: ${await engagementLabel(db, a.engagement)}`, link: `/einsaetze/${engagementId}`, actorUserId: actor.userId });
     }
     await recordAudit(tx, actor, "care.set", "ENGAGEMENT", engagementId, { rolle: p.data.role, person: p.data.userId || null, grund: p.data.reason || null });
   });
@@ -230,14 +231,16 @@ export async function actOnCheckin(actor: Actor, checkinId: string, raw: unknown
       .returning();
     if (!u) throw new ConflictError();
     await recordAudit(tx, actor, "checkin.updated", "ENGAGEMENT", c.engagementId, { aktion: i.action, status: u.status });
+    // e44: geführt oder entfallen → die Fälligkeits-Hinweise zu den Check-ins dieses Einsatzes sind erledigt
+    if (["ERLEDIGT", "ABGESAGT", "GEPLANT"].includes(u.status)) await resolveNotifications(tx, actor.workspaceId, `/einsaetze/${c.engagementId}#checkins`);
     // Folgetermin im 6-Wochen-Rhythmus – nur für Freelancer-Einsätze (Kunde und Freelancer), nicht für interne
     if (next && a.engagement.freelancerId && ["AKTIV", "GEPLANT", "ENDET"].includes(a.engagement.status)) {
       const side = c.side === "KUNDE" ? "KUNDE" : "FREELANCER";
       const owner = await careOwner(c.engagementId, side, a.engagement.bdUserId, tx);
       await tx.insert(schema.checkins).values({ workspaceId: actor.workspaceId, engagementId: c.engagementId, side, ownerUserId: owner, dueDate: next, ruleKey: `catchup:${c.engagementId}:${side === "KUNDE" ? "" : "FREELANCER:"}${next}`, createdBy: actor.userId }).onConflictDoNothing();
     }
-    if (signalId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [a.engagement.bdUserId], kind: "KOMMENTAR", title: `Sales-Hinweis aus Check-in (${a.engagement.title}) – bitte prüfen`, link: `/setups/${a.engagement.setupId}`, actorUserId: actor.userId });
-    if (i.salesHint && !signalId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [a.engagement.bdUserId], kind: "KOMMENTAR", title: `Sales-Hinweis aus Check-in (${a.engagement.title}): ${i.salesHint.slice(0, 100)}`, link: `/einsaetze/${c.engagementId}#checkins`, actorUserId: actor.userId });
+    if (signalId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [a.engagement.bdUserId], kind: "KOMMENTAR", title: `Sales-Hinweis aus Check-in (${await engagementLabel(db, a.engagement)}) – bitte prüfen`, link: `/setups/${a.engagement.setupId}`, actorUserId: actor.userId });
+    if (i.salesHint && !signalId) await notify(tx, { workspaceId: actor.workspaceId, userIds: [a.engagement.bdUserId], kind: "KOMMENTAR", title: `Sales-Hinweis aus Check-in (${await engagementLabel(db, a.engagement)}): ${i.salesHint.slice(0, 100)}`, link: `/einsaetze/${c.engagementId}#checkins`, actorUserId: actor.userId });
     return u;
   });
 }
@@ -264,16 +267,16 @@ export async function ensureCatchups(workspaceId?: string): Promise<number> {
   return n;
 }
 
-/** Fällige/überfällige Check-ins: ein Hinweis je Check-in und Tag an die zuständige Person. */
+/** Fällige/überfällige Check-ins: je Check-in und Termin ein Hinweis bei Fälligkeit und einer bei Überfälligkeit (e44: nicht mehr täglich). */
 export async function notifyDueCheckins(workspaceId?: string): Promise<number> {
   const t = todayIso();
   const rows = await db.query.checkins.findMany({ where: and(workspaceId ? eq(schema.checkins.workspaceId, workspaceId) : undefined, inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT"])) });
   let n = 0;
   for (const c of rows.filter((c) => c.dueDate <= plusDaysIso(t, 7))) {
-    const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, c.engagementId), columns: { title: true, workspaceId: true } });
+    const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, c.engagementId) });
     if (!e) continue;
     const overdue = c.dueDate < t;
-    n += await notify(db, { workspaceId: e.workspaceId, userIds: [c.ownerUserId], kind: overdue ? "UEBERFAELLIG" : "ZUGEWIESEN", title: `${overdue ? "Überfälliger" : "Fälliger"} Check-in (${c.side === "KUNDE" ? "Kunde" : "Freelancer"}) bis ${c.dueDate}: ${e.title}`, link: `/einsaetze/${c.engagementId}#checkins`, dedupeKey: `checkin:${c.id}:${overdue ? t : c.dueDate}` });
+    n += await notify(db, { workspaceId: e.workspaceId, userIds: [c.ownerUserId], kind: overdue ? "UEBERFAELLIG" : "ZUGEWIESEN", title: `${overdue ? "Überfälliger" : "Fälliger"} Check-in (${c.side === "KUNDE" ? "Kunde" : "Freelancer"}) bis ${c.dueDate}: ${await engagementLabel(db, e)}`, link: `/einsaetze/${c.engagementId}#checkins`, dedupeKey: `checkin:${c.id}:${c.dueDate}:${overdue ? "ueberfaellig" : "faellig"}` });
   }
   return n;
 }
@@ -350,7 +353,7 @@ export async function upsertRenewalDecision(actor: Actor, engagementId: string, 
     await recordAudit(tx, actor, "renewal.decision", "ENGAGEMENT", engagementId, { status: i.status, bis: i.proposedTo || null });
     if (["BESTAETIGT", "ABGELEHNT"].includes(i.status)) {
       const cares = await tx.query.careAssignments.findMany({ where: and(eq(schema.careAssignments.engagementId, engagementId), isNull(schema.careAssignments.toDate)) });
-      await notify(tx, { workspaceId: actor.workspaceId, userIds: cares.map((c) => c.userId), kind: "KOMMENTAR", title: `Verlängerung ${renewalStatusLabel[i.status]}: ${e.title}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId });
+      await notify(tx, { workspaceId: actor.workspaceId, userIds: cares.map((c) => c.userId), kind: "KOMMENTAR", title: `Verlängerung ${renewalStatusLabel[i.status]}: ${await engagementLabel(db, e)}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId });
     }
     return row!;
   });
@@ -370,6 +373,8 @@ export const renewalStartInput = z.object({
   vk: opt(20),
   rateUnit: z.enum(["TAG", "STUNDE"]).optional(),
   note: opt(1000),
+  /** neue Bestellnummer, falls sie schon vorliegt (e44) */
+  orderReference: opt(200),
 });
 
 async function latestPeriod(engagementId: string) {
@@ -394,7 +399,7 @@ function personLabel(e: { freelancerId: string | null; internalUserId: string | 
 }
 
 /** Verlängerung anstoßen: ein Datum, Konditionen „unverändert“ als Vorgabe, optional eine Notiz. Erlaubt für alle, die den Einsatz sehen. */
-export async function startRenewal(actor: Actor, engagementId: string, raw: unknown) {
+export async function startRenewal(actor: Actor, engagementId: string, raw: unknown, opts: { /** wird im selben Zug bestätigt: keine Bitte um Bestätigung verschicken */ direct?: boolean } = {}) {
   const p = renewalStartInput.safeParse(raw);
   if (!p.success) throw new ValidationError(issues(p.error));
   const a = await requireEngagement(actor, engagementId);
@@ -420,12 +425,12 @@ export async function startRenewal(actor: Actor, engagementId: string, raw: unkn
   const person = personLabel(e, new Map(fls.map((f) => [f.id, f.displayName])), new Map(users.map((u) => [u.id, u.displayName])));
   const principals = await principalsFor(actor.workspaceId, e.accountId);
   return db.transaction(async (tx) => {
-    const values = { status: "IN_ABSTIMMUNG", proposedFrom, proposedTo: i.newEnd, conditionsNote, availabilityNote: i.note || null, commercialOwnerUserId: e.bdUserId, triggerDate: current?.triggerDate ?? todayIso(), updatedAt: new Date() };
+    const values = { status: "IN_ABSTIMMUNG", proposedFrom, proposedTo: i.newEnd, conditionsNote, orderReference: i.orderReference || current?.orderReference || null, availabilityNote: i.note || null, commercialOwnerUserId: e.bdUserId, triggerDate: current?.triggerDate ?? todayIso(), updatedAt: new Date() };
     let row;
     if (current) [row] = await tx.update(schema.renewalDecisions).set({ ...values, version: current.version + 1 }).where(eq(schema.renewalDecisions.id, current.id)).returning();
     else [row] = await tx.insert(schema.renewalDecisions).values({ workspaceId: actor.workspaceId, engagementId, ...values, createdBy: actor.userId }).returning();
     await recordAudit(tx, actor, "renewal.requested", "ENGAGEMENT", engagementId, { bis: i.newEnd, konditionen: conditionsNote });
-    await notify(tx, { workspaceId: actor.workspaceId, userIds: [e.bdUserId, ...principals], kind: "ZUGEWIESEN", title: `Verlängerung bestätigen: ${person} bei ${a.account.name} bis ${i.newEnd}`, link: `/start#entscheidungen`, actorUserId: actor.userId, dedupeKey: `renewal-request:${row!.id}:${i.newEnd}` });
+    if (!opts.direct) await notify(tx, { workspaceId: actor.workspaceId, userIds: [e.bdUserId, ...principals], kind: "ZUGEWIESEN", title: `Verlängerung bestätigen: ${person} bei ${a.account.name} bis ${i.newEnd}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId, dedupeKey: `renewal-request:${row!.id}:${i.newEnd}` });
     return row!;
   });
 }
@@ -436,6 +441,8 @@ export const renewalDecideInput = z.object({
   contractFollowUp: opt(500),
   note: opt(1000),
   targetUserId: opt(100),
+  /** neue Bestellnummer zur Verlängerung (e44) – geht an den Einsatz, den Auftrag und in die Übergabe ans Backoffice */
+  orderReference: opt(200),
 });
 
 export type RenewalDecideResult = { decision: typeof schema.renewalDecisions.$inferSelect; mocoWritten: boolean; mocoError: string | null; pendingApproval?: boolean };
@@ -477,14 +484,15 @@ export async function decideRenewal(actor: Actor, engagementId: string, raw: unk
     return db.transaction(async (tx) => {
       const [row] = await tx.update(schema.renewalDecisions).set({ commercialOwnerUserId: target.id, availabilityNote: i.note ? `${current.availabilityNote ? `${current.availabilityNote}\n` : ""}Weitergabe von ${actor.displayName}: ${i.note}` : current.availabilityNote, version: current.version + 1, updatedAt: new Date() }).where(eq(schema.renewalDecisions.id, current.id)).returning();
       await recordAudit(tx, actor, "renewal.delegated", "ENGAGEMENT", engagementId, { an: target.id });
-      await notify(tx, { workspaceId: actor.workspaceId, userIds: [target.id], kind: "ZUGEWIESEN", title: `Verlängerung entscheiden: ${e.title}${i.note ? ` – ${i.note.slice(0, 80)}` : ""}`, link: `/start#entscheidungen`, actorUserId: actor.userId });
+      await notify(tx, { workspaceId: actor.workspaceId, userIds: [target.id], kind: "ZUGEWIESEN", title: `Verlängerung entscheiden: ${await engagementLabel(db, e)}${i.note ? ` – ${i.note.slice(0, 80)}` : ""}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId });
       return { decision: row!, mocoWritten: false, mocoError: null };
     });
   }
   if (!a.commercial) throw new ForbiddenError("Bestätigen oder ablehnen darf der verantwortliche BD, Principal oder CEO; Sales Operations stößt an.");
   if (i.decision === "ABLEHNEN") {
     const row = await upsertRenewalDecision(actor, engagementId, { version: current.version, status: "ABGELEHNT", proposedFrom: current.proposedFrom ?? "", proposedTo: current.proposedTo ?? "", conditionsNote: current.conditionsNote ?? "", availabilityNote: `Abgelehnt von ${actor.displayName}${i.note ? `: ${i.note}` : ""}`, commercialOwnerUserId: actor.userId });
-    await notify(db, { workspaceId: actor.workspaceId, userIds: [requester], kind: "ABGELEHNT", title: `Verlängerung abgelehnt: ${e.title}${i.note ? ` – ${i.note.slice(0, 80)}` : ""}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId });
+    await resolveNotifications(db, actor.workspaceId, `/einsaetze/${engagementId}#verlaengerung`);
+    await notify(db, { workspaceId: actor.workspaceId, userIds: [requester], kind: "ABGELEHNT", title: `Verlängerung abgelehnt: ${await engagementLabel(db, e)}${i.note ? ` – ${i.note.slice(0, 80)}` : ""}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId });
     return { decision: row, mocoWritten: false, mocoError: null };
   }
   // BESTAETIGEN
@@ -494,7 +502,7 @@ export async function decideRenewal(actor: Actor, engagementId: string, raw: unk
     return db.transaction(async (tx) => {
       const [row] = await tx.update(schema.renewalDecisions).set({ commercialOwnerUserId: approver, availabilityNote: `${current.availabilityNote ? `${current.availabilityNote}\n` : ""}Zur Freigabe an die Geschäftsführung (geänderte Konditionen, Account-Lead-Kunde) – von ${actor.displayName}${i.note ? `: ${i.note}` : ""}`, version: current.version + 1, updatedAt: new Date() }).where(eq(schema.renewalDecisions.id, current.id)).returning();
       await recordAudit(tx, actor, "renewal.approval_requested", "ENGAGEMENT", engagementId, { an: approver });
-      await notify(tx, { workspaceId: actor.workspaceId, userIds: [approver], kind: "ZUGEWIESEN", title: `Freigabe: Verlängerung mit neuen Konditionen – ${e.title} bis ${current.proposedTo}`, link: `/start#entscheidungen`, actorUserId: actor.userId });
+      await notify(tx, { workspaceId: actor.workspaceId, userIds: [approver], kind: "ZUGEWIESEN", title: `Freigabe: Verlängerung mit neuen Konditionen – ${await engagementLabel(db, e)} bis ${current.proposedTo}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId });
       return { decision: row!, mocoWritten: false, mocoError: null, pendingApproval: true };
     });
   }
@@ -518,6 +526,13 @@ export async function decideRenewal(actor: Actor, engagementId: string, raw: unk
     rateUnit,
   });
   if (e.orderId) await db.update(schema.orders).set({ plannedEnd: current.proposedTo, updatedAt: new Date() }).where(eq(schema.orders.id, e.orderId));
+  // Neue Bestellnummer (e44): am Einsatz fortschreiben; der Auftrag behält die ursprüngliche Nummer als Historie
+  const orderReference = i.orderReference || current.orderReference || "";
+  if (orderReference) {
+    await db.update(schema.engagements).set({ orderReference, updatedAt: new Date() }).where(eq(schema.engagements.id, engagementId));
+    await db.update(schema.renewalDecisions).set({ orderReference }).where(eq(schema.renewalDecisions.id, current.id));
+    await recordAudit(db, actor, "engagement.order_reference", "ENGAGEMENT", engagementId, { bestellnummer: orderReference, anlass: "Verlängerung" });
+  }
   // Projektende nach Moco (zweiter Schreibzugriff nach den Leads), protokolliert; bei Fehler Aufgabe an Sales Operations
   let mocoWritten = false;
   let mocoError: string | null = null;
@@ -529,14 +544,15 @@ export async function decideRenewal(actor: Actor, engagementId: string, raw: unk
     } catch (err) {
       mocoError = err instanceof Error ? err.message : String(err);
       const ops = await salesOpsUsers(actor.workspaceId);
-      await notify(db, { workspaceId: actor.workspaceId, userIds: [...ops, requester, actor.userId], kind: "ZUGEWIESEN", title: `Projektende in Moco von Hand setzen: ${e.title} bis ${current.proposedTo} (Schreibzugriff fehlgeschlagen)`, link: `/einsaetze/${engagementId}#verlaengerung`, dedupeKey: `moco-finish-manual:${engagementId}:${current.proposedTo}` });
+      await notify(db, { workspaceId: actor.workspaceId, userIds: [...ops, requester, actor.userId], kind: "ZUGEWIESEN", title: `Projektende in Moco von Hand setzen: ${await engagementLabel(db, e)} bis ${current.proposedTo} (Schreibzugriff fehlgeschlagen)`, link: `/einsaetze/${engagementId}#verlaengerung`, dedupeKey: `moco-finish-manual:${engagementId}:${current.proposedTo}` });
     }
   }
-  await notify(db, { workspaceId: actor.workspaceId, userIds: [requester], kind: "ERLEDIGT", title: `Verlängerung bestätigt: ${e.title} bis ${current.proposedTo}${mocoWritten ? " (Moco aktualisiert)" : ""}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId });
+  await resolveNotifications(db, actor.workspaceId, `/einsaetze/${engagementId}#verlaengerung`);
+  await notify(db, { workspaceId: actor.workspaceId, userIds: [requester], kind: "ERLEDIGT", title: `Verlängerung bestätigt: ${await engagementLabel(db, e)} bis ${current.proposedTo}${mocoWritten ? " (Moco aktualisiert)" : ""}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId });
   // Übergabe ans Backoffice (Etappe 51): nur die Änderung
   {
     const { handoverForChange } = await import("@/modules/conversion/handover");
-    await handoverForChange(actor, engagementId, "VERLAENGERT", `Verlängert bis ${current.proposedTo}. ${current.conditionsNote ?? "Konditionen unverändert"}.${mocoWritten ? " Das Projektende in Moco ist bereits gesetzt." : ""}`);
+    await handoverForChange(actor, engagementId, "VERLAENGERT", `Verlängert bis ${current.proposedTo}. ${current.conditionsNote ?? "Konditionen unverändert"}.${orderReference ? ` Neue Bestellnummer: ${orderReference}.` : " Bestellnummer zur Verlängerung liegt noch nicht vor."}${mocoWritten ? " Das Projektende in Moco ist bereits gesetzt." : ""}`);
   }
   return { decision: row, mocoWritten, mocoError };
 }
@@ -569,6 +585,10 @@ export type RenewalCard = {
   forMe: boolean;
   /** über wen beim Kunden, wer spricht an (e37) */
   contacts: import("./contacts").RenewalContacts;
+  /** darf ich selbst bestätigen (BD-Kontext, Principal, CEO)? Dann geht Anstoßen und Bestätigen in einem Schritt (e44) */
+  canDecide: boolean;
+  /** schon hinterlegte neue Bestellnummer */
+  orderReference: string | null;
 };
 
 /** Verlängerungskarten für die Startseite: offene Entscheidungen (in Abstimmung) für kommerziell Zuständige, zu klärende für Sales Operations/Betreuung. */
@@ -630,6 +650,8 @@ export async function listRenewalCards(actor: Actor): Promise<RenewalCard[]> {
       bdName: e.bdUserId ? un.get(e.bdUserId) ?? null : null,
       forMe,
       contacts: contacts.get(e.id) ?? { renewal: null, order: null, approach: null, source: null },
+      canDecide: !!a.commercial,
+      orderReference: d.orderReference,
     });
   }
   return out.sort((x, y) => (x.mode === y.mode ? (x.daysToEnd ?? 9999) - (y.daysToEnd ?? 9999) : x.mode === "ENTSCHEIDEN" ? -1 : 1));
@@ -650,7 +672,7 @@ export async function ensureRenewalDecisions(workspaceId?: string): Promise<numb
     await db.transaction(async (tx) => {
       await tx.insert(schema.renewalDecisions).values({ workspaceId: e.workspaceId, engagementId: e.id, triggerDate: ping, status: "ZU_KLAEREN", commercialOwnerUserId: e.bdUserId, createdBy: e.bdUserId });
       const cares = await tx.query.careAssignments.findMany({ where: and(eq(schema.careAssignments.engagementId, e.id), isNull(schema.careAssignments.toDate)) });
-      await notify(tx, { workspaceId: e.workspaceId, userIds: [e.bdUserId, ...cares.map((c) => c.userId)], kind: "ZUGEWIESEN", title: `Verlängerung klären: „${e.title}“ endet am ${e.plannedEnd ?? e.renewalDeadline}`, link: `/einsaetze/${e.id}#verlaengerung`, dedupeKey: `renewal:engagement:${e.id}` });
+      await notify(tx, { workspaceId: e.workspaceId, userIds: [e.bdUserId, ...cares.map((c) => c.userId)], kind: "ZUGEWIESEN", title: `Verlängerung klären: ${await engagementLabel(db, e)} endet am ${e.plannedEnd ?? e.renewalDeadline}`, link: `/einsaetze/${e.id}#verlaengerung`, dedupeKey: `renewal:engagement:${e.id}` });
     });
     n++;
   }

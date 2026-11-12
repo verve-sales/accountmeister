@@ -4,6 +4,7 @@ import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
 import { isSalesOpsOnlyUser } from "@/modules/identity/authz";
 import { ensureDefaultPlaybooks, startPlaybookRun } from "@/modules/playbooks/service";
+import { getConfig } from "@/lib/config";
 import { DAY, renewalPingDate, renewalTriggerDate } from "./service";
 
 /**
@@ -11,10 +12,18 @@ import { DAY, renewalPingDate, renewalTriggerDate } from "./service";
  * startet das Tool am Auslösetag (Frist − 14 Tage, sonst Ende − 8 Wochen) einmalig das Vorgehen
  * „Verlängerung vor Einsatzende“ an der Chance. Der erste Schritt kommt als Vorschlag – der BD nimmt ihn an.
  * Berechnet beim Öffnen von Start/Meine Arbeit für die Einsätze, die der Akteur verantwortet.
+ *
+ * Seit e44 ist diese Automatik standardmäßig aus (RENEWAL_AUTOMATION=off): Für eine Verlängerung entstanden sonst eine
+ * Ping-Aktion, ein Vorgehen mit drei Schritt-Aktionen und zusätzlich die Karte am Einsatz. Geführt wird die Verlängerung
+ * über die Karte am Einsatz; unberührte Reste der Automatik werden zurückgestellt (siehe retireRenewalAutomation).
  */
 export async function ensureRenewalRuns(actor: Actor, now = new Date()): Promise<number> {
   const { ensureOrdersEnded } = await import("./service");
   await ensureOrdersEnded(actor.workspaceId).catch(() => 0);
+  if (getConfig().RENEWAL_AUTOMATION !== "on") {
+    await retireRenewalAutomation(actor.workspaceId);
+    return 0;
+  }
   let rows = await db
     .select({ o: schema.orders, opp: schema.opportunities, bd: schema.accounts.responsibleBdUserId })
     .from(schema.orders)
@@ -91,6 +100,62 @@ export async function ensureRenewalRuns(actor: Actor, now = new Date()): Promise
     }
   }
   return started;
+}
+
+const RETIRE_REASON = "Automatik abgeschaltet – die Verlängerung läuft über die Karte am Einsatz.";
+
+/**
+ * Reste der Verlängerungs-Automatik aufräumen, solange niemand damit gearbeitet hat: vorgeschlagene Ping-Aktionen werden
+ * verworfen; automatisch gestartete Vorgehen ohne erledigten Schritt, deren erste Aktion noch auf Annahme wartet, werden
+ * zurückgestellt (wieder aufnehmbar). Angenommene Aktionen und Vorgehen mit Fortschritt bleiben unberührt.
+ */
+export async function retireRenewalAutomation(workspaceId: string): Promise<number> {
+  let n = 0;
+  // Jeder Anlass wird genau einmal aufgeräumt (kind → …_RETIRED), damit ein später von Hand wieder aufgenommenes Vorgehen bleibt.
+  const pings = await db.query.standardTasks.findMany({ where: and(eq(schema.standardTasks.workspaceId, workspaceId), eq(schema.standardTasks.kind, "RENEWAL_PING")) });
+  for (const t of pings) {
+    if (t.actionId) {
+      const a = await db.query.actions.findFirst({ where: eq(schema.actions.id, t.actionId), columns: { id: true, status: true, version: true } });
+      if (a?.status === "VORGESCHLAGEN") {
+        await db.update(schema.actions).set({ status: "VERWORFEN", result: RETIRE_REASON, version: a.version + 1, updatedAt: new Date() }).where(and(eq(schema.actions.id, a.id), eq(schema.actions.status, "VORGESCHLAGEN")));
+        n++;
+      }
+    }
+    await db.update(schema.standardTasks).set({ kind: "RENEWAL_PING_RETIRED" }).where(eq(schema.standardTasks.id, t.id));
+  }
+  const autos = await db.query.standardTasks.findMany({ where: and(eq(schema.standardTasks.workspaceId, workspaceId), eq(schema.standardTasks.kind, "RENEWAL")) });
+  if (!autos.length) return n;
+  const pbs = await db.query.playbooks.findMany({ where: and(eq(schema.playbooks.workspaceId, workspaceId), eq(schema.playbooks.code, "VERLAENGERUNG")), columns: { id: true } });
+  const orderIds = autos.map((t) => t.key.replace("renewal:order:", ""));
+  const orders = await db.query.orders.findMany({ where: inArray(schema.orders.id, orderIds), columns: { id: true, opportunityId: true } });
+  const oppOf = new Map(orders.map((o) => [o.id, o.opportunityId]));
+  const oppIds = [...new Set(orders.map((o) => o.opportunityId))];
+  const runs = pbs.length && oppIds.length ? await db.query.playbookRuns.findMany({ where: and(eq(schema.playbookRuns.workspaceId, workspaceId), eq(schema.playbookRuns.status, "AKTIV"), inArray(schema.playbookRuns.playbookId, pbs.map((p) => p.id)), inArray(schema.playbookRuns.opportunityId, oppIds)) }) : [];
+  const steps = runs.length ? await db.query.playbookRunSteps.findMany({ where: inArray(schema.playbookRunSteps.runId, runs.map((r) => r.id)) }) : [];
+  const actionIds = steps.map((s) => s.actionId).filter((x): x is string => !!x);
+  const acts = actionIds.length ? await db.query.actions.findMany({ where: inArray(schema.actions.id, actionIds), columns: { id: true, status: true, version: true } }) : [];
+  for (const t of autos) {
+    const opp = oppOf.get(t.key.replace("renewal:order:", ""));
+    // das von der Regel gestartete Vorgehen: an dieser Chance, innerhalb eines Tages nach dem Anlass
+    const r = runs.find((x) => x.opportunityId === opp && Math.abs(x.createdAt.getTime() - t.createdAt.getTime()) < DAY);
+    if (r) {
+      const mine = steps.filter((s) => s.runId === r.id);
+      const open = mine.filter((s) => s.status === "OFFEN");
+      const openActs = open.map((s) => acts.find((a) => a.id === s.actionId)).filter((a): a is NonNullable<typeof a> => !!a);
+      const untouched = !mine.some((s) => s.status === "ERLEDIGT" || s.status === "UEBERSPRUNGEN") && open.length > 0 && openActs.every((a) => a.status === "VORGESCHLAGEN");
+      if (untouched) {
+        await db.transaction(async (tx) => {
+          const [u] = await tx.update(schema.playbookRuns).set({ status: "ZURUECKGESTELLT", closedReason: RETIRE_REASON, version: r.version + 1, updatedAt: new Date() }).where(and(eq(schema.playbookRuns.id, r.id), eq(schema.playbookRuns.version, r.version))).returning({ id: schema.playbookRuns.id });
+          if (!u) return;
+          for (const a of openActs) await tx.update(schema.actions).set({ status: "VERWORFEN", result: RETIRE_REASON, version: a.version + 1, updatedAt: new Date() }).where(eq(schema.actions.id, a.id));
+          for (const s of open) await tx.update(schema.playbookRunSteps).set({ status: "WARTET", actionId: null }).where(eq(schema.playbookRunSteps.id, s.id));
+          n++;
+        });
+      }
+    }
+    await db.update(schema.standardTasks).set({ kind: "RENEWAL_RETIRED" }).where(eq(schema.standardTasks.id, t.id));
+  }
+  return n;
 }
 
 export async function ensureRenewalRunsSafe(actor: Actor): Promise<number> {
