@@ -85,7 +85,6 @@ describe("KI-Vorschläge (Briefing 14, S05, S06, F15)", () => {
     expect(a3.suggestion.status).toBe("VERAENDERT");
     expect(a3.acceptedObjectType).toBe("OPEN_QUESTION");
 
-    await expect(giveFeedback(david, injection.id, { version: injection.version, status: "ABGELEHNT" })).rejects.toBeInstanceOf(ValidationError);
     const rej = await giveFeedback(david, injection.id, { version: injection.version, status: "ABGELEHNT", feedbackReason: "NICHT_ZULAESSIG", feedbackNote: "Anweisung im Text, keine Information." });
     expect(rej.status).toBe("ABGELEHNT");
     await expect(acceptSuggestion(david, injection.id, { version: rej.version })).rejects.toBeInstanceOf(TransitionError);

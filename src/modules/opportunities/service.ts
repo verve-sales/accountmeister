@@ -286,7 +286,6 @@ export async function changeOpportunityStatus(actor: Actor, id: string, raw: { v
   if (to === "BEAUFTRAGT") throw new TransitionError("„Beauftragt“ entsteht über einen Auftrag („Beauftragung bestätigen“).");
   if (!oppTransitions[opp.status].includes(to)) throw new TransitionError(`Übergang von „${opp.status}“ nach „${to}“ ist nicht vorgesehen.`);
   const reason = (raw.reason ?? "").trim();
-  if ((to === "ZURUECKGESTELLT" || to === "BEENDET") && reason.length < 3) throw new ValidationError("Bitte begründen, warum die Chance zurückgestellt bzw. beendet wird.");
   const [u] = await db
     .update(schema.opportunities)
     .set({ status: to, statusReason: reason || null, version: Number(raw.version) + 1, updatedAt: new Date() })
@@ -461,7 +460,6 @@ export async function changeOfferStatus(actor: Actor, offerId: string, raw: { ve
   if (to === "VORGESTELLT") throw new TransitionError("„Vorgestellt“ wird über „Vorstellungsereignis bestätigen“ gesetzt.");
   if (!offerTransitions[offer.status].includes(to)) throw new TransitionError(`Übergang von „${offer.status}“ nach „${to}“ ist nicht vorgesehen.`);
   const note = (raw.note ?? "").trim();
-  if ((to === "ABGELEHNT" || to === "ZURUECKGEZOGEN") && note.length < 3) throw new ValidationError("Bitte den Grund festhalten.");
   return db.transaction(async (tx) => {
     const [u] = await tx
       .update(schema.offers)
@@ -572,7 +570,6 @@ export async function cancelOrder(actor: Actor, orderId: string, raw: { version:
   const { order } = await requireOrder(actor, orderId);
   if (order.status === "BEENDET_STORNIERT") throw new TransitionError("Bereits beendet/storniert.");
   const reason = (raw.reason ?? "").trim();
-  if (reason.length < 3) throw new ValidationError("Bitte den Grund festhalten.");
   const [u] = await db
     .update(schema.orders)
     .set({ status: "BEENDET_STORNIERT", engagementStatus: order.engagementStatus === "GESTARTET" ? "BEENDET" : order.engagementStatus, statusReason: reason, version: Number(raw.version) + 1, updatedAt: new Date() })

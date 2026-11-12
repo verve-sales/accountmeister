@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { MoveToSetup } from "@/components/MoveToSetup";
+import { PendingButton } from "@/components/PendingButton";
+import { canClean } from "@/modules/cleanup/service";
 import { Term } from "@/components/Term";
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -61,6 +64,7 @@ import {
   updateSetupAction,
   setupContactsAction,
   setupOfferPathAction,
+  mergeIntoSetupAction,
 } from "../../actions";
 import { offerPathLabel, offerPathValues } from "@/modules/conversion/service";
 import { approachLabel, approachValues } from "@/modules/engagements/contacts";
@@ -78,6 +82,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
     throw e;
   }
   const back = `/setups/${id}`;
+  const siblings = canClean(actor) ? (await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, d.account.id), columns: { id: true, name: true, status: true }, orderBy: (x, { asc }) => [asc(x.name)] })).filter((x) => x.id !== d.setup.id && x.status !== "ARCHIVIERT") : [];
   const allUsers = await db.query.users.findMany({ where: eq(schema.users.status, "ACTIVE"), orderBy: (u, { asc }) => [asc(u.displayName)] });
   const others = allUsers.filter((u) => u.id !== actor.userId);
   const name = (uid: string | null | undefined) => (uid ? d.userNames.get(uid) ?? allUsers.find((u) => u.id === uid)?.displayName ?? "?" : "–");
@@ -433,6 +438,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                         {(a.status === "ANGENOMMEN" || a.status === "IN_ARBEIT") && <button className="btn btn-secondary btn-small" name="status" value="BLOCKIERT">Blockiert</button>}
                         <button className="btn btn-secondary btn-small" name="status" value="VERWORFEN">Verwerfen</button>
                       </form>
+                      <MoveToSetup kind="ACTION" id={a.id} currentSetupId={a.setupId} back={back} />
                     </td>
                   )}
                 </tr>
@@ -541,11 +547,12 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                         <input type="hidden" name="signalId" value={s.id} />
                         <input type="hidden" name="version" value={s.version} />
                         <input type="hidden" name="back" value={back} />
-                        <input name="closedReason" className="input" style={{ width: "14rem" }} placeholder="Begründung (bei Beenden/Zurückstellen)" aria-label="Begründung" />
+                        <input name="closedReason" className="input" style={{ width: "14rem" }} placeholder="Notiz (optional)" aria-label="Notiz" />
                         {s.status === "PRUEFUNG_UEBERNOMMEN" && <button className="btn btn-secondary btn-small" name="status" value="IN_KLAERUNG">In Klärung</button>}
                         <button className="btn btn-secondary btn-small" name="status" value="ZURUECKGESTELLT">Zurückstellen</button>
                         <button className="btn btn-secondary btn-small" name="status" value="BEENDET">Beenden</button>
                       </form>
+                      <MoveToSetup kind="SIGNAL" id={s.id} currentSetupId={s.setupId} back={back} />
                       {!relatedHandover && others.length > 0 && (
                         <details>
                           <summary className="text-sm">Übergabe an eine andere Person</summary>
@@ -730,6 +737,23 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
       </section>
       <Comments actor={actor} subjectType="SETUP" subjectId={d.setup.id} back={back} />
+      {canClean(actor) && siblings.length > 0 && (
+        <details className="card text-sm" id="zusammenlegen">
+          <summary className="font-semibold" style={{ cursor: "pointer" }}>Mit anderem Setup zusammenlegen</summary>
+          <form action={mergeIntoSetupAction} className="flex flex-wrap gap-2 items-end mt-2">
+            <input type="hidden" name="fromSetupId" value={d.setup.id} />
+            <div>
+              <label className="label" htmlFor="mergeTarget">„{d.setup.name}“ aufgehen lassen in</label>
+              <select id="mergeTarget" name="intoSetupId" className="select" required defaultValue="" style={{ width: "22rem" }}>
+                <option value="" disabled>Setup desselben Kunden …</option>
+                {siblings.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </div>
+            <PendingButton className="btn btn-secondary" busy="Lege zusammen …">Zusammenlegen</PendingButton>
+          </form>
+          <p className="muted text-xs mt-1">Chancen, Einsätze, Beobachtungen, Aufgaben, Personen und Quellen wandern mit; dieses Setup verschwindet danach.</p>
+        </details>
+      )}
       {(mayReassign || actor.roles.has("ADMIN")) && <DeleteBlock kind="SETUP" id={d.setup.id} label={`${d.account.name} · ${d.setup.name}`} scope="rekursiv mit allen Chancen, Positionen, Einsätzen, Beobachtungen, Aktionen, Weeklys, Quellen, Vorgängen und Beteiligungen" back={back} />}
     </div>
   );

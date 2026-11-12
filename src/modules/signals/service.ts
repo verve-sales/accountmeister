@@ -153,9 +153,6 @@ export async function changeSignalStatus(actor: Actor, signalId: string, raw: un
   const isOwner = signal.ownerUserId === actor.userId;
   if (!isOwner && !canEditSetup(actor, ctx)) throw new ForbiddenError();
   assertSignalTransition(signal.status, input.status);
-  if ((input.status === "BEENDET" || input.status === "ZURUECKGESTELLT") && !input.closedReason) {
-    throw new ValidationError("Bitte begründen, warum die Beobachtung beendet bzw. zurückgestellt wird.");
-  }
   return db.transaction(async (tx) => {
     const [updated] = await tx
       .update(schema.signals)

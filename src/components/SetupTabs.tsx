@@ -9,7 +9,6 @@ export function SetupTabs({ setupId, active }: { setupId: string; active: "ueber
     { key: "personen", href: `/setups/${setupId}/personen`, label: "Personen & Zugang" },
     // e44: der Vorlagenkatalog ist standardmäßig ausgeblendet (FEATURE_ARTEFAKTE)
     ...(getConfig().FEATURE_ARTEFAKTE === "true" || active === "artefakte" ? [{ key: "artefakte", href: `/setups/${setupId}/artefakte`, label: "Artefakte" }] : []),
-    { key: "weeklys", href: `/weeklys?setup=${setupId}`, label: "Weeklys" },
   ];
   return (
     <nav aria-label="Setup-Bereiche" className="flex flex-wrap gap-1 border-b text-sm" style={{ borderColor: "var(--border)" }}>

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
+import { filesFor } from "@/modules/sharepoint/service";
+import { PendingButton } from "@/components/PendingButton";
 import { markSeen } from "@/modules/notifications/service";
 import { DomainError } from "@/lib/errors";
 import { getConfig } from "@/lib/config";
@@ -16,7 +18,7 @@ import { DeleteBlock } from "@/components/DeleteBlock";
 import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { approachLabel, approachValues, loadRenewalContacts } from "@/modules/engagements/contacts";
-import { addContractDocumentAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
+import { addSharePointDocumentAction, addContractDocumentAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
 import { contractDefaults } from "@/modules/conversion/contractService";
 
 const eur = (v: string | null, unit: string) => (v ? `${Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${rateUnitLabel[unit] ?? unit}` : "offen");
@@ -61,6 +63,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const setupDefault = (await loadRenewalContacts([{ ...e, renewalContactPersonId: null, orderContactPersonId: null, renewalApproach: null }])).get(e.id)!;
   const canContacts = (a.manage || a.care) && !final;
   const cd = e.freelancerId && (a.manage || a.care) && !final ? await contractDefaults(actor, e.id).catch(() => null) : null;
+  const spFiles = (a.manage || a.care) && !final ? await filesFor({ accountName: e.accountName, freelancerName: e.freelancerId ? e.freelancerName : null }) : null;
   const nextDue = [e.nextCheckin, openRenewal ? e.pingDate : null, e.status === "PAUSIERT" ? e.reviewDate : null].filter((x): x is string => !!x).sort()[0] ?? null;
 
   return (
@@ -138,11 +141,11 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
             {e.status === "VORBEREITUNG" && <Btn id={id} version={e.version} back={back} status="GEPLANT" label="Nur auf „geplant“ setzen (Start liegt in der Zukunft)" secondary />}
             {e.status === "GEPLANT" && <Btn id={id} version={e.version} back={back} status="VORBEREITUNG" label="Zurück in Vorbereitung" secondary />}
             {e.status === "PAUSIERT" && <Btn id={id} version={e.version} back={back} status="AKTIV" label="Fortsetzen" />}
-            {(e.status === "AKTIV") && <Btn id={id} version={e.version} back={back} status="PAUSIERT" label="Pausieren" secondary fields={<><input name="reason" className="input" placeholder="Grund" required /><div><label className="label">Prüftermin</label><input type="date" name="reviewDate" className="input" required /></div></>} />}
+            {(e.status === "AKTIV") && <Btn id={id} version={e.version} back={back} status="PAUSIERT" label="Pausieren" secondary fields={<><input name="reason" className="input" placeholder="Grund" /><div><label className="label">Prüftermin</label><input type="date" name="reviewDate" className="input" required /></div></>} />}
             {["AKTIV", "PAUSIERT"].includes(e.status) && <Btn id={id} version={e.version} back={back} status="ENDET" label="Ende bestätigen" secondary fields={<div><label className="label">Bestätigtes Enddatum</label><input type="date" name="actualDate" className="input" required defaultValue={e.plannedEnd && e.plannedEnd <= today ? e.plannedEnd : today} /></div>} />}
-            {e.status === "ENDET" && <Btn id={id} version={e.version} back={back} status="ABGESCHLOSSEN" label="Abschließen" fields={<input name="reason" className="input" placeholder="Abschlussnotiz (bei offenen Punkten Pflicht)" style={{ minWidth: 280 }} />} />}
+            {e.status === "ENDET" && <Btn id={id} version={e.version} back={back} status="ABGESCHLOSSEN" label="Abschließen" fields={<input name="reason" className="input" placeholder="Abschlussnotiz (optional)" style={{ minWidth: 280 }} />} />}
             {e.status === "ENDET" && <Btn id={id} version={e.version} back={back} status="AKTIV" label="Doch weiter (aktiv)" secondary />}
-            {!["ENDET"].includes(e.status) && <Btn id={id} version={e.version} back={back} status="ABGEBROCHEN" label="Abbrechen" secondary fields={<input name="reason" className="input" placeholder="Grund (Pflicht)" required />} />}
+            {!["ENDET"].includes(e.status) && <Btn id={id} version={e.version} back={back} status="ABGEBROCHEN" label="Abbrechen" secondary fields={<input name="reason" className="input" placeholder="Grund (optional)" />} />}
           </div>
           {e.procurement.complete !== true && !e.procurementException && ["VORBEREITUNG", "GEPLANT"].includes(e.status) && (
             <p className="text-xs" style={{ color: "#b7791f" }}>
@@ -176,7 +179,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
                   {targets.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
-              <div className="sm:col-span-2"><label className="label">Grund</label><input name="reason" className="input" required minLength={5} /></div>
+              <div className="sm:col-span-2"><label className="label">Grund</label><input name="reason" className="input" /></div>
               <div><label className="label">Relevante Kontakte</label><input name="contacts" className="input" /></div>
               <div><label className="label">Erlaubte Gesprächshistorie</label><input name="history" className="input" /></div>
               <div><label className="label">Offene Zusagen / Risiken</label><input name="commitments" className="input" /></div>
@@ -257,6 +260,27 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         )}
         {!final && (a.manage || a.care) && (
           <>
+            {spFiles && (
+              <details className="mt-3" open={spFiles.groups.length > 0 && d.documents.length === 0}>
+                <summary>Aus SharePoint übernehmen</summary>
+                {spFiles.error ? <p className="text-sm mt-2" style={{ color: "#b7791f" }}>SharePoint nicht erreichbar: {spFiles.error}</p> : spFiles.groups.length === 0 ? <p className="muted text-sm mt-2">In den SharePoint-Ordnern von {e.accountName}{e.freelancerId ? ` und ${e.freelancerName}` : ""} liegen noch keine Dateien.</p> : (
+                  <form action={addSharePointDocumentAction} className="flex flex-wrap gap-2 items-end mt-2 text-sm">
+                    <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="back" value={`${back}#vertraege`} />
+                    <div>
+                      <label className="label" htmlFor="spPick">Datei</label>
+                      <select id="spPick" name="pick" className="select" required defaultValue="" style={{ width: "26rem" }}>
+                        <option value="" disabled>Bitte wählen …</option>
+                        {spFiles.groups.map((g) => <optgroup key={g.kind} label={g.label}>{g.files.map((f) => <option key={f.value} value={f.value}>{f.name}</option>)}</optgroup>)}
+                      </select>
+                    </div>
+                    <div><label className="label" htmlFor="spStatus">Status</label><select id="spStatus" name="signedStatus" className="select" defaultValue=""><option value="">wie Ordner</option><option value="ENTWURF">Entwurf</option><option value="VERSENDET">versendet</option><option value="UNTERSCHRIEBEN">unterschrieben</option></select></div>
+                    <div><label className="label" htmlFor="spRef">Nummer (optional)</label><input id="spRef" name="reference" className="input" style={{ width: "11rem" }} /></div>
+                    <PendingButton className="btn btn-small" busy="Übernehme …">Übernehmen</PendingButton>
+                    <p className="muted text-xs" style={{ flexBasis: "100%" }}>Seite und Typ folgen dem Ordner (Bestellungen → Bestellung, Rahmen und Einkauf → Rahmenvertrag, Freelancer › Verträge → Einzelbeauftragung); korrigierbar über „Korrigieren“.</p>
+                  </form>
+                )}
+              </details>
+            )}
             <details className="mt-3">
               <summary>Unterlage hinzufügen (Datei oder Link)</summary>
               <form action={addContractDocumentAction} className="grid sm:grid-cols-3 gap-2 mt-2" encType="multipart/form-data">

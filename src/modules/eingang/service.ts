@@ -780,3 +780,45 @@ export async function editableSetupOptions(actor: Actor): Promise<{ id: string; 
   }
   return out.sort((x, y) => x.label.localeCompare(y.label, "de"));
 }
+
+/**
+ * Eine Karte ohne neue Auswertung einem anderen Setup (ggf. anderen Kunden) zuordnen (e47). Bezüge auf Objekte des
+ * alten Kunden (Chance, Einsatz, Aufgabe, Person) fallen weg, wenn der Kunde wechselt.
+ */
+export async function moveIntakeCard(actor: Actor, suggestionId: string, setupId: string) {
+  const { requireSuggestionAny } = await import("@/modules/suggestions/service");
+  const { suggestion: s, ctx: from } = await requireSuggestionAny(actor, suggestionId);
+  if (from && !canEditSetup(actor, from)) throw new ForbiddenError();
+  const ctx = await loadSetupContext(actor, setupId);
+  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError("In diesem Setup darfst du nicht arbeiten.");
+  const p = (s.payload ?? {}) as { resolved?: Record<string, unknown> } & Record<string, unknown>;
+  const sameAccount = s.accountId === ctx.account.id;
+  const payload = sameAccount ? p : { ...p, resolved: p.resolved?.dueDate ? { dueDate: p.resolved.dueDate } : {} };
+  await db
+    .update(schema.suggestions)
+    .set({ setupId: ctx.setup.id, accountId: ctx.account.id, payload, opportunityId: sameAccount ? s.opportunityId : null, objectId: sameAccount ? s.objectId : null, objectType: sameAccount ? s.objectType : null, version: s.version + 1 })
+    .where(eq(schema.suggestions.id, s.id));
+  await recordAudit(db, actor, "suggestion.moved", "SUGGESTION", s.id, { nach: ctx.setup.id, kundeGewechselt: !sameAccount });
+  return { accountName: ctx.account.name, setupName: ctx.setup.name };
+}
+
+/** Karte verwerfen – ohne Rückfrage und ohne Grund; mit `wholeMail` alle offenen Karten derselben Mail (e47). */
+export async function discardIntakeCards(actor: Actor, suggestionId: string, wholeMail: boolean): Promise<number> {
+  const { requireSuggestionAny } = await import("@/modules/suggestions/service");
+  const { suggestion: s, ctx } = await requireSuggestionAny(actor, suggestionId);
+  if (ctx && !canEditSetup(actor, ctx)) throw new ForbiddenError();
+  const open = ["NEU", "GEPRUEFT", "ZURUECKGESTELLT"] as const;
+  const rows = wholeMail && s.aiJobId ? await db.query.suggestions.findMany({ where: and(eq(schema.suggestions.aiJobId, s.aiJobId), inArray(schema.suggestions.status, [...open])) }) : [s];
+  let n = 0;
+  for (const r of rows) {
+    if (!(open as readonly string[]).includes(r.status)) continue;
+    if (r.id !== s.id) {
+      const c = r.setupId ? await loadSetupContext(actor, r.setupId) : null;
+      if (r.setupId ? !(c && canEditSetup(actor, c)) : r.proposedOwnerUserId !== actor.userId) continue;
+    }
+    await db.update(schema.suggestions).set({ status: "ABGELEHNT", decidedBy: actor.userId, decidedAt: new Date(), version: r.version + 1 }).where(eq(schema.suggestions.id, r.id));
+    n++;
+  }
+  await recordAudit(db, actor, "suggestion.discarded", "SUGGESTION", s.id, { karten: n, ganzeMail: wholeMail });
+  return n;
+}

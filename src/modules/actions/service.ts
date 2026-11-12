@@ -110,7 +110,6 @@ export async function changeActionStatus(actor: Actor, actionId: string, raw: un
   }
   assertActionTransition(action.status, input.status);
   // „Erledigt“ dokumentiert das Ergebnis (9.3).
-  if (input.status === "ERLEDIGT" && !input.result) throw new ValidationError("Bitte das Ergebnis dokumentieren, bevor die Aktion als erledigt gilt.");
   if (input.status === "BLOCKIERT" && !input.result) throw new ValidationError("Bitte kurz festhalten, was blockiert.");
 
   return db.transaction(async (tx) => {

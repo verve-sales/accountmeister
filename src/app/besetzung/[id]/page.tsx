@@ -188,14 +188,14 @@ export default async function PositionPage({ params, searchParams }: { params: P
           {p.status === "OFFEN" && (
             <form action={changePositionStatusAction} className="flex flex-wrap gap-2 items-end">
               <input type="hidden" name="positionId" value={p.id} /><input type="hidden" name="version" value={p.version} /><input type="hidden" name="back" value={back} /><input type="hidden" name="status" value="PAUSIERT" />
-              <input name="reason" className="input" placeholder="Grund der Pause" aria-label="Grund der Pause" required />
+              <input name="reason" className="input" placeholder="Grund der Pause" aria-label="Grund der Pause" />
               <div><label className="label" htmlFor="hold">Prüftermin</label><input id="hold" type="date" name="holdReviewDate" className="input" required /></div>
               <button className="btn btn-secondary btn-small" type="submit">Pausieren</button>
             </form>
           )}
           <form action={changePositionStatusAction} className="flex flex-wrap gap-2 items-end">
             <input type="hidden" name="positionId" value={p.id} /><input type="hidden" name="version" value={p.version} /><input type="hidden" name="back" value={back} /><input type="hidden" name="status" value="ABGEBROCHEN" />
-            <input name="reason" className="input" placeholder="Grund (Pflicht)" aria-label="Grund des Abbruchs" required />
+            <input name="reason" className="input" placeholder="Grund (optional)" aria-label="Grund des Abbruchs" />
             <button className="btn btn-secondary btn-small" type="submit">Ohne Besetzung beenden</button>
           </form>
           <form action={copyPositionAction}>
@@ -303,7 +303,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
                       <form action={changeCandidacyStatusAction} className="flex flex-wrap gap-2 items-end">
                         <input type="hidden" name="candidacyId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="back" value={`${back}#kandidaturen`} />
                         <select name="status" className="input" defaultValue={nextStatuses[0]} aria-label="Nächster Status">{nextStatuses.map((x) => <option key={x} value={x}>{candidacyStatusLabel[x]}</option>)}</select>
-                        <input name="reason" className="input" placeholder="Grund (bei Überspringen Pflicht)" aria-label="Grund" style={{ minWidth: 220 }} />
+                        <input name="reason" className="input" placeholder="Grund (optional)" aria-label="Grund" style={{ minWidth: 220 }} />
                         <button className="btn btn-small" type="submit">Weiter</button>
                       </form>
                     )}
@@ -356,7 +356,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
                       <form action={selectCandidacyAction} className="flex flex-wrap gap-2 items-end border rounded-md p-2" style={{ borderColor: "#2f7d32" }}>
                         <input type="hidden" name="candidacyId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="back" value={back} />
                         <label className="text-sm flex items-center gap-2"><input type="checkbox" name="confirm" value="on" required /> Ich bestätige die Auswahl dieser Person für die Position.</label>
-                        {st !== "INTERVIEW" && <input name="reason" className="input" placeholder="Begründung (ohne Interview Pflicht)" aria-label="Begründung" />}
+                        {st !== "INTERVIEW" && <input name="reason" className="input" placeholder="Begründung (optional)" aria-label="Begründung" />}
                         <button className="btn btn-small" type="submit">Auswahl bestätigen</button>
                       </form>
                     )}
@@ -364,14 +364,14 @@ export default async function PositionPage({ params, searchParams }: { params: P
                       <form action={changeCandidacyStatusAction} className="flex flex-wrap gap-2 items-end">
                         <input type="hidden" name="candidacyId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="back" value={`${back}#kandidaturen`} />
                         <select name="status" className="input" defaultValue="ABGELEHNT" aria-label="Beenden als"><option value="ABGELEHNT">abgelehnt</option><option value="ZURUECKGEZOGEN">zurückgezogen</option><option value="NICHT_VERFUEGBAR">nicht verfügbar</option></select>
-                        <input name="reason" className="input" placeholder="Grund (Pflicht)" aria-label="Grund" required />
+                        <input name="reason" className="input" placeholder="Grund (optional)" aria-label="Grund" />
                         <button className="btn btn-secondary btn-small" type="submit">Beenden</button>
                       </form>
                     )}
                     {terminal && (
                       <form action={changeCandidacyStatusAction} className="flex flex-wrap gap-2 items-end">
                         <input type="hidden" name="candidacyId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="back" value={`${back}#kandidaturen`} /><input type="hidden" name="status" value="QUALIFIZIERT" />
-                        <input name="reason" className="input" placeholder="Grund der Wiederaufnahme" required />
+                        <input name="reason" className="input" placeholder="Grund der Wiederaufnahme" />
                         <input name="availabilityNote" className="input" placeholder="aktualisierte Verfügbarkeit" required />
                         <button className="btn btn-secondary btn-small" type="submit">Wieder aufnehmen</button>
                       </form>

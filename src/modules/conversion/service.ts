@@ -193,6 +193,8 @@ export async function listConversions(actor: Actor, opportunityId: string): Prom
   for (const row of chosen) {
     const c = await syncWithOpportunity(row, opp.status);
     const p = c.positionId ? positions.find((x) => x.id === c.positionId) ?? null : null;
+    // e47: entfernte (abgebrochene) Positionen verschwinden aus der Liste
+    if (p?.status === "ABGEBROCHEN") continue;
     const e = p ? engs.find((x) => x.positionId === p.id) ?? null : null;
     const mine = e ? docs.filter((d) => links.some((l) => l.engagementId === e.id && l.documentId === d.id) && ["EINZELBEAUFTRAGUNG", "RAHMENVERTRAG"].includes(d.docType) && d.signedStatus !== "GEKUENDIGT") : [];
     const best = mine.sort((a, b) => (rank[b.signedStatus] ?? 0) - (rank[a.signedStatus] ?? 0))[0] ?? null;
@@ -292,6 +294,8 @@ export async function confirmIntermediaryCheck(actor: Actor, conversionId: strin
 const offerInput = z.object({
   offerNumber: z.string().trim().max(100).optional().default(""),
   offerLink: z.string().trim().max(500).optional().default(""),
+  /** Auswahl aus SharePoint (e47) – gilt, wenn kein Link eingetragen ist */
+  offerLinkPick: z.string().trim().max(500).optional().default(""),
   sent: z.union([z.literal("1"), z.literal("on"), z.literal(""), z.boolean()]).optional(),
   newVersion: z.union([z.literal("1"), z.literal("on"), z.literal(""), z.boolean()]).optional(),
 });
@@ -304,7 +308,7 @@ export async function saveOffer(actor: Actor, conversionId: string, raw: unknown
   const { c, opp } = await requireEditable(actor, conversionId);
   const setup = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, opp.setupId), columns: { offerPath: true } });
   const noOffer = setup?.offerPath === "KEIN_ANGEBOT";
-  const i = p.data;
+  const i = { ...p.data, offerLink: p.data.offerLink || p.data.offerLinkPick };
   const sent = truthy(i.sent);
   if (sent && !noOffer && !i.offerNumber && !c.offerNumber) throw new ValidationError("Bitte die Moco-Angebotsnummer eintragen, bevor das Angebot als abgegeben gilt.");
   const version = truthy(i.newVersion) ? c.offerVersion + 1 : c.offerVersion;
@@ -327,6 +331,7 @@ export async function recordCommit(actor: Actor, conversionId: string, note: str
 const orderInput = z.object({
   orderReference: z.string().trim().max(200).optional().default(""),
   orderLink: z.string().trim().max(500).optional().default(""),
+  orderLinkPick: z.string().trim().max(500).optional().default(""),
   provisional: z.union([z.literal("1"), z.literal("on"), z.literal(""), z.boolean()]).optional(),
   evidence: z.string().trim().max(1000).optional().default(""),
 });
@@ -340,7 +345,7 @@ export async function recordOrder(actor: Actor, conversionId: string, raw: unkno
   const p = orderInput.safeParse(raw);
   if (!p.success) throw new ValidationError("Angaben zur Beauftragung ungültig.");
   const { c, opp } = await requireEditable(actor, conversionId);
-  const i = p.data;
+  const i = { ...p.data, orderLink: p.data.orderLink || p.data.orderLinkPick };
   const provisional = truthy(i.provisional) && !i.orderReference;
   if (!i.orderReference && !provisional) throw new ValidationError("Bitte die Bestellnummer eintragen – oder „Start mit Zusage per Mail“ wählen.");
   if (provisional && i.evidence.length < 5) throw new ValidationError("Für den Start ohne Bestellung bitte die Zusage-Mail festhalten (wer, wann, was).");
@@ -387,8 +392,7 @@ export async function cancelConversion(actor: Actor, conversionId: string, reaso
   const a = await access(actor, c.opportunityId);
   if (!a.canEdit) throw new ForbiddenError("Den Vorgang bricht BD, Principal, Sales Operations oder Geschäftsführung ab.");
   if (!["LAUFEND", "RUHEND"].includes(c.status)) throw new TransitionError("Der Vorgang ist bereits beendet.");
-  if (reason.trim().length < 3) throw new ValidationError("Bitte den Grund für den Abbruch festhalten.");
-  const [u] = await db.update(schema.conversions).set({ status: "ABGEBROCHEN", endedReason: reason.trim().slice(0, 500), updatedAt: new Date(), version: c.version + 1 }).where(and(eq(schema.conversions.id, c.id), eq(schema.conversions.version, c.version))).returning();
+  const [u] = await db.update(schema.conversions).set({ status: "ABGEBROCHEN", endedReason: reason.trim().slice(0, 500) || "ohne Angabe", updatedAt: new Date(), version: c.version + 1 }).where(and(eq(schema.conversions.id, c.id), eq(schema.conversions.version, c.version))).returning();
   if (!u) throw new ConflictError();
   await recordAudit(db, actor, "conversion.cancelled", "OPPORTUNITY", c.opportunityId, { grund: reason.trim().slice(0, 200) });
   return u;

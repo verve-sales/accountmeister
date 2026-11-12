@@ -184,7 +184,6 @@ export default async function StartPage({ searchParams }: { searchParams: Search
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-4">
         <h1 className="text-2xl font-semibold">Start</h1>
-        <Link href="/meine-arbeit" className="muted text-sm ml-auto">Alle Listen (Meine Arbeit)</Link>
       </div>
       <Feedback params={params} />
       <SosBanner sos={openSos} />

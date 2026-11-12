@@ -24,7 +24,12 @@ export interface SpClient {
   /** Datei hochladen; gibt es den Namen schon, hängt SharePoint eine Nummer an. */
   upload(driveId: string, folder: string[], fileName: string, bytes: ArrayBuffer): Promise<SpItem>;
   setFields(driveId: string, itemId: string, fields: Record<string, string | null>): Promise<void>;
+  /** Inhalt eines Ordners (eine Ebene); fehlt der Ordner, leer. */
+  children(driveId: string, path: string[]): Promise<SpEntry[]>;
+  item(driveId: string, itemId: string): Promise<SpEntry>;
 }
+
+export type SpEntry = SpItem & { name: string; folder: boolean; modified: string | null };
 
 export class SharePointError extends Error {
   constructor(message: string, readonly status?: number) {
@@ -119,10 +124,27 @@ export class GraphSpClient implements SpClient {
   async setFields(driveId: string, itemId: string, fields: Record<string, string | null>): Promise<void> {
     await this.call("PATCH", `/drives/${driveId}/items/${itemId}/listItem/fields`, fields);
   }
+
+  async children(driveId: string, path: string[]): Promise<SpEntry[]> {
+    type G = { id: string; name: string; webUrl: string; folder?: unknown; lastModifiedDateTime?: string };
+    try {
+      const base = path.length ? `/drives/${driveId}/root:/${seg(path)}:/children` : `/drives/${driveId}/root/children`;
+      const r = await this.call<{ value: G[] }>("GET", `${base}?$select=id,name,webUrl,folder,lastModifiedDateTime&$top=200`);
+      return r.value.map((x) => ({ id: x.id, name: x.name, webUrl: x.webUrl, folder: !!x.folder, modified: x.lastModifiedDateTime ?? null }));
+    } catch (e) {
+      if (e instanceof SharePointError && e.status === 404) return [];
+      throw e;
+    }
+  }
+
+  async item(driveId: string, itemId: string): Promise<SpEntry> {
+    const x = await this.call<{ id: string; name: string; webUrl: string; folder?: unknown; lastModifiedDateTime?: string }>("GET", `/drives/${driveId}/items/${encodeURIComponent(itemId)}?$select=id,name,webUrl,folder,lastModifiedDateTime`);
+    return { id: x.id, name: x.name, webUrl: x.webUrl, folder: !!x.folder, modified: x.lastModifiedDateTime ?? null };
+  }
 }
 
 /** Im Speicher, für Entwicklung und Tests (SHAREPOINT_MODE=fixture). Zustand je Prozess. */
-type FixtureState = { libs: (SpLibrary & { drive: string; cols: string[] })[]; items: Map<string, { path: string; fields: Record<string, string | null> }>; seq: number; fail?: string | null };
+type FixtureState = { libs: (SpLibrary & { drive: string; cols: string[] })[]; items: Map<string, { path: string; fields: Record<string, string | null>; file?: boolean }>; seq: number; fail?: string | null };
 const g = globalThis as unknown as { __spFixture?: FixtureState };
 export function fixtureState(): FixtureState {
   if (!g.__spFixture) g.__spFixture = { libs: [], items: new Map(), seq: 0, fail: null };
@@ -188,8 +210,24 @@ export class FixtureSpClient implements SpClient {
     for (let n = 1; this.find(`${driveId}/${[...folder, name].join("/")}`); n++) name = fileName.replace(/(\.[^.]+)?$/, ` ${n}$1`);
     const p = `${driveId}/${[...folder, name].join("/")}`;
     const id = this.next("item-");
-    this.s.items.set(id, { path: p, fields: {} });
+    this.s.items.set(id, { path: p, fields: {}, file: true });
     return { id, webUrl: `https://fixture.sharepoint.local/${encodeURI(p)}` };
+  }
+  async children(driveId: string, path: string[]) {
+    this.check();
+    const base = `${driveId}/${path.join("/")}`.replace(/\/$/, "");
+    const out: SpEntry[] = [];
+    for (const [id, it] of this.s.items) {
+      if (!it.path.startsWith(`${base}/`) || it.path.slice(base.length + 1).includes("/")) continue;
+      out.push({ id, name: it.path.slice(base.length + 1), webUrl: `https://fixture.sharepoint.local/${encodeURI(it.path)}`, folder: !it.file, modified: null });
+    }
+    return out;
+  }
+  async item(_driveId: string, itemId: string) {
+    this.check();
+    const it = this.s.items.get(itemId);
+    if (!it) throw new SharePointError("SharePoint: HTTP 404", 404);
+    return { id: itemId, name: it.path.split("/").pop()!, webUrl: `https://fixture.sharepoint.local/${encodeURI(it.path)}`, folder: !it.file, modified: null };
   }
   async setFields(_driveId: string, itemId: string, fields: Record<string, string | null>) {
     this.check();

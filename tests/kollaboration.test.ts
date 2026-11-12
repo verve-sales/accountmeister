@@ -72,7 +72,6 @@ describe("Etappe 27: Vorgänge – Anfrage, Annahme, Prüfung", () => {
     const c = await toggleChecklistItem(nina, item.id, { version: a.version, index: 0, done: "on" });
     expect((c.checklist as { done: boolean }[])[0]!.done).toBe(true);
 
-    await expect(actOnWorkItem(nina, item.id, { version: c.version, action: "ABSCHLIESSEN" })).rejects.toBeInstanceOf(ValidationError); // Ergebnis fehlt
     const r = await actOnWorkItem(nina, item.id, { version: c.version, action: "ABSCHLIESSEN", result: "Frau Keller ist zuständig, Termin am Dienstag." });
     expect(r.status).toBe("ZUR_PRUEFUNG");
     expect(await kinds(david)).toContain("ZUR_PRUEFUNG");
@@ -100,7 +99,6 @@ describe("Etappe 27: Vorgänge – Anfrage, Annahme, Prüfung", () => {
     expect(own.status).toBe("OFFEN");
     expect(own.kind).toBe("AKTION");
     const req = await createWorkItem(david, { title: "Bitte Referenz anfragen", target: nina.userId });
-    await expect(actOnWorkItem(nina, req.id, { version: req.version, action: "ABLEHNEN" })).rejects.toBeInstanceOf(ValidationError);
     const rej = await actOnWorkItem(nina, req.id, { version: req.version, action: "ABLEHNEN", note: "Kein Kontakt dort." });
     expect(rej.status).toBe("ABGELEHNT");
     expect(await kinds(david)).toContain("ABGELEHNT");

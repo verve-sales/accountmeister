@@ -202,15 +202,13 @@ export async function actOnCheckin(actor: Actor, checkinId: string, raw: unknown
     }
     case "VERSCHIEBEN":
       if (!i.newDueDate) throw new ValidationError("Bitte das neue Datum angeben.");
-      if (!i.reason) throw new ValidationError("Bitte den Grund der Verschiebung festhalten.");
       patch.status = "FAELLIG";
       patch.dueDate = i.newDueDate;
-      patch.note = `${c.note ?? ""}\nVerschoben (${todayIso()}): ${i.reason}`.trim();
+      patch.note = `${c.note ?? ""}\nVerschoben (${todayIso()})${i.reason ? `: ${i.reason}` : ""}`.trim();
       break;
     case "ABSAGEN":
-      if (!i.reason) throw new ValidationError("Bitte den Grund festhalten.");
       patch.status = "ABGESAGT";
-      patch.note = `${c.note ?? ""}\nAbgesagt: ${i.reason}`.trim();
+      patch.note = `${c.note ?? ""}\nAbgesagt${i.reason ? `: ${i.reason}` : ""}`.trim();
       break;
   }
   if (i.action === "ERLEDIGEN" && i.heldAt && i.salesHint && i.salesHint.length >= 5) {

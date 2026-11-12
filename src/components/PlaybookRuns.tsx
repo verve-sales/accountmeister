@@ -175,13 +175,13 @@ function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }
               <form action={completeRunStepAction} className="flex flex-wrap gap-2 items-end">
                 <input type="hidden" name="runStepId" value={current.id} />
                 <input type="hidden" name="back" value={back} />
-                <div className="grow"><label className="label" htmlFor={`res-${current.id}`}>Ergebnis</label><input id={`res-${current.id}`} name="result" className="input" required minLength={5} placeholder="Was ist herausgekommen?" /></div>
+                <div className="grow"><label className="label" htmlFor={`res-${current.id}`}>Ergebnis</label><input id={`res-${current.id}`} name="result" className="input" placeholder="Was ist herausgekommen?" /></div>
                 <button className="btn btn-small" type="submit">Schritt erledigt</button>
               </form>
               <form action={skipRunStepAction} className="flex flex-wrap gap-2 items-end">
                 <input type="hidden" name="runStepId" value={current.id} />
                 <input type="hidden" name="back" value={back} />
-                <div className="grow"><label className="label" htmlFor={`skip-${current.id}`}>Begründung</label><input id={`skip-${current.id}`} name="reason" className="input" required minLength={5} placeholder="Warum passt der Schritt hier nicht?" /></div>
+                <div className="grow"><label className="label" htmlFor={`skip-${current.id}`}>Begründung</label><input id={`skip-${current.id}`} name="reason" className="input" placeholder="Warum passt der Schritt hier nicht?" /></div>
                 <button className="btn btn-secondary btn-small" type="submit">Überspringen</button>
               </form>
             </div>
@@ -227,7 +227,7 @@ function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }
             <input type="hidden" name="runId" value={r.id} />
             <input type="hidden" name="version" value={r.version} />
             <input type="hidden" name="back" value={back} />
-            <div><label className="label" htmlFor={`pause-${r.id}`}>Zurückstellen – Grund</label><input id={`pause-${r.id}`} name="reason" className="input" required minLength={5} placeholder="z. B. Wiedervorlage in 6 Monaten" /></div>
+            <div><label className="label" htmlFor={`pause-${r.id}`}>Zurückstellen – Grund</label><input id={`pause-${r.id}`} name="reason" className="input" placeholder="z. B. Wiedervorlage in 6 Monaten" /></div>
             <button className="btn btn-secondary btn-small" type="submit">Zurückstellen</button>
           </form>
         )}

@@ -7,6 +7,7 @@ import { listConversions, offerPathLabel, type ConversionView, type Step } from 
 import { handoverKindLabel } from "@/modules/conversion/handover";
 import { signedStatusLabel } from "@/modules/engagements/service";
 import { Feedback } from "@/components/Feedback";
+import { filesFor } from "@/modules/sharepoint/service";
 import { PendingButton } from "@/components/PendingButton";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { conversionStepAction, startConversionAction } from "@/app/actions";
@@ -62,6 +63,9 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
   const step = (k: Step["key"]) => v.steps.find((s) => s.key === k)!;
   const act = conversionStepAction.bind(null, id, c.id);
   const noOffer = v.offerPath === "KEIN_ANGEBOT";
+  const spf = v.canEdit ? await filesFor({ accountName: v.accountName, kinds: ["KUNDE_ANGEBOT", "KUNDE_BESTELLUNG"] }) : null;
+  const offerFiles = spf?.groups.find((g) => g.kind === "KUNDE_ANGEBOT")?.files ?? [];
+  const orderFiles = spf?.groups.find((g) => g.kind === "KUNDE_BESTELLUNG")?.files ?? [];
   const freelancerPositions = v.positions.filter((p) => p.resourceKind === "FREELANCER");
   const cur = (x: ConversionView) => x.steps.find((s) => s.state === "AKTUELL");
   return (
@@ -156,7 +160,15 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
             <form action={act} className="flex flex-wrap gap-2 items-end text-sm">
               <input type="hidden" name="op" value="offer" /><input type="hidden" name="step" value="4" />
               {!noOffer && <label className="space-y-1"><span className="block muted text-xs">Moco-Angebotsnummer{!c.offerNumber && v.siblingOffer ? ` (Vorschlag aus „${v.siblingOffer.label}“ – bitte prüfen)` : ""}</span><input name="offerNumber" className="input" defaultValue={c.offerNumber ?? v.siblingOffer?.number ?? ""} placeholder="aus Moco" /></label>}
-              <label className="space-y-1" style={{ flex: "1 1 260px" }}><span className="block muted text-xs">Link zur Datei (SharePoint, optional)</span><input name="offerLink" className="input" defaultValue={c.offerLink ?? ""} /></label>
+              {offerFiles.length > 0 && (
+                <label className="space-y-1" style={{ flex: "1 1 260px" }}><span className="block muted text-xs">Angebot aus SharePoint</span>
+                  <select name="offerLinkPick" className="select" defaultValue={offerFiles.find((f) => f.webUrl === c.offerLink)?.webUrl ?? ""}>
+                    <option value="">– wählen –</option>
+                    {offerFiles.map((f) => <option key={f.value} value={f.webUrl}>{f.name}</option>)}
+                  </select>
+                </label>
+              )}
+              <label className="space-y-1" style={{ flex: "1 1 220px" }}><span className="block muted text-xs">{offerFiles.length ? "oder Link" : "Link zur Datei (SharePoint, optional)"}</span><input name="offerLink" className="input" defaultValue={offerFiles.some((f) => f.webUrl === c.offerLink) ? "" : c.offerLink ?? ""} /></label>
               {!c.offerSentAt && <label className="flex gap-1 items-center"><input type="checkbox" name="sent" value="1" /> {noOffer ? "Konditionen sind raus" : "ist abgegeben"}</label>}
               {c.offerSentAt && !noOffer && <label className="flex gap-1 items-center"><input type="checkbox" name="newVersion" value="1" /> neue Fassung (Nachverhandlung, andere Besetzung)</label>}
               <PendingButton busy="Speichere …" className="btn btn-small">Speichern</PendingButton>
@@ -205,7 +217,15 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
           <form action={act} className="flex flex-wrap gap-2 items-end text-sm">
             <input type="hidden" name="op" value="order" /><input type="hidden" name="step" value="6" />
             <label className="space-y-1"><span className="block muted text-xs">Bestellnummer</span><input name="orderReference" className="input" /></label>
-            <label className="space-y-1" style={{ flex: "1 1 240px" }}><span className="block muted text-xs">Link zur Bestellung (SharePoint, optional)</span><input name="orderLink" className="input" defaultValue={c.orderLink ?? ""} /></label>
+            {orderFiles.length > 0 && (
+              <label className="space-y-1" style={{ flex: "1 1 240px" }}><span className="block muted text-xs">Bestellung aus SharePoint</span>
+                <select name="orderLinkPick" className="select" defaultValue={orderFiles.find((f) => f.webUrl === c.orderLink)?.webUrl ?? ""}>
+                  <option value="">– wählen –</option>
+                  {orderFiles.map((f) => <option key={f.value} value={f.webUrl}>{f.name}</option>)}
+                </select>
+              </label>
+            )}
+            <label className="space-y-1" style={{ flex: "1 1 220px" }}><span className="block muted text-xs">{orderFiles.length ? "oder Link" : "Link zur Bestellung (SharePoint, optional)"}</span><input name="orderLink" className="input" defaultValue={orderFiles.some((f) => f.webUrl === c.orderLink) ? "" : c.orderLink ?? ""} /></label>
             {!c.provisionalStart && (
               <details style={{ flexBasis: "100%" }}>
                 <summary className="cursor-pointer">Start mit Zusage per Mail, Bestellung kommt später</summary>
@@ -225,7 +245,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
           <summary className="text-sm cursor-pointer">Vorgang abbrechen</summary>
           <form action={act} className="flex flex-wrap gap-2 items-end text-sm mt-2">
             <input type="hidden" name="op" value="cancel" /><input type="hidden" name="step" value="1" />
-            <label className="space-y-1" style={{ flex: "1 1 320px" }}><span className="block muted text-xs">Grund</span><input name="reason" className="input" required minLength={3} /></label>
+            <label className="space-y-1" style={{ flex: "1 1 320px" }}><span className="block muted text-xs">Grund</span><input name="reason" className="input" /></label>
             <button className="btn btn-small btn-secondary" type="submit">Abbrechen</button>
           </form>
           <p className="muted text-xs mt-1">Bricht nur diesen Vorgang ab{all.length > 1 ? "; die Vorgänge der anderen Positionen laufen weiter" : ""}. Die Chance bleibt, wie sie ist. Wird die Chance geschlossen, endet der Vorgang von selbst.</p>

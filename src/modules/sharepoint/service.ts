@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db/client";
-import { ForbiddenError } from "@/lib/errors";
+import { ForbiddenError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { backofficeUserIds } from "@/modules/conversion/profile";
@@ -218,4 +218,60 @@ export async function syncDocumentFields(documentId: string, deps: { client?: Sp
   const client = deps.client ?? (await defaultSpClient());
   await client.setFields(d.spDriveId, d.spItemId, { DokStatus: statusOf[d.signedStatus] ?? null, Dokumentart: docTypeOf[d.docType] ?? "Sonstiges", GueltigVon: d.validFrom, GueltigBis: d.validTo });
   return true;
+}
+
+/** Ordnerart → Seite und Dokumenttyp im Accountmeister (e47). */
+export const PICK_KINDS = {
+  KUNDE_RAHMEN: { lib: LIB.KUNDEN, sub: KUNDE_SUB[0], side: "KUNDE", docType: "RAHMENVERTRAG", label: "Rahmen und Einkauf" },
+  KUNDE_ANGEBOT: { lib: LIB.KUNDEN, sub: KUNDE_SUB[1], side: "KUNDE", docType: "SONSTIGES", label: "Angebote" },
+  KUNDE_BESTELLUNG: { lib: LIB.KUNDEN, sub: KUNDE_SUB[2], side: "KUNDE", docType: "BESTELLUNG", label: "Bestellungen" },
+  FL_VERTRAG: { lib: LIB.FREELANCER, sub: FREELANCER_SUB[0], side: "FREELANCER", docType: "EINZELBEAUFTRAGUNG", label: "Freelancer · Verträge" },
+  FL_NACHWEIS: { lib: LIB.FREELANCER, sub: FREELANCER_SUB[1], side: "FREELANCER", docType: "SONSTIGES", label: "Freelancer · Nachweise" },
+} as const;
+export type PickKind = keyof typeof PICK_KINDS;
+
+export type FileGroup = { kind: PickKind; label: string; files: { value: string; name: string; webUrl: string; modified: string | null }[] };
+
+/**
+ * Dateien in den SharePoint-Ordnern eines Kunden und ggf. eines Freelancers, zur Auswahl am Einsatz und im Vorgang.
+ * Gibt null zurück, wenn SharePoint aus ist; bei einem Fehler eine leere Liste mit Meldung.
+ */
+export async function filesFor(input: { accountName: string; freelancerName?: string | null; kinds?: PickKind[] }, deps: { client?: SpClient } = {}): Promise<{ groups: FileGroup[]; error: string | null } | null> {
+  if (!deps.client && !sharePointEnabled()) return null;
+  try {
+    const client = deps.client ?? (await defaultSpClient());
+    const libs = await libraryMap(client);
+    const drives = new Map<string, string>();
+    const groups: FileGroup[] = [];
+    const kinds = (input.kinds ?? (Object.keys(PICK_KINDS) as PickKind[])).filter((k) => PICK_KINDS[k].lib === LIB.KUNDEN || input.freelancerName);
+    for (const k of kinds) {
+      const def = PICK_KINDS[k];
+      const listId = libs.get(def.lib);
+      if (!listId) continue;
+      if (!drives.has(def.lib)) drives.set(def.lib, await client.driveOf(listId));
+      const drive = drives.get(def.lib)!;
+      const owner = def.lib === LIB.KUNDEN ? folderName(input.accountName) : freelancerFolder(input.freelancerName!);
+      const entries = (await client.children(drive, [owner, def.sub])).filter((x) => !x.folder).sort((a, b) => (b.modified ?? "").localeCompare(a.modified ?? "") || a.name.localeCompare(b.name, "de"));
+      if (entries.length) groups.push({ kind: k, label: def.label, files: entries.map((x) => ({ value: `${drive}|${x.id}|${k}`, name: x.name, webUrl: x.webUrl, modified: x.modified })) });
+    }
+    return { groups, error: null };
+  } catch (e) {
+    return { groups: [], error: (e as Error).message };
+  }
+}
+
+/** Eine schon in SharePoint liegende Datei als Unterlage an den Einsatz hängen (e47). Seite und Typ folgen dem Ordner. */
+export async function linkSharePointFile(actor: Actor, engagementId: string, pick: string, extra: { signedStatus?: string; reference?: string; validFrom?: string; validTo?: string } = {}, deps: { client?: SpClient } = {}) {
+  const [drive, itemId, kind] = pick.split("|");
+  const def = kind ? PICK_KINDS[kind as PickKind] : undefined;
+  if (!drive || !itemId || !def) throw new ValidationError("Bitte eine Datei aus SharePoint wählen.");
+  const client = deps.client ?? (await defaultSpClient());
+  const it = await client.item(drive, itemId);
+  if (it.folder) throw new ValidationError("Bitte eine Datei wählen, keinen Ordner.");
+  const { addContractDocument } = await import("@/modules/engagements/service");
+  const title = it.name.replace(/\.[^.]+$/, "").replace(/_/g, " ").slice(0, 200);
+  const { document } = await addContractDocument(actor, engagementId, { side: def.side, docType: def.docType, title: title.length >= 2 ? title : it.name, signedStatus: extra.signedStatus || (def.docType === "BESTELLUNG" ? "UNTERSCHRIEBEN" : "ENTWURF"), link: it.webUrl, reference: extra.reference ?? "", validFrom: extra.validFrom ?? "", validTo: extra.validTo ?? "" }, null);
+  await db.update(schema.contractDocuments).set({ spDriveId: drive, spItemId: it.id }).where(eq(schema.contractDocuments.id, document.id));
+  await recordAudit(db, actor, "contract_document.sharepoint_linked", "ENGAGEMENT", engagementId, { dokument: document.id, ordner: def.label });
+  return document;
 }

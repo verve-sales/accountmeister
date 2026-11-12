@@ -492,7 +492,6 @@ export async function giveFeedback(actor: Actor, id: string, raw: unknown) {
   const { suggestion: s, ctx } = await requireSuggestionAny(actor, id);
   if (ctx && !canEditSetup(actor, ctx)) throw new ForbiddenError();
   if (!transitions[s.status].includes(input.status)) throw new TransitionError(`Übergang von „${s.status}“ nach „${input.status}“ ist nicht vorgesehen.`);
-  if (input.status === "ABGELEHNT" && !input.feedbackReason) throw new ValidationError("Bitte einen Ablehnungsgrund wählen (hilft, Wiederholungen zu vermeiden).");
   return db.transaction(async (tx) => {
     const [updated] = await tx
       .update(schema.suggestions)

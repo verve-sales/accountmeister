@@ -2,8 +2,8 @@ import Link from "next/link";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { Status } from "@/components/Status";
-import { feedbackReasonLabel, fmtDate, opportunityStatusLabel, orgTypeLabel } from "@/lib/labels";
-import { acceptSuggestionAction, reassignIntakeAction, suggestionFeedbackAction } from "@/app/actions";
+import { fmtDate, opportunityStatusLabel, orgTypeLabel } from "@/lib/labels";
+import { acceptSuggestionAction, discardIntakeCardsAction, moveIntakeCardAction, reassignIntakeAction, suggestionFeedbackAction } from "@/app/actions";
 import { editableSetupOptions, eingangTypeLabel, renewalDefaultsFor } from "@/modules/eingang/service";
 import { getCurrentActor } from "@/modules/identity/session";
 import { cache } from "react";
@@ -141,13 +141,26 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
             <input type="hidden" name="suggestionId" value={s.id} />
             <input type="hidden" name="version" value={s.version} />
             <input type="hidden" name="back" value={back} />
-            <select name="feedbackReason" className="select" style={{ width: "11rem" }} defaultValue="" aria-label="Grund">
-              <option value="">Grund (bei Ablehnung)</option>
-              {schema.feedbackReasonEnum.enumValues.map((v) => <option key={v} value={v}>{feedbackReasonLabel[v]}</option>)}
-            </select>
-            <button className="btn btn-secondary btn-small" name="status" value="ABGELEHNT">Ablehnen</button>
             <button className="btn btn-secondary btn-small" name="status" value="ZURUECKGESTELLT">Später</button>
           </form>
+          <form action={discardIntakeCardsAction} className="flex flex-wrap gap-1 items-end">
+            <input type="hidden" name="suggestionId" value={s.id} />
+            <input type="hidden" name="back" value={back} />
+            <button className="btn btn-secondary btn-small" type="submit" title="Ohne Rückfrage und ohne Grund">Verwerfen</button>
+            {s.aiJobId && <button className="btn btn-secondary btn-small" type="submit" name="all" value="1" title="Alle offenen Karten aus dieser Mail verwerfen">Ganze Mail verwerfen</button>}
+          </form>
+          <details className="text-xs">
+            <summary className="muted" style={{ cursor: "pointer" }}>Anderes Setup / anderer Kunde</summary>
+            <form action={moveIntakeCardAction} className="flex flex-wrap gap-1 items-center mt-1">
+              <input type="hidden" name="suggestionId" value={s.id} />
+              <input type="hidden" name="back" value={back} />
+              <select name="setupId" className="select" required defaultValue="" aria-label="Richtiger Kunde · Setup" style={{ width: "18rem" }}>
+                <option value="" disabled>Richtiger Kunde · Setup …</option>
+                {(await setupOptions()).filter((o) => o.id !== s.setupId).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+              <PendingButton className="btn btn-secondary btn-small" busy="Verschiebe …">Nur diese Karte verschieben</PendingButton>
+            </form>
+          </details>
         </div>
       )}
     </li>

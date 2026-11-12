@@ -34,7 +34,7 @@ import { PendingButton } from "@/components/PendingButton";
 import { listConversions } from "@/modules/conversion/service";
 import {
   addParticipationAction, addStartRequirementAction, cancelOrderAction, changeOfferStatusAction, changeOpportunityStatusAction, confirmOpportunityAction, confirmOrderAction, createOfferAction,
-  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, reassignOpportunityOwnerAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction, linkChanceInitiativeAction, startConversionAction,
+  createOrderAction, markReadyAction, markStartedAction, orderEvidenceIncompleteAction, presentOfferAction, reassignOpportunityOwnerAction, removeParticipationAction, saveBuyingCenterAdviceAction, saveMeddpiccAction, saveOpportunityAdviceAction, setRequirementStatusAction, updateOpportunityAction, linkChanceInitiativeAction, startConversionAction, removePositionAction,
 } from "../../actions";
 
 /** Reifegradkette dieser Chance – Orientierung, keine Pflichtschleuse (Angebot/Auftrag/Einsatz haben eigene Zustände). */
@@ -227,6 +227,9 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
                       <td><Link href={`/bedarfe/${opp.id}/vorgang?v=${x.conversion.id}`}><strong>{x.label}</strong></Link></td>
                       <td>{cs === "LAUFEND" ? (st ? `Schritt ${st.no} – ${st.title}` : "läuft") : cs === "RUHEND" ? "ruht" : cs === "ABGESCHLOSSEN" ? "abgeschlossen" : "abgebrochen"}</td>
                       <td className="muted text-xs">{cs === "LAUFEND" ? st?.note : cs === "ABGESCHLOSSEN" ? "beauftragt und ans Backoffice übergeben" : cs === "ABGEBROCHEN" ? x.conversion.endedReason : "solange die Chance zurückgestellt ist"}</td>
+                      <td>{x.position && !x.position.engagementId && x.position.status !== "BESETZT" && (canEdit || actor.roles.has("CEO")) ? (
+                        <form action={removePositionAction}><input type="hidden" name="positionId" value={x.position.id} /><input type="hidden" name="opportunityId" value={opp.id} /><button className="btn btn-secondary btn-small" type="submit" title="Überzählige Position ohne Rückfrage entfernen">Entfernen</button></form>
+                      ) : null}</td>
                     </tr>
                   );
                 })}
@@ -336,11 +339,11 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
               </form>
             </details>
             <details>
-              <summary>Zurückstellen / Beenden (mit Begründung)</summary>
+              <summary>Zurückstellen / Beenden</summary>
               <form action={changeOpportunityStatusAction} className="mt-2 flex flex-wrap gap-2 items-end">
                 <input type="hidden" name="opportunityId" value={opp.id} />
                 <input type="hidden" name="version" value={opp.version} />
-                <div><label className="label" htmlFor="oReason">Begründung</label><input id="oReason" name="reason" className="input" style={{ width: "24rem" }} required minLength={3} /></div>
+                <div><label className="label" htmlFor="oReason">Begründung</label><input id="oReason" name="reason" className="input" style={{ width: "24rem" }} /></div>
                 {opp.status !== "ZURUECKGESTELLT" && opp.status !== "BEAUFTRAGT" && <button className="btn btn-secondary" name="status" value="ZURUECKGESTELLT">Zurückstellen</button>}
                 {opp.status === "ZURUECKGESTELLT" && <button className="btn btn-secondary" name="status" value="IN_KLAERUNG">Wieder in Klärung</button>}
                 <button className="btn btn-secondary" name="status" value="BEENDET">Beenden</button>

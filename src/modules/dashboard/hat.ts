@@ -5,31 +5,28 @@ export type NavLink = { href: string; label: string };
 
 export const ALL_LINKS: Record<string, NavLink> = {
   start: { href: "/start", label: "Start" },
-  arbeit: { href: "/meine-arbeit", label: "Meine Arbeit" },
   kunden: { href: "/kunden", label: "Kunden" },
   bds: { href: "/meine-bds", label: "Meine BDs" },
   einsaetze: { href: "/einsaetze", label: "Einsätze" },
   besetzung: { href: "/besetzung", label: "Besetzung" },
-  eingang: { href: "/eingang", label: "Eingang" },
   ziele: { href: "/ziele", label: "Ziele" },
   principals: { href: "/meine-principals", label: "Verantwortliche" },
   runde: { href: "/kundenrunde", label: "Kundenrunde" },
   salesops: { href: "/vertragsbuero", label: "Sales-Ops-Sicht" },
   bereinigung: { href: "/bereinigung", label: "Bereinigung" },
-  uebergaben: { href: "/uebergaben", label: "Übergaben" },
 };
 
 export const HAT_NAV: Record<DashboardView, string[]> = {
   CEO: ["start", "runde", "principals", "kunden", "einsaetze"],
   PRINCIPAL: ["start", "runde", "bds", "kunden", "einsaetze"],
-  BD: ["start", "arbeit", "kunden", "einsaetze", "eingang"],
-  ANKER: ["start", "arbeit", "kunden", "eingang"],
+  BD: ["start", "kunden", "einsaetze", "besetzung"],
+  ANKER: ["start", "kunden"],
   SALES_OPS: ["start", "salesops", "einsaetze", "besetzung", "kunden"],
   COACH: ["start", "bds", "kunden", "einsaetze"],
 };
 
 /** Ohne Hut (keine fachliche Rolle): die bisherige Grundnavigation. */
-export const DEFAULT_NAV = ["start", "arbeit", "kunden"];
+export const DEFAULT_NAV = ["start", "kunden"];
 
 /** Teilt die erlaubten Links in erste Reihe (nach Hut) und „Mehr“. `allowed` = Schlüssel, die die Person überhaupt sehen darf. */
 export function splitNav(hat: DashboardView | null, allowed: Set<string>): { main: NavLink[]; more: NavLink[] } {

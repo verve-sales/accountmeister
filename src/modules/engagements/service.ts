@@ -211,7 +211,7 @@ export async function changeEngagementStatus(actor: Actor, id: string, raw: unkn
     if (i.actualDate > todayIso()) throw new ValidationError("Der Start kann erst bestätigt werden, wenn das Datum erreicht ist.");
     patch.actualStart = i.actualDate;
   }
-  if (i.status === "PAUSIERT" && (!i.reason || !i.reviewDate)) throw new ValidationError("Pause braucht Grund und Prüftermin.");
+  if (i.status === "PAUSIERT" && !i.reviewDate) throw new ValidationError("Pause braucht einen Prüftermin.");
   if (i.status === "PAUSIERT") patch.reviewDate = i.reviewDate || null;
   if (i.status === "ENDET") {
     if (!i.actualDate) throw new ValidationError("Bitte das bestätigte Enddatum angeben.");
@@ -220,10 +220,7 @@ export async function changeEngagementStatus(actor: Actor, id: string, raw: unkn
   if (i.status === "ABGESCHLOSSEN") {
     const openRenewal = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
     if (openRenewal) throw new ValidationError("Die Verlängerungsentscheidung ist noch offen – erst entscheiden (bestätigt/abgelehnt/erledigt).");
-    const openRisks = await db.query.checkins.findMany({ where: and(eq(schema.checkins.engagementId, e.id), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])) });
-    if (openRisks.length && !i.reason) throw new ValidationError(`${openRisks.length} offene Check-in(s) – bitte abschließen oder im Grund festhalten, warum sie entfallen.`);
   }
-  if (i.status === "ABGEBROCHEN" && !i.reason) throw new ValidationError("Bitte den Grund festhalten.");
   return db.transaction(async (tx) => {
     const [u] = await tx
       .update(schema.engagements)

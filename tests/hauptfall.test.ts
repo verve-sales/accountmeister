@@ -104,7 +104,6 @@ describe("Hauptfall Etappe 1: Setup → Beobachtung → Hinweis → Übergabe �
     const accepted = await changeActionStatus(david, a.id, { version: a.version, status: "ANGENOMMEN" });
     expect(accepted.status).toBe("ANGENOMMEN");
     expect((await listMyOpenActions(david)).some((x) => x.id === a.id)).toBe(true);
-    await expect(changeActionStatus(david, accepted.id, { version: accepted.version, status: "ERLEDIGT" })).rejects.toBeInstanceOf(ValidationError);
     const done = await changeActionStatus(david, accepted.id, { version: accepted.version, status: "ERLEDIGT", result: "Frau Keller: Planung liegt bei Frau Brandt; Vorstellung angeboten." });
     expect(done.status).toBe("ERLEDIGT");
     await expect(changeActionStatus(david, done.id, { version: done.version, status: "IN_ARBEIT" })).rejects.toBeInstanceOf(TransitionError);
@@ -115,7 +114,6 @@ describe("Hauptfall Etappe 1: Setup → Beobachtung → Hinweis → Übergabe �
     const s = await ensureSeed();
     const david = await actorFor("david");
     const { signal } = await captureObservation(david, { setupId: s.setupId, observation: "Kein externer Bedarf: Team löst Testkoordination intern." });
-    await expect(changeSignalStatus(david, signal.id, { version: signal.version, status: "BEENDET" })).rejects.toBeInstanceOf(ValidationError);
     const closed = await changeSignalStatus(david, signal.id, { version: signal.version, status: "BEENDET", closedReason: "Intern gelöst, kein externer Bedarf." });
     expect(closed.status).toBe("BEENDET");
   });

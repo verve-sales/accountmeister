@@ -402,7 +402,7 @@ function canWorkOnRun(actor: Actor, run: RunRow, ctx: NonNullable<Awaited<Return
   return run.ownerUserId === actor.userId || canEditSetup(actor, ctx) || canReassignResponsibility(actor, ctx.account);
 }
 
-export const completeStepInput = z.object({ result: z.string().trim().min(5, "Bitte das Ergebnis des Schritts festhalten (mind. 5 Zeichen).").max(4000) });
+export const completeStepInput = z.object({ result: z.string().trim().max(4000).optional().default("") });
 
 /** Schritt erledigen: Ergebnis dokumentieren; die zugehörige Aktion wird mit demselben Ergebnis erledigt. */
 export async function completeRunStep(actor: Actor, runStepId: string, raw: unknown) {
@@ -420,7 +420,7 @@ export async function completeRunStep(actor: Actor, runStepId: string, raw: unkn
   });
 }
 
-export const skipStepInput = z.object({ reason: z.string().trim().min(5, "Bitte begründen, warum der Schritt übersprungen wird.").max(2000) });
+export const skipStepInput = z.object({ reason: z.string().trim().max(2000).optional().default("") });
 
 export async function skipRunStep(actor: Actor, runStepId: string, raw: unknown) {
   const parsed = skipStepInput.safeParse(raw);
@@ -462,7 +462,7 @@ export async function syncRunStepFromAction(tx: Tx, actor: Actor, action: typeof
   await advance(tx, actor, run.id);
 }
 
-export const closeRunInput = z.object({ version: z.coerce.number().int().positive(), reason: z.string().trim().min(5, "Bitte begründen, warum das Vorgehen zurückgestellt wird.").max(2000) });
+export const closeRunInput = z.object({ version: z.coerce.number().int().positive(), reason: z.string().trim().max(2000).optional().default("") });
 
 /** Vorgehen bewusst zurückstellen (z. B. „passt gerade nicht, Wiedervorlage in 6 Monaten“). */
 export async function pauseRun(actor: Actor, runId: string, raw: unknown) {

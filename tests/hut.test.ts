@@ -33,13 +33,13 @@ describe("Etappe 37: Hut statt Rollen-Sammlung", () => {
   });
 
   it("H02: Navigation folgt dem Hut, alles Weitere landet unter „Mehr“ – nichts geht verloren", () => {
-    const all = new Set(["start", "arbeit", "kunden", "bds", "einsaetze", "besetzung", "eingang", "ziele", "principals", "runde"]);
+    const all = new Set(["start", "kunden", "bds", "einsaetze", "besetzung", "ziele", "principals", "runde"]);
     const ceo = splitNav("CEO", all);
     expect(ceo.main.map((n) => n.label)).toEqual(["Start", "Kundenrunde", "Verantwortliche", "Kunden", "Einsätze"]);
-    expect(ceo.more.map((n) => n.label).sort()).toEqual(["Besetzung", "Eingang", "Meine Arbeit", "Meine BDs", "Ziele"]);
-    const bd = splitNav("BD", new Set(["start", "arbeit", "kunden", "eingang", "ziele"]));
-    expect(bd.main.map((n) => n.href)).toEqual(["/start", "/meine-arbeit", "/kunden", "/eingang"]);
+    expect(ceo.more.map((n) => n.label).sort()).toEqual(["Besetzung", "Meine BDs", "Ziele"]);
+    const bd = splitNav("BD", new Set(["start", "kunden", "einsaetze", "ziele"]));
+    expect(bd.main.map((n) => n.href)).toEqual(["/start", "/kunden", "/einsaetze"]);
     expect(bd.more.map((n) => n.href)).toEqual(["/ziele"]);
-    expect(splitNav(null, new Set(["start", "arbeit", "kunden"])).main).toHaveLength(3);
+    expect(splitNav(null, new Set(["start", "kunden"])).main).toHaveLength(2);
   });
 });

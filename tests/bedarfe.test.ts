@@ -47,7 +47,6 @@ describe("Etappe 5: Bedarfe, Angebote, Aufträge (Briefing 8.3, 9.2–9.4, F02, 
     expect(sa.status).toBe("BESTAETIGT");
     expect(sb.status).toBe("IN_KLAERUNG"); // unabhängig
     // Zurückstellen braucht Begründung; direkte Sprünge zu „vorgestellt“/„beauftragt“ sind nicht möglich
-    await expect(changeOpportunityStatus(david, b.id, { version: b.version, status: "ZURUECKGESTELLT" })).rejects.toBeInstanceOf(ValidationError);
     await expect(changeOpportunityStatus(david, b.id, { version: b.version, status: "BEAUFTRAGT" })).rejects.toBeInstanceOf(TransitionError);
     const zb = await changeOpportunityStatus(david, b.id, { version: b.version, status: "ZURUECKGESTELLT", reason: "Budgetentscheidung erst im Januar." });
     expect(zb.status).toBe("ZURUECKGESTELLT");

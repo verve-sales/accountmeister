@@ -3,6 +3,7 @@ import { Fragment, type ReactNode } from "react";
 import { fmtDate, actionStatusLabel, handoverStatusLabel, supportStatusLabel } from "@/lib/labels";
 import { Status } from "./Status";
 import { WorkList } from "./Work";
+import { MoveToSetup } from "./MoveToSetup";
 import { SuggestionCard } from "./SuggestionCard";
 import { HintButtons } from "./MocoHints";
 import { RenewalDecisionCard, RenewalStartCard } from "./Renewal";
@@ -130,6 +131,7 @@ function ActionRow({ a, back, today }: { a: ActionItem; back: string; today: str
         {a.status !== "VORGESCHLAGEN" && <button className="btn btn-small" name="status" value="ERLEDIGT">Erledigt</button>}
         <button className="btn btn-secondary btn-small" name="status" value="VERWORFEN">Verwerfen</button>
       </form>
+      <MoveToSetup kind="ACTION" id={a.id} currentSetupId={a.setupId} back={back} />
     </li>
   );
 }

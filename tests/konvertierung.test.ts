@@ -199,7 +199,6 @@ describe("Etappe 51: Konvertierungsvorgang, Freelancer-Profil, Vertrag aus Vorla
     env();
     const { david, opp } = await setupCase("Vorgang K05");
     const c = await startConversion(david, opp.id);
-    await expect(cancelConversion(david, c.id, "")).rejects.toBeInstanceOf(ValidationError);
     await cancelConversion(david, c.id, "Kunde hat das Vorhaben gestoppt");
     expect((await getConversion(david, opp.id))!.conversion.status).toBe("ABGEBROCHEN");
     await expect(markClarified(david, c.id)).rejects.toThrow(/beendet/);

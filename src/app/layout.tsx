@@ -15,6 +15,7 @@ import { AssistantPanel } from "@/components/AssistantPanel";
 import { provisionAccess } from "@/modules/provision/access";
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
 import { unreadCount } from "@/modules/notifications/service";
+import { CloseMenus } from "@/components/CloseMenus";
 import type { Actor } from "@/modules/identity/actor";
 
 /** Navigationseintrag „Besetzung“ für BD, Principal, CEO und Sales Operations (keine Sicherheitsgrenze – die liegt in den Services). */
@@ -34,13 +35,11 @@ function coachNav(actor: Actor): boolean {
 export const metadata: Metadata = { title: "Accountmeister – Verve AI", description: "Interne Sales-Arbeitsumgebung von Verve Consulting", icons: { icon: "/verve-ai-lockup.png" } };
 import { canUseSalesOps } from "@/modules/salesops/service";
 import { canClean } from "@/modules/cleanup/service";
-import { mayHandle } from "@/modules/conversion/handover";
 
 export const dynamic = "force-dynamic";
 
 /** Weitere Bereiche – immer unter „Mehr“. Die erste Reihe folgt dem Hut (Etappe 37, modules/dashboard/hat.ts). */
 const MORE = [
-  { href: "/weeklys", label: "Weeklys" },
   { href: "/vorgehen", label: "Vorgehen" },
   { href: "/einstellungen", label: "Einstellungen" },
   { href: "/hilfe", label: "Hilfe" },
@@ -53,7 +52,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (actor && actor.accountRoles.size > 0) roles.push("kundenbezogene Rollen");
   const { hat, available } = actor ? await loadHat(actor, (await cookies()).get("am_sicht")?.value ?? null).catch(() => ({ hat: null, available: [] })) : { hat: null, available: [] };
   const staffing = cfg.FEATURE_BESETZUNG === "true";
-  const allowed = new Set<string>(["start", "arbeit", "kunden", "eingang", "ziele"]);
+  const allowed = new Set<string>(["start", "kunden", "ziele"]);
   if (actor && canBrowsePortfolio(actor)) allowed.add("bds");
   if (actor && canSetTargets(actor)) allowed.add("principals");
   if (actor && canSeeRound(actor)) allowed.add("runde");
@@ -61,7 +60,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (actor && staffing && staffingNav(actor)) allowed.add("besetzung");
   if (actor && staffing && canUseSalesOps(actor)) allowed.add("salesops");
   if (actor && canClean(actor)) allowed.add("bereinigung");
-  if (actor && staffing && (await mayHandle(actor).catch(() => false))) allowed.add("uebergaben");
   const nav = splitNav(hat, allowed);
   const unread = actor ? await unreadCount(actor).catch(() => 0) : 0;
   // Moco (Etappe 31): Link für Importberechtigte, wenn die Anbindung an ist, oder bei offenen Hinweisen für die Person
@@ -69,6 +67,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="de">
       <body className="min-h-screen">
+        <CloseMenus />
         {cfg.AUTH_MODE === "development" && (
           <div className="notice-dev" role="status">
             Entwicklungsmodus: Anmeldung ohne Passwort, ausschließlich fiktive Daten. KI-Anbieter: {cfg.AI_PROVIDER === "disabled" ? "deaktiviert" : "Testanbieter"}. Kein Produktivbetrieb.
@@ -91,7 +90,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <details className="nav-more">
                   <summary>Mehr ▾</summary>
                   <div className="nav-more-menu">
-                    {[...nav.more, ...(actor.roles.has("CEO") ? [{ href: "/ceo", label: "CEO-Dashboard" }] : []), ...MORE.slice(0, 2), ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte" }] : []), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(2)].map((n) => (
+                    {[...nav.more, ...(actor.roles.has("CEO") ? [{ href: "/ceo", label: "CEO-Dashboard" }] : []), ...MORE.slice(0, 1), ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte" }] : []), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(1)].map((n) => (
                       <Link key={n.href} href={n.href}>
                         {n.label}
                       </Link>

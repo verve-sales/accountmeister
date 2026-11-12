@@ -228,8 +228,7 @@ export async function changePositionStatus(actor: Actor, positionId: string, raw
     const miss = openReadiness(a.position);
     if (miss.length) throw new ValidationError(`Bevor die Position offen ist, fehlt noch: ${miss.join(", ")}.`);
   }
-  if (i.status === "PAUSIERT" && (!i.reason || !i.holdReviewDate)) throw new ValidationError("Pausieren braucht einen Grund und einen nächsten Prüftermin.");
-  if (i.status === "ABGEBROCHEN" && (!i.reason || i.reason.length < 3)) throw new ValidationError("Bitte begründen, warum die Position ohne Besetzung endet.");
+  if (i.status === "PAUSIERT" && !i.holdReviewDate) throw new ValidationError("Pausieren braucht einen nächsten Prüftermin.");
   return db.transaction(async (tx) => {
     const [u] = await tx
       .update(schema.staffingPositions)
@@ -574,18 +573,15 @@ export async function changeCandidacyStatus(actor: Actor, candidacyId: string, r
   if (to === from) throw new TransitionError("Die Kandidatur hat diesen Status bereits.");
   const patch: Partial<typeof schema.candidacies.$inferInsert> = { status: to, statusReason: p.data.reason || null };
   if (CANDIDACY_TERMINAL.includes(to)) {
-    if (!p.data.reason || p.data.reason.length < 3) throw new ValidationError("Bitte den Grund festhalten.");
     if (from === "AUSGEWAEHLT") throw new TransitionError("Eine bestätigte Auswahl wird nicht per Status zurückgenommen – dafür Nachbesetzung anlegen.");
   } else if (CANDIDACY_TERMINAL.includes(from)) {
     // Wiederaufnahme: Grund und aktualisierte Verfügbarkeit, zurück in die Qualifizierung
     if (to !== "QUALIFIZIERT") throw new TransitionError("Wiederaufnahme führt zurück nach „qualifiziert“.");
-    if (!p.data.reason || !p.data.availabilityNote) throw new ValidationError("Wiederaufnahme braucht Grund und aktualisierte Verfügbarkeit.");
-    patch.notes = `${c.notes ?? ""}\nWiederaufnahme ${todayIso()}: ${p.data.reason}; Verfügbarkeit: ${p.data.availabilityNote}`.trim();
+    patch.notes = `${c.notes ?? ""}\nWiederaufnahme ${todayIso()}${p.data.reason ? `: ${p.data.reason}` : ""}${p.data.availabilityNote ? `; Verfügbarkeit: ${p.data.availabilityNote}` : ""}`.trim();
   } else {
     const fi = CANDIDACY_FLOW.indexOf(from);
     const ti = CANDIDACY_FLOW.indexOf(to);
     if (ti < fi) throw new TransitionError("Rückwärts geht es nur über Absage/Rückzug und Wiederaufnahme.");
-    if (ti > fi + 1 && !p.data.reason) throw new ValidationError("Beim Überspringen von Schritten bitte den Grund angeben.");
     if (to === "FREIGEGEBEN") {
       if (!a.manage) throw new ForbiddenError("Zur Vorstellung freigeben darf nur der verantwortliche BD (bzw. Principal/CEO).");
       patch.presentationApprovedBy = actor.userId;
@@ -692,7 +688,6 @@ export async function recordInterview(actor: Actor, candidacyId: string, raw: un
   const i = p.data;
   if ((i.interviewStatus === "GEPLANT" || i.interviewStatus === "DURCHGEFUEHRT") && !i.interviewAt) throw new ValidationError("Für geplante oder durchgeführte Interviews fehlt der Termin.");
   if (i.interviewStatus === "DURCHGEFUEHRT" && !i.outcome) throw new ValidationError("Bitte das Ergebnis des Interviews kurz festhalten.");
-  if (i.interviewStatus === "ABGESAGT" && !i.reason) throw new ValidationError("Bitte den Grund der Absage festhalten.");
   return db.transaction(async (tx) => {
     const [u] = await tx
       .update(schema.candidacies)
@@ -736,7 +731,6 @@ export async function selectCandidacy(actor: Actor, candidacyId: string, raw: un
   if (a.position.status === "BESETZT" && a.position.filledCandidacyId === c.id) return { candidacy: c, position: a.position, already: true };
   if (a.position.status !== "OFFEN") throw new TransitionError("Nur an einer offenen Position kann ausgewählt werden.");
   if (!["FREIGEGEBEN", "VORGESTELLT", "INTERVIEW"].includes(c.status)) throw new TransitionError("Ausgewählt werden kann nur eine zur Vorstellung freigegebene Kandidatur.");
-  if (c.status !== "INTERVIEW" && !p.data.reason) throw new ValidationError("Auswahl ohne Interview: bitte kurz begründen.");
   return db.transaction(async (tx) => {
     // Position atomar besetzen – schützt vor zwei gleichzeitigen Auswahlen
     const [pos] = await tx

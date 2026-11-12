@@ -288,9 +288,8 @@ export async function actOnWorkItem(actor: Actor, id: string, raw: unknown) {
     }
     case "ABLEHNEN":
       if (!(r.assignee || (r.teamMember && !item.assigneeUserId))) deny("Ablehnen kann nur die angefragte Person oder das Team.");
-      if (!i.note || i.note.length < 3) throw new ValidationError("Bitte kurz begründen, warum die Anfrage abgelehnt wird.");
       to = "ABGELEHNT";
-      patch.statusNote = i.note;
+      patch.statusNote = i.note || null;
       event = { kind: "ABGELEHNT", to: [item.requesterUserId], title: `${who} hat abgelehnt: ${item.title}` };
       break;
     case "STARTEN":
@@ -314,7 +313,6 @@ export async function actOnWorkItem(actor: Actor, id: string, raw: unknown) {
       if (openChildren) throw new ValidationError("Es sind noch Unteraufgaben offen.");
       const byRequester = r.requester && !worker;
       const needsReview = !byRequester && item.reviewRequired && item.requesterUserId !== actor.userId;
-      if (needsReview && !i.result) throw new ValidationError("Bitte das Ergebnis kurz beschreiben – es geht zur Prüfung an die Auftraggeber:in.");
       to = needsReview ? "ZUR_PRUEFUNG" : "ERLEDIGT";
       if (i.result) patch.result = i.result;
       if (!item.assigneeUserId && !byRequester) patch.assigneeUserId = actor.userId;

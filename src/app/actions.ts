@@ -2159,3 +2159,65 @@ export async function setupSharePointAction() {
     throw new PendingInfo(`${r.errors.length ? "Eingerichtet mit Fehlern" : "Eingerichtet"} – ${parts}.${r.errors.length ? ` ${r.errors.length} Fehler: ${r.errors.slice(0, 3).join("; ")}` : ""}`);
   }, "");
 }
+
+// --- Aufräumen (e47) ---------------------------------------------------------------
+
+export async function moveToSetupAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/start"), async (actor) => {
+    const { moveToSetup } = await import("@/modules/move/service");
+    const kind = data.kind === "SIGNAL" ? "SIGNAL" : "ACTION";
+    await moveToSetup(actor, kind, data.id ?? "", data.setupId ?? "");
+  }, data.kind === "SIGNAL" ? "Beobachtung verschoben." : "Aufgabe verschoben.");
+}
+
+export async function mergeIntoSetupAction(fd: FormData) {
+  const data = formToObject(fd);
+  const from = data.fromSetupId ?? "";
+  const into = data.intoSetupId ?? "";
+  return run(`/setups/${from}#zusammenlegen`, async (actor) => {
+    const { mergeSetups } = await import("@/modules/cleanup/service");
+    await mergeSetups(actor, into, [from]);
+    return `/setups/${into}`;
+  }, "Setups zusammengelegt.");
+}
+
+export async function moveIntakeCardAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/start#vorschlaege"), async (actor) => {
+    const { moveIntakeCard } = await import("@/modules/eingang/service");
+    const r = await moveIntakeCard(actor, data.suggestionId ?? "", data.setupId ?? "");
+    throw new PendingInfo(`Karte verschoben zu ${r.accountName} · ${r.setupName}.`);
+  }, "");
+}
+
+export async function discardIntakeCardsAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/start#vorschlaege"), async (actor) => {
+    const { discardIntakeCards } = await import("@/modules/eingang/service");
+    const n = await discardIntakeCards(actor, data.suggestionId ?? "", data.all === "1");
+    throw new PendingInfo(n === 1 ? "Karte verworfen." : `${n} Karten verworfen.`);
+  }, "");
+}
+
+/** Überzählige, noch unbesetzte Position einer Chance entfernen – ohne Begründung (e47). */
+export async function removePositionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/bedarfe/${data.opportunityId ?? ""}#konvertierung`, async (actor) => {
+    requireStaffingFlag();
+    const { db, schema } = await import("@/db/client");
+    const { eq } = await import("drizzle-orm");
+    const p = await db.query.staffingPositions.findFirst({ where: eq(schema.staffingPositions.id, data.positionId ?? ""), columns: { version: true, status: true } });
+    if (!p) throw new ValidationError("Position nicht gefunden.");
+    if (p.status === "BESETZT") throw new ValidationError("Eine besetzte Position wird über den Einsatz beendet, nicht hier.");
+    await changePositionStatus(actor, data.positionId ?? "", { version: p.version, status: "ABGEBROCHEN", reason: "Überzählige Position entfernt" });
+  }, "Position entfernt.");
+}
+
+export async function addSharePointDocumentAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#vertraege`), async (actor) => {
+    const { linkSharePointFile } = await import("@/modules/sharepoint/service");
+    await linkSharePointFile(actor, data.engagementId ?? "", data.pick ?? "", { signedStatus: data.signedStatus ?? "", reference: data.reference ?? "" });
+  }, "Unterlage aus SharePoint übernommen.");
+}

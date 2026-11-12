@@ -8,7 +8,7 @@ import { Feedback, type SearchParams } from "@/components/Feedback";
 
 export default async function AnmeldenPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  if (await getCurrentActor()) redirect("/meine-arbeit");
+  if (await getCurrentActor()) redirect("/start");
   const cfg = getConfig();
   if (cfg.AUTH_MODE !== "development") {
     return (
