@@ -3,7 +3,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { Status } from "@/components/Status";
 import { fmtDate, opportunityStatusLabel, orgTypeLabel } from "@/lib/labels";
-import { acceptSuggestionAction, discardIntakeCardsAction, moveIntakeCardAction, reassignIntakeAction, suggestionFeedbackAction } from "@/app/actions";
+import { acceptSuggestionAction, assignIntakeSetupAction, discardIntakeCardsAction, moveIntakeCardAction, reassignIntakeAction, suggestionFeedbackAction } from "@/app/actions";
 import { editableSetupOptions, eingangTypeLabel, renewalDefaultsFor } from "@/modules/eingang/service";
 import { getCurrentActor } from "@/modules/identity/session";
 import { cache } from "react";
@@ -45,7 +45,7 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
   const initiative = s.initiativeId ? await db.query.accountInitiatives.findFirst({ where: eq(schema.accountInitiatives.id, s.initiativeId), columns: { id: true, title: true, accountId: true } }) : null;
   const renewal = item.type === "VERLAENGERUNG" ? await renewalDefaultsFor(resolved.engagementId ?? null, item.newEnd) : null;
   const engagement = item.type === "STIMMUNG" && resolved.engagementId ? await db.query.engagements.findFirst({ where: eq(schema.engagements.id, resolved.engagementId) }) : null;
-  const needsCustomer = !s.setupId && !["KUNDE", "EINSORTIERUNG"].includes(item.type) && !(s.accountId && ["PERSON", "INITIATIVE", "BESCHAFFUNG", "RISIKO", "HEBEL", "SOS", "TEAM"].includes(item.type));
+  const needsCustomer = !s.setupId && !["KUNDE", "EINSORTIERUNG"].includes(item.type) && !(s.accountId && ["PERSON", "INITIATIVE", "BESCHAFFUNG", "RISIKO", "HEBEL", "SOS", "TEAM", "VERLAENGERUNG", "STIMMUNG", "CHANCE_STATUS", "ERLEDIGT", "FREELANCER"].includes(item.type));
   const label = eingangTypeLabel[item.type] ?? item.type;
   const accept: Record<string, string> = {
     KUNDE: "Kunde + Setup anlegen", EINSORTIERUNG: "Zuordnen", SETUP: "Setup anlegen", PERSON: resolved.personId ? "Person ergänzen" : "Person übernehmen", CHANCE: "Chance anlegen", CHANCE_STATUS: "Stand übernehmen",
@@ -88,6 +88,19 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
         {initiative ? <p><span className="status">Initiative</span> <Link href={`/kunden/${initiative.accountId}/initiativen/${initiative.id}`}>{initiative.title}</Link></p> : null}
         <p className="muted">Beleg: „{s.evidenceQuote.length > 260 ? `${s.evidenceQuote.slice(0, 260)} …` : s.evidenceQuote}“</p>
       </div>
+      {open && canDecide && showRoute && account && !s.setupId && (await setupOptions()).some((o) => o.accountId === account.id) && (
+        <form action={assignIntakeSetupAction} className="text-sm mt-2 flex flex-wrap items-center gap-2 p-2" style={{ background: "var(--surface-2)", borderRadius: 6, borderLeft: `3px solid ${AMBER}` }}>
+          <input type="hidden" name="suggestionId" value={s.id} />
+          <input type="hidden" name="back" value={back} />
+          <strong>Zu welchem Setup bei {account.name} gehört diese Mail?</strong>
+          <select name="setupId" className="select" required defaultValue="" aria-label="Setup wählen" style={{ width: "16rem" }}>
+            <option value="" disabled>Setup wählen …</option>
+            {(await setupOptions()).filter((o) => o.accountId === account.id).map((o) => <option key={o.id} value={o.id}>{o.setupName}</option>)}
+          </select>
+          <PendingButton className="btn btn-small" busy="Ordne zu …">Zuordnen</PendingButton>
+          <span className="muted text-xs">gilt für alle Karten dieser Mail</span>
+        </form>
+      )}
       {open && canDecide && showRoute && (
         <div className="text-xs mt-2 flex flex-wrap items-center gap-2" style={{ color: payload.route && !payload.route.confident ? AMBER : undefined }}>
           <span className={payload.route?.confident ? "muted" : undefined}>
@@ -113,7 +126,7 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
       {canDecide && open && (
         <div className="mt-2 flex flex-wrap gap-4 items-end">
           {needsCustomer ? (
-            <p className="text-sm" style={{ color: AMBER }}>Erst die Karte „Neuer Kunde“ bzw. „Kunde zuordnen“ übernehmen – dann gehört diese Karte automatisch dazu.</p>
+            <p className="text-sm" style={{ color: AMBER }}>{account ? "Erst oben das Setup wählen – dann gehört diese Karte automatisch dazu." : "Erst die Karte „Neuer Kunde“ bzw. „Kunde zuordnen“ übernehmen – dann gehört diese Karte automatisch dazu."}</p>
           ) : (
             <form action={acceptSuggestionAction} className="flex flex-wrap gap-2 items-end text-sm">
               <input type="hidden" name="suggestionId" value={s.id} />
@@ -146,7 +159,13 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
           <form action={discardIntakeCardsAction} className="flex flex-wrap gap-1 items-end">
             <input type="hidden" name="suggestionId" value={s.id} />
             <input type="hidden" name="back" value={back} />
-            <button className="btn btn-secondary btn-small" type="submit" title="Ohne Rückfrage und ohne Grund">Verwerfen</button>
+            <select name="reason" className="select" defaultValue="" aria-label="Grund (freiwillig)" title="Freiwillig – die KI lernt daraus für diesen Kunden" style={{ width: "9rem", fontSize: 12 }}>
+              <option value="">ohne Grund</option>
+              <option value="UNPASSEND">unwichtig</option>
+              <option value="FALSCHE_ANNAHME">falsch verstanden</option>
+              <option value="BEREITS_ERLEDIGT">schon bekannt</option>
+            </select>
+            <button className="btn btn-secondary btn-small" type="submit" title="Ohne Rückfrage">Verwerfen</button>
             {s.aiJobId && <button className="btn btn-secondary btn-small" type="submit" name="all" value="1" title="Alle offenen Karten aus dieser Mail verwerfen">Ganze Mail verwerfen</button>}
           </form>
           <details className="text-xs">

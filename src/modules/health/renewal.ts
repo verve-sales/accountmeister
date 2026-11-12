@@ -1,3 +1,4 @@
+import { EXPIRY_WINDOW_DAYS } from "@/lib/window";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { recordAudit } from "@/modules/audit/audit";
@@ -179,7 +180,7 @@ export async function listRenewals(accountIds: string[], now = new Date()): Prom
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.opportunities.accountId))
     .where(and(inArray(schema.opportunities.accountId, accountIds), eq(schema.orders.status, "BEAUFTRAGUNG_BESTAETIGT"), eq(schema.orders.engagementStatus, "GESTARTET")));
   const t = now.getTime();
-  const soon = rows.filter((r) => r.o.plannedEnd && new Date(r.o.plannedEnd).getTime() - t <= 92 * DAY && new Date(r.o.plannedEnd).getTime() >= t - DAY);
+  const soon = rows.filter((r) => r.o.plannedEnd && new Date(r.o.plannedEnd).getTime() - t <= EXPIRY_WINDOW_DAYS * DAY && new Date(r.o.plannedEnd).getTime() >= t - DAY);
   if (soon.length === 0) return [];
   const runs = await db.query.playbookRuns.findMany({ where: inArray(schema.playbookRuns.opportunityId, soon.map((r) => r.opp.id)) });
   const runSteps = runs.length ? await db.query.playbookRunSteps.findMany({ where: inArray(schema.playbookRunSteps.runId, runs.map((r) => r.id)) }) : [];

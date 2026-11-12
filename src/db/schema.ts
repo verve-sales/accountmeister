@@ -178,6 +178,9 @@ export const accounts = pgTable("accounts", {
   procurementChannel: text("procurement_channel"), // DIREKT | VERMITTLER | RAHMENVERTRAG | null = unbekannt
   intermediaryName: text("intermediary_name"),
   procurementNote: text("procurement_note"),
+  /** e48: Rechnungsanschrift und Rechnungsweg (z. B. „PDF an kreditoren@…, Bestellnummer im Betreff“) – für Backoffice und Buchhaltung */
+  billingAddress: text("billing_address"),
+  invoiceRoute: text("invoice_route"),
   isDemo: boolean("is_demo").notNull().default(false),
   createdBy: text("created_by").notNull().references(() => users.id),
   createdAt: createdAt(),
@@ -2611,7 +2614,7 @@ export const backofficeHandovers = pgTable(
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     engagementId: text("engagement_id").notNull().references(() => engagements.id),
     conversionId: text("conversion_id").references(() => conversions.id, { onDelete: "set null" }),
-    kind: text("kind").notNull(), // VORLAEUFIG | BEAUFTRAGT | BESTELLUNG_NACHGEREICHT | VERLAENGERT | BEENDET
+    kind: text("kind").notNull(), // VORLAEUFIG | BEAUFTRAGT | BESTELLUNG_NACHGEREICHT | VERLAENGERT | KONDITIONEN | BEENDET
     /** Momentaufnahme der Pflichtangaben (ohne Dateien; Links zeigen auf die Unterlagen) */
     payload: jsonb("payload").notNull().default({}).$type<Record<string, unknown>>(),
     status: text("status").notNull().default("OFFEN"), // OFFEN | QUITTIERT | ZURUECKGEZOGEN

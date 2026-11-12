@@ -694,7 +694,7 @@ export class TestProvider implements AIProvider {
     const known = (input.contextText.split("\n").find((l) => l.startsWith("Chancen:")) ?? "").slice("Chancen:".length).split(";").map((x) => x.split(" [")[0]!.trim()).filter(Boolean);
     const purposeFor = (text: string) => p.needs.find((n) => text.includes(n.evidenceQuote) || n.evidenceQuote.includes(text))?.title ?? known.find((k) => text.toLowerCase().includes(k.toLowerCase().split(" ")[0] ?? "\u0000")) ?? p.needs[0]?.title ?? known[0] ?? "";
     for (const x of p.signals) items.push({ type: "SIGNAL", ...x, purpose: purposeFor(x.observation) });
-    for (const x of p.needs) items.push({ type: "CHANCE", title: x.title, needDescription: x.needDescription, kind: x.kind, roleName: x.roleName, headcount: null, horizon: x.horizon, anticipated: !/bestätigt|beauftragt|Anfrage/i.test(x.needDescription), evidenceQuote: x.evidenceQuote });
+    for (const x of p.needs) items.push({ type: "CHANCE", title: x.title, needDescription: x.needDescription, kind: x.kind, roleName: x.roleName, headcount: null, positions: [], horizon: x.horizon, anticipated: !/bestätigt|beauftragt|Anfrage/i.test(x.needDescription), evidenceQuote: x.evidenceQuote });
     for (const x of p.actions) items.push({ type: "AKTION", dueDate: "", chanceRef: "", ...x, purpose: purposeFor(x.title) });
     for (const x of p.contacts) items.push({ type: "KONTAKT", ...x, purpose: purposeFor(x.occasion) });
     const missing: string[] = [];

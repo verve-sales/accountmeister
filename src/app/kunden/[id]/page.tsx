@@ -1,3 +1,4 @@
+import { EXPIRY_WINDOW_DAYS } from "@/lib/window";
 import Link from "next/link";
 import { Term } from "@/components/Term";
 import { notFound, redirect } from "next/navigation";
@@ -167,12 +168,12 @@ export default async function KundePage({ params, searchParams }: { params: Prom
           <table className="list text-sm">
             <tbody>
               {deployed.map((e) => {
-                const soon = e.daysToEnd !== null && e.daysToEnd <= 60;
+                const soon = e.daysToEnd !== null && e.daysToEnd <= EXPIRY_WINDOW_DAYS;
                 return (
                   <tr key={e.id}>
                     <td><Link href={`/einsaetze/${e.id}`}><strong>{e.personName}</strong></Link>{e.internalUserId ? <span className="muted text-xs"> (intern)</span> : null}</td>
                     <td className="muted">{e.title}</td>
-                    <td style={{ whiteSpace: "nowrap", color: soon ? "#b7791f" : undefined, fontWeight: soon ? 600 : undefined }}>{e.plannedEnd ? `bis ${fmtDate(e.plannedEnd)}${e.daysToEnd !== null && e.daysToEnd <= 120 ? ` · ${e.daysToEnd} Tage` : ""}` : "Ende offen"}</td>
+                    <td style={{ whiteSpace: "nowrap", color: soon ? "#b7791f" : undefined, fontWeight: soon ? 600 : undefined }}>{e.plannedEnd ? `bis ${fmtDate(e.plannedEnd)}${e.daysToEnd !== null && e.daysToEnd <= 365 ? ` · ${e.daysToEnd} Tage` : ""}` : "Ende offen"}</td>
                     <td className="text-xs">{e.renewalStatus && e.renewalStatus !== "ZU_KLAEREN" ? `Verlängerung ${renewalStatusLabel[e.renewalStatus] ?? e.renewalStatus}${e.renewalTo ? ` bis ${fmtDate(e.renewalTo)}` : ""}` : soon ? <Link href={`/einsaetze/${e.id}#verlaengerung`}>verlängern</Link> : null}</td>
                   </tr>
                 );

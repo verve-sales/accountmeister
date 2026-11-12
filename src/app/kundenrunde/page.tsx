@@ -60,7 +60,7 @@ export default async function KundenrundePage({ searchParams }: { searchParams: 
           </details>
         )}
       </section>
-      <p className="muted text-xs">In der Runde: Kunden mit laufenden Einsätzen, ohne Nebengeschäft. Rot: Health-Check gefährdet oder Einsatz endet in höchstens 4 Wochen ohne Klärung. Gelb: wackelig, zu wenig Daten, Ende in 90 Tagen offen oder weniger Köpfe als bei der letzten Runde. Alles ist aus dem Tool vorbefüllt – die Verantwortlichen bestätigen je Kunde.</p>
+      <p className="muted text-xs">In der Runde: Kunden mit laufenden Einsätzen, ohne Nebengeschäft. Rot: Health-Check gefährdet oder Einsatz endet in höchstens 4 Wochen ohne Klärung. Gelb: wackelig, zu wenig Daten, Ende in 8 Wochen offen oder weniger Köpfe als bei der letzten Runde. Alles ist aus dem Tool vorbefüllt – die Verantwortlichen bestätigen je Kunde.</p>
 
       {r.groups.length === 0 && <p className="card muted text-sm">Keine Bestandskunden in deiner Verantwortung.</p>}
       {r.groups.map((g) => {
@@ -89,7 +89,7 @@ export default async function KundenrundePage({ searchParams }: { searchParams: 
                         <div className="muted text-xs">Nachhaltigkeit</div>
                         <div>Köpfe {a.headsNow}{a.headsNow !== a.headsBefore ? <span style={{ color: a.headsNow < a.headsBefore ? COLOR.ROT : COLOR.GRUEN }}> ({a.headsNow > a.headsBefore ? "+" : ""}{a.headsNow - a.headsBefore})</span> : <span className="muted"> (unverändert)</span>}</div>
                         {a.ending.map((e, n) => <div key={e.engagementId || `o${n}`}><Link href={e.engagementId ? `/einsaetze/${e.engagementId}#verlaengerung` : `/kunden/${a.accountId}/health`}>{e.person}</Link> <span className="muted">· Ende {fmtDate(e.plannedEnd)} (in {e.daysToEnd} T.) · {e.renewal}</span>{e.engagementId ? (e.contact ? <span className="muted"> · über {e.contact}</span> : <span style={{ color: "#b7791f" }}> · Ansprechpartner offen</span>) : null}</div>)}
-                        {a.ending.length === 0 && <div className="muted">kein Einsatzende in den nächsten 90 Tagen</div>}
+                        {a.ending.length === 0 && <div className="muted">kein Einsatzende in den nächsten 8 Wochen</div>}
                       </div>
                       <Interesting a={a} />
                     </div>

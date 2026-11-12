@@ -337,6 +337,13 @@
       "when": 1794499124830,
       "tag": "0047_sharepoint_ablage",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1794515330400,
+      "tag": "0048_rechnungsdaten",
+      "breakpoints": true
     }
   ]
 }

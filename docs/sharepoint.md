@@ -37,3 +37,12 @@ PATCH https://graph.microsoft.com/v1.0/sites/<Site-ID>/permissions/<Kennung der 
 ```
 
 Die Kennung der Berechtigung liefert `GET https://graph.microsoft.com/v1.0/sites/<Site-ID>/permissions`. Neue Spalten oder Bibliotheken kann die App danach nicht mehr anlegen; neue Kundenordner schon.
+
+## e48: Dokumentenfluss
+
+- Neue Spalten „Tagessatz“ (Satz) und „Zahlungsziel“ sowie die Dokumentart „Einsatzblatt“: einmal unter Verwaltung › SharePoint „Einrichten“ klicken – es wird nur Fehlendes ergänzt. Bis dahin werden diese Felder einfach ausgelassen.
+- Hochgeladene Unterlagen am Einsatz landen automatisch im Kunden- bzw. Freelancer-Ordner.
+- „Unterschrieben“ gilt beim erzeugten Vertragsentwurf nur mit hochgeladener unterschriebener Fassung; der Entwurf steht danach auf „ersetzt“.
+- Beim Quittieren einer Übergabe entsteht ein Einsatzblatt (Excel): im Kundenordner › Bestellungen mit Verkaufssatz, Rechnungsanschrift und -weg; bei Freelancern zusätzlich im Freelancer-Ordner › Verträge mit Einkaufssatz und Zahlungsziel.
+- Bestellnummer, Moco-Projekt und „gültig bis“ werden bei Bestellung, Quittung, Verlängerung und Einsatzende an allen Unterlagen nachgeführt.
+- Bestell-Mails (Weiterleitung ans Postfach oder Ordner „Accountmeister“): PDF-/Office-Anhänge landen unter Kunden › Kunde › Bestellungen, mit erkannter Bestellnummer; Sales Operations bekommt einen Hinweis.

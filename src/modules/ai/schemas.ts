@@ -214,6 +214,12 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
     horizon: z.string().max(60).optional().default(""),
     /** antizipiert = aus Beobachtungen vermutet, noch nicht vom Kunden ausgesprochen */
     anticipated: z.boolean().optional().default(true),
+    /** e48: zu besetzende Plätze dieser Chance (aus Besetzungs-Karten derselben Mail zusammengeführt) */
+    positions: z
+      .array(z.object({ title: z.string().min(2).max(200), resourceKind: z.enum(["FREELANCER", "INTERN"]).optional().default("FREELANCER"), tasks: z.string().max(4000).optional().default(""), mustHave: z.string().max(4000).optional().default(""), niceToHave: z.string().max(4000).optional().default(""), location: z.string().max(200).optional().default(""), language: z.string().max(100).optional().default(""), desiredStart: z.string().max(10).optional().default(""), plannedEnd: z.string().max(10).optional().default(""), endOpen: z.boolean().optional().default(false), scopeAmount: z.number().int().min(0).max(1000).nullable().optional().default(null), scopeUnit: z.enum(["TAGE_PRO_WOCHE", "STUNDEN_PRO_WOCHE", "PROZENT", ""]).optional().default("") }))
+      .max(20)
+      .optional()
+      .default([]),
     ...q,
   }),
   z.object({

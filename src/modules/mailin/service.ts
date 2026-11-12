@@ -21,13 +21,30 @@ import type { AIProvider } from "@/modules/ai/provider";
  *    bestimmt, wem die Kärtchen gehören und was er sehen darf. Alles andere (z. B. Bewerbungen von außen) wird
  *    übersprungen – der Inhalt wird dafür gar nicht erst abgerufen.
  *  - Weitergeleitete Bewerbungen werden nicht ausgewertet (Bewerberdaten gehören nicht in den Accountmeister).
- *  - Anhänge werden nicht übernommen.
+ *  - Anhänge (e48): Sieht eine Mail nach einer Kundenbestellung aus, landen PDF-/Office-Anhänge in SharePoint unter
+ *    Kunden › Kunde › Bestellungen (mit erkannter Bestellnummer); Sales Operations bekommt einen Hinweis. Sonst nichts.
  */
+
+export type MailAttachment = { name: string; contentType: string; bytes: ArrayBuffer };
+type GraphAttachment = { "@odata.type"?: string; name?: string; contentType?: string; size?: number; isInline?: boolean; contentBytes?: string };
+const MAX_ATTACHMENT = 15 * 1024 * 1024;
+const DOC_TYPES = /pdf|msword|officedocument|image\/(png|jpe?g)/i;
+
+function toAttachments(list: GraphAttachment[]): MailAttachment[] {
+  return list
+    .filter((a) => a["@odata.type"] === "#microsoft.graph.fileAttachment" && !a.isInline && !!a.contentBytes && (a.size ?? 0) <= MAX_ATTACHMENT && DOC_TYPES.test(a.contentType ?? ""))
+    .map((a) => {
+      const buf = Buffer.from(a.contentBytes!, "base64");
+      return { name: a.name ?? "Anhang", contentType: a.contentType ?? "application/octet-stream", bytes: buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer };
+    });
+}
 
 export type InboxMeta = { id: string; messageId: string; subject: string; fromEmail: string; fromName: string; receivedAt: string; /** true/false laut Exchange-Kopfzeile, null = nicht feststellbar */ internal: boolean | null };
 export interface InboxClient {
   list(sinceIso: string): Promise<InboxMeta[]>;
   body(id: string): Promise<string>;
+  /** e48: Dateianhänge (optional – ältere Clients/Tests liefern keine) */
+  attachments?(id: string): Promise<MailAttachment[]>;
 }
 
 type GraphMessage = { id: string; internetMessageId?: string; subject?: string; receivedDateTime: string; from?: { emailAddress?: { address?: string; name?: string } }; internetMessageHeaders?: { name: string; value: string }[]; body?: { content?: string } };
@@ -52,6 +69,10 @@ export class GraphInboxClient implements InboxClient {
   async body(id: string): Promise<string> {
     const m = (await graphGet(`/users/${this.box}/messages/${encodeURIComponent(id)}?$select=body`, await this.token())) as GraphMessage;
     return m.body?.content ?? "";
+  }
+  async attachments(id: string): Promise<MailAttachment[]> {
+    const r = (await graphGet(`/users/${this.box}/messages/${encodeURIComponent(id)}/attachments`, await this.token())) as { value?: GraphAttachment[] };
+    return toAttachments(r.value ?? []);
   }
 }
 
@@ -120,7 +141,7 @@ export async function runMailInbox(deps: { client?: InboxClient; provider?: AIPr
       res.abgelehnt++;
       continue;
     }
-    await processForUser(user, { key: m.messageId, subject: m.subject, receivedAt: m.receivedAt, exclude: m.fromEmail }, () => client.body(m.id), { what: "Weitergeleitete Mail", header: `Weitergeleitet von: ${user.displayName}`, origin: `Weiterleitung an ${cfg.MAIL_INBOX ?? "das Accountmeister-Postfach"} durch ${user.displayName}`, provider: deps.provider }, res);
+    await processForUser(user, { key: m.messageId, subject: m.subject, receivedAt: m.receivedAt, exclude: m.fromEmail }, () => client.body(m.id), { what: "Weitergeleitete Mail", header: `Weitergeleitet von: ${user.displayName}`, origin: `Weiterleitung an ${cfg.MAIL_INBOX ?? "das Accountmeister-Postfach"} durch ${user.displayName}`, provider: deps.provider, attachments: client.attachments ? () => client.attachments!(m.id) : undefined }, res);
   }
   return res;
 }
@@ -132,7 +153,7 @@ async function processForUser(
   user: UserRow,
   m: { key: string; subject: string; receivedAt: string; exclude?: string },
   getBody: () => Promise<string>,
-  o: { what: string; header: string; origin: string; participants?: { name: string; email?: string }[]; provider?: AIProvider },
+  o: { what: string; header: string; origin: string; participants?: { name: string; email?: string }[]; provider?: AIProvider; attachments?: () => Promise<MailAttachment[]> },
   res: MailInboxResult,
 ) {
   const title = cleanSubject(m.subject);
@@ -172,6 +193,8 @@ async function processForUser(
     await db.insert(schema.sourceVersions).values({ sourceId, versionNo: 1, body, contentHash: hash });
     const r = await eingangFromSource(actor, sourceId, { participants, sourceLabel: `E-Mail „${title}“ vom ${new Date(m.receivedAt).toLocaleDateString("de-DE")}`, autoRoute: true }, { provider: o.provider });
     await record("AUSGEWERTET", r.created ? null : r.noSuggestionReason || "keine Vorschläge", { sourceId, cardCount: r.created });
+    // e48: Kundenbestellung im Anhang → SharePoint (Kunden › Kunde › Bestellungen), Hinweis an Sales Operations
+    if (route.account && o.attachments) await fileOrderAttachments(user, actor.workspaceId, route.account.name, m.subject, text, o.attachments).catch((err) => console.error("Bestellung aus Mail", (err as Error).message));
     await notify(db, { workspaceId: user.workspaceId, userIds: [user.id], kind: "ZUR_PRUEFUNG", title: r.created ? `${o.what} „${title.slice(0, 80)}“: ${r.created} Vorschlag/Vorschläge zur Bestätigung${r.accountName ? ` (${r.accountName})` : ""}` : `${o.what} „${title.slice(0, 80)}“: nichts abzuleiten${r.noSuggestionReason ? ` – ${r.noSuggestionReason.slice(0, 120)}` : ""}`, link: "/start", dedupeKey: `mailin:${m.key}` });
     res.ausgewertet++;
     res.karten += r.created;
@@ -181,6 +204,22 @@ async function processForUser(
     await notify(db, { workspaceId: user.workspaceId, userIds: [user.id], kind: "ABGELEHNT", title: `${o.what} „${title.slice(0, 80)}“ konnte nicht ausgewertet werden: ${msg.slice(0, 140)}`, link: "/eingang", dedupeKey: `mailin:${m.key}` }).catch(() => 0);
     res.fehler++;
   }
+}
+
+/** Anhänge einer Bestell-Mail ablegen und Sales Operations sowie den Absender informieren. */
+async function fileOrderAttachments(user: UserRow, workspaceId: string, accountName: string, subject: string, text: string, get: () => Promise<MailAttachment[]>): Promise<number> {
+  const { looksLikeOrder, extractOrderNumber, fileCustomerOrder } = await import("@/modules/sharepoint/documents");
+  const { sharePointEnabled } = await import("@/modules/sharepoint/client");
+  if (!sharePointEnabled()) return 0;
+  const atts = (await get()).filter((a) => looksLikeOrder(subject, text, a.name));
+  if (!atts.length) return 0;
+  const ref = extractOrderNumber(subject, atts.map((a) => a.name).join(" "), text);
+  const filed: string[] = [];
+  for (const a of atts) if (await fileCustomerOrder({ accountName, fileName: a.name, bytes: a.bytes, reference: ref })) filed.push(a.name);
+  if (!filed.length) return 0;
+  const ops = await db.select({ userId: schema.roleAssignments.userId }).from(schema.roleAssignments).where(sql`${schema.roleAssignments.workspaceId} = ${workspaceId} and ${schema.roleAssignments.role} = 'SALES_OPS'`);
+  await notify(db, { workspaceId, userIds: [user.id, ...ops.map((o) => o.userId)], kind: "ZUGEWIESEN", title: `Bestellung von ${accountName} in SharePoint abgelegt: ${filed.join(", ").slice(0, 120)}${ref ? ` – Bestellnummer ${ref}` : ""}. Im Vorgang unter „Beauftragung“ auswählen.`, link: "/vertragsbuero", dedupeKey: `order-mail:${filed.join("|").slice(0, 100)}:${ref ?? ""}` });
+  return filed.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +239,7 @@ export interface FolderClient {
   findFolder(): Promise<string | null>;
   list(folderId: string): Promise<FolderMeta[]>;
   body(id: string): Promise<string>;
+  attachments?(id: string): Promise<MailAttachment[]>;
 }
 
 type GraphFolder = { id: string; displayName: string };
@@ -224,6 +264,10 @@ export class GraphFolderClient implements FolderClient {
   async body(id: string): Promise<string> {
     const m = (await graphGet(`/me/messages/${encodeURIComponent(id)}?$select=body`, this.token)) as GraphMessage;
     return m.body?.content ?? "";
+  }
+  async attachments(id: string): Promise<MailAttachment[]> {
+    const r = (await graphGet(`/me/messages/${encodeURIComponent(id)}/attachments`, this.token)) as { value?: GraphAttachment[] };
+    return toAttachments(r.value ?? []);
   }
 }
 
@@ -281,7 +325,7 @@ export async function runFolderInbox(deps: { clientFor?: (conn: typeof schema.in
       for (const m of fresh) {
         res.gesehen++;
         const header = `Von: ${m.from ? `${m.from.name}${m.from.email ? ` (${m.from.email})` : ""}` : "?"}${m.to.length ? `\nAn: ${m.to.map((t) => `${t.name}${t.email ? ` (${t.email})` : ""}`).join(", ")}` : ""}`;
-        await processForUser(user, { key: keyOf(m), subject: m.subject, receivedAt: m.receivedAt }, () => client.body(m.id), { what: "Mail aus dem Ordner „Accountmeister“", header, origin: `Microsoft 365 · Ordner „${WATCH_FOLDER_NAME}“ von ${user.displayName}`, participants: [...(m.from ? [m.from] : []), ...m.to], provider: deps.provider }, res);
+        await processForUser(user, { key: keyOf(m), subject: m.subject, receivedAt: m.receivedAt }, () => client.body(m.id), { what: "Mail aus dem Ordner „Accountmeister“", header, origin: `Microsoft 365 · Ordner „${WATCH_FOLDER_NAME}“ von ${user.displayName}`, participants: [...(m.from ? [m.from] : []), ...m.to], provider: deps.provider, attachments: client.attachments ? () => client.attachments!(m.id) : undefined }, res);
       }
       await db.update(schema.integrationConnections).set({ lastSuccessfulFetchAt: new Date(), lastError: null }).where(eq(schema.integrationConnections.id, conn.id));
     } catch (e) {

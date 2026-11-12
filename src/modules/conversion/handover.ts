@@ -14,13 +14,14 @@ import { backofficeUserIds, isBackoffice } from "./profile";
  * anderer Stelle tippt, und der Moco-Abgleich legt keinen zweiten Einsatz an.
  */
 
-export const handoverKindValues = ["VORLAEUFIG", "BEAUFTRAGT", "BESTELLUNG_NACHGEREICHT", "VERLAENGERT", "BEENDET"] as const;
+export const handoverKindValues = ["VORLAEUFIG", "BEAUFTRAGT", "BESTELLUNG_NACHGEREICHT", "VERLAENGERT", "KONDITIONEN", "BEENDET"] as const;
 export type HandoverKind = (typeof handoverKindValues)[number];
 export const handoverKindLabel: Record<string, string> = {
   VORLAEUFIG: "Vorläufig beauftragt (Start mit Zusage per Mail)",
   BEAUFTRAGT: "Beauftragt",
   BESTELLUNG_NACHGEREICHT: "Bestellung nachgereicht",
   VERLAENGERT: "Verlängert",
+  KONDITIONEN: "Konditionen geändert",
   BEENDET: "Beendet",
 };
 /** Was das Backoffice in Moco zu tun hat – der Betreff der Übergabe. */
@@ -29,6 +30,7 @@ export const handoverTask: Record<string, string> = {
   BEAUFTRAGT: "Angebot in Moco in ein Projekt umwandeln",
   BESTELLUNG_NACHGEREICHT: "Bestellnummer am Moco-Projekt nachtragen",
   VERLAENGERT: "Laufzeit und Satz am Moco-Projekt anpassen",
+  KONDITIONEN: "Satz bzw. Kontingent am Moco-Projekt anpassen",
   BEENDET: "Moco-Projekt abschließen",
 };
 
@@ -51,6 +53,11 @@ export type HandoverPayload = {
   beschaffungsweg: string;
   vermittler: string | null;
   rechnungshinweis: string | null;
+  /** e48: Rechnungsanschrift und Rechnungsweg des Kunden */
+  rechnungsanschrift?: string | null;
+  rechnungsweg?: string | null;
+  /** e48: Zahlungsziel des Freelancers in Tagen (nur Berechtigten) */
+  zahlungszielTage?: number | null;
   /** nur bei Freelancern; wird nur Berechtigten gezeigt */
   ek: string | null;
   ekEinheit: string | null;
@@ -104,6 +111,9 @@ async function buildPayload(engagementId: string, conversionId: string | null, h
     beschaffungsweg: account?.procurementChannel ?? "DIREKT",
     vermittler: account?.intermediaryName ?? null,
     rechnungshinweis: account?.procurementNote ?? null,
+    rechnungsanschrift: account?.billingAddress ?? null,
+    rechnungsweg: account?.invoiceRoute ?? null,
+    zahlungszielTage: e.freelancerId ? freelancer?.paymentTermDays ?? null : null,
     ek: e.freelancerId ? p?.ek ?? freelancer?.ekRate ?? null : null,
     ekEinheit: e.freelancerId ? (p?.ek ? p.rateUnit : freelancer?.ekUnit ?? null) : null,
     freelancerRechnungsdaten: freelancer?.invoiceNote ?? null,
@@ -159,7 +169,7 @@ export async function getHandover(actor: Actor, id: string): Promise<HandoverVie
   if (v.full) await recordAudit(db, actor, "handover.viewed", "ENGAGEMENT", h.engagementId, { uebergabe: h.id });
   return {
     handover: h,
-    payload: v.full ? payload : { ...payload, ek: null, ekEinheit: null, freelancerRechnungsdaten: null },
+    payload: v.full ? payload : { ...payload, ek: null, ekEinheit: null, freelancerRechnungsdaten: null, zahlungszielTage: null },
     canAck: h.status === "OFFEN" && (await mayHandle(actor)),
     showConditions: v.full,
     createdByName: users.find((u) => u.id === h.createdBy)?.displayName ?? "?",
@@ -235,7 +245,19 @@ export async function acknowledgeHandover(actor: Actor, id: string, raw: unknown
   });
   await resolveNotifications(db, actor.workspaceId, `/uebergaben/${h.id}`);
   await notify(db, { workspaceId: actor.workspaceId, userIds: [h.createdBy, e.bdUserId], kind: "ERLEDIGT", title: `Backoffice hat quittiert: ${handoverKindLabel[h.kind]} – ${(h.payload as unknown as HandoverPayload).person}${mocoProjectId ? ` (Moco-Projekt ${mocoProjectId})` : ""}`, link: `/einsaetze/${e.id}`, actorUserId: actor.userId, dedupeKey: `handover-ack:${h.id}` });
-  return { mocoProjectId, mocoContractId };
+  // e48: Einsatzblatt für die Buchhaltung und SharePoint-Spalten (Bestellnummer, Moco-Projekt) nachführen
+  let einsatzblatt: { kunde: string | null; freelancer: string | null } | null = null;
+  let sharepointError: string | null = null;
+  try {
+    const { writeEinsatzblatt, syncEngagementDocs } = await import("@/modules/sharepoint/documents");
+    const fresh = await buildPayload(e.id, h.conversionId ?? null, null);
+    if (h.kind !== "BEENDET") einsatzblatt = await writeEinsatzblatt(e.id, fresh, mocoProjectId);
+    await syncEngagementDocs(e.id, h.kind === "BEENDET" ? { validTo: e.actualEnd ?? e.plannedEnd ?? null } : {});
+  } catch (err) {
+    sharepointError = (err as Error).message;
+    console.error("SharePoint nach Quittung", sharepointError);
+  }
+  return { mocoProjectId, mocoContractId, einsatzblatt, sharepointError };
 }
 
 /** Erinnerung für Übergaben, die länger als zwei Tage offen sind – danach höchstens wöchentlich (e44). */
@@ -253,15 +275,16 @@ export async function remindOpenHandovers(now = new Date()): Promise<number> {
 }
 
 /**
- * Übergabe für Verlängerung oder Ende – nur für Einsätze, die das Backoffice schon kennt (Moco-Projekt am Einsatz oder
- * frühere Übergabe). Fehler hier dürfen die auslösende Entscheidung nicht verhindern.
+ * Übergabe für Verlängerung, Konditionsänderung oder Ende (e48: immer, auch ohne Moco-Projekt).
+ * Fehler hier dürfen die auslösende Entscheidung nicht verhindern.
  */
-export async function handoverForChange(actor: Actor, engagementId: string, kind: "VERLAENGERT" | "BEENDET", hinweis: string): Promise<HandoverRow | null> {
+export async function handoverForChange(actor: Actor, engagementId: string, kind: "VERLAENGERT" | "KONDITIONEN" | "BEENDET", hinweis: string): Promise<HandoverRow | null> {
   try {
-    const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, engagementId), columns: { mocoProjectId: true } });
+    const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, engagementId), columns: { mocoProjectId: true, status: true } });
+    if (!e) return null;
+    // e48: auch ohne Moco-Projekt – dann ordnet das Backoffice das Projekt beim Quittieren zu
     const prior = await db.query.backofficeHandovers.findFirst({ where: eq(schema.backofficeHandovers.engagementId, engagementId), columns: { id: true } });
-    if (!e?.mocoProjectId && !prior) return null;
-    return await createHandover(actor, engagementId, kind, { hinweis });
+    return await createHandover(actor, engagementId, kind, { hinweis: !e.mocoProjectId && !prior ? `${hinweis ? `${hinweis} · ` : ""}Am Einsatz hängt noch kein Moco-Projekt – bitte zuordnen.` : hinweis });
   } catch (err) {
     console.error("Übergabe ans Backoffice", (err as Error).message);
     return null;

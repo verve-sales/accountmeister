@@ -79,8 +79,8 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
       </section>
 
       <section className="card space-y-2" id="enden">
-        <h2 className="font-semibold">Enden in den nächsten 120 Tagen ({o.ending.length})</h2>
-        {o.ending.length === 0 ? <p className="muted text-sm">Keine Einsätze mit Ende in den nächsten 120 Tagen.</p> : (
+        <h2 className="font-semibold">Enden in den nächsten 8 Wochen ({o.ending.length})</h2>
+        {o.ending.length === 0 ? <p className="muted text-sm">Keine Einsätze mit Ende in den nächsten 8 Wochen.</p> : (
           <table className="list text-sm">
             <thead><tr><th>Person · Kunde</th><th>Ende</th><th>Verlängerung</th><th>läuft über</th><th>Unterlagen</th></tr></thead>
             <tbody>

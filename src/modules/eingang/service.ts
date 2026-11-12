@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
 import type { SetupContext } from "@/modules/identity/authz";
@@ -7,6 +7,7 @@ import { canEditSetup, canViewSetup, loadSetupContext } from "@/modules/identity
 import { ConflictError, ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
 import { getConfig } from "@/lib/config";
 import { feedbackReasonLabel } from "@/lib/labels";
+import { hasRole } from "@/modules/identity/actor";
 import { recordAudit } from "@/modules/audit/audit";
 import type { Actor } from "@/modules/identity/actor";
 import { getAIProvider } from "@/modules/ai";
@@ -48,6 +49,8 @@ export type Route = {
   byKey?: boolean;
   /** fremde, als Kennung taugliche Mail-Domänen im Eingang (zum Lernen bei Neu-/Umzuordnung) */
   domains?: string[];
+  /** Kunde erkannt, Setup aber nicht eindeutig (e48): dann kein geratenes Setup, sondern eine Rückfrage */
+  setupUnsure?: boolean;
 };
 
 /** Allgemeine Wörter, die in Kundennamen vorkommen, aber nichts über den Kunden sagen (z. B. „Agent Platforms“). */
@@ -98,8 +101,8 @@ export async function routeText(actor: Actor, text: string, participants: Partic
   if (decisive.length === 1) {
     const [accId, why] = decisive[0]!;
     const account = accounts.find((a) => a.id === accId)!;
-    const ctx = await pickSetup(actor, account.id, flat, engs, (e) => (e.freelancerId ? null : users.find((u) => u.id === e.internalUserId)?.displayName ?? null));
-    return { ctx, account, reason: why, confident: true, byKey: true, domains: keyDomains };
+    const picked = await pickSetup(actor, account.id, flat, engs, (e) => (e.freelancerId ? null : users.find((u) => u.id === e.internalUserId)?.displayName ?? null));
+    return { ctx: picked.ctx, account, reason: why, confident: true, byKey: true, domains: keyDomains, setupUnsure: picked.unsure };
   }
   for (const e of foreign) {
     for (const p of persons) if (p.email?.toLowerCase() === e) add(p.accountId, 10, `Absender/Adresse ${e} ist bekannt`);
@@ -139,12 +142,14 @@ export async function routeText(actor: Actor, text: string, participants: Partic
   }
   const engHit = engs.find((e) => e.accountId === account.id && (() => { const last = norm(engPerson(e)).split(" ").pop() ?? ""; return last.length >= 4 && flat.includes(` ${last} `); })());
   const byName = editable.find((c) => norm(c.setup.name).length >= 4 && flat.includes(norm(c.setup.name)));
-  const ctx = (engHit && editable.find((c) => c.setup.id === engHit.setupId)) || byName || editable[0] || null;
-  return { ctx, account, reason: best.why.slice(0, 3).join(" · "), confident, domains: keyDomains };
+  // e48: ohne echten Treffer kein geratenes Setup – nur wenn es genau eines gibt
+  const hitCtx = (engHit && editable.find((c) => c.setup.id === engHit.setupId)) || byName || null;
+  const ctx = hitCtx ?? (editable.length === 1 ? editable[0]! : null);
+  return { ctx, account, reason: best.why.slice(0, 3).join(" · "), confident, domains: keyDomains, setupUnsure: !ctx && editable.length > 1 };
 }
 
-/** Setup für einen über Kennung erkannten Kunden: Einsatz- oder Setupname im Text, sonst zuletzt aktives bearbeitbares Setup. */
-async function pickSetup(actor: Actor, accountId: string, flat: string, engs: (typeof schema.engagements.$inferSelect)[], internalName: (e: typeof schema.engagements.$inferSelect) => string | null): Promise<SetupContext | null> {
+/** Setup für einen über Kennung erkannten Kunden: Einsatz- oder Setupname im Text, sonst das einzige Setup – sonst offen (Rückfrage). */
+async function pickSetup(actor: Actor, accountId: string, flat: string, engs: (typeof schema.engagements.$inferSelect)[], internalName: (e: typeof schema.engagements.$inferSelect) => string | null): Promise<{ ctx: SetupContext | null; unsure: boolean }> {
   const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, accountId), orderBy: desc(schema.projectSetups.updatedAt) });
   const editable: SetupContext[] = [];
   for (const s of setups.filter((x) => x.status !== "ARCHIVIERT")) {
@@ -159,7 +164,10 @@ async function pickSetup(actor: Actor, accountId: string, flat: string, engs: (t
     return last.length >= 4 && flat.includes(` ${last} `);
   });
   const byName = editable.find((c) => norm(c.setup.name).length >= 4 && flat.includes(norm(c.setup.name)));
-  return (hit && editable.find((c) => c.setup.id === hit.setupId)) || byName || editable[0] || null;
+  // e48: ohne Einsatz- oder Setupnamen im Text kein „zuletzt geändertes“ Setup mehr – nur wenn es genau eines gibt
+  const found = (hit && editable.find((c) => c.setup.id === hit.setupId)) || byName || null;
+  if (found) return { ctx: found, unsure: false };
+  return editable.length === 1 ? { ctx: editable[0]!, unsure: false } : { ctx: null, unsure: editable.length > 1 };
 }
 
 // ---------------------------------------------------------------------------
@@ -237,10 +245,13 @@ export async function buildLagebild(actor: Actor, route: Route): Promise<{ text:
   return { text: lines.join("\n"), refs };
 }
 
-/** Lernen aus Ablehnungen: die letzten abgelehnten Vorschläge mit Grund. */
-export async function recentLessons(workspaceId: string): Promise<string[]> {
-  const rows = await db.query.suggestions.findMany({ where: and(eq(schema.suggestions.workspaceId, workspaceId), eq(schema.suggestions.status, "ABGELEHNT")), orderBy: desc(schema.suggestions.decidedAt), limit: 15 });
-  return rows.map((r) => `${r.title.slice(0, 100)} – abgelehnt: ${feedbackReasonLabel[r.feedbackReason ?? ""] ?? "ohne Grund"}${r.feedbackNote ? ` (${r.feedbackNote.slice(0, 80)})` : ""}`);
+/** Lernen aus Ablehnungen (e48): zuerst die dieses Kunden, dann wenige allgemeine – mit Grund, wenn einer gewählt wurde. */
+export async function recentLessons(workspaceId: string, accountId: string | null = null): Promise<string[]> {
+  const fmt = (r: typeof schema.suggestions.$inferSelect) => `${r.title.slice(0, 100)} – abgelehnt: ${feedbackReasonLabel[r.feedbackReason ?? ""] ?? "ohne Grund"}${r.feedbackNote ? ` (${r.feedbackNote.slice(0, 80)})` : ""}`;
+  const own = accountId ? await db.query.suggestions.findMany({ where: and(eq(schema.suggestions.workspaceId, workspaceId), eq(schema.suggestions.accountId, accountId), eq(schema.suggestions.status, "ABGELEHNT")), orderBy: desc(schema.suggestions.decidedAt), limit: 15 }) : [];
+  const general = await db.query.suggestions.findMany({ where: and(eq(schema.suggestions.workspaceId, workspaceId), eq(schema.suggestions.status, "ABGELEHNT"), isNotNull(schema.suggestions.feedbackReason)), orderBy: desc(schema.suggestions.decidedAt), limit: 8 });
+  const ids = new Set(own.map((r) => r.id));
+  return [...own.map((r) => `[dieser Kunde] ${fmt(r)}`), ...general.filter((r) => !ids.has(r.id)).map(fmt)];
 }
 
 // ---------------------------------------------------------------------------
@@ -297,7 +308,7 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
   if (!info.enabled) throw new ValidationError("Die KI ist deaktiviert (Verwaltung → KI). Der Text ist gespeichert.");
   if (!provider.intake) throw new ValidationError("Der KI-Anbieter unterstützt die Eingangs-Auswertung nicht.");
   const { text: contextText, refs } = await buildLagebild(actor, i.route);
-  const lessons = await recentLessons(actor.workspaceId);
+  const lessons = await recentLessons(actor.workspaceId, i.route.account?.id ?? null);
   const taskOpts = await resolveTaskOptions(actor.workspaceId, "STRUCTURE_NOTE", info.id);
   const [job] = await db.insert(schema.aiJobs).values({ workspaceId: actor.workspaceId, type: "EINGANG", actorUserId: actor.userId, setupId: i.route.ctx?.setup.id ?? null, provider: info.id, model: taskOpts.model ?? info.model, promptVersion: INTAKE_PROMPT_VERSION, inputHash: sha(i.text), inputChars: i.text.length, dedupeKey: sha(`eingang:${i.sourceId}:${sha(i.text)}:${Date.now()}`) }).returning();
   let raw: unknown;
@@ -322,8 +333,9 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
     const n = norm(name);
     return verveNames.has(n) || (/^(frau|herr)\s/i.test(name.trim()) && verveLast.has(n.split(" ").pop() ?? "")) || (!!email && (ownDomains.has(email.split("@")[1]?.toLowerCase() ?? "") || /verve/i.test(email)));
   };
-  const valid: { item: IntakeItem; resolved: Resolved }[] = [];
+  let valid: { item: IntakeItem; resolved: Resolved }[] = [];
   let rejected = 0;
+  let conflict: string | null = null;
   for (const rawItem of out.data.items) {
     const parsed = intakeItemSchema.safeParse(rawItem);
     if (!parsed.success) {
@@ -347,16 +359,33 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
       rejected++;
       continue;
     }
-    // Kunde schon erkannt → keine Kunden-/Einsortierungskarte
-    // Kunde sicher erkannt → keine Kunden-/Einsortierungskarte; unsicher → die KI darf eine andere Zuordnung vorschlagen
-    if (i.route.account && (item.type === "KUNDE" || item.type === "EINSORTIERUNG") && (i.route.confident || (item.type === "EINSORTIERUNG" && norm(item.accountName) === norm(i.route.account.name)))) continue;
+    // Kunde erkannt → keine Karte „Neuer Kunde“; EINSORTIERUNG nur, wenn die KI einen ANDEREN Kunden sieht (e48: dann gilt die Zuordnung als unsicher)
+    if (i.route.account && item.type === "KUNDE") continue;
+    if (i.route.account && item.type === "EINSORTIERUNG") {
+      if (norm(item.accountName) === norm(i.route.account.name)) continue;
+      conflict = item.accountName;
+    }
     if (item.type === "AKTION") r.dueDate = ISO.test(item.dueDate) ? item.dueDate : parseRelativeDue(item.dueHint) ?? parseDueHint(item.dueHint) ?? "";
     if (item.type === "VERLAENGERUNG" && item.newEnd && !ISO.test(item.newEnd)) item.newEnd = "";
     valid.push({ item, resolved: r });
   }
+  // e48: KI und Regel widersprechen sich → Zuordnung offen lassen, der Mensch entscheidet mit einem Klick
+  if (conflict && i.route.account) {
+    i.route = { ...i.route, ctx: null, account: null, confident: false, setupUnsure: false, reason: `unklar – erkannt „${i.route.account.name}“ (${i.route.reason}), die KI sieht „${conflict}“` };
+  }
+  // e48: weniger Karten – Positionen in die Chance, höchstens 3 Hauptkarten, oft Abgelehntes unterdrückt
+  const before = valid.length;
+  valid = await curateCards(actor.workspaceId, i.route.account?.id ?? null, valid);
+  const trimmed = before - valid.length;
   // Karte ohne eigenes Initiativen-Kürzel: über die Chance, auf die sie sich bezieht
   const oppIds = valid.map((v) => v.resolved.opportunityId).filter((x): x is string => !!x);
   const oppInitiative = new Map((oppIds.length ? await db.query.opportunities.findMany({ where: inArray(schema.opportunities.id, oppIds), columns: { id: true, initiativeId: true } }) : []).filter((o) => o.initiativeId).map((o) => [o.id, o.initiativeId!] as const));
+  // e48: Was ein Anker einspielt, geht an den BD des Setups – mit Benachrichtigung (bei Unzufriedenheit/SOS als SOS)
+  const bdId = i.route.ctx?.setup.bdUserId ?? null;
+  const accId0 = i.route.account?.id;
+  const fromAnker = !!bdId && bdId !== actor.userId && (actor.roles.has("ANKER") || (!!accId0 && hasRole(actor, "ANKER", accId0))) && !actor.roles.has("CEO") && !actor.roles.has("PRINCIPAL") && !actor.roles.has("BD");
+  const owner = fromAnker ? bdId! : actor.userId;
+  const alarming = valid.some((v) => v.item.type === "SOS" || (v.item.type === "STIMMUNG" && v.item.mood === "NEGATIV"));
   let created = 0;
   await db.transaction(async (tx) => {
     for (const { item, resolved } of valid) {
@@ -379,7 +408,7 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
         observation: v.detail.slice(0, 2000) || item.evidenceQuote,
         objectType: resolved.engagementId ? "ENGAGEMENT" : null,
         objectId: resolved.engagementId ?? null,
-        proposedOwnerUserId: actor.userId,
+        proposedOwnerUserId: owner,
         payload: { item, resolved, route: { reason: i.route.reason, confident: i.route.confident, byKey: !!i.route.byKey, domains: i.route.domains ?? [] } },
         priorityCategory: v.priority,
         dedupeKey,
@@ -391,13 +420,100 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
       });
       created++;
     }
+    if (fromAnker && created > 0) {
+      const { notify } = await import("@/modules/notifications/service");
+      await notify(tx, { workspaceId: actor.workspaceId, userIds: [bdId], kind: alarming ? "SOS" : "ZUGEWIESEN", title: `${alarming ? "Achtung – " : ""}${actor.displayName} meldet von ${i.route.account?.name ?? "einem Kunden"}: ${created === 1 ? "1 Karte" : `${created} Karten`}`, link: "/start#vorschlaege", actorUserId: actor.userId });
+    }
     await tx.update(schema.aiJobs).set({ status: "ERFOLGREICH", itemCount: created, rejectedCount: rejected, finishedAt: new Date(), ...(usage ? { tokensIn: usage.tokensIn, tokensOut: usage.tokensOut } : {}) }).where(eq(schema.aiJobs.id, job!.id));
-    await recordAudit(tx, actor, "eingang.evaluated", "SOURCE", i.sourceId, { karten: created, zurueckgewiesen: rejected, kunde: i.route.account?.name ?? null, setup: i.route.ctx?.setup.name ?? null });
+    await recordAudit(tx, actor, "eingang.evaluated", "SOURCE", i.sourceId, { karten: created, zurueckgewiesen: rejected, gekuerzt: trimmed, kunde: i.route.account?.name ?? null, setup: i.route.ctx?.setup.name ?? null });
   });
   return { created, rejected, setupId: i.route.ctx?.setup.id ?? null, accountName: i.route.account?.name ?? null, reason: i.route.reason, sourceId: i.sourceId, noSuggestionReason: out.data.noSuggestionReason };
 }
 
-type Resolved = { opportunityId?: string | null; engagementId?: string | null; actionId?: string | null; questionId?: string | null; personId?: string | null; initiativeId?: string | null; dueDate?: string };
+type Resolved = { opportunityId?: string | null; engagementId?: string | null; actionId?: string | null; questionId?: string | null; personId?: string | null; initiativeId?: string | null; dueDate?: string; count?: number };
+
+/** Rangfolge der Karten (e48): was eine Entscheidung oder eine neue Chance auslöst, zuerst. */
+const CARD_RANK = ["VERLAENGERUNG", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS", "STIMMUNG", "ERLEDIGT", "AKTION", "VORGANG", "FREELANCER", "ANSPRECHPARTNER", "EINSATZ", "FRAGE", "SIGNAL", "KONTAKT", "RISIKO", "INITIATIVE", "HEBEL", "BESCHAFFUNG", "TEAM", "ACCOUNTZIEL"];
+/** Struktur-Karten (Kunde/Setup zuordnen) zählen nicht gegen die Obergrenze */
+const STRUCTURE = new Set(["KUNDE", "EINSORTIERUNG", "SETUP"]);
+/** Nebenkarten fallen weg, sobald die Mail etwas Handfestes enthält */
+const SECONDARY = new Set(["SIGNAL", "FRAGE", "RISIKO", "INITIATIVE", "HEBEL", "KONTAKT", "BESCHAFFUNG", "TEAM", "ACCOUNTZIEL"]);
+const CONCRETE = new Set(["VERLAENGERUNG", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS"]);
+export const MAX_MAIN_CARDS = 3;
+export const MAX_PERSON_CARDS = 2;
+
+type Carded = { item: IntakeItem; resolved: Resolved };
+
+/**
+ * Weniger, bessere Karten (e48):
+ * - Besetzungen ohne feststehende Person wandern als Positionen in die Chance derselben Mail („Chance mit n Positionen“);
+ *   gleiche Besetzungen ohne Chance werden zu einer Karte mit Anzahl.
+ * - Enthält die Mail etwas Handfestes, fallen Beobachtungen, Fragen, Risiken u. Ä. weg.
+ * - Kartentypen, die bei diesem Kunden zuletzt mehrfach abgelehnt und nie übernommen wurden, entfallen.
+ * - Höchstens 3 Hauptkarten und 2 Personen (mit neuer Angabe), die wichtigsten zuerst.
+ */
+export async function curateCards(workspaceId: string, accountId: string | null, cards: Carded[]): Promise<Carded[]> {
+  let out = [...cards];
+  // 1) Besetzungen in die Chance
+  const chances = out.filter((c) => c.item.type === "CHANCE");
+  const open = out.filter((c) => c.item.type === "BESETZUNG" && !(c.item as Extract<IntakeItem, { type: "BESETZUNG" }>).personName);
+  if (chances.length === 1 && open.length) {
+    const ch = chances[0]!.item as Extract<IntakeItem, { type: "CHANCE" }>;
+    const fits = open.filter((c) => { const t = (c.item as Extract<IntakeItem, { type: "BESETZUNG" }>).chanceTitle; return !t || norm(t) === norm(ch.title); });
+    if (fits.length) {
+      ch.positions = fits.map((c) => { const b = c.item as Extract<IntakeItem, { type: "BESETZUNG" }>; return { title: b.title, resourceKind: b.resourceKind, tasks: b.tasks, mustHave: b.mustHave, niceToHave: b.niceToHave, location: b.location, language: b.language, desiredStart: b.desiredStart, plannedEnd: b.plannedEnd, endOpen: b.endOpen, scopeAmount: b.scopeAmount, scopeUnit: b.scopeUnit }; });
+      if ((ch.headcount ?? 0) > ch.positions.length && ch.positions.length === 1) ch.positions = Array.from({ length: Math.min(ch.headcount!, 20) }, () => ({ ...ch.positions[0]! }));
+      ch.headcount = Math.max(ch.headcount ?? 0, ch.positions.length);
+      ch.anticipated = false;
+      out = out.filter((c) => !fits.includes(c));
+    }
+  }
+  // gleiche Besetzungen zusammenfassen (Anzahl statt Dubletten)
+  const seen = new Map<string, Carded>();
+  out = out.filter((c) => {
+    if (c.item.type !== "BESETZUNG") return true;
+    const b = c.item;
+    const key = `${norm(b.title)}|${norm(b.personName)}|${norm(b.chanceTitle)}`;
+    if (b.personName) return true;
+    const first = seen.get(key);
+    if (first) { first.resolved.count = (first.resolved.count ?? 1) + 1; return false; }
+    seen.set(key, c);
+    return true;
+  });
+  // 2) Nebenkarten weg, wenn Handfestes da ist
+  if (out.some((c) => CONCRETE.has(c.item.type))) out = out.filter((c) => !SECONDARY.has(c.item.type));
+  // 3) oft abgelehnte Kartentypen bei diesem Kunden unterdrücken (letzte 60 Tage: ≥ 3× abgelehnt, nie übernommen)
+  if (accountId) {
+    const since = new Date(Date.now() - 60 * 86400000);
+    const hist = await db.query.suggestions.findMany({ where: and(eq(schema.suggestions.workspaceId, workspaceId), eq(schema.suggestions.accountId, accountId), eq(schema.suggestions.type, "KARTE"), inArray(schema.suggestions.status, ["ABGELEHNT", "ANGENOMMEN"])), columns: { status: true, payload: true, decidedAt: true } });
+    const stat = new Map<string, { no: number; yes: number }>();
+    for (const h of hist) {
+      if (!h.decidedAt || h.decidedAt < since) continue;
+      const t = (h.payload as { item?: { type?: string } } | null)?.item?.type;
+      if (!t) continue;
+      const x = stat.get(t) ?? { no: 0, yes: 0 };
+      if (h.status === "ABGELEHNT") x.no++;
+      else x.yes++;
+      stat.set(t, x);
+    }
+    out = out.filter((c) => { const x = stat.get(c.item.type); return STRUCTURE.has(c.item.type) || CONCRETE.has(c.item.type) || !x || x.yes > 0 || x.no < 3; });
+  }
+  // 4) Obergrenzen
+  const structure = out.filter((c) => STRUCTURE.has(c.item.type));
+  // Personen: nur mit neuer Angabe; Buyingcenter-Rolle und zum Namen passende Adresse zuerst
+  const personScore = (p: Extract<IntakeItem, { type: "PERSON" }>) => {
+    const last = norm(p.displayName).split(" ").pop() ?? "";
+    return (p.decisionRole ? 4 : 0) + (p.email ? 2 : 0) + (p.email && last.length >= 3 && p.email.toLowerCase().includes(last) ? 3 : 0) + (p.functionTitle ? 1 : 0) + (p.phone ? 1 : 0);
+  };
+  const persons = out
+    .filter((c) => c.item.type === "PERSON")
+    .filter((c) => { const p = c.item as Extract<IntakeItem, { type: "PERSON" }>; return !!(p.email || p.functionTitle || p.phone || p.decisionRole); })
+    .sort((a, b) => personScore(b.item as Extract<IntakeItem, { type: "PERSON" }>) - personScore(a.item as Extract<IntakeItem, { type: "PERSON" }>))
+    .slice(0, MAX_PERSON_CARDS);
+  const rank = (t: string) => { const i = CARD_RANK.indexOf(t); return i < 0 ? 99 : i; };
+  const main = out.filter((c) => !STRUCTURE.has(c.item.type) && c.item.type !== "PERSON").sort((a, b) => rank(a.item.type) - rank(b.item.type)).slice(0, MAX_MAIN_CARDS);
+  return [...structure, ...main, ...persons];
+}
 
 /** Kürzel auflösen; unbekanntes Pflichtkürzel → null (Karte verwerfen). */
 function resolveRefs(item: IntakeItem, refs: Refs): Resolved | null {
@@ -430,6 +546,10 @@ function cardKey(item: IntakeItem): unknown {
     case "ERLEDIGT": return item.ref;
     case "CHANCE": return norm(item.title);
     case "FREELANCER": return norm(item.displayName);
+    case "BESETZUNG": return [norm(item.title), norm(item.personName)];
+    // e48: Dubletten nach Kartentyp und Titel, nicht nur nach dem wörtlichen Beleg
+    case "AKTION": case "VORGANG": return norm(item.title);
+    case "FRAGE": return norm(item.question).slice(0, 80);
     default: return "";
   }
 }
@@ -451,7 +571,7 @@ export function describeCard(item: IntakeItem, labels: Map<string, string> = new
     case "SETUP": return { title: `${t}: ${item.name}`, detail: item.contextNote, purpose: "", priority: "NEUE_INFORMATION" };
     case "PERSON": return { title: `${t}: ${item.displayName}${item.functionTitle ? ` – ${item.functionTitle}` : ""}`, detail: [item.orgUnitName && `Bereich: ${item.orgUnitName}`, item.email, item.phone, item.decisionRole && `Buyingcenter: ${item.decisionRole}`, item.knownResponsibility].filter(Boolean).join(" · "), purpose: "", priority: "ZUGANGSLUECKE" };
     case "SIGNAL": return { title: `${t}: ${item.observation.slice(0, 120)}`, detail: [item.observation, item.relevanceHypothesis && `Vermutung: ${item.relevanceHypothesis}`].filter(Boolean).join(" · "), purpose: item.purpose, priority: "NEUE_INFORMATION" };
-    case "CHANCE": return { title: `${t}: ${item.title}`, detail: `${item.needDescription}${item.roleName ? ` · Rolle ${item.roleName}` : ""}${item.headcount ? ` · ${item.headcount}×` : ""}${item.horizon ? ` · ${item.horizon}` : ""}${item.anticipated ? " · antizipiert" : " · vom Kunden ausgesprochen"}`, purpose: item.title, priority: "KONKRETE_ANFRAGE" };
+    case "CHANCE": return { title: `${t}: ${item.title}${item.positions?.length ? ` · ${item.positions.length} ${item.positions.length === 1 ? "Position" : "Positionen"}` : ""}`, detail: `${item.needDescription}${item.roleName ? ` · Rolle ${item.roleName}` : ""}${item.headcount ? ` · ${item.headcount}×` : ""}${item.horizon ? ` · ${item.horizon}` : ""}${item.anticipated ? " · antizipiert" : " · vom Kunden ausgesprochen"}`, purpose: item.title, priority: "KONKRETE_ANFRAGE" };
     case "AKTION": return { title: `${t}: ${item.title}`, detail: item.description, purpose: item.purpose, priority: "KONKRETE_ANFRAGE" };
     case "KONTAKT": return { title: `${t}: ${item.personName}`, detail: item.occasion, purpose: item.purpose, priority: "ZUGANGSLUECKE" };
     case "FRAGE": return { title: `${t}: ${item.question.slice(0, 140)}`, detail: item.question, purpose: item.purpose, priority: "NEUE_INFORMATION" };
@@ -535,12 +655,7 @@ export async function acceptIntakeCard(actor: Actor, s: SuggestionRow, ctx0: Set
     default: {
       const { applyCard } = await import("@/modules/assistant/service");
       const res = { ref: ctx ? { type: "SETUP" as const, id: ctx.setup.id } : account ? { type: "ACCOUNT" as const, id: account.id } : { type: "GLOBAL" as const, id: "" }, ctx, account, canWrite: ctx ? canEditSetup(actor, ctx) : !!account };
-      const r = await applyCard(actor, res, item as AssistantItem, {
-        origin: s.trigger,
-        intake: true,
-        dueDate: resolved.dueDate,
-        opportunityId: resolved.opportunityId ?? null,
-        sourceFor: async (setupId) => {
+      const srcFor = async (setupId: string | null): Promise<string> => {
           if (sourceId) {
             const src = await db.query.sources.findFirst({ where: eq(schema.sources.id, sourceId) });
             if (src && !src.setupId && setupId) await db.update(schema.sources).set({ setupId, accessClass: "SETUP" }).where(eq(schema.sources.id, src.id));
@@ -548,8 +663,18 @@ export async function acceptIntakeCard(actor: Actor, s: SuggestionRow, ctx0: Set
           }
           const [n] = await db.insert(schema.sources).values({ workspaceId: actor.workspaceId, setupId, type: "NOTIZ", title: "Eingang", body: s.evidenceQuote, origin: "Eingang", sourceTime: new Date(), ownerUserId: actor.userId, accessClass: setupId ? "SETUP" : "PERSOENLICH" }).returning();
           return n!.id;
-        },
+        };
+      const r = await applyCard(actor, res, item as AssistantItem, {
+        origin: s.trigger,
+        intake: true,
+        dueDate: resolved.dueDate,
+        opportunityId: resolved.opportunityId ?? null,
+        sourceFor: srcFor,
       });
+      // e48: gleiche Besetzungen als eine Karte mit Anzahl → je Platz eine Position
+      const extra = item.type === "BESETZUNG" && !item.personName ? Math.min((resolved.count ?? 1) - 1, 19) : 0;
+      for (let k = 0; k < extra; k++) await applyCard(actor, res, item as AssistantItem, { origin: s.trigger, intake: true, opportunityId: resolved.opportunityId ?? null, sourceFor: srcFor });
+      if (extra > 0) r.note = `${extra + 1} Positionen „${(item as Extract<IntakeItem, { type: "BESETZUNG" }>).title}“ angelegt.`;
       result = { type: r.type, id: r.id, note: (r.note ?? "Übernommen.").replace(/;\s*das Gespräch gehört jetzt zu diesem Setup\./, ".").replace("das Gespräch bezieht sich jetzt auf", "der Eingang gehört jetzt zu").replace(/ Als Nächstes kannst du z\. B\. ein Setup vorschlagen lassen\./, "") };
       // Neuer Kunde/Setup oder Zuordnung: die übrigen Karten desselben Eingangs gehören jetzt dorthin
       if (r.rebind && s.aiJobId) {
@@ -769,16 +894,34 @@ export async function reassignIntake(actor: Actor, suggestionId: string, setupId
 }
 
 /** Bearbeitbare Setups für die Auswahl „Anderer Kunde“. */
-export async function editableSetupOptions(actor: Actor): Promise<{ id: string; label: string }[]> {
-  const out: { id: string; label: string }[] = [];
-  for (const a of (await listVisibleAccounts(actor)).filter((x) => x.status !== "ARCHIVED")) {
-    const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, a.id) });
-    for (const st of setups.filter((x) => x.status !== "ARCHIVIERT")) {
-      const c = await loadSetupContext(actor, st.id);
-      if (c && canEditSetup(actor, c)) out.push({ id: st.id, label: `${a.name} · ${st.name}` });
-    }
-  }
+export async function editableSetupOptions(actor: Actor): Promise<{ id: string; label: string; accountId: string; setupName: string }[]> {
+  const accounts = (await listVisibleAccounts(actor)).filter((x) => x.status !== "ARCHIVED");
+  if (!accounts.length) return [];
+  const setups = (await db.query.projectSetups.findMany({ where: inArray(schema.projectSetups.accountId, accounts.map((a) => a.id)) })).filter((x) => x.status !== "ARCHIVIERT");
+  const ctxs = await Promise.all(setups.map((st) => loadSetupContext(actor, st.id)));
+  const out = setups.flatMap((st, k) => {
+    const c = ctxs[k];
+    const a = accounts.find((x) => x.id === st.accountId)!;
+    return c && canEditSetup(actor, c) ? [{ id: st.id, label: `${a.name} · ${st.name}`, accountId: a.id, setupName: st.name }] : [];
+  });
   return out.sort((x, y) => x.label.localeCompare(y.label, "de"));
+}
+
+/** Rückfrage „welches Setup?“ beantworten (e48): alle offenen Karten derselben Mail kommen in dieses Setup. */
+export async function assignIntakeSetup(actor: Actor, suggestionId: string, setupId: string): Promise<{ moved: number; setupName: string }> {
+  const s = await db.query.suggestions.findFirst({ where: and(eq(schema.suggestions.id, suggestionId), eq(schema.suggestions.workspaceId, actor.workspaceId)) });
+  if (!s) throw new NotFoundError("Karte");
+  const rows = s.aiJobId ? await db.query.suggestions.findMany({ where: and(eq(schema.suggestions.aiJobId, s.aiJobId), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT", "ZURUECKGESTELLT"]), isNull(schema.suggestions.setupId)) }) : [s];
+  let moved = 0;
+  let setupName = "";
+  for (const r of rows) {
+    const m = await moveIntakeCard(actor, r.id, setupId);
+    setupName = m.setupName;
+    moved++;
+  }
+  const src = s.sourceIds[0];
+  if (src) await db.update(schema.sources).set({ setupId, accessClass: "SETUP" }).where(and(eq(schema.sources.id, src), isNull(schema.sources.setupId)));
+  return { moved, setupName };
 }
 
 /**
@@ -802,8 +945,10 @@ export async function moveIntakeCard(actor: Actor, suggestionId: string, setupId
   return { accountName: ctx.account.name, setupName: ctx.setup.name };
 }
 
-/** Karte verwerfen – ohne Rückfrage und ohne Grund; mit `wholeMail` alle offenen Karten derselben Mail (e47). */
-export async function discardIntakeCards(actor: Actor, suggestionId: string, wholeMail: boolean): Promise<number> {
+const DISCARD_REASONS = ["UNPASSEND", "FALSCHE_ANNAHME", "BEREITS_ERLEDIGT", "KEIN_AKTUELLER_ANLASS"] as const;
+/** Karte verwerfen – ohne Rückfrage, Grund freiwillig (e48: die KI lernt daraus je Kunde); mit `wholeMail` alle offenen Karten derselben Mail (e47). */
+export async function discardIntakeCards(actor: Actor, suggestionId: string, wholeMail: boolean, reason = ""): Promise<number> {
+  const feedbackReason = (DISCARD_REASONS as readonly string[]).includes(reason) ? (reason as (typeof DISCARD_REASONS)[number]) : null;
   const { requireSuggestionAny } = await import("@/modules/suggestions/service");
   const { suggestion: s, ctx } = await requireSuggestionAny(actor, suggestionId);
   if (ctx && !canEditSetup(actor, ctx)) throw new ForbiddenError();
@@ -816,7 +961,7 @@ export async function discardIntakeCards(actor: Actor, suggestionId: string, who
       const c = r.setupId ? await loadSetupContext(actor, r.setupId) : null;
       if (r.setupId ? !(c && canEditSetup(actor, c)) : r.proposedOwnerUserId !== actor.userId) continue;
     }
-    await db.update(schema.suggestions).set({ status: "ABGELEHNT", decidedBy: actor.userId, decidedAt: new Date(), version: r.version + 1 }).where(eq(schema.suggestions.id, r.id));
+    await db.update(schema.suggestions).set({ status: "ABGELEHNT", decidedBy: actor.userId, decidedAt: new Date(), feedbackReason, version: r.version + 1 }).where(eq(schema.suggestions.id, r.id));
     n++;
   }
   await recordAudit(db, actor, "suggestion.discarded", "SUGGESTION", s.id, { karten: n, ganzeMail: wholeMail });

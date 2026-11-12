@@ -101,7 +101,7 @@ export function KundenAgenda({ accountId, initiatives, canEdit, back, cards = {}
 }
 
 /** Beschaffungsweg: direkt, über Vermittler oder Rahmenvertrag. */
-export function Beschaffung({ account, canEdit, back }: { account: { id: string; version: number; procurementChannel: string | null; intermediaryName: string | null; procurementNote: string | null }; canEdit: boolean; back: string }) {
+export function Beschaffung({ account, canEdit, back }: { account: { id: string; version: number; procurementChannel: string | null; intermediaryName: string | null; procurementNote: string | null; billingAddress?: string | null; invoiceRoute?: string | null }; canEdit: boolean; back: string }) {
   return (
     <section className="card">
       <h2 className="font-semibold mb-1">Einkauf & Beschaffung</h2>
@@ -109,9 +109,13 @@ export function Beschaffung({ account, canEdit, back }: { account: { id: string;
         {account.procurementChannel ? <>Wir arbeiten {procurementLabel[account.procurementChannel] ?? account.procurementChannel}{account.intermediaryName ? <>: <strong>{account.intermediaryName}</strong></> : null}.</> : <span className="muted">Beschaffungsweg noch nicht erfasst – direkt, über Vermittler oder Rahmenvertrag?</span>}
         {account.procurementNote && <span className="muted"> {account.procurementNote}</span>}
       </p>
+      <p className="text-sm mt-1">
+        <span className="muted">Rechnung: </span>
+        {account.billingAddress || account.invoiceRoute ? <>{account.billingAddress ? <span style={{ whiteSpace: "pre-line" }}>{account.billingAddress}</span> : <span className="muted">Anschrift offen</span>}{account.invoiceRoute ? <span> · {account.invoiceRoute}</span> : null}</> : <span style={{ color: "#b7791f" }}>Rechnungsanschrift und Rechnungsweg fehlen – Backoffice und Buchhaltung brauchen sie.</span>}
+      </p>
       {canEdit && (
         <details className="mt-2">
-          <summary className="text-sm">Beschaffungsweg bearbeiten</summary>
+          <summary className="text-sm">Beschaffung und Rechnung bearbeiten</summary>
           <form action={updateProcurementAction} className="grid sm:grid-cols-3 gap-3 mt-2">
             <input type="hidden" name="accountId" value={account.id} />
             <input type="hidden" name="version" value={account.version} />
@@ -127,6 +131,8 @@ export function Beschaffung({ account, canEdit, back }: { account: { id: string;
             </div>
             <div><label className="label" htmlFor="pcName">Vermittler / Rahmenvertrag</label><input id="pcName" name="intermediaryName" className="input" defaultValue={account.intermediaryName ?? ""} /></div>
             <div><label className="label" htmlFor="pcNote">Notiz</label><input id="pcNote" name="procurementNote" className="input" defaultValue={account.procurementNote ?? ""} /></div>
+            <div className="sm:col-span-2"><label className="label" htmlFor="pcBill">Rechnungsanschrift</label><textarea id="pcBill" name="billingAddress" className="textarea" rows={3} defaultValue={account.billingAddress ?? ""} placeholder={"Firma\nAbteilung Kreditoren\nStraße\nPLZ Ort"} /></div>
+            <div><label className="label" htmlFor="pcRoute">Rechnungsweg</label><input id="pcRoute" name="invoiceRoute" className="input" defaultValue={account.invoiceRoute ?? ""} placeholder="z. B. PDF an kreditoren@…, Bestellnummer im Betreff" /></div>
             <div className="sm:col-span-3"><button className="btn btn-secondary" type="submit">Speichern</button></div>
           </form>
         </details>

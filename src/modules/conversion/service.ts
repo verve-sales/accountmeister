@@ -382,6 +382,13 @@ export async function recordOrder(actor: Actor, conversionId: string, raw: unkno
   });
   const created: string[] = [];
   for (const e of engs) created.push((await createHandover(actor, e.id, kind, { conversionId: c.id })).id);
+  // e48: Bestellnummer an den Unterlagen in SharePoint nachführen
+  try {
+    const { syncEngagementDocs } = await import("@/modules/sharepoint/documents");
+    for (const e of engs) await syncEngagementDocs(e.id);
+  } catch (err) {
+    console.error("SharePoint nach Bestellung", (err as Error).message);
+  }
   return { kind, handoverIds: created };
 }
 

@@ -764,7 +764,22 @@ export async function applyCard(actor: Actor, res: Resolved, item: AssistantItem
   }
   if (item.type === "CHANCE") {
     const opp = await createOpportunity(actor, { setupId, title: item.title, needDescription: item.needDescription, trigger: origin, kind: item.kind, roleName: item.roleName, headcount: item.headcount ?? undefined, horizon: item.horizon, anticipated: item.anticipated });
-    return { type: "OPPORTUNITY", id: opp.id, note: `Chance (${item.anticipated ? "antizipiert" : "in Klärung"}) angelegt${item.roleName ? ` – Rolle „${item.roleName}“` : ""}.` };
+    // e48: „zwei Scrum Master“ → zwei Positionen (je Platz eine), sofern der Kunde den Bedarf ausspricht
+    let posNote = "";
+    if (getConfig().FEATURE_BESETZUNG === "true" && !item.anticipated) {
+      const iso = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+      const plan = item.positions?.length
+        ? item.positions
+        : item.headcount && item.headcount > 0
+          ? Array.from({ length: Math.min(item.headcount, 20) }, () => ({ title: item.roleName || item.title, resourceKind: item.kind === "VERVE_EXPERTE" ? ("INTERN" as const) : ("FREELANCER" as const), tasks: "", mustHave: "", niceToHave: "", location: "", language: "", desiredStart: "", plannedEnd: "", endOpen: false, scopeAmount: null, scopeUnit: "" as const }))
+          : [];
+      for (const p of plan) {
+        const pos = await createPosition(actor, opp.id, { title: p.title, resourceKind: p.resourceKind, tasks: p.tasks, mustHave: p.mustHave, niceToHave: p.niceToHave, location: p.location, language: p.language, desiredStart: iso(p.desiredStart), plannedEnd: iso(p.plannedEnd), endOpen: p.endOpen ? "on" : "false", scopeAmount: p.scopeAmount ?? "", scopeUnit: p.scopeUnit, internalNotes: `Aus dem Eingang (${origin}).` });
+        if (!openReadiness(pos).length) await changePositionStatus(actor, pos.id, { version: pos.version, status: "OFFEN" });
+      }
+      if (plan.length) posNote = ` ${plan.length === 1 ? "Eine Position" : `${plan.length} Positionen`} angelegt.`;
+    }
+    return { type: "OPPORTUNITY", id: opp.id, note: `Chance (${item.anticipated ? "antizipiert" : "in Klärung"}) angelegt${item.roleName ? ` – Rolle „${item.roleName}“` : ""}.${posNote}` };
   }
   const linkedOppId = env.opportunityId ?? linkedOpp?.id ?? null;
   if (env.intake && item.type === "AKTION") {

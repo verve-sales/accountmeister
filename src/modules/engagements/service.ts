@@ -1,3 +1,4 @@
+import { EXPIRY_WINDOW_DAYS } from "@/lib/window";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { engagementLabel } from "./label";
 import { z } from "zod";
@@ -246,7 +247,28 @@ export async function changeEngagementStatus(actor: Actor, id: string, raw: unkn
     // Übergabe ans Backoffice (Etappe 51): Ende oder Abbruch melden, wenn das Backoffice den Einsatz kennt
     if (i.status === "ENDET" || i.status === "ABGEBROCHEN") {
       const { handoverForChange } = await import("@/modules/conversion/handover");
-      await handoverForChange(actor, e.id, "BEENDET", `${i.status === "ENDET" ? `Endet zum ${patch.actualEnd ?? "?"}` : "Abgebrochen"}${i.reason ? ` – ${i.reason}` : ""}.`);
+      // e48: Projektende in Moco setzen und „gültig bis“ an den Unterlagen in SharePoint nachführen
+      const endDate = patch.actualEnd ?? todayIso();
+      let mocoNote = "";
+      if (e.mocoProjectId) {
+        try {
+          const { mocoEnabled, getMocoClient } = await import("@/modules/moco/client");
+          if (mocoEnabled()) {
+            await getMocoClient().updateProjectFinishDate(e.mocoProjectId, endDate);
+            await recordAudit(db, actor, "engagement.moco_finish_date", "ENGAGEMENT", e.id, { mocoProjectId: e.mocoProjectId, finishDate: endDate, anlass: "Einsatzende" });
+            mocoNote = " Das Projektende in Moco ist bereits gesetzt.";
+          }
+        } catch (err) {
+          mocoNote = ` Projektende in Moco bitte von Hand setzen (${(err as Error).message.slice(0, 80)}).`;
+        }
+      }
+      try {
+        const { syncEngagementDocs } = await import("@/modules/sharepoint/documents");
+        await syncEngagementDocs(e.id, { validTo: endDate });
+      } catch (err) {
+        console.error("SharePoint nach Einsatzende", (err as Error).message);
+      }
+      await handoverForChange(actor, e.id, "BEENDET", `${i.status === "ENDET" ? `Endet zum ${patch.actualEnd ?? "?"}` : "Abgebrochen"}${i.reason ? ` – ${i.reason}` : ""}.${mocoNote}${e.freelancerId ? " Freelancer-Vertrag läuft damit aus – ggf. Kündigung/Beendigung schriftlich bestätigen." : ""}`);
     }
     return u;
   });
@@ -298,7 +320,15 @@ export async function addPeriod(actor: Actor, engagementId: string, raw: unknown
     void a;
     return row!;
   };
-  return tx0 ? run(tx0) : db.transaction(run);
+  if (tx0) return run(tx0);
+  const row = await db.transaction(run);
+  // e48: bestätigte neue Konditionen (Satz/Kontingent) lösen die Übergabe ans Backoffice aus – inkl. Nachtrag beim Freelancer
+  if (i.kind === "BESTAETIGT" && i.supersedesId) {
+    const { handoverForChange } = await import("@/modules/conversion/handover");
+    const unit = i.rateUnit === "STUNDE" ? "Stunde" : "Tag";
+    await handoverForChange(actor, engagementId, "KONDITIONEN", `Neue Konditionen ab ${i.validFrom.split("-").reverse().join(".")}${i.vk ? `: VK ${i.vk} je ${unit}` : ""}${i.scopeAmount ? `, Kontingent ${i.scopeAmount} ${i.scopeUnit ?? ""}`.trimEnd() : ""}.${a.engagement.freelancerId ? " Freelancer: Nachtrag erzeugen (Einsatz › Vertrag erzeugen ist mit den neuen Werten vorbelegt) und unterschrieben ablegen." : ""}`);
+  }
+  return row;
 }
 
 // ---------------------------------------------------------------------------
@@ -366,7 +396,7 @@ export function suggestDocType(text: string): { docType: (typeof docTypeValues)[
 }
 
 /** Unterlage anlegen (optional mit hochgeladenem Dokument) und mit dem Einsatz verknüpfen. */
-export async function addContractDocument(actor: Actor, engagementId: string, raw: unknown, file: { name: string; type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> } | null) {
+export async function addContractDocument(actor: Actor, engagementId: string, raw: unknown, file: { name: string; type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> } | null, opts: { skipSharePoint?: boolean } = {}) {
   const p = contractDocInput.safeParse(raw);
   if (!p.success) throw new ValidationError(issues(p.error));
   const a = await requireEngagement(actor, engagementId);
@@ -382,7 +412,7 @@ export async function addContractDocument(actor: Actor, engagementId: string, ra
     suggestion = { docType: sug?.docType ?? "", evidence: sug?.evidence ?? "", extractStatus: up.extract.status, note: up.extract.status === "LEER" ? "Scan erkannt – nicht ausgewertet. Typ und Angaben bitte manuell prüfen." : up.extract.note };
   }
   if (i.signedStatus === "UNTERSCHRIEBEN" && !sourceId && !i.link) throw new ValidationError("„Unterschrieben“ braucht einen Beleg: Datei oder Link zum führenden Ablageort.");
-  return db.transaction(async (tx) => {
+  const res = await db.transaction(async (tx) => {
     const [d] = await tx
       .insert(schema.contractDocuments)
       .values({ workspaceId: actor.workspaceId, accountId: a.engagement.accountId, side: i.side, docType: i.docType, title: i.title, versionLabel: nul(i.versionLabel), validFrom: nul(i.validFrom), validTo: nul(i.validTo), signedStatus: i.signedStatus, sourceId, link: nul(i.link), reference: nul(i.reference), freelancerId: i.side === "FREELANCER" ? a.engagement.freelancerId : null, reviewNote: nul(i.reviewNote), reviewedBy: a.manage ? actor.userId : null, reviewedAt: a.manage ? new Date() : null, suggestion, createdBy: actor.userId })
@@ -391,6 +421,52 @@ export async function addContractDocument(actor: Actor, engagementId: string, ra
     await recordAudit(tx, actor, "contract_document.added", "ENGAGEMENT", engagementId, { typ: i.docType, seite: i.side, status: i.signedStatus, vorschlag: suggestion?.docType ?? null });
     return { document: d!, suggestion };
   });
+  // e48: hochgeladene Datei landet auch in SharePoint (Kunden- bzw. Freelancer-Ordner); ein Fehler wird nur gemeldet
+  let sharepointError: string | null = null;
+  if (file && file.size > 0 && !opts.skipSharePoint) {
+    try {
+      const { fileDocument } = await import("@/modules/sharepoint/documents");
+      const sp = await fileDocument(res.document.id, file.name, await file.arrayBuffer());
+      if (sp) res.document = { ...res.document, link: sp.webUrl };
+    } catch (err) {
+      sharepointError = (err as Error).message;
+      console.error("SharePoint-Ablage", sharepointError);
+    }
+  }
+  return { ...res, sharepointError };
+}
+
+/** Erzeugter Vertragsentwurf (Vorlage)? Dann gilt „unterschrieben“ nur mit hochgeladener unterschriebener Fassung. */
+export function isGeneratedDraft(d: { reviewNote: string | null; versionLabel: string | null }): boolean {
+  return !!d.reviewNote?.startsWith("Erzeugt aus der Vorlage");
+}
+
+/**
+ * Unterschriebene Fassung zu einer Unterlage hochladen (e48): landet lokal und in SharePoint neben dem Entwurf,
+ * die Unterlage zeigt danach auf die unterschriebene Datei, der Entwurf steht in SharePoint auf „ersetzt“.
+ */
+export async function uploadSignedVersion(actor: Actor, engagementId: string, documentId: string, file: { name: string; type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> } | null) {
+  if (!file || file.size === 0) throw new ValidationError("Bitte die unterschriebene Datei auswählen.");
+  const a = await requireEngagement(actor, engagementId);
+  if (!(a.manage || a.care)) throw new ForbiddenError();
+  const d = await db.query.contractDocuments.findFirst({ where: and(eq(schema.contractDocuments.id, documentId), eq(schema.contractDocuments.workspaceId, actor.workspaceId)) });
+  if (!d) throw new NotFoundError("Unterlage");
+  const { uploadDocument } = await import("@/modules/documents/service");
+  const up = await uploadDocument(actor, { setupId: a.engagement.setupId, title: `${d.title} (unterschrieben)`.slice(0, 200), accessClass: "ACCOUNT_TEAM" }, file);
+  const old = d.spDriveId && d.spItemId ? { drive: d.spDriveId, item: d.spItemId } : null;
+  await db.update(schema.contractDocuments).set({ sourceId: up.sourceId, signedStatus: "UNTERSCHRIEBEN", spDriveId: null, spItemId: null, reviewNote: `${d.reviewNote ? `${d.reviewNote} ` : ""}Unterschriebene Fassung am ${new Date().toLocaleDateString("de-DE")} hochgeladen.`.slice(0, 1000), reviewedBy: actor.userId, reviewedAt: new Date(), version: d.version + 1, updatedAt: new Date() }).where(eq(schema.contractDocuments.id, d.id));
+  let sharepointError: string | null = null;
+  try {
+    const { fileDocument, markReplaced } = await import("@/modules/sharepoint/documents");
+    const ext = /\.[a-z0-9]+$/i.exec(file.name)?.[0] ?? "";
+    const sp = await fileDocument(d.id, `${file.name.replace(/\.[a-z0-9]+$/i, "")}_unterschrieben${ext}`.replace(/_unterschrieben_unterschrieben/, "_unterschrieben"), await file.arrayBuffer());
+    if (sp && old) await markReplaced(old.drive, old.item);
+  } catch (err) {
+    sharepointError = (err as Error).message;
+    console.error("SharePoint-Ablage", sharepointError);
+  }
+  await recordAudit(db, actor, "contract_document.signed_uploaded", "ENGAGEMENT", engagementId, { dokument: d.id });
+  return { sharepointError };
 }
 
 export const docStatusInput = z.object({
@@ -411,6 +487,8 @@ export async function setContractDocumentStatus(actor: Actor, engagementId: stri
   const d = await db.query.contractDocuments.findFirst({ where: and(eq(schema.contractDocuments.id, documentId), eq(schema.contractDocuments.workspaceId, actor.workspaceId)) });
   if (!d) throw new NotFoundError("Unterlage");
   if (p.data.signedStatus === "UNTERSCHRIEBEN" && !d.sourceId && !d.link && !p.data.link) throw new ValidationError("„Unterschrieben“ braucht einen Beleg: Datei oder Link.");
+  // e48: Der erzeugte Entwurf ist nie die unterschriebene Fassung
+  if (p.data.signedStatus === "UNTERSCHRIEBEN" && d.signedStatus !== "UNTERSCHRIEBEN" && isGeneratedDraft(d) && !p.data.link) throw new ValidationError("Das ist der erzeugte Entwurf. Bitte die unterschriebene Fassung hochladen („Unterschriebene Fassung hochladen“) – dann steht der Vertrag auf „unterschrieben“.");
   const updated = await db.transaction(async (tx) => {
     const [u] = await tx
       .update(schema.contractDocuments)
@@ -513,7 +591,7 @@ export function isOverdueEngagement(r: Pick<EngagementRow, "status" | "actualEnd
   return ["AKTIV", "PAUSIERT", "ENDET"].includes(r.status) && !!end && end < today;
 }
 
-export const engagementFilterValues = ["laufend", "ende_ueberschritten", "ohne_ansprechpartner", "alle", "aktiv", "vertrag_offen", "enden_30", "enden_60", "enden_90", "checkin_ueberfaellig", "betreuung", "abgeschlossen"] as const;
+export const engagementFilterValues = ["laufend", "ende_ueberschritten", "ohne_ansprechpartner", "alle", "aktiv", "vertrag_offen", "enden_8w", "enden_30", "enden_60", "enden_90", "checkin_ueberfaellig", "betreuung", "abgeschlossen"] as const;
 export type EngagementFilter = (typeof engagementFilterValues)[number];
 
 export async function listEngagements(actor: Actor, filter: EngagementFilter = "laufend", q = "") {
@@ -538,6 +616,7 @@ export async function listEngagements(actor: Actor, filter: EngagementFilter = "
     alle: v.length,
     aktiv: v.filter((x) => x.status === "AKTIV" && !x.overdue).length,
     vertrag_offen: v.filter((x) => active(x) && x.procurement.complete !== true && !x.procurementException).length,
+    enden_8w: v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= EXPIRY_WINDOW_DAYS).length,
     enden_30: v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= 30).length,
     enden_60: v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= 60).length,
     enden_90: v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= 90).length,
@@ -551,6 +630,7 @@ export async function listEngagements(actor: Actor, filter: EngagementFilter = "
     : filter === "ohne_ansprechpartner" ? v.filter(noContact)
     : filter === "aktiv" ? v.filter((x) => x.status === "AKTIV" && !x.overdue)
     : filter === "vertrag_offen" ? v.filter((x) => active(x) && x.procurement.complete !== true && !x.procurementException)
+    : filter === "enden_8w" ? v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= EXPIRY_WINDOW_DAYS)
     : filter === "enden_30" ? v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= 30)
     : filter === "enden_60" ? v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= 60)
     : filter === "enden_90" ? v.filter((x) => active(x) && x.daysToEnd !== null && x.daysToEnd <= 90)

@@ -55,8 +55,11 @@ export default async function UebergabePage({ params, searchParams }: { params: 
           <Row k="Verkaufssatz">{eur(p.vk, p.vkEinheit)}</Row>
           {p.kontingent && <Row k="Umfang">{p.kontingent}</Row>}
           <Row k="Beschaffungsweg">{CHANNEL[p.beschaffungsweg] ?? p.beschaffungsweg}{p.vermittler ? ` · Rechnung an: ${p.vermittler}` : ""}</Row>
+          <Row k="Rechnungsanschrift">{p.rechnungsanschrift ? <span style={{ whiteSpace: "pre-line" }}>{p.rechnungsanschrift}</span> : <span style={{ color: "#b7791f" }}>fehlt – am Kunden unter „Einkauf & Beschaffung“ eintragen</span>}</Row>
+          {p.rechnungsweg && <Row k="Rechnungsweg">{p.rechnungsweg}</Row>}
           {p.rechnungshinweis && <Row k="Hinweis zur Rechnung">{p.rechnungshinweis}</Row>}
           {p.personArt === "FREELANCER" && v.showConditions && <Row k="Einkaufssatz">{eur(p.ek, p.ekEinheit)}</Row>}
+          {p.personArt === "FREELANCER" && v.showConditions && p.zahlungszielTage ? <Row k="Zahlungsziel Freelancer">{p.zahlungszielTage} Tage</Row> : null}
           {p.personArt === "FREELANCER" && v.showConditions && <Row k="Rechnungsdaten Freelancer">{p.freelancerRechnungsdaten ?? <span className="muted">im Freelancer-Profil noch leer</span>}</Row>}
           {p.hinweis && <Row k="Anmerkung">{p.hinweis}</Row>}
           <Row k="Übergeben von">{v.createdByName} am {fmtDateTime(h.createdAt)}</Row>

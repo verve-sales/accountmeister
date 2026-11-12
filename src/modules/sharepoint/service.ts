@@ -20,7 +20,7 @@ export const FREELANCER_SUB = ["Verträge", "Nachweise"] as const;
 export const VORLAGEN_SUB = ["Vertrag", "Angebot Kunde"] as const;
 
 export const COLUMNS: SpColumn[] = [
-  { name: "Dokumentart", displayName: "Dokumentart", kind: "choice", choices: ["Angebot", "Bestellung", "Nachtrag", "Rahmenvertrag", "NDA", "Projekteinzelvertrag", "Nachweis", "Sonstiges"] },
+  { name: "Dokumentart", displayName: "Dokumentart", kind: "choice", choices: ["Angebot", "Bestellung", "Nachtrag", "Rahmenvertrag", "NDA", "Projekteinzelvertrag", "Nachweis", "Einsatzblatt", "Sonstiges"] },
   { name: "Kunde", displayName: "Kunde", kind: "text" },
   { name: "Person", displayName: "Person", kind: "text" },
   { name: "Bestellnummer", displayName: "Bestellnummer", kind: "text" },
@@ -29,6 +29,9 @@ export const COLUMNS: SpColumn[] = [
   { name: "GueltigVon", displayName: "Gültig von", kind: "date" },
   { name: "GueltigBis", displayName: "Gültig bis", kind: "date" },
   { name: "DokStatus", displayName: "Status", kind: "choice", choices: ["Entwurf", "versendet", "unterschrieben", "ersetzt"] },
+  // e48: für die Buchhaltung – im Kundenordner der Verkaufssatz, im Freelancer-Ordner der Einkaufssatz
+  { name: "Satz", displayName: "Tagessatz", kind: "text" },
+  { name: "Zahlungsziel", displayName: "Zahlungsziel", kind: "text" },
 ];
 
 const RUNNING = ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT", "ENDET"];
@@ -55,13 +58,13 @@ export function freelancerFolder(displayName: string): string {
   return folderName(m ? `${m[2]}, ${m[1]}${m[3] ?? ""}` : n);
 }
 
-const statusOf: Record<string, string> = { ENTWURF: "Entwurf", VERSENDET: "versendet", UNTERSCHRIEBEN: "unterschrieben", GEKUENDIGT: "ersetzt" };
-const docTypeOf: Record<string, string> = { EINZELBEAUFTRAGUNG: "Projekteinzelvertrag", RAHMENVERTRAG: "Rahmenvertrag", BESTELLUNG: "Bestellung", NACHTRAG: "Nachtrag", NDA: "NDA" };
+export const statusOf: Record<string, string> = { ENTWURF: "Entwurf", VERSENDET: "versendet", UNTERSCHRIEBEN: "unterschrieben", GEKUENDIGT: "ersetzt" };
+export const docTypeOf: Record<string, string> = { EINZELBEAUFTRAGUNG: "Projekteinzelvertrag", RAHMENVERTRAG: "Rahmenvertrag", BESTELLUNG: "Bestellung", NACHTRAG: "Nachtrag", NDA: "NDA" };
 
 export type SetupStep = { what: string; created: number; existing: number };
 export type SetupResult = { steps: SetupStep[]; folders: string[]; errors: string[] };
 
-async function libraryMap(client: SpClient) {
+export async function libraryMap(client: SpClient) {
   const libs = await client.libraries();
   return new Map(libs.map((l) => [l.name, l.id]));
 }

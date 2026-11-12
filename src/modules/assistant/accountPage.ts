@@ -236,7 +236,7 @@ export function extractAccountPage(text: string, opts: { hasCustomer: boolean })
     const rationale = i.rationale.join(" ").slice(0, 1000);
     if (i.lever) out.push({ type: "HEBEL", lever: i.lever as "AUSWEITEN", title: i.title.slice(0, 300), rationale, evidenceQuote: i.quote });
     const need = `${i.title}${rationale ? ` – ${rationale}` : ""}`;
-    if (need.length >= 10) out.push({ type: "CHANCE", title: i.title.slice(0, 200), needDescription: need.slice(0, 4000), kind: "VERVE_EXPERTE", roleName: "", headcount: null, horizon: "", anticipated: true, evidenceQuote: i.quote });
+    if (need.length >= 10) out.push({ type: "CHANCE", title: i.title.slice(0, 200), needDescription: need.slice(0, 4000), kind: "VERVE_EXPERTE", roleName: "", headcount: null, positions: [], horizon: "", anticipated: true, evidenceQuote: i.quote });
   }
   out.push(...items.filter((i) => i.type === "RISIKO" || i.type === "SOS"));
   if (!opts.hasCustomer && !customerName) missing.unshift("Um welchen Kunden geht es? (Name, damit ich die Karte „Kunde“ vorschlagen kann)");

@@ -18,7 +18,7 @@ import { DeleteBlock } from "@/components/DeleteBlock";
 import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { approachLabel, approachValues, loadRenewalContacts } from "@/modules/engagements/contacts";
-import { addSharePointDocumentAction, addContractDocumentAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
+import { addSharePointDocumentAction, addContractDocumentAction, uploadSignedVersionAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
 import { contractDefaults } from "@/modules/conversion/contractService";
 
 const eur = (v: string | null, unit: string) => (v ? `${Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${rateUnitLabel[unit] ?? unit}` : "offen");
@@ -252,6 +252,13 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
                     <select name="signedStatus" className="input" defaultValue={doc.signedStatus} aria-label="Status"><option value="ENTWURF">Entwurf</option><option value="VERSENDET">versendet</option><option value="UNTERSCHRIEBEN">unterschrieben</option><option value="GEKUENDIGT">gekündigt</option></select>
                     {!doc.sourceId && !doc.link && <input name="link" className="input" placeholder="Link zum Beleg" />}
                     <button className="btn btn-secondary btn-small" type="submit">Korrigieren</button>
+                  </form>
+                )}
+                {(a.manage || a.care) && !final && ["ENTWURF", "VERSENDET"].includes(doc.signedStatus) && ["EINZELBEAUFTRAGUNG", "NACHTRAG", "RAHMENVERTRAG", "NDA"].includes(doc.docType) && (
+                  <form action={uploadSignedVersionAction} className="inline-flex flex-wrap gap-1 items-center">
+                    <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="documentId" value={doc.id} /><input type="hidden" name="back" value={`${back}#vertraege`} />
+                    <input type="file" name="file" required className="text-xs" aria-label="Unterschriebene Fassung" accept=".pdf,.docx,.doc,.png,.jpg" />
+                    <PendingButton className="btn btn-small" busy="Lade hoch …">Unterschriebene Fassung hochladen</PendingButton>
                   </form>
                 )}
               </li>

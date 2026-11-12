@@ -90,7 +90,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <details className="nav-more">
                   <summary>Mehr ▾</summary>
                   <div className="nav-more-menu">
-                    {[...nav.more, ...(actor.roles.has("CEO") ? [{ href: "/ceo", label: "CEO-Dashboard" }] : []), ...MORE.slice(0, 1), ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte" }] : []), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(1)].map((n) => (
+                    {[...nav.more, ...MORE.slice(0, 1), ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte" }] : []), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(1)].map((n) => (
                       <Link key={n.href} href={n.href}>
                         {n.label}
                       </Link>

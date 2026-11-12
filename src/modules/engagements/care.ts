@@ -550,7 +550,14 @@ export async function decideRenewal(actor: Actor, engagementId: string, raw: unk
   // Übergabe ans Backoffice (Etappe 51): nur die Änderung
   {
     const { handoverForChange } = await import("@/modules/conversion/handover");
-    await handoverForChange(actor, engagementId, "VERLAENGERT", `Verlängert bis ${current.proposedTo}. ${current.conditionsNote ?? "Konditionen unverändert"}.${orderReference ? ` Neue Bestellnummer: ${orderReference}.` : " Bestellnummer zur Verlängerung liegt noch nicht vor."}${mocoWritten ? " Das Projektende in Moco ist bereits gesetzt." : ""}`);
+    await handoverForChange(actor, engagementId, "VERLAENGERT", `Verlängert bis ${current.proposedTo}. ${current.conditionsNote ?? "Konditionen unverändert"}.${orderReference ? ` Neue Bestellnummer: ${orderReference}.` : " Bestellnummer zur Verlängerung liegt noch nicht vor."}${mocoWritten ? " Das Projektende in Moco ist bereits gesetzt." : ""}${e.freelancerId ? ` Freelancer: ${i.contractFollowUp || "Nachtrag"} erzeugen (Einsatz › Vertrag erzeugen ist mit neuem Ende und Satz vorbelegt) und unterschrieben ablegen.` : ""}`);
+  }
+  // e48: Laufzeit und Bestellnummer an den Unterlagen in SharePoint nachführen
+  try {
+    const { syncEngagementDocs } = await import("@/modules/sharepoint/documents");
+    await syncEngagementDocs(engagementId);
+  } catch (err) {
+    console.error("SharePoint nach Verlängerung", (err as Error).message);
   }
   return { decision: row, mocoWritten, mocoError };
 }

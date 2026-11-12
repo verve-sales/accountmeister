@@ -67,16 +67,29 @@ export async function contractDefaults(actor: Actor, engagementId: string): Prom
   if (company && !f.representativeName) missing.push("vertretungsberechtigte Person");
   if (company && !f.representativeRole) missing.push("Funktion der vertretungsberechtigten Person");
   if (!company && !f.taxNumber) missing.push("Steuernummer");
+  // e48: Vorbelegung aus dem Tool – bei Verlängerung/Konditionsänderung gilt die jüngste Periode (Nachtrag)
+  const start0 = e.actualStart ?? e.plannedStart ?? "";
+  const fromPeriod = period?.validFrom && period.validFrom > start0 ? period.validFrom : "";
+  const beginn = fromPeriod || start0;
+  const ende = (fromPeriod ? period?.validTo : null) ?? e.plannedEnd ?? "";
+  let kontingent = "";
+  if (period?.scopeAmount) {
+    if (period.scopeUnit === "TAGE_PRO_WOCHE" && beginn && ende) {
+      const weeks = (new Date(ende).getTime() - new Date(beginn).getTime()) / (7 * 86400000);
+      kontingent = String(Math.max(1, Math.round(weeks * period.scopeAmount)));
+    } else if (!period.scopeUnit) kontingent = String(period.scopeAmount);
+  }
+  const ortAusPosition = (position?.location ?? "").split(/[,(/;]/)[0]!.replace(/remote|vor ort/gi, "").trim();
   return {
     variant: company ? "GESELLSCHAFT" : "PERSON",
     rolle: position?.title ?? e.title,
     leistungsbereich: "der Software- und Integrationsentwicklung",
     aufgaben: (position?.tasks ?? "").trim(),
     endkunde: a.account.name,
-    endkundeOrt: "",
-    beginn: e.actualStart ?? e.plannedStart ?? "",
-    ende: e.plannedEnd ?? "",
-    kontingentTage: "",
+    endkundeOrt: ortAusPosition,
+    beginn,
+    ende,
+    kontingentTage: kontingent,
     stundenJeProjekttag: String(hours),
     bedingungFrist: e.plannedStart ?? "",
     einsatzort: position?.location ?? "",
@@ -152,7 +165,7 @@ export async function generateFreelancerContract(actor: Actor, engagementId: str
   const name = `${todayIso()}_Projekteinzelvertrag_${fileSafe(a.account.name)}_${fileSafe(last)}.docx`;
   const bytes = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   const file = { name, type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: buf.length, arrayBuffer: async () => bytes };
-  const { document } = await addContractDocument(actor, e.id, { side: "FREELANCER", docType: "EINZELBEAUFTRAGUNG", title: `Projekteinzelvertrag ${f.displayName} ab ${deDate(i.beginn)}`.slice(0, 200), versionLabel: CONTRACT_TEMPLATE_VERSION, validFrom: i.beginn, validTo: i.ende, signedStatus: "ENTWURF", reviewNote: `Erzeugt aus der Vorlage ${CONTRACT_TEMPLATE_VERSION} (${company ? "Gesellschaft" : "Einzelperson"}).` }, file);
+  const { document } = await addContractDocument(actor, e.id, { side: "FREELANCER", docType: "EINZELBEAUFTRAGUNG", title: `Projekteinzelvertrag ${f.displayName} ab ${deDate(i.beginn)}`.slice(0, 200), versionLabel: CONTRACT_TEMPLATE_VERSION, validFrom: i.beginn, validTo: i.ende, signedStatus: "ENTWURF", reviewNote: `Erzeugt aus der Vorlage ${CONTRACT_TEMPLATE_VERSION} (${company ? "Gesellschaft" : "Einzelperson"}).` }, file, { skipSharePoint: true });
   await recordAudit(db, actor, "contract.generated", "ENGAGEMENT", e.id, { vorlage: CONTRACT_TEMPLATE_VERSION, fassung: data.variant, dokument: document.id });
   // SharePoint-Ablage (e45): Freelancer › Person › Verträge. Ein Fehler hält die Erzeugung nicht auf, er wird gemeldet.
   let sharepoint: { webUrl: string } | null = null;

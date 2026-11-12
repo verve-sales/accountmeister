@@ -1666,9 +1666,21 @@ export async function addContractDocumentAction(fd: FormData) {
   return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#vertraege`), async (actor) => {
     requireStaffingFlag();
     const r = await addContractDocument(actor, data.engagementId ?? "", data, fileFrom(fd, "file"));
+    if (r.sharepointError) throw new PendingInfo(`Unterlage gespeichert. SharePoint-Ablage hat nicht geklappt: ${r.sharepointError}`);
     if (r.suggestion?.docType && r.suggestion.docType !== data.docType) throw new PendingInfo(`Unterlage gespeichert. Hinweis aus dem Dokumenttext: Es sieht nach „${r.suggestion.docType}“ aus („${r.suggestion.evidence.slice(0, 80)}…“) – bitte Typ prüfen.`);
     if (r.suggestion?.extractStatus === "LEER") throw new PendingInfo("Unterlage gespeichert. Scan erkannt – der Inhalt wurde nicht ausgewertet; Angaben bitte manuell prüfen.");
   }, "Unterlage gespeichert.");
+}
+
+/** e48: unterschriebene Fassung hochladen – Status „unterschrieben“, Ablage in SharePoint, Entwurf „ersetzt“. */
+export async function uploadSignedVersionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#vertraege`), async (actor) => {
+    requireStaffingFlag();
+    const { uploadSignedVersion } = await import("@/modules/engagements/service");
+    const r = await uploadSignedVersion(actor, data.engagementId ?? "", data.documentId ?? "", fileFrom(fd, "file"));
+    if (r.sharepointError) throw new PendingInfo(`Unterschriebene Fassung gespeichert, Status „unterschrieben“. SharePoint hat nicht geklappt: ${r.sharepointError}`);
+  }, "Unterschriebene Fassung gespeichert – Status „unterschrieben“, abgelegt in SharePoint.");
 }
 
 export async function setContractDocumentStatusAction(fd: FormData) {
@@ -2138,7 +2150,7 @@ export async function ackHandoverAction(handoverId: string, fd: FormData) {
     const { acknowledgeHandover } = await import("@/modules/conversion/handover");
     const data = fdObject(fd);
     const r = await acknowledgeHandover(actor, handoverId, { mocoProjectId: data.mocoProjectIdManual || data.mocoProjectId || "", note: data.note ?? "" });
-    throw new PendingInfo(`Quittiert${r.mocoProjectId ? ` – Moco-Projekt ${r.mocoProjectId} steht am Einsatz` : ""}.`);
+    throw new PendingInfo(`Quittiert${r.mocoProjectId ? ` – Moco-Projekt ${r.mocoProjectId} steht am Einsatz` : ""}.${r.einsatzblatt?.kunde ? " Einsatzblatt für die Buchhaltung liegt in SharePoint." : ""}${r.sharepointError ? ` SharePoint: ${r.sharepointError}` : ""}`);
   }, "");
 }
 
@@ -2195,8 +2207,18 @@ export async function discardIntakeCardsAction(fd: FormData) {
   const data = formToObject(fd);
   return run(backOf(data, "/start#vorschlaege"), async (actor) => {
     const { discardIntakeCards } = await import("@/modules/eingang/service");
-    const n = await discardIntakeCards(actor, data.suggestionId ?? "", data.all === "1");
+    const n = await discardIntakeCards(actor, data.suggestionId ?? "", data.all === "1", data.reason ?? "");
     throw new PendingInfo(n === 1 ? "Karte verworfen." : `${n} Karten verworfen.`);
+  }, "");
+}
+
+/** Rückfrage „welches Setup?“ einer Mail beantworten (e48). */
+export async function assignIntakeSetupAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/start#vorschlaege"), async (actor) => {
+    const { assignIntakeSetup } = await import("@/modules/eingang/service");
+    const r = await assignIntakeSetup(actor, data.suggestionId ?? "", data.setupId ?? "");
+    throw new PendingInfo(`${r.moved === 1 ? "Karte" : `${r.moved} Karten`} jetzt bei „${r.setupName}“.`);
   }, "");
 }
 

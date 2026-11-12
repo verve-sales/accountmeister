@@ -1,3 +1,4 @@
+import { EXPIRY_URGENT_DAYS, EXPIRY_WINDOW_DAYS } from "@/lib/window";
 import { and, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
@@ -128,7 +129,7 @@ export async function buildRound(actor: Actor, today = todayIso()) {
     const headsNow = headsAt(mine, today) + orderHeadsAt(slots, a.id, today);
     const headsBefore = headsAt(mine, since) + orderHeadsAt(slots, a.id, since);
     const ending = running
-      .filter((e) => e.accountId === a.id && e.plannedEnd && e.plannedEnd >= today && e.plannedEnd <= plusDaysIso(today, 90))
+      .filter((e) => e.accountId === a.id && e.plannedEnd && e.plannedEnd >= today && e.plannedEnd <= plusDaysIso(today, EXPIRY_WINDOW_DAYS))
       .map((e) => {
         const d = decisions.find((x) => x.engagementId === e.id);
         const person = e.freelancerId ? fls.find((f) => f.id === e.freelancerId)?.displayName ?? "?" : e.internalUserId ? un.get(e.internalUserId) ?? "?" : e.title;
@@ -136,7 +137,7 @@ export async function buildRound(actor: Actor, today = todayIso()) {
       })
       .concat(
         slots
-          .filter((o) => o.accountId === a.id && !o.ended && o.end && o.end >= today && o.end <= plusDaysIso(today, 90))
+          .filter((o) => o.accountId === a.id && !o.ended && o.end && o.end >= today && o.end <= plusDaysIso(today, EXPIRY_WINDOW_DAYS))
           .map((o) => ({ engagementId: "", person: o.person ?? o.title, plannedEnd: o.end!, daysToEnd: day(o.end!, today), renewal: "Verlängerung noch nicht angestoßen (Auftrag aus dem Health-Check)", decided: false, inProgress: false, contact: null as string | null })),
       )
       .sort((x, y) => x.daysToEnd - y.daysToEnd);
@@ -147,7 +148,7 @@ export async function buildRound(actor: Actor, today = todayIso()) {
     if (h?.level === "GEFAEHRDET") red(`Health-Check gefährdet (${h.score ?? "–"})`);
     for (const e of ending) {
       if (e.decided) continue;
-      if (e.daysToEnd <= 28 && !e.inProgress) red(`${e.person}: Einsatz endet in ${e.daysToEnd} Tagen, ${e.renewal.toLowerCase()}`);
+      if (e.daysToEnd <= EXPIRY_URGENT_DAYS && !e.inProgress) red(`${e.person}: Einsatz endet in ${e.daysToEnd} Tagen, ${e.renewal.toLowerCase()}`);
       else yellow(`${e.person}: endet in ${e.daysToEnd} Tagen – ${e.renewal}`);
     }
     const noContact = ending.filter((e) => !e.decided && e.engagementId && !e.contact);

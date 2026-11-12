@@ -7,7 +7,9 @@ import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildDashboard, loadHat, viewLabel } from "@/modules/dashboard/service";
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
-import { hasAnyContentRole, isCoach, isReadOnlyActor } from "@/modules/identity/actor";
+import { hasAnyContentRole, hasRole, isCoach, isReadOnlyActor } from "@/modules/identity/actor";
+import { buildGfOverview } from "@/modules/overview/gf";
+import { GfCustomers, GfExpiring, GfKpis, GfPipeline, GfTeam } from "@/components/GfStart";
 import { canEditSetup, loadSetupContext } from "@/modules/identity/authz";
 import { MATURITY, maturityLabel } from "@/modules/strategy/chancen";
 import { CHANCE_STEPS } from "@/lib/chanceStages";
@@ -67,14 +69,6 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const work = await listMyWork(actor);
   const openSos = await listOpenSosForActor(actor);
   const d = await buildDashboard(actor, hat);
-  const focus = await getFocus(actor.workspaceId);
-  const fl = d && focus.freelancerLever ? await freelancerStats(actor, d.accounts.map((c) => c.accountId)) : null;
-  const healthAll = d ? await computeHealthFor(d.accounts.map((c) => ({ id: c.accountId, name: c.accountName }))) : [];
-  // Unübersehbar: Kunden, bei denen Angaben fehlen – zuerst die mit den meisten Einsätzen
-  const healthGaps = healthAll.filter((h) => h.questions.length > 0).sort((a, b) => b.engagements.length - a.engagements.length || a.coverage - b.coverage);
-  const renewals = d ? await listRenewals(d.accounts.map((c) => c.accountId)) : [];
-  const healthBy = new Map(healthAll.map((h) => [h.accountId, h]));
-  const chanceCounts = d ? await countChancesByStatus(d.accounts.map((c) => c.accountId)) : {};
   const staffing = getConfig().FEATURE_BESETZUNG === "true";
   const today = new Date().toISOString().slice(0, 10);
   const ai = getProviderStatus();
@@ -93,14 +87,21 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const openIncoming = handovers.filter((h) => h.receiverUserId === actor.userId && h.status === "ANGEFRAGT");
   const reviewItems = work.requested.filter((w) => w.status === "ZUR_PRUEFUNG");
   // Schnelleingabe: alle Setups, die ich bearbeiten darf (auch ohne Dashboard-Sicht)
-  const quickSetups: { id: string; label: string }[] = [];
-  for (const a of await listVisibleAccounts(actor).catch(() => [])) {
-    for (const st of await listSetupsForAccount(actor, a.id).catch(() => [])) {
-      if (st.status === "ARCHIVIERT") continue;
-      const ctx = await loadSetupContext(actor, st.id).catch(() => null);
-      if (ctx && canEditSetup(actor, ctx)) quickSetups.push({ id: st.id, label: `${a.name} · ${st.name}` });
-    }
-  }
+  // parallel statt nacheinander (e48: Start war langsam)
+  const quickSetups: { id: string; label: string }[] = (
+    await Promise.all(
+      (await listVisibleAccounts(actor).catch(() => [])).map(async (a) =>
+        Promise.all(
+          (await listSetupsForAccount(actor, a.id).catch(() => []))
+            .filter((st) => st.status !== "ARCHIVIERT")
+            .map(async (st) => {
+              const ctx = await loadSetupContext(actor, st.id).catch(() => null);
+              return ctx && canEditSetup(actor, ctx) ? { id: st.id, label: `${a.name} · ${st.name}` } : null;
+            }),
+        ),
+      ),
+    )
+  ).flat().filter((x): x is { id: string; label: string } => !!x);
   const back = "/start";
   // Hut (Etappe 37): die Arbeitsliste ist persönlich – Verlängerungen der BDs erscheinen bei Principal/GF nur „im Blick“
   const myRenewals = renewalCards.filter((c) => c.forMe);
@@ -171,6 +172,37 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       </div>
     );
   }
+  // GF-Hut (e48): eine Seite, nichts eingeklappt – Kennzahlen, Entscheidungen, Auslaufendes, Kunden, Pipeline, Team
+  if (d.view === "CEO" && hasRole(actor, "CEO")) {
+    const o = await buildGfOverview(actor);
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-semibold">Start</h1>
+        <Feedback params={params} />
+        <SosBanner sos={openSos} />
+        <GfKpis o={o} />
+        {arbeitsliste}
+        <GfExpiring o={o} />
+        <GfCustomers o={o} />
+        <GfPipeline o={o} />
+        <GfTeam o={o} />
+        {quickEntry && (
+          <details className="card">
+            <summary className="font-semibold">Was gibt es Neues? <span className="muted text-sm font-normal">Mail oder Notiz einspielen</span></summary>
+            <div className="mt-2">{quickEntry}</div>
+          </details>
+        )}
+      </div>
+    );
+  }
+  const focus = await getFocus(actor.workspaceId);
+  const fl = focus.freelancerLever ? await freelancerStats(actor, d.accounts.map((c) => c.accountId)) : null;
+  const healthAll = await computeHealthFor(d.accounts.map((c) => ({ id: c.accountId, name: c.accountName })));
+  // Unübersehbar: Kunden, bei denen Angaben fehlen – zuerst die mit den meisten Einsätzen
+  const healthGaps = healthAll.filter((h) => h.questions.length > 0).sort((a, b) => b.engagements.length - a.engagements.length || a.coverage - b.coverage);
+  const renewals = await listRenewals(d.accounts.map((c) => c.accountId));
+  const healthBy = new Map(healthAll.map((h) => [h.accountId, h]));
+  const chanceCounts = await countChancesByStatus(d.accounts.map((c) => c.accountId));
   // Principal/GF-Hut: erst „Bei deinen BDs im Blick“, dann die persönliche Arbeitsliste
   const leader = d.view === "PRINCIPAL" || d.view === "CEO";
   const round = d.view === "CEO" || d.view === "PRINCIPAL" ? await roundTeaser(actor).catch(() => null) : null;
@@ -353,7 +385,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
 
       {renewals.length > 0 && (
         <details className="card">
-          <summary className="font-semibold">Auslaufende Einsätze – nächste 3 Monate ({renewals.length}){renewals.some((r) => r.escalate) ? <span style={{ color: "#c0392b" }}> · {renewals.filter((r) => r.escalate).length} eskaliert</span> : null}</summary>
+          <summary className="font-semibold">Auslaufende Einsätze – nächste 8 Wochen ({renewals.length}){renewals.some((r) => r.escalate) ? <span style={{ color: "#c0392b" }}> · {renewals.filter((r) => r.escalate).length} eskaliert</span> : null}</summary>
           <table className="list">
             <thead><tr><th>Person · Kunde</th><th>Einsatz</th><th>Ende</th><th>Verlängerung</th></tr></thead>
             <tbody>

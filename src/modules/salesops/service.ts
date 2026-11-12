@@ -1,3 +1,4 @@
+import { EXPIRY_WINDOW_DAYS } from "@/lib/window";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
@@ -31,7 +32,7 @@ export async function salesOpsOverview(actor: Actor) {
   const { listRunningConversions } = await import("@/modules/conversion/service");
   const [uebergabenOffen, vorgaenge] = await Promise.all([openHandoverCount(actor), listRunningConversions(actor)]);
   const t = todayIso();
-  const horizon = plusDaysIso(t, 120);
+  const horizon = plusDaysIso(t, EXPIRY_WINDOW_DAYS);
   const ending = running.filter((e) => e.endDate && e.endDate <= horizon).sort((a, b) => (a.endDate ?? "").localeCompare(b.endDate ?? ""));
   const toStart = cards.filter((c) => c.mode === "ANSTOSSEN");
   const inDecision = cards.filter((c) => c.mode === "ENTSCHEIDEN" || c.status === "IN_ABSTIMMUNG" || c.status === "ANGEBOTEN");

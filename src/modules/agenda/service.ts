@@ -133,6 +133,8 @@ export const procurementInput = z.object({
   procurementChannel: z.enum(procurementValues).or(z.literal("")),
   intermediaryName: z.string().trim().max(200).optional().or(z.literal("")),
   procurementNote: z.string().trim().max(1000).optional().or(z.literal("")),
+  billingAddress: z.string().trim().max(1000).optional(),
+  invoiceRoute: z.string().trim().max(500).optional(),
 });
 
 export async function updateProcurement(actor: Actor, accountId: string, raw: unknown) {
@@ -143,7 +145,7 @@ export async function updateProcurement(actor: Actor, accountId: string, raw: un
   if (i.procurementChannel === "VERMITTLER" && !i.intermediaryName) throw new ValidationError("Bitte den Vermittler nennen.");
   const [u] = await db
     .update(schema.accounts)
-    .set({ procurementChannel: i.procurementChannel || null, intermediaryName: i.procurementChannel === "VERMITTLER" ? i.intermediaryName || null : i.intermediaryName || null, procurementNote: i.procurementNote || null, updatedAt: new Date(), version: account.version + 1 })
+    .set({ procurementChannel: i.procurementChannel || null, intermediaryName: i.procurementChannel === "VERMITTLER" ? i.intermediaryName || null : i.intermediaryName || null, procurementNote: i.procurementNote || null, ...(i.billingAddress !== undefined ? { billingAddress: i.billingAddress || null } : {}), ...(i.invoiceRoute !== undefined ? { invoiceRoute: i.invoiceRoute || null } : {}), updatedAt: new Date(), version: account.version + 1 })
     .where(and(eq(schema.accounts.id, accountId), eq(schema.accounts.version, i.version)))
     .returning();
   if (!u) throw new ConflictError();

@@ -5,7 +5,7 @@ import type { IntakeProposal, StructureNoteOutput } from "./schemas";
 export const STRUCTURE_NOTE_PROMPT_VERSION = "structure-note.v2";
 export const ANALYZE_DOCUMENT_PROMPT_VERSION = "analyze-document.v2";
 export const INTERVIEW_NEXT_PROMPT_VERSION = "interview-next.v1";
-export const ASSISTANT_PROMPT_VERSION = "assistant.v6";
+export const ASSISTANT_PROMPT_VERSION = "assistant.v7";
 
 /** Berechtigter Kontext, den der Anbieter erhalten darf – keine Rohquellen außer dem zu strukturierenden Text. */
 export type StructureNoteInput = {
@@ -24,7 +24,7 @@ export type StructureNoteInput = {
 };
 
 /** Kontext für „Dokument analysieren“ (Kundenanlage): nur der Dokumenttext und Namen bereits bekannter Kunden. */
-export const INTAKE_PROMPT_VERSION = "intake.v1";
+export const INTAKE_PROMPT_VERSION = "intake.v2";
 
 /** Eingangs-Auswertung (Etappe 36): Text + Lagebild (mit Kürzeln) + Lernhinweise. */
 export type IntakeInput = {

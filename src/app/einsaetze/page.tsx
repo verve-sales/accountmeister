@@ -13,8 +13,7 @@ import { canClean, findEngagementDuplicates } from "@/modules/cleanup/service";
 const FILTERS: { key: EngagementFilter; label: string }[] = [
   { key: "laufend", label: "laufend" },
   { key: "betreuung", label: "meine Betreuung" },
-  { key: "enden_90", label: "enden ≤ 90 Tage" },
-  { key: "enden_30", label: "≤ 30" },
+  { key: "enden_8w", label: "enden in 8 Wochen" },
   { key: "checkin_ueberfaellig", label: "Check-in überfällig" },
   { key: "vertrag_offen", label: "Unterlagen offen" },
   { key: "ohne_ansprechpartner", label: "ohne Verlängerungs-Ansprechpartner" },
