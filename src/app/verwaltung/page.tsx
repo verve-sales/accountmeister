@@ -47,6 +47,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
           <Link href="/verwaltung/ki">KI-Anbieter und Modelle</Link>
           <Link href="/verwaltung/fristen">Fristenprüfung (Löschkonzept)</Link>
           <Link href="/moco">Moco-Anbindung</Link>
+          <Link href="/verwaltung/sharepoint">SharePoint-Ablage</Link>
         </p>
       </section>
 

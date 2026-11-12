@@ -2128,7 +2128,8 @@ export async function generateContractAction(engagementId: string, fd: FormData)
   return run(`/einsaetze/${engagementId}#vertraege`, async (actor) => {
     const { generateFreelancerContract } = await import("@/modules/conversion/contractService");
     const r = await generateFreelancerContract(actor, engagementId, fdObject(fd));
-    throw new PendingInfo(`Vertrag erzeugt: „${r.fileName}“ liegt als Entwurf unter den Unterlagen. Herunterladen, prüfen, unterschreiben und versenden – danach den Stand auf „versendet“ setzen.`);
+    const sp = r.sharepoint ? " Abgelegt in SharePoint unter Freelancer › Verträge." : r.sharepointError ? ` SharePoint-Ablage fehlgeschlagen (${r.sharepointError.slice(0, 160)}) – bitte von Hand ablegen und den Link am Dokument eintragen.` : "";
+    throw new PendingInfo(`Vertrag erzeugt: „${r.fileName}“ liegt als Entwurf unter den Unterlagen.${sp} Herunterladen, prüfen, unterschreiben und versenden – danach den Stand auf „versendet“ setzen.`);
   }, "");
 }
 
@@ -2146,4 +2147,15 @@ export async function setupOfferPathAction(setupId: string, fd: FormData) {
     const { setSetupOfferPath } = await import("@/modules/conversion/service");
     await setSetupOfferPath(actor, setupId, String(fd.get("offerPath") ?? ""));
   }, "Angebotsweg gespeichert.");
+}
+
+// --- SharePoint-Ablage (e45) ------------------------------------------------------
+
+export async function setupSharePointAction() {
+  return run("/verwaltung/sharepoint", async (actor) => {
+    const { setupSite } = await import("@/modules/sharepoint/service");
+    const r = await setupSite(actor);
+    const parts = r.steps.map((s) => `${s.what}: ${s.created} neu, ${s.existing} vorhanden`).join(" · ");
+    throw new PendingInfo(`${r.errors.length ? "Eingerichtet mit Fehlern" : "Eingerichtet"} – ${parts}.${r.errors.length ? ` ${r.errors.length} Fehler: ${r.errors.slice(0, 3).join("; ")}` : ""}`);
+  }, "");
 }

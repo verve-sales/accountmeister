@@ -54,6 +54,12 @@ const envSchema = z.object({
   RENEWAL_AUTOMATION: z.enum(["on", "off"]).default("off"),
   /** Vorlagenkatalog „Artefakte“ in Menü, Setup und Chance zeigen (e44: Standard aus) */
   FEATURE_ARTEFAKTE: z.enum(["true", "false"]).default("false"),
+  /**
+   * SharePoint-Ablage (e45): off (Standard) | graph (Microsoft Graph mit der App des Accountmeisters, Recht über Sites.Selected)
+   * | fixture (im Speicher, nur Entwicklung/Tests). SHAREPOINT_SITE_ID = die Graph-Site-ID „<host>,<guid>,<guid>“.
+   */
+  SHAREPOINT_MODE: z.enum(["off", "graph", "fixture"]).default("off"),
+  SHAREPOINT_SITE_ID: z.string().min(3).optional(),
   /** Uhrzeit (Europe/Berlin) des Tagesdigests */
   MAIL_DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(7),
   /** Moco-Anbindung (Etappe 31): off (Standard) | http (echte Moco-API) | fixture (Testdaten aus tests/fixtures/moco, nur Entwicklung/Tests) */

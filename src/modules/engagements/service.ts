@@ -414,7 +414,7 @@ export async function setContractDocumentStatus(actor: Actor, engagementId: stri
   const d = await db.query.contractDocuments.findFirst({ where: and(eq(schema.contractDocuments.id, documentId), eq(schema.contractDocuments.workspaceId, actor.workspaceId)) });
   if (!d) throw new NotFoundError("Unterlage");
   if (p.data.signedStatus === "UNTERSCHRIEBEN" && !d.sourceId && !d.link && !p.data.link) throw new ValidationError("„Unterschrieben“ braucht einen Beleg: Datei oder Link.");
-  return db.transaction(async (tx) => {
+  const updated = await db.transaction(async (tx) => {
     const [u] = await tx
       .update(schema.contractDocuments)
       .set({ signedStatus: p.data.signedStatus, side: p.data.side || d.side, docType: p.data.docType || d.docType, freelancerId: (p.data.side || d.side) === "FREELANCER" ? (d.freelancerId ?? a.engagement.freelancerId) : null, reviewNote: p.data.reviewNote || d.reviewNote, link: p.data.link || d.link, reviewedBy: actor.userId, reviewedAt: new Date(), version: p.data.version + 1, updatedAt: new Date() })
@@ -424,6 +424,12 @@ export async function setContractDocumentStatus(actor: Actor, engagementId: stri
     await recordAudit(tx, actor, "contract_document.status", "ENGAGEMENT", engagementId, { dokument: documentId, status: p.data.signedStatus });
     return u;
   });
+  // e45: Status in SharePoint nachführen (nur bei dort abgelegten Unterlagen; ein Fehler ändert am Ergebnis nichts)
+  if (updated.spItemId) {
+    const { syncDocumentFields } = await import("@/modules/sharepoint/service");
+    await syncDocumentFields(updated.id).catch((err) => console.error("SharePoint-Status", (err as Error).message));
+  }
+  return updated;
 }
 
 /** Bestehende Unterlage des Kunden (z. B. Rahmenvertrag) an einen weiteren Einsatz hängen. */

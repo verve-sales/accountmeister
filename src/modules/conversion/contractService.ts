@@ -154,5 +154,15 @@ export async function generateFreelancerContract(actor: Actor, engagementId: str
   const file = { name, type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: buf.length, arrayBuffer: async () => bytes };
   const { document } = await addContractDocument(actor, e.id, { side: "FREELANCER", docType: "EINZELBEAUFTRAGUNG", title: `Projekteinzelvertrag ${f.displayName} ab ${deDate(i.beginn)}`.slice(0, 200), versionLabel: CONTRACT_TEMPLATE_VERSION, validFrom: i.beginn, validTo: i.ende, signedStatus: "ENTWURF", reviewNote: `Erzeugt aus der Vorlage ${CONTRACT_TEMPLATE_VERSION} (${company ? "Gesellschaft" : "Einzelperson"}).` }, file);
   await recordAudit(db, actor, "contract.generated", "ENGAGEMENT", e.id, { vorlage: CONTRACT_TEMPLATE_VERSION, fassung: data.variant, dokument: document.id });
-  return { document, fileName: name };
+  // SharePoint-Ablage (e45): Freelancer › Person › Verträge. Ein Fehler hält die Erzeugung nicht auf, er wird gemeldet.
+  let sharepoint: { webUrl: string } | null = null;
+  let sharepointError: string | null = null;
+  try {
+    const { fileFreelancerContract } = await import("@/modules/sharepoint/service");
+    sharepoint = await fileFreelancerContract({ documentId: document.id, accountName: a.account.name, freelancerName: f.displayName, fileName: name, bytes, validFrom: i.beginn, validTo: i.ende, status: "ENTWURF" });
+  } catch (err) {
+    sharepointError = (err as Error).message;
+    console.error("SharePoint-Ablage", sharepointError);
+  }
+  return { document, fileName: name, sharepoint, sharepointError };
 }

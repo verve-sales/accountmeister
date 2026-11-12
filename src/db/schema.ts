@@ -2247,6 +2247,9 @@ export const contractDocuments = pgTable(
     reviewNote: text("review_note"),
     /** Vorschlag aus dem Dateieingang: { docType, evidence, status } */
     suggestion: jsonb("suggestion"),
+    /** Ablage in SharePoint (e45): Laufwerk und Element, damit Status und Spalten nachgeführt werden können */
+    spDriveId: text("sp_drive_id"),
+    spItemId: text("sp_item_id"),
     createdBy: text("created_by").notNull().references(() => users.id),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

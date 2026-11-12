@@ -6,6 +6,7 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { getConfig } from "@/lib/config";
 import { canUseSalesOps, captureChoices, salesOpsOverview } from "@/modules/salesops/service";
 import { canClean, cleanupCount } from "@/modules/cleanup/service";
+import { canManageSharePoint } from "@/modules/sharepoint/service";
 import { approachLabel, approachValues } from "@/modules/engagements/contacts";
 import { renewalStatusLabel } from "@/modules/engagements/care";
 import { RenewalCards } from "@/components/Renewal";
@@ -42,7 +43,8 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">Sales-Ops-Sicht</h1>
         <span className="muted text-sm">Verlängerungen anstoßen, Ansprechpartner und Unterlagen pflegen, neue Assignments erfassen.</span>
-        <a href="#erfassen" className="btn btn-small ml-auto">Neues Assignment erfassen</a>
+        {canManageSharePoint(actor) && <Link href="/verwaltung/sharepoint" className="text-sm ml-auto">SharePoint-Ablage</Link>}
+        <a href="#erfassen" className={`btn btn-small${canManageSharePoint(actor) ? "" : " ml-auto"}`}>Neues Assignment erfassen</a>
       </div>
       <Feedback params={sp} />
 
