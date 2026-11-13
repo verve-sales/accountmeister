@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema, type Tx } from "@/db/client";
 import { getConfig } from "@/lib/config";
@@ -116,6 +116,8 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
     db.query.teams.findMany({ where: eq(schema.teams.workspaceId, ws) }),
     db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, ws), notInArray(schema.engagements.status, ["ABGESCHLOSSEN", "ABGEBROCHEN"])) }),
   ]);
+  // e48d: auch abgeschlossene Einsätze kennen ihre Moco-Zuweisung – sonst würde ein beendeter Einsatz erneut vorgeschlagen
+  const closedByContract = new Map((await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, ws), inArray(schema.engagements.status, ["ABGESCHLOSSEN", "ABGEBROCHEN"]), isNotNull(schema.engagements.mocoContractId)), columns: { id: true, mocoContractId: true } })).map((e) => [e.mocoContractId!, e.id]));
   const items: ImportItem[] = [];
   const isFreelancerUnit = (u: MocoUser) => isFreelancerMocoUser(u);
   const isTeamlead = (u: MocoUser) => (u.role?.name ?? "").trim().toLowerCase() === cfg.MOCO_TEAMLEAD_ROLE.trim().toLowerCase();
@@ -223,13 +225,14 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
     for (const c of p.contracts.filter((x) => x.active)) {
       const kind = personKind.get(c.user_id) ?? "NUTZER";
       const pt = personTarget(c.user_id);
+      if (closedByContract.has(c.id)) continue;
       const byContract = engagements.find((e) => e.mocoContractId === c.id);
       const samePerson = !byContract && pt ? engagements.filter((e) => (pt.startsWith("fl:") ? e.freelancerId === pt.slice(3) : e.internalUserId === pt.slice(5))) : [];
       const accountItem = items.find((x) => x.type === "KUNDE" && x.mocoId === p.customer!.id);
       const sameAccount = samePerson.filter((e) => e.accountId === accountItem?.targetId);
       const hit = byContract ?? (sameAccount.length === 1 ? sameAccount[0]! : null);
       const ended = !!p.finish_date && p.finish_date < todayIso();
-      const note = byContract ? "bereits verknüpft" : hit ? "Vorschlag: bestehender Einsatz derselben Person beim Kunden → verknüpfen" : !personKind.has(c.user_id) ? "Person in Moco inaktiv – prüfen" : ended ? "Projektende liegt zurück → wird als beendet übernommen" : "neuer Einsatz (aktiv)";
+      const note = byContract ? "bereits verknüpft" : hit ? "Vorschlag: bestehender Einsatz derselben Person beim Kunden → verknüpfen" : !personKind.has(c.user_id) ? "Person in Moco inaktiv – prüfen" : ended ? "Projektende liegt zurück → wird als abgeschlossen übernommen (Historie)" : "neuer Einsatz (aktiv)";
       items.push({
         key: `einsatz:${c.id}`,
         type: "EINSATZ",
@@ -517,7 +520,7 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
         const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, engagementId) });
         if (!e) throw new NotFoundError("Einsatz");
         const patch: Partial<typeof schema.engagements.$inferInsert> = { mocoProjectId: it.mocoProjectId, mocoContractId: it.mocoContractId, externalRef: e.externalRef ?? mocoProjectUrl(it.mocoProjectId), updatedAt: new Date() };
-        if (["VORBEREITUNG", "GEPLANT"].includes(e.status)) Object.assign(patch, it.end && it.end < todayIso() ? { status: "ENDET", actualStart: e.actualStart ?? start, actualEnd: it.end } : { status: "AKTIV", actualStart: e.actualStart ?? start });
+        if (["VORBEREITUNG", "GEPLANT"].includes(e.status)) Object.assign(patch, it.end && it.end < todayIso() ? { status: "ABGESCHLOSSEN", actualStart: e.actualStart ?? start, actualEnd: it.end } : { status: "AKTIV", actualStart: e.actualStart ?? start });
         if (it.end && !e.plannedEnd) patch.plannedEnd = it.end;
         await db.update(schema.engagements).set(patch).where(eq(schema.engagements.id, engagementId));
         await db.update(schema.opportunities).set({ mocoProjectId: it.mocoProjectId }).where(eq(schema.opportunities.id, e.opportunityId));
@@ -559,7 +562,7 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
         const alreadyEnded = !!it.end && it.end < todayIso();
         await db
           .update(schema.engagements)
-          .set({ status: alreadyEnded ? "ENDET" : "AKTIV", actualStart: start, actualEnd: alreadyEnded ? it.end : null, statusReason: alreadyEnded ? "Laut Moco bereits beendet (Startimport)." : null, orderId: order!.id, mocoProjectId: it.mocoProjectId, mocoContractId: it.mocoContractId, externalRef: mocoProjectUrl(it.mocoProjectId), updatedAt: new Date() })
+          .set({ status: alreadyEnded ? "ABGESCHLOSSEN" : "AKTIV", actualStart: start, actualEnd: alreadyEnded ? it.end : null, statusReason: alreadyEnded ? "Laut Moco bereits beendet (Startimport)." : null, orderId: order!.id, mocoProjectId: it.mocoProjectId, mocoContractId: it.mocoContractId, externalRef: mocoProjectUrl(it.mocoProjectId), updatedAt: new Date() })
           .where(eq(schema.engagements.id, engagementId));
         if (alreadyEnded) await db.update(schema.orders).set({ engagementStatus: "BEENDET", updatedAt: new Date() }).where(eq(schema.orders.id, order!.id));
         await recordAudit(db, actor, "engagement.moco_imported", "ENGAGEMENT", engagementId, { projekt: it.mocoProjectId, contract: it.mocoContractId, beendet: alreadyEnded });

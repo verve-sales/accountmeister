@@ -344,6 +344,13 @@
       "when": 1794515330400,
       "tag": "0048_rechnungsdaten",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1794515331400,
+      "tag": "0049_moco_beendet",
+      "breakpoints": true
     }
   ]
 }

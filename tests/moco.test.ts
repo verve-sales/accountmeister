@@ -198,7 +198,7 @@ describe("Etappe 31: Moco-Anbindung", () => {
     expect((await db.query.engagements.findFirst({ where: eq(schema.engagements.id, ende.subjectId!) }))?.plannedEnd).toBe("2027-03-31");
     await resolveHint(petra, inaktiv.id, "UEBERNEHMEN");
     const ended = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, inaktiv.subjectId!) });
-    expect(ended?.status).toBe("ENDET");
+    expect(ended?.status).toBe("ABGESCHLOSSEN");
     expect((await db.query.checkins.findMany({ where: eq(schema.checkins.engagementId, ended!.id) })).every((c) => c.status === "ABGESAGT")).toBe(true);
     // Erneuter Lauf erzeugt keine doppelten Hinweise
     const again = await runMocoSync({ client, workspaceId: petra.workspaceId });
@@ -295,12 +295,12 @@ describe("Etappe 31: Moco-Anbindung", () => {
     client.projectsOverride = [...base, { ...p1001, id: 1005, name: "Altes Vorhaben (Ende zurück)", start_date: "2026-01-01", finish_date: "2026-06-30", project_group: null, contracts: [{ ...p1001.contracts[1]!, id: 9105, user_id: 503, firstname: "Ben", lastname: "Berater (fiktiv)" }] }];
     const imp = await buildImportPreview(petra, client);
     const item = (imp.items as ImportItem[]).find((i): i is Extract<ImportItem, { type: "EINSATZ" }> => i.type === "EINSATZ" && i.mocoContractId === 9105)!;
-    expect(item.note).toMatch(/beendet/);
+    expect(item.note).toMatch(/abgeschlossen/);
     const form: Record<string, string> = {};
     for (const k of (imp.items as ImportItem[]).filter((i) => i.type === "SETUP").map((i) => i.key)) form[`d.${k}.bdUserId`] = s.users.david;
     await applyImport(petra, imp.id, decisionsFromForm(form));
     const e = (await db.query.engagements.findFirst({ where: eq(schema.engagements.mocoContractId, 9105) }))!;
-    expect(e.status).toBe("ENDET");
+    expect(e.status).toBe("ABGESCHLOSSEN");
     expect(e.actualEnd).toBe("2026-06-30");
     expect((await db.query.orders.findFirst({ where: eq(schema.orders.id, e.orderId!) }))?.engagementStatus).toBe("BEENDET");
     expect(await db.query.checkins.findMany({ where: eq(schema.checkins.engagementId, e.id) })).toHaveLength(0);
@@ -312,8 +312,11 @@ describe("Etappe 31: Moco-Anbindung", () => {
     const n = await resolveHintsBulk(petra, "ENDE_UEBERSCHRITTEN", "UEBERNEHMEN");
     expect(n).toBeGreaterThanOrEqual(1);
     const after = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, e.id) }))!;
-    expect(after.status).toBe("ENDET");
+    expect(after.status).toBe("ABGESCHLOSSEN");
     expect(after.actualEnd).toBe("2026-06-30");
+    // abgeschlossene Zuweisung wird beim nächsten Import nicht erneut vorgeschlagen
+    const again = await buildImportPreview(petra, client);
+    expect((again.items as ImportItem[]).some((i) => i.key === "einsatz:9105")).toBe(false);
   });
 
   it("M08: Lead-Push – offene Chance wird als Lead in Moco angelegt (Firma, Inhaber, Phase, Rückverweis), einmalig; Namensgleicher Lead wird nur verknüpft; nur CEO/Principal", async () => {
