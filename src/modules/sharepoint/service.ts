@@ -30,6 +30,12 @@ export function yearOf(fileName: string, modified?: string | null): string {
 }
 
 /** Zielordner mit Jahr, wenn der Ordner nach Jahren unterteilt wird („ITERGO/Angebote“ → „ITERGO/Angebote/2026“). */
+/** Angebotsnummer aus dem Dateinamen (Moco-Format, z. B. „…_VCA-M26-11_0003.xlsx“ → „VCA-M26-11_0003“). */
+export function offerNumberFromName(fileName: string): string | null {
+  const m = /(?<![A-Za-z0-9])([A-Z]{2,5}-[A-Z0-9]{2,6}-\d{2}[_-]\d{3,5})(?![0-9])/.exec(fileName);
+  return m ? m[1]! : null;
+}
+
 export function yearFolder(folder: string[], fileName: string): string[] {
   return folder.length && YEAR_SUBS.has(folder.at(-1)!) ? [...folder, yearOf(fileName)] : folder;
 }
@@ -74,7 +80,7 @@ export function freelancerFolder(displayName: string): string {
 }
 
 export const statusOf: Record<string, string> = { ENTWURF: "Entwurf", VERSENDET: "versendet", UNTERSCHRIEBEN: "unterschrieben", GEKUENDIGT: "ersetzt" };
-export const docTypeOf: Record<string, string> = { EINZELBEAUFTRAGUNG: "Projekteinzelvertrag", RAHMENVERTRAG: "Rahmenvertrag", BESTELLUNG: "Bestellung", NACHTRAG: "Nachtrag", NDA: "NDA" };
+export const docTypeOf: Record<string, string> = { EINZELBEAUFTRAGUNG: "Projekteinzelvertrag", RAHMENVERTRAG: "Rahmenvertrag", BESTELLUNG: "Bestellung", NACHTRAG: "Nachtrag", ANGEBOT: "Angebot", NDA: "NDA" };
 
 export type SetupStep = { what: string; created: number; existing: number };
 export type SetupResult = { steps: SetupStep[]; folders: string[]; errors: string[] };
@@ -266,7 +272,7 @@ export async function syncDocumentFields(documentId: string, deps: { client?: Sp
 /** Ordnerart → Seite und Dokumenttyp im Accountmeister (e47). */
 export const PICK_KINDS = {
   KUNDE_RAHMEN: { lib: LIB.KUNDEN, sub: KUNDE_SUB[0], side: "KUNDE", docType: "RAHMENVERTRAG", label: "Rahmen und Einkauf" },
-  KUNDE_ANGEBOT: { lib: LIB.KUNDEN, sub: KUNDE_SUB[1], side: "KUNDE", docType: "SONSTIGES", label: "Angebote" },
+  KUNDE_ANGEBOT: { lib: LIB.KUNDEN, sub: KUNDE_SUB[1], side: "KUNDE", docType: "ANGEBOT", label: "Angebote" },
   KUNDE_BESTELLUNG: { lib: LIB.KUNDEN, sub: KUNDE_SUB[2], side: "KUNDE", docType: "BESTELLUNG", label: "Bestellungen" },
   FL_VERTRAG: { lib: LIB.FREELANCER, sub: FREELANCER_SUB[0], side: "FREELANCER", docType: "EINZELBEAUFTRAGUNG", label: "Freelancer · Verträge" },
   FL_NACHWEIS: { lib: LIB.FREELANCER, sub: FREELANCER_SUB[1], side: "FREELANCER", docType: "SONSTIGES", label: "Freelancer · Nachweise" },

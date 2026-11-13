@@ -373,6 +373,9 @@ export const renewalStartInput = z.object({
   note: opt(1000),
   /** neue Bestellnummer, falls sie schon vorliegt (e44) */
   orderReference: opt(200),
+  /** e48e: Angebot zur Verlängerung – Datei aus SharePoint (Auswahl) und/oder Nummer aus Moco */
+  offerPick: opt(400),
+  offerNumber: opt(100),
 });
 
 async function latestPeriod(engagementId: string) {
@@ -422,8 +425,18 @@ export async function startRenewal(actor: Actor, engagementId: string, raw: unkn
   ]);
   const person = personLabel(e, new Map(fls.map((f) => [f.id, f.displayName])), new Map(users.map((u) => [u.id, u.displayName])));
   const principals = await principalsFor(actor.workspaceId, e.accountId);
+  // e48e: Angebot aus SharePoint als Unterlage am Einsatz verknüpfen; Nummer aus dem Dateinamen, wenn keine eingetragen ist
+  let offerNumber = i.offerNumber || current?.offerNumber || null;
+  let offerLink = current?.offerLink ?? null;
+  if (i.offerPick) {
+    const { linkSharePointFile, offerNumberFromName } = await import("@/modules/sharepoint/service");
+    const doc = await linkSharePointFile(actor, engagementId, i.offerPick, { signedStatus: "VERSENDET", reference: i.offerNumber || "" });
+    offerNumber = i.offerNumber || offerNumberFromName(doc.title.replace(/ /g, "_")) || offerNumberFromName(doc.link ?? "") || offerNumber;
+    offerLink = doc.link;
+    if (offerNumber && !doc.reference) await db.update(schema.contractDocuments).set({ reference: offerNumber }).where(eq(schema.contractDocuments.id, doc.id));
+  }
   return db.transaction(async (tx) => {
-    const values = { status: "IN_ABSTIMMUNG", proposedFrom, proposedTo: i.newEnd, conditionsNote, orderReference: i.orderReference || current?.orderReference || null, availabilityNote: i.note || null, commercialOwnerUserId: e.bdUserId, triggerDate: current?.triggerDate ?? todayIso(), updatedAt: new Date() };
+    const values = { status: offerNumber || offerLink ? "ANGEBOTEN" : "IN_ABSTIMMUNG", offerNumber, offerLink, proposedFrom, proposedTo: i.newEnd, conditionsNote, orderReference: i.orderReference || current?.orderReference || null, availabilityNote: i.note || null, commercialOwnerUserId: e.bdUserId, triggerDate: current?.triggerDate ?? todayIso(), updatedAt: new Date() };
     let row;
     if (current) [row] = await tx.update(schema.renewalDecisions).set({ ...values, version: current.version + 1 }).where(eq(schema.renewalDecisions.id, current.id)).returning();
     else [row] = await tx.insert(schema.renewalDecisions).values({ workspaceId: actor.workspaceId, engagementId, ...values, createdBy: actor.userId }).returning();

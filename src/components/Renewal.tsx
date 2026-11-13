@@ -29,7 +29,7 @@ function addMonths(iso: string, months: number): string {
 }
 
 /** „Verlängerung anstoßen“ – ein Datum, Konditionen unverändert als Vorgabe, optional Notiz (Use Case 1, Schritt 2). */
-export function RenewalStartForm({ engagementId, currentEnd, back, compact = false, lastRates, canDecide = false }: { engagementId: string; currentEnd: string | null; back: string; compact?: boolean; lastRates?: { ek: string | null; vk: string | null; unit: string } | null; /** darf selbst bestätigen: ein Schritt statt zwei */ canDecide?: boolean }) {
+export function RenewalStartForm({ engagementId, currentEnd, back, compact = false, lastRates, canDecide = false, offers, offerPreselect }: { engagementId: string; currentEnd: string | null; back: string; compact?: boolean; lastRates?: { ek: string | null; vk: string | null; unit: string } | null; /** darf selbst bestätigen: ein Schritt statt zwei */ canDecide?: boolean; /** e48e: Angebote des Kunden aus SharePoint (passende zuerst) */ offers?: { value: string; name: string }[] | null; offerPreselect?: string | null }) {
   const base = currentEnd ?? new Date().toISOString().slice(0, 10);
   const plus6 = addMonths(base, 6);
   const idp = `rs-${engagementId.slice(0, 6)}`;
@@ -63,6 +63,21 @@ export function RenewalStartForm({ engagementId, currentEnd, back, compact = fal
         <label className="label" htmlFor={`${idp}-po`}>Neue Bestellnummer (falls schon da)</label>
         <input id={`${idp}-po`} name="orderReference" className="input" maxLength={200} />
       </div>
+      {offers && (
+        <>
+          <div className={compact ? "" : "sm:col-span-2"}>
+            <label className="label" htmlFor={`${idp}-offer`}>Angebot (aus SharePoint, optional)</label>
+            <select id={`${idp}-offer`} name="offerPick" className="select" defaultValue={offerPreselect ?? ""} style={{ maxWidth: "100%" }}>
+              <option value="">– kein Angebot –</option>
+              {offers.map((o) => <option key={o.value} value={o.value}>{o.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label" htmlFor={`${idp}-offno`}>Angebotsnummer</label>
+            <input id={`${idp}-offno`} name="offerNumber" className="input" maxLength={100} placeholder="leer = aus dem Dateinamen" />
+          </div>
+        </>
+      )}
       <div className={compact ? "" : "sm:col-span-2"}>
         <label className="label" htmlFor={`${idp}-note`}>Notiz (optional)</label>
         <input id={`${idp}-note`} name="note" className="input" placeholder="z. B. Kunde hat mündlich zugesagt, Bestellung folgt" style={{ minWidth: compact ? 200 : undefined }} />

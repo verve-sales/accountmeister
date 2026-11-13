@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
 import { ForbiddenError, NotFoundError, TransitionError, ValidationError } from "@/lib/errors";
@@ -90,6 +90,8 @@ async function buildPayload(engagementId: string, conversionId: string | null, h
     conversionId ? db.query.conversions.findFirst({ where: eq(schema.conversions.id, conversionId) }) : db.query.conversions.findFirst({ where: and(eq(schema.conversions.opportunityId, e.opportunityId), eq(schema.conversions.positionId, e.positionId)), orderBy: desc(schema.conversions.createdAt) }),
     db.query.engagementDocuments.findMany({ where: eq(schema.engagementDocuments.engagementId, e.id) }),
   ]);
+  // e48e: Angebot der jüngsten Verlängerung geht vor dem ursprünglichen Angebot aus dem Vorgang
+  const renewalOffer = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), isNotNull(schema.renewalDecisions.offerNumber)), orderBy: desc(schema.renewalDecisions.createdAt) });
   const docs = links.length ? await db.query.contractDocuments.findMany({ where: inArray(schema.contractDocuments.id, links.map((l) => l.documentId)) }) : [];
   const p = periods[0] ?? null;
   return {
@@ -103,8 +105,8 @@ async function buildPayload(engagementId: string, conversionId: string | null, h
     // die aktuelle Nummer am Einsatz (nach einer Verlängerung) geht vor
     bestellnummer: e.orderReference ?? conv?.orderReference ?? order?.orderReference ?? null,
     bestellungLink: conv?.orderLink ?? order?.contractLink ?? null,
-    angebotsnummer: conv?.offerNumber ? `${conv.offerNumber}${conv.offerVersion > 1 ? ` (Fassung ${conv.offerVersion})` : ""}` : null,
-    angebotLink: conv?.offerLink ?? null,
+    angebotsnummer: renewalOffer?.offerNumber ?? (conv?.offerNumber ? `${conv.offerNumber}${conv.offerVersion > 1 ? ` (Fassung ${conv.offerVersion})` : ""}` : null),
+    angebotLink: renewalOffer?.offerLink ?? conv?.offerLink ?? null,
     vk: p?.vk ?? null,
     vkEinheit: p?.rateUnit ?? null,
     kontingent: p?.scopeAmount ? `${p.scopeAmount} ${p.scopeUnit ?? ""}`.trim() : null,

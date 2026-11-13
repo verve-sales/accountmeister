@@ -2235,7 +2235,7 @@ export const contractDocuments = pgTable(
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     accountId: text("account_id").notNull().references(() => accounts.id),
     side: text("side").notNull(), // KUNDE | FREELANCER
-    docType: text("doc_type").notNull(), // RAHMENVERTRAG | EINZELBEAUFTRAGUNG | BESTELLUNG | NACHTRAG | NDA | KUENDIGUNG | SONSTIGES
+    docType: text("doc_type").notNull(), // RAHMENVERTRAG | EINZELBEAUFTRAGUNG | BESTELLUNG | NACHTRAG | ANGEBOT | NDA | KUENDIGUNG | SONSTIGES
     title: text("title").notNull(),
     versionLabel: text("version_label"),
     validFrom: date("valid_from"),
@@ -2390,6 +2390,9 @@ export const renewalDecisions = pgTable(
     conditionsNote: text("conditions_note"),
     /** Neue Bestellnummer zur Verlängerung (e44), sobald sie vorliegt */
     orderReference: text("order_reference"),
+    /** Angebot zur Verlängerung (e48e): Nummer aus Moco und Link auf die Datei in SharePoint */
+    offerNumber: text("offer_number"),
+    offerLink: text("offer_link"),
     availabilityNote: text("availability_note"),
     commercialOwnerUserId: text("commercial_owner_user_id").references(() => users.id),
     contractFollowUp: text("contract_follow_up"),

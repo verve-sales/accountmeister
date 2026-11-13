@@ -40,7 +40,7 @@ async function driveFor(client: SpClient, lib: string) {
 /** Zielordner einer Unterlage nach Seite und Typ. */
 export function folderFor(d: { side: string; docType: string }, accountName: string, freelancerName: string | null): { lib: string; path: string[] } {
   if (d.side === "FREELANCER" && freelancerName) return { lib: LIB.FREELANCER, path: [freelancerFolder(freelancerName), d.docType === "SONSTIGES" ? FREELANCER_SUB[1] : FREELANCER_SUB[0]] };
-  const sub = ["BESTELLUNG", "EINZELBEAUFTRAGUNG", "NACHTRAG", "KUENDIGUNG"].includes(d.docType) ? KUNDE_SUB[2] : KUNDE_SUB[0];
+  const sub = d.docType === "ANGEBOT" ? KUNDE_SUB[1] : ["BESTELLUNG", "EINZELBEAUFTRAGUNG", "NACHTRAG", "KUENDIGUNG"].includes(d.docType) ? KUNDE_SUB[2] : KUNDE_SUB[0];
   return { lib: LIB.KUNDEN, path: [folderName(accountName), sub] };
 }
 

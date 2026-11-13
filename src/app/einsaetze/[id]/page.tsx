@@ -64,6 +64,12 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const canContacts = (a.manage || a.care) && !final;
   const cd = e.freelancerId && (a.manage || a.care) && !final ? await contractDefaults(actor, e.id).catch(() => null) : null;
   const spFiles = (a.manage || a.care) && !final ? await filesFor({ accountName: e.accountName, freelancerName: e.freelancerId ? e.freelancerName : null }) : null;
+  // e48e: Angebote des Kunden für die Verlängerung – Dateien mit dem Nachnamen der Person zuerst, eindeutiger Treffer vorausgewählt
+  const lastNameKey = (e.personName ?? "").replace(/\(.*?\)/g, "").trim().split(/\s+/).pop()?.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss") ?? "";
+  const offerFiles = spFiles?.groups.find((g) => g.kind === "KUNDE_ANGEBOT")?.files ?? [];
+  const nameHit = (n: string) => lastNameKey.length >= 3 && n.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").includes(lastNameKey);
+  const offers = spFiles ? [...offerFiles.filter((f) => nameHit(f.name)), ...offerFiles.filter((f) => !nameHit(f.name))].map((f) => ({ value: f.value, name: f.name })) : null;
+  const offerPreselect = offerFiles.filter((f) => nameHit(f.name)).length === 1 ? offerFiles.find((f) => nameHit(f.name))!.value : null;
   const nextDue = [e.nextCheckin, openRenewal ? e.pingDate : null, e.status === "PAUSIERT" ? e.reviewDate : null].filter((x): x is string => !!x).sort()[0] ?? null;
 
   return (
@@ -95,7 +101,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         {!final && (a.manage || a.care) && !(openRenewal && openRenewal.proposedTo) && (
           <details className="mt-2">
             <summary className="btn btn-small" style={{ display: "inline-block", color: "#fff" }}>{a.commercial ? "Verlängern" : "Verlängerung anstoßen"}</summary>
-            <div className="card mt-2"><RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} canDecide={!!a.commercial} /></div>
+            <div className="card mt-2"><RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} canDecide={!!a.commercial} offers={offers} offerPreselect={offerPreselect} /></div>
           </details>
         )}
         {renewalCard && renewalCard.mode === "ENTSCHEIDEN" && <ul className="mt-2 list-none p-0"><RenewalDecisionCard c={renewalCard} back={`${back}#verlaengerung`} /></ul>}
@@ -108,7 +114,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         <dl className="text-sm grid sm:grid-cols-3 gap-x-6 gap-y-2">
           <div><dt className="muted">Verantwortlicher BD</dt><dd>{e.bdName}</dd></div>
           <div><dt className="muted">Vertragslage</dt><dd style={e.procurement.complete === true ? undefined : { color: "#b7791f" }}>{vertrag}</dd></div>
-          <div><dt className="muted">Verlängerung</dt><dd>{openRenewal ? `${renewalStatusLabel[openRenewal.status]} (Auslöser ${fmtDate(openRenewal.triggerDate)})` : e.pingDate ? `Klärung ab ${fmtDate(e.pingDate)}` : "kein Ende hinterlegt"}</dd></div>
+          <div><dt className="muted">Verlängerung</dt><dd>{openRenewal ? `${renewalStatusLabel[openRenewal.status]} (Auslöser ${fmtDate(openRenewal.triggerDate)})` : e.pingDate ? `Klärung ab ${fmtDate(e.pingDate)}` : "kein Ende hinterlegt"}{openRenewal?.offerNumber || openRenewal?.offerLink ? <> · Angebot {openRenewal.offerLink ? <a href={openRenewal.offerLink} target="_blank" rel="noreferrer">{openRenewal.offerNumber ?? "öffnen"}</a> : openRenewal.offerNumber}</> : null}</dd></div>
           <div><dt className="muted">Kündigungs-/Optionsfrist</dt><dd>{e.renewalDeadline ? `${fmtDate(e.renewalDeadline)}${e.noticeNote ? ` – ${e.noticeNote}` : ""}` : "unbekannt – bitte klären"}</dd></div>
           <div><dt className="muted">Auftrag/Bestellung (Chance)</dt><dd>{e.orderId ? (d.orders.find((o) => o.id === e.orderId)?.orderReference ?? "verknüpft") : "nicht verknüpft"}</dd></div>
           <div><dt className="muted">Externe Referenz (z. B. Moco)</dt><dd>{e.externalRef ? (/^https?:\/\//.test(e.externalRef) ? <a href={e.externalRef} target="_blank" rel="noreferrer">{e.externalRef}</a> : e.externalRef) : "keine – Stundenzettel laufen in Moco"}</dd></div>

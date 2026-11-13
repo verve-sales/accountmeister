@@ -351,6 +351,13 @@
       "when": 1794515331400,
       "tag": "0049_moco_beendet",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1794565766475,
+      "tag": "0050_verlaengerung_angebot",
+      "breakpoints": true
     }
   ]
 }

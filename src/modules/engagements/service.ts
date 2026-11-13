@@ -35,8 +35,8 @@ export function assertEngagementTransition(from: string, to: EngStatus) {
 }
 
 export const docSideLabel: Record<string, string> = { KUNDE: "Kunde ↔ Verve", FREELANCER: "Verve ↔ Freelancer" };
-export const docTypeValues = ["RAHMENVERTRAG", "EINZELBEAUFTRAGUNG", "BESTELLUNG", "NACHTRAG", "NDA", "KUENDIGUNG", "SONSTIGES"] as const;
-export const docTypeLabel: Record<string, string> = { RAHMENVERTRAG: "Rahmenvertrag", EINZELBEAUFTRAGUNG: "Einzelbeauftragung", BESTELLUNG: "Bestellung", NACHTRAG: "Nachtrag", NDA: "NDA", KUENDIGUNG: "Kündigung", SONSTIGES: "Sonstiges" };
+export const docTypeValues = ["RAHMENVERTRAG", "EINZELBEAUFTRAGUNG", "BESTELLUNG", "NACHTRAG", "ANGEBOT", "NDA", "KUENDIGUNG", "SONSTIGES"] as const;
+export const docTypeLabel: Record<string, string> = { RAHMENVERTRAG: "Rahmenvertrag", EINZELBEAUFTRAGUNG: "Einzelbeauftragung", BESTELLUNG: "Bestellung", NACHTRAG: "Nachtrag", ANGEBOT: "Angebot", NDA: "NDA", KUENDIGUNG: "Kündigung", SONSTIGES: "Sonstiges" };
 export const signedStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", VERSENDET: "versendet", UNTERSCHRIEBEN: "unterschrieben", GEKUENDIGT: "gekündigt" };
 export const careRoleLabel: Record<string, string> = { CUSTOMER_CARE: "Kundenbetreuung", FREELANCER_CARE: "Freelancer-Betreuung" };
 

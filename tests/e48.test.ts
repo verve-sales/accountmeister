@@ -252,4 +252,37 @@ describe("e48: GF-Start, leisere KI, Dokumentenfluss", () => {
     expect((await setOrderReference(david, q.engagement.id, "4500111222")).changed).toBe(false);
     await expect(setOrderReference(await actorFor("lars"), q.engagement.id, "x123")).rejects.toThrow();
   });
+
+  it("D05: Verlängerung mit Angebot aus SharePoint – Unterlage „Angebot“, Nummer aus dem Dateinamen, Übergabe nennt das Angebot", async () => {
+    env();
+    resetFixture();
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    await setupSite(await actorFor("clemens"), { client: new FixtureSpClient() });
+    const acc = (await db.query.accounts.findFirst({ where: eq(schema.accounts.id, s.accountId) }))!;
+    const name = `Hugo Hueper ${u()} (fiktiv)`;
+    const opp = await createOpportunity(david, { setupId: s.setupId, title: `E48e Verlängerung ${u()}`, needDescription: "Verlängerung mit Angebot.", kind: "FREELANCER_EXPERTE" });
+    const q = await quickFill(david, opp.id, { title: "Tester", resourceKind: "FREELANCER", newName: name, ekRate: "80", vkRate: "100", desiredStart: plusDaysIso(todayIso(), -60), plannedEnd: plusDaysIso(todayIso(), 40) });
+    await db.update(schema.engagements).set({ status: "AKTIV" }).where(eq(schema.engagements.id, q.engagement.id));
+    const client = new FixtureSpClient() as unknown as import("@/modules/sharepoint/client").SpClient;
+    const libs = await client.libraries();
+    const kunden = await client.driveOf(libs.find((l) => l.name === "Kunden")!.id);
+    const { folderName, filesFor } = await import("@/modules/sharepoint/service");
+    await client.upload(kunden, [folderName(acc.name), "Angebote", "2026"], "2026-11-12_Angebot_Beispiel_Hueper_VCA-M26-11_0003.xlsx", new ArrayBuffer(2));
+    const files = await filesFor({ accountName: acc.name, kinds: ["KUNDE_ANGEBOT"] });
+    const pick = files!.groups[0]!.files.find((f) => f.name.includes("Hueper"))!.value;
+    const { startRenewal, decideRenewal } = await import("@/modules/engagements/care");
+    const newEnd = plusDaysIso(todayIso(), 220);
+    await startRenewal(david, q.engagement.id, { newEnd, conditions: "UNVERAENDERT", offerPick: pick }, { direct: true });
+    await decideRenewal(david, q.engagement.id, { decision: "BESTAETIGEN" });
+    const ren = (await db.query.renewalDecisions.findFirst({ where: eq(schema.renewalDecisions.engagementId, q.engagement.id), orderBy: (r, { desc }) => desc(r.createdAt) }))!;
+    expect(ren.offerNumber).toBe("VCA-M26-11_0003");
+    expect(ren.offerLink).toMatch(/Angebote/);
+    const links = await db.query.engagementDocuments.findMany({ where: eq(schema.engagementDocuments.engagementId, q.engagement.id) });
+    const docs = await db.query.contractDocuments.findMany({ where: eq(schema.contractDocuments.accountId, s.accountId) });
+    const offer = docs.find((d) => links.some((l) => l.documentId === d.id) && d.docType === "ANGEBOT")!;
+    expect(offer.reference).toBe("VCA-M26-11_0003");
+    const h = await db.query.backofficeHandovers.findFirst({ where: and(eq(schema.backofficeHandovers.engagementId, q.engagement.id), eq(schema.backofficeHandovers.kind, "VERLAENGERT")) });
+    expect((h?.payload as { angebotsnummer?: string }).angebotsnummer).toBe("VCA-M26-11_0003");
+  });
 });
