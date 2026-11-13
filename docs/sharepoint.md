@@ -46,3 +46,10 @@ Die Kennung der Berechtigung liefert `GET https://graph.microsoft.com/v1.0/sites
 - Beim Quittieren einer Übergabe entsteht ein Einsatzblatt (Excel): im Kundenordner › Bestellungen mit Verkaufssatz, Rechnungsanschrift und -weg; bei Freelancern zusätzlich im Freelancer-Ordner › Verträge mit Einkaufssatz und Zahlungsziel.
 - Bestellnummer, Moco-Projekt und „gültig bis“ werden bei Bestellung, Quittung, Verlängerung und Einsatzende an allen Unterlagen nachgeführt.
 - Bestell-Mails (Weiterleitung ans Postfach oder Ordner „Accountmeister“): PDF-/Office-Anhänge landen unter Kunden › Kunde › Bestellungen, mit erkannter Bestellnummer; Sales Operations bekommt einen Hinweis.
+
+## e48b: Jahresordner
+
+- Angebote, Bestellungen (Kunden) sowie Verträge und Nachweise (Freelancer) haben je Jahr einen Unterordner, z. B. `Kunden/ITERGO/Angebote/2026/`. „Rahmen und Einkauf“ bleibt ohne Jahre.
+- Maßgeblich ist das Datum vorn im Dateinamen (`JJJJ-MM-TT_…`), sonst das Änderungsdatum.
+- Der Accountmeister legt automatisch ins richtige Jahr ab. „Einrichten“ legt das aktuelle Jahr an und sortiert lose Dateien in ihr Jahr ein.
+- Die Auswahl „Aus SharePoint übernehmen“ zeigt lose Dateien, das aktuelle und das Vorjahr.

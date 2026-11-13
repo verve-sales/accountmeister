@@ -2,7 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { todayIso } from "@/modules/work/calendar";
 import { defaultSpClient, sharePointEnabled, type SpClient } from "./client";
-import { docTypeOf, folderName, freelancerFolder, FREELANCER_SUB, KUNDE_SUB, LIB, libraryMap, statusOf } from "./service";
+import { docTypeOf, folderName, freelancerFolder, FREELANCER_SUB, KUNDE_SUB, LIB, libraryMap, statusOf, yearFolder } from "./service";
 
 /**
  * Dokumentenfluss nach SharePoint (e48): hochgeladene Unterlagen, Kundenbestellungen aus Mails, Einsatzblätter für
@@ -60,7 +60,8 @@ export async function fileDocument(documentId: string, fileName: string, bytes: 
   const eng = link ? await db.query.engagements.findFirst({ where: eq(schema.engagements.id, link.engagementId), columns: { mocoProjectId: true, orderReference: true } }) : null;
   const target = folderFor(d, acc?.name ?? "Ohne Kunde", fl?.displayName ?? null);
   const drive = await driveFor(client, target.lib);
-  const item = await client.upload(drive, target.path, datePrefix(fileName), bytes);
+  const name = datePrefix(fileName);
+  const item = await client.upload(drive, yearFolder(target.path, name), name, bytes);
   await setFieldsSafe(client, drive, item.id, {
     Dokumentart: docTypeOf[d.docType] ?? "Sonstiges",
     Kunde: acc?.name ?? null,
@@ -101,7 +102,8 @@ export async function fileCustomerOrder(input: { accountName: string; fileName: 
   const client = await clientOf(deps);
   if (!client) return null;
   const drive = await driveFor(client, LIB.KUNDEN);
-  const item = await client.upload(drive, [folderName(input.accountName), KUNDE_SUB[2]], datePrefix(input.fileName.replace(/[\\/:*?"<>|]/g, "-")), input.bytes);
+  const name = datePrefix(input.fileName.replace(/[\\/:*?"<>|]/g, "-"));
+  const item = await client.upload(drive, yearFolder([folderName(input.accountName), KUNDE_SUB[2]], name), name, input.bytes);
   await setFieldsSafe(client, drive, item.id, { Dokumentart: "Bestellung", Kunde: input.accountName, Bestellnummer: input.reference, DokStatus: "unterschrieben" });
   return { webUrl: item.webUrl, driveId: drive, itemId: item.id };
 }
@@ -171,12 +173,12 @@ export async function writeEinsatzblatt(engagementId: string, p: { kunde: string
     ["Moco-Projekt", mocoProjectId ? String(mocoProjectId) : "–"],
   ];
   const kdrive = await driveFor(client, LIB.KUNDEN);
-  const kItem = await client.upload(kdrive, [folderName(p.kunde), KUNDE_SUB[2]], `${base}.xlsx`, await sheet(`Einsatzblatt ${p.person} bei ${p.kunde}`, [...common, ["Verkaufssatz", money(p.vk, p.vkEinheit)], ["Rechnungsanschrift", p.rechnungsanschrift ?? "fehlt – am Kunden im Accountmeister eintragen"], ["Rechnungsweg", p.rechnungsweg ?? "–"], ["Hinweis zur Rechnung", p.rechnungshinweis ?? "–"]]));
+  const kItem = await client.upload(kdrive, yearFolder([folderName(p.kunde), KUNDE_SUB[2]], base), `${base}.xlsx`, await sheet(`Einsatzblatt ${p.person} bei ${p.kunde}`, [...common, ["Verkaufssatz", money(p.vk, p.vkEinheit)], ["Rechnungsanschrift", p.rechnungsanschrift ?? "fehlt – am Kunden im Accountmeister eintragen"], ["Rechnungsweg", p.rechnungsweg ?? "–"], ["Hinweis zur Rechnung", p.rechnungshinweis ?? "–"]]));
   await setFieldsSafe(client, kdrive, kItem.id, { Dokumentart: "Einsatzblatt", Kunde: p.kunde, Person: p.person, Bestellnummer: p.bestellnummer, MocoProjekt: mocoProjectId ? String(mocoProjectId) : null, GueltigVon: p.beginn, GueltigBis: p.ende, Satz: money(p.vk, p.vkEinheit), DokStatus: "unterschrieben" });
   let fUrl: string | null = null;
   if (p.personArt === "FREELANCER") {
     const fdrive = await driveFor(client, LIB.FREELANCER);
-    const fItem = await client.upload(fdrive, [freelancerFolder(p.person), FREELANCER_SUB[0]], `${base}_Einkauf.xlsx`, await sheet(`Einsatzblatt Einkauf ${p.person}`, [...common, ["Einkaufssatz", money(p.ek, p.ekEinheit)], ["Zahlungsziel", p.zahlungszielTage ? `${p.zahlungszielTage} Tage` : "–"], ["Rechnungsdaten Freelancer", p.freelancerRechnungsdaten ?? "–"]]));
+    const fItem = await client.upload(fdrive, yearFolder([freelancerFolder(p.person), FREELANCER_SUB[0]], base), `${base}_Einkauf.xlsx`, await sheet(`Einsatzblatt Einkauf ${p.person}`, [...common, ["Einkaufssatz", money(p.ek, p.ekEinheit)], ["Zahlungsziel", p.zahlungszielTage ? `${p.zahlungszielTage} Tage` : "–"], ["Rechnungsdaten Freelancer", p.freelancerRechnungsdaten ?? "–"]]));
     await setFieldsSafe(client, fdrive, fItem.id, { Dokumentart: "Einsatzblatt", Kunde: p.kunde, Person: p.person, Bestellnummer: p.bestellnummer, MocoProjekt: mocoProjectId ? String(mocoProjectId) : null, GueltigVon: p.beginn, GueltigBis: p.ende, Satz: money(p.ek, p.ekEinheit), Zahlungsziel: p.zahlungszielTage ? `${p.zahlungszielTage} Tage` : null, DokStatus: "unterschrieben" });
     fUrl = fItem.webUrl;
   }

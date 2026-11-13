@@ -27,6 +27,8 @@ export interface SpClient {
   /** Inhalt eines Ordners (eine Ebene); fehlt der Ordner, leer. */
   children(driveId: string, path: string[]): Promise<SpEntry[]>;
   item(driveId: string, itemId: string): Promise<SpEntry>;
+  /** Datei in einen anderen Ordner derselben Bibliothek verschieben (Ordner wird angelegt); bei Namensgleichheit nummeriert. */
+  move(driveId: string, itemId: string, folder: string[]): Promise<SpItem>;
 }
 
 export type SpEntry = SpItem & { name: string; folder: boolean; modified: string | null };
@@ -141,6 +143,12 @@ export class GraphSpClient implements SpClient {
     const x = await this.call<{ id: string; name: string; webUrl: string; folder?: unknown; lastModifiedDateTime?: string }>("GET", `/drives/${driveId}/items/${encodeURIComponent(itemId)}?$select=id,name,webUrl,folder,lastModifiedDateTime`);
     return { id: x.id, name: x.name, webUrl: x.webUrl, folder: !!x.folder, modified: x.lastModifiedDateTime ?? null };
   }
+
+  async move(driveId: string, itemId: string, folder: string[]): Promise<SpItem> {
+    const target = await this.ensureFolder(driveId, folder);
+    const r = await this.call<SpItem>("PATCH", `/drives/${driveId}/items/${encodeURIComponent(itemId)}?@microsoft.graph.conflictBehavior=rename`, { parentReference: { id: target.id } });
+    return { id: r.id, webUrl: r.webUrl };
+  }
 }
 
 /** Im Speicher, für Entwicklung und Tests (SHAREPOINT_MODE=fixture). Zustand je Prozess. */
@@ -233,6 +241,17 @@ export class FixtureSpClient implements SpClient {
     this.check();
     const it = this.s.items.get(itemId);
     if (it) it.fields = { ...it.fields, ...fields };
+  }
+  async move(driveId: string, itemId: string, folder: string[]) {
+    this.check();
+    const it = this.s.items.get(itemId);
+    if (!it) throw new SharePointError("SharePoint: HTTP 404", 404);
+    await this.ensureFolder(driveId, folder);
+    const fileName = it.path.split("/").pop()!;
+    let name = fileName;
+    for (let n = 1; this.find(`${driveId}/${[...folder, name].join("/")}`); n++) name = fileName.replace(/(\.[^.]+)?$/, ` ${n}$1`);
+    it.path = `${driveId}/${[...folder, name].join("/")}`;
+    return { id: itemId, webUrl: `https://fixture.sharepoint.local/${encodeURI(it.path)}` };
   }
 }
 

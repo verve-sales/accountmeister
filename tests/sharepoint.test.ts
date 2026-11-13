@@ -8,8 +8,8 @@ import { quickFill } from "@/modules/staffing/service";
 import { setContractDocumentStatus } from "@/modules/engagements/service";
 import { contractDefaults, generateFreelancerContract } from "@/modules/conversion/contractService";
 import { saveFreelancerProfile } from "@/modules/conversion/profile";
-import { FixtureSpClient, fixtureState, resetFixture } from "@/modules/sharepoint/client";
-import { COLUMNS, folderName, freelancerFolder, permissionPlan, setupSite, siteStatus } from "@/modules/sharepoint/service";
+import { FixtureSpClient, fixtureState, resetFixture, type SpClient } from "@/modules/sharepoint/client";
+import { COLUMNS, filesFor, folderName, freelancerFolder, permissionPlan, setupSite, siteStatus, yearFolder, yearOf } from "@/modules/sharepoint/service";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 import { actorFor, ensureSeed } from "./helpers";
 
@@ -58,7 +58,7 @@ describe("e45: SharePoint-Ablage", () => {
     const paths = [...fixtureState().items.values()].map((i) => i.path);
     expect(paths.some((p) => p.endsWith("/Beispielkonzern AG (fiktiv)/Bestellungen"))).toBe(true);
     const r2 = await setupSite(ceo);
-    expect(r2.steps.map((s) => s.created)).toEqual([0, 0, 0]);
+    expect(r2.steps.map((s) => s.created)).toEqual([0, 0, 0, 0]);
     const after = await siteStatus(ceo);
     expect(after.libraries.every((l) => l.present && l.columnsMissing.length === 0)).toBe(true);
     // Fehler der Site → Stand mit Meldung statt Absturz
@@ -114,5 +114,35 @@ describe("e45: SharePoint-Ablage", () => {
     expect(plan[4]!.freelancer).toBe("–");
     expect(plan[3]!.personen).toEqual([]);
     await expect(permissionPlan(await actorFor("david"))).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("S05: Jahresordner – Ablage nach dem Datum im Dateinamen, lose Dateien werden beim Einrichten einsortiert, Auswahl zeigt aktuelles und Vorjahr", async () => {
+    env();
+    resetFixture();
+    await ensureSeed();
+    const ceo = await actorFor("clemens");
+    const y = todayIso().slice(0, 4);
+    const prev = String(Number(y) - 1);
+    expect(yearOf("2026-11-12_Angebot_ITERGO_Teglas.xlsx")).toBe("2026");
+    expect(yearOf("Angebot.xlsx", "2025-03-01T10:00:00Z")).toBe("2025");
+    expect(yearFolder(["ITERGO", "Angebote"], "2027-01-05_x.pdf")).toEqual(["ITERGO", "Angebote", "2027"]);
+    expect(yearFolder(["ITERGO", "Rahmen und Einkauf"], "2027-01-05_x.pdf")).toEqual(["ITERGO", "Rahmen und Einkauf"]);
+    expect(yearFolder(["Muster, Max", "Verträge"], "v.docx")).toEqual(["Muster, Max", "Verträge", y]);
+    const client: SpClient = new FixtureSpClient();
+    await setupSite(ceo, { client });
+    const libs = await client.libraries();
+    const kunden = await client.driveOf(libs.find((l) => l.name === "Kunden")!.id);
+    // lose Dateien wie von Hand abgelegt
+    await client.upload(kunden, ["ITERGO-Test", "Angebote"], "2026-11-12_Angebot_ITERGO_Teglas_VCA-M26-11_0001.xlsx", new ArrayBuffer(2));
+    await client.upload(kunden, ["ITERGO-Test", "Angebote"], `${prev}-12-01_Angebot_ITERGO_Alt.xlsx`, new ArrayBuffer(2));
+    await client.upload(kunden, ["ITERGO-Test", "Rahmen und Einkauf"], "Rahmenvertrag.pdf", new ArrayBuffer(2));
+    const r = await setupSite(ceo, { client });
+    expect(r.steps.find((s) => s.what === "Einsortiert")!.created).toBe(2);
+    const paths = [...fixtureState().items.values()].filter((i) => i.file).map((i) => i.path);
+    expect(paths.some((p) => p.endsWith("/ITERGO-Test/Angebote/2026/2026-11-12_Angebot_ITERGO_Teglas_VCA-M26-11_0001.xlsx"))).toBe(true);
+    expect(paths.some((p) => p.endsWith(`/ITERGO-Test/Angebote/${prev}/${prev}-12-01_Angebot_ITERGO_Alt.xlsx`))).toBe(true);
+    expect(paths.some((p) => p.endsWith("/ITERGO-Test/Rahmen und Einkauf/Rahmenvertrag.pdf"))).toBe(true);
+    const files = await filesFor({ accountName: "ITERGO-Test", kinds: ["KUNDE_ANGEBOT"] }, { client });
+    expect(files!.groups[0]!.files.map((f) => f.name).some((n) => n.includes("Alt"))).toBe(true);
   });
 });

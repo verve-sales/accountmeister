@@ -18,6 +18,21 @@ export const LIBRARIES = [LIB.KUNDEN, LIB.FREELANCER, LIB.VORLAGEN] as const;
 export const KUNDE_SUB = ["Rahmen und Einkauf", "Angebote", "Bestellungen"] as const;
 export const FREELANCER_SUB = ["Verträge", "Nachweise"] as const;
 export const VORLAGEN_SUB = ["Vertrag", "Angebot Kunde"] as const;
+/** e48b: Ordner, die nach Jahren unterteilt werden (Rahmen und Einkauf bleibt flach – wenige, lange gültige Unterlagen) */
+export const YEAR_SUBS: ReadonlySet<string> = new Set([KUNDE_SUB[1], KUNDE_SUB[2], ...FREELANCER_SUB]);
+
+/** Jahr eines Dokuments: das Datum vorn im Dateinamen (JJJJ-MM-TT_…), sonst das Änderungsdatum, sonst heute. */
+export function yearOf(fileName: string, modified?: string | null): string {
+  const m = /^(20\d{2})-\d{2}-\d{2}/.exec(fileName.trim());
+  if (m) return m[1]!;
+  if (modified && /^20\d{2}/.test(modified)) return modified.slice(0, 4);
+  return todayIso().slice(0, 4);
+}
+
+/** Zielordner mit Jahr, wenn der Ordner nach Jahren unterteilt wird („ITERGO/Angebote“ → „ITERGO/Angebote/2026“). */
+export function yearFolder(folder: string[], fileName: string): string[] {
+  return folder.length && YEAR_SUBS.has(folder.at(-1)!) ? [...folder, yearOf(fileName)] : folder;
+}
 
 export const COLUMNS: SpColumn[] = [
   { name: "Dokumentart", displayName: "Dokumentart", kind: "choice", choices: ["Angebot", "Bestellung", "Nachtrag", "Rahmenvertrag", "NDA", "Projekteinzelvertrag", "Nachweis", "Einsatzblatt", "Sonstiges"] },
@@ -115,9 +130,10 @@ export async function setupSite(actor: Actor, deps: { client?: SpClient } = {}):
   }
   res.steps.push(colStep);
   const { kunden, freelancer } = await activeNames(actor.workspaceId);
+  const year = todayIso().slice(0, 4);
   const plan: { lib: string; path: string[] }[] = [
-    ...kunden.flatMap((k) => KUNDE_SUB.map((u) => ({ lib: LIB.KUNDEN, path: [k, u] }))),
-    ...freelancer.flatMap((f) => FREELANCER_SUB.map((u) => ({ lib: LIB.FREELANCER, path: [f, u] }))),
+    ...kunden.flatMap((k) => KUNDE_SUB.flatMap((u) => [{ lib: LIB.KUNDEN, path: [k, u] }, ...(YEAR_SUBS.has(u) ? [{ lib: LIB.KUNDEN, path: [k, u, year] }] : [])])),
+    ...freelancer.flatMap((f) => FREELANCER_SUB.flatMap((u) => [{ lib: LIB.FREELANCER, path: [f, u] }, { lib: LIB.FREELANCER, path: [f, u, year] }])),
     ...VORLAGEN_SUB.map((u) => ({ lib: LIB.VORLAGEN, path: [u] })),
   ];
   const drives = new Map<string, string>();
@@ -134,6 +150,30 @@ export async function setupSite(actor: Actor, deps: { client?: SpClient } = {}):
     }
   }
   res.steps.push(folderStep);
+  // e48b: lose Dateien in Angebote/Bestellungen/Verträge/Nachweise in ihren Jahresordner einsortieren (alle Ordner der Bibliothek)
+  const sortStep = { what: "Einsortiert", created: 0, existing: 0 };
+  for (const lib of [LIB.KUNDEN, LIB.FREELANCER]) {
+    try {
+      if (!drives.has(lib)) drives.set(lib, await client.driveOf(libs.get(lib)!));
+      const drive = drives.get(lib)!;
+      const subs = lib === LIB.KUNDEN ? [KUNDE_SUB[1], KUNDE_SUB[2]] : [...FREELANCER_SUB];
+      for (const owner of (await client.children(drive, [])).filter((x) => x.folder)) {
+        for (const u of subs) {
+          for (const f of (await client.children(drive, [owner.name, u])).filter((x) => !x.folder)) {
+            try {
+              await client.move(drive, f.id, [owner.name, u, yearOf(f.name, f.modified)]);
+              sortStep.created++;
+            } catch (e) {
+              res.errors.push(`${lib}/${owner.name}/${u}/${f.name}: ${(e as Error).message}`);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      res.errors.push(`${lib}: ${(e as Error).message}`);
+    }
+  }
+  res.steps.push(sortStep);
   await recordAudit(db, actor, "sharepoint.setup", "WORKSPACE", actor.workspaceId, { schritte: res.steps, fehler: res.errors.length });
   return res;
 }
@@ -199,7 +239,7 @@ export async function fileFreelancerContract(input: { documentId: string; accoun
   if (!listId) throw new Error("In SharePoint fehlt die Bibliothek „Freelancer“ – bitte unter Verwaltung › SharePoint einrichten.");
   const drive = await client.driveOf(listId);
   const folder = [freelancerFolder(input.freelancerName), FREELANCER_SUB[0]];
-  const item = await client.upload(drive, folder, input.fileName, input.bytes);
+  const item = await client.upload(drive, yearFolder(folder, input.fileName), input.fileName, input.bytes);
   await client.setFields(drive, item.id, {
     Dokumentart: "Projekteinzelvertrag",
     Kunde: input.accountName,
@@ -254,7 +294,11 @@ export async function filesFor(input: { accountName: string; freelancerName?: st
       if (!drives.has(def.lib)) drives.set(def.lib, await client.driveOf(listId));
       const drive = drives.get(def.lib)!;
       const owner = def.lib === LIB.KUNDEN ? folderName(input.accountName) : freelancerFolder(input.freelancerName!);
-      const entries = (await client.children(drive, [owner, def.sub])).filter((x) => !x.folder).sort((a, b) => (b.modified ?? "").localeCompare(a.modified ?? "") || a.name.localeCompare(b.name, "de"));
+      // e48b: lose Dateien plus aktuelles und Vorjahr (Einsätze laufen über den Jahreswechsel)
+      const y = Number(todayIso().slice(0, 4));
+      const base = [owner, def.sub];
+      const lists = await Promise.all([client.children(drive, base), ...(YEAR_SUBS.has(def.sub) ? [client.children(drive, [...base, String(y)]), client.children(drive, [...base, String(y - 1)])] : [])]);
+      const entries = lists.flat().filter((x) => !x.folder).sort((a, b) => (b.modified ?? "").localeCompare(a.modified ?? "") || a.name.localeCompare(b.name, "de"));
       if (entries.length) groups.push({ kind: k, label: def.label, files: entries.map((x) => ({ value: `${drive}|${x.id}|${k}`, name: x.name, webUrl: x.webUrl, modified: x.modified })) });
     }
     return { groups, error: null };

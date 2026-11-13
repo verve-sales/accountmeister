@@ -95,7 +95,9 @@ export default async function SharePointPage({ searchParams }: { searchParams: S
             <li><strong>Unterschrift fehlt</strong> (Kunden und Freelancer): Status ist Entwurf oder versendet.</li>
             <li><strong>Laufende Bestellungen</strong> (Kunden): Dokumentart Bestellung, sortiert nach Gültig bis.</li>
             <li><strong>Nach Person</strong>: gruppiert nach der Spalte Person.</li>
+            <li><strong>Einsatzblätter (für die Buchhaltung)</strong>, in Kunden und in Freelancer: „Alle Elemente ohne Ordner anzeigen“, Filter Dokumentart = Einsatzblatt, gruppiert nach Kunde, sortiert nach Gültig von absteigend. So stehen alle Einsätze über alle Kunden und Jahre auf einer Seite.</li>
           </ul>
+          <p className="muted">Ordner: Angebote, Bestellungen, Verträge und Nachweise sind nach Jahren unterteilt (Jahr aus dem Datum vorn im Dateinamen). „Rahmen und Einkauf“ bleibt ohne Jahre. „Einrichten“ legt das aktuelle Jahr an und sortiert lose Dateien in ihr Jahr ein.</p>
         </div>
       </details>
     </div>
