@@ -18,7 +18,7 @@ import { DeleteBlock } from "@/components/DeleteBlock";
 import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { approachLabel, approachValues, loadRenewalContacts } from "@/modules/engagements/contacts";
-import { addSharePointDocumentAction, addContractDocumentAction, uploadSignedVersionAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
+import { addSharePointDocumentAction, addContractDocumentAction, uploadSignedVersionAction, setOrderReferenceAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
 import { contractDefaults } from "@/modules/conversion/contractService";
 
 const eur = (v: string | null, unit: string) => (v ? `${Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${rateUnitLabel[unit] ?? unit}` : "offen");
@@ -79,6 +79,16 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           {e.mocoProjectId && <span className="muted text-xs">aus Moco (Projekt {e.mocoProjectId}{e.externalRef ? <> · <a href={e.externalRef} target="_blank" rel="noreferrer">in Moco öffnen</a></> : null}) – Laufzeit und Zuweisung führt Moco</span>}
           <span>Laufzeit: {fmtDate(e.actualStart ?? e.plannedStart)} – {e.plannedEnd ? `${fmtDate(e.plannedEnd)}${e.daysToEnd !== null ? ` (${e.daysToEnd} Tage)` : ""}` : "offen"}</span>
           {e.orderReference && <span>Bestellnummer: <strong>{e.orderReference}</strong></span>}
+          {!final && (a.manage || a.care) && (
+            <details className="inline-block">
+              <summary className="text-xs" style={{ cursor: "pointer", color: e.orderReference ? undefined : "#b7791f" }}>{e.orderReference ? "ändern" : "Bestellnummer nachtragen"}</summary>
+              <form action={setOrderReferenceAction} className="inline-flex flex-wrap gap-1 items-center mt-1">
+                <input type="hidden" name="engagementId" value={e.id} /><input type="hidden" name="back" value={back} />
+                <input name="orderReference" className="input" required minLength={2} maxLength={200} defaultValue={e.orderReference ?? ""} placeholder="z. B. 4500123456" style={{ width: 160 }} />
+                <PendingButton className="btn btn-small" busy="Speichere …">Speichern</PendingButton>
+              </form>
+            </details>
+          )}
           {nextDue && <span style={nextDue < new Date().toISOString().slice(0, 10) ? { color: RED, fontWeight: 600 } : undefined}>nächste Frist {fmtDate(nextDue)}</span>}
           <span className="muted text-xs ml-auto">{a.commercial ? "BD-Kontext" : a.ops ? "Sales Operations" : a.readOnly ? "Coach (nur lesen)" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
         </div>

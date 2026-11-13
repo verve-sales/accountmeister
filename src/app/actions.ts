@@ -1672,6 +1672,17 @@ export async function addContractDocumentAction(fd: FormData) {
   }, "Unterlage gespeichert.");
 }
 
+/** e48c: Bestellnummer am Einsatz nachtragen (Backoffice wird informiert, SharePoint nachgeführt). */
+export async function setOrderReferenceAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}`), async (actor) => {
+    requireStaffingFlag();
+    const { setOrderReference } = await import("@/modules/engagements/service");
+    const r = await setOrderReference(actor, data.engagementId ?? "", data.orderReference ?? "");
+    if (!r.changed) throw new PendingInfo("Diese Bestellnummer steht schon am Einsatz.");
+  }, "Bestellnummer gespeichert – das Backoffice ist informiert.");
+}
+
 /** e48: unterschriebene Fassung hochladen – Status „unterschrieben“, Ablage in SharePoint, Entwurf „ersetzt“. */
 export async function uploadSignedVersionAction(fd: FormData) {
   const data = formToObject(fd);

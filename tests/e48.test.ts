@@ -237,4 +237,19 @@ describe("e48: GF-Start, leisere KI, Dokumentenfluss", () => {
     expect(item?.path).toMatch(/Bestellungen/);
     expect(item?.fields).toMatchObject({ Dokumentart: "Bestellung", Bestellnummer: "4500123987" });
   });
+
+  it("D04: Bestellnummer nachtragen – am Einsatz und an der Verlängerung, Übergabe „Bestellung nachgereicht“", async () => {
+    env();
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const opp = await createOpportunity(david, { setupId: s.setupId, title: `E48c Nachtrag ${u()}`, needDescription: "Bestellung kommt später.", kind: "FREELANCER_EXPERTE" });
+    const q = await quickFill(david, opp.id, { title: "Tester", resourceKind: "FREELANCER", newName: `Nora Nach ${u()} (fiktiv)`, ekRate: "600", vkRate: "960", desiredStart: plusDaysIso(todayIso(), -30), plannedEnd: plusDaysIso(todayIso(), 40) });
+    const { setOrderReference } = await import("@/modules/engagements/service");
+    expect((await setOrderReference(david, q.engagement.id, "4500111222")).changed).toBe(true);
+    expect((await db.query.engagements.findFirst({ where: eq(schema.engagements.id, q.engagement.id) }))!.orderReference).toBe("4500111222");
+    const h = await db.query.backofficeHandovers.findFirst({ where: and(eq(schema.backofficeHandovers.engagementId, q.engagement.id), eq(schema.backofficeHandovers.kind, "BESTELLUNG_NACHGEREICHT")) });
+    expect((h?.payload as { bestellnummer?: string }).bestellnummer).toBe("4500111222");
+    expect((await setOrderReference(david, q.engagement.id, "4500111222")).changed).toBe(false);
+    await expect(setOrderReference(await actorFor("lars"), q.engagement.id, "x123")).rejects.toThrow();
+  });
 });

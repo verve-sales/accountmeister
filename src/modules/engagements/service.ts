@@ -436,6 +436,34 @@ export async function addContractDocument(actor: Actor, engagementId: string, ra
   return { ...res, sharepointError };
 }
 
+/**
+ * Bestellnummer nachtragen (e48c), z. B. wenn die Verlängerung mündlich zugesagt war und die Bestellung später kommt:
+ * am Einsatz und an der jüngsten Verlängerung fortschreiben, Backoffice informieren, SharePoint nachführen.
+ */
+export async function setOrderReference(actor: Actor, engagementId: string, reference: string) {
+  const ref = reference.trim();
+  if (ref.length < 2 || ref.length > 200) throw new ValidationError("Bitte die Bestellnummer eintragen.");
+  const a = await requireEngagement(actor, engagementId);
+  if (!(a.manage || a.care || a.ops)) throw new ForbiddenError();
+  const e = a.engagement;
+  if (e.orderReference === ref) return { changed: false };
+  await db.transaction(async (tx) => {
+    await tx.update(schema.engagements).set({ orderReference: ref, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
+    const last = await tx.query.renewalDecisions.findFirst({ where: eq(schema.renewalDecisions.engagementId, e.id), orderBy: desc(schema.renewalDecisions.createdAt) });
+    if (last && !last.orderReference) await tx.update(schema.renewalDecisions).set({ orderReference: ref }).where(eq(schema.renewalDecisions.id, last.id));
+    await recordAudit(tx, actor, "engagement.order_reference", "ENGAGEMENT", e.id, { bestellnummer: ref, vorher: e.orderReference ?? null, anlass: "nachgetragen" });
+  });
+  const { createHandover } = await import("@/modules/conversion/handover");
+  await createHandover(actor, e.id, "BESTELLUNG_NACHGEREICHT", { hinweis: `Bestellnummer ${ref}${e.orderReference ? ` (vorher ${e.orderReference})` : ""}.` }).catch((err) => console.error("Übergabe", (err as Error).message));
+  try {
+    const { syncEngagementDocs } = await import("@/modules/sharepoint/documents");
+    await syncEngagementDocs(e.id);
+  } catch (err) {
+    console.error("SharePoint nach Bestellnummer", (err as Error).message);
+  }
+  return { changed: true };
+}
+
 /** Erzeugter Vertragsentwurf (Vorlage)? Dann gilt „unterschrieben“ nur mit hochgeladener unterschriebener Fassung. */
 export function isGeneratedDraft(d: { reviewNote: string | null; versionLabel: string | null }): boolean {
   return !!d.reviewNote?.startsWith("Erzeugt aus der Vorlage");
