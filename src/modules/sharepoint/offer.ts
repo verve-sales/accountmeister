@@ -21,7 +21,7 @@ import { folderName, KUNDE_SUB, LIB, libraryMap, PICK_KINDS, yearFolder, type Pi
 export const ERGO_SHEET = "Offer overview";
 export const ERGO_CELLS = { requestDate: "I9", offerDate: "O9", offerNumber: "S9", personDays: "Q28", rate: "U28", rateDiscounted: "X28", from: "M54", until: "Q54" } as const;
 
-type CellValue = { n: number } | { s: string };
+type CellValue = { n: number } | { s: string } | { empty: true };
 const xmlEsc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 /** Excel-Datum (Tage seit 30.12.1899). */
 export const excelDate = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.UTC(1899, 11, 30)) / 86400000);
@@ -59,7 +59,7 @@ export async function patchCells(bytes: ArrayBuffer, sheetName: string, patches:
     const m = re.exec(xml);
     if (!m) throw new ValidationError(`Zelle ${ref} fehlt in der Grundlage – bitte ein vollständiges Angebot als Grundlage wählen.`);
     const style = /\ss="\d+"/.exec(m[1] ?? "")?.[0] ?? "";
-    const cell = "n" in val ? `<c r="${ref}"${style}><v>${val.n}</v></c>` : `<c r="${ref}"${style} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(val.s)}</t></is></c>`;
+    const cell = "empty" in val ? `<c r="${ref}"${style}/>` : "n" in val ? `<c r="${ref}"${style}><v>${val.n}</v></c>` : `<c r="${ref}"${style} t="inlineStr"><is><t xml:space="preserve">${xmlEsc(val.s)}</t></is></c>`;
     xml = xml.replace(re, () => cell);
   }
   zip.file(path, xml);
@@ -183,7 +183,7 @@ export async function offerForRenewal(actor: Actor, engagementId: string, input:
 }
 
 /** Grundlagen für ein neues Angebot: Angebote des Kunden (passende Person zuerst) und Vorlagen aus „Vorlagen › Angebot Kunde“. */
-export async function offerBases(input: { accountName: string; personName: string }, deps: { client?: SpClient } = {}): Promise<{ options: { value: string; label: string }[]; preselect: string | null } | null> {
+export async function offerBases(input: { accountName: string; personName: string }, deps: { client?: SpClient } = {}): Promise<{ options: { value: string; label: string }[]; preselect: string | null; templates: number } | null> {
   if (!deps.client && !sharePointEnabled()) return null;
   try {
     const client = deps.client ?? (await defaultSpClient());
@@ -200,11 +200,14 @@ export async function offerBases(input: { accountName: string; personName: strin
     let templates: { value: string; label: string }[] = [];
     if (vid) {
       const vdrive = await client.driveOf(vid);
-      templates = (await client.children(vdrive, ["Angebot Kunde"])).filter((x) => !x.folder && /\.xlsx$/i.test(x.name)).map((x) => ({ value: `${vdrive}|${x.id}|VORLAGE`, label: `Vorlage: ${x.name}` }));
+      // Vorlagen direkt im Ordner und eine Ebene darunter (z. B. je Kunde)
+      const top = await client.children(vdrive, ["Angebot Kunde"]);
+      const nested = (await Promise.all(top.filter((x) => x.folder).map(async (f) => (await client.children(vdrive, ["Angebot Kunde", f.name])).map((x) => ({ ...x, name: `${f.name} › ${x.name}` }))))).flat();
+      templates = [...top, ...nested].filter((x) => !x.folder && /\.xlsx$/i.test(x.name)).map((x) => ({ value: `${vdrive}|${x.id}|VORLAGE`, label: `Vorlage: ${x.name}` }));
     }
-    const options = [...mine.map((f) => ({ value: f.value, label: `Letztes Angebot: ${f.name}` })), ...templates, ...offers.filter((f) => !mine.includes(f)).map((f) => ({ value: f.value, label: f.name }))];
-    return { options, preselect: mine[0]?.value ?? templates[0]?.value ?? null };
+    const options = [...mine.map((f) => ({ value: f.value, label: `Letztes Angebot: ${f.name}` })), ...templates, ...offers.filter((f) => !mine.includes(f)).map((f) => ({ value: f.value, label: `Anderes Angebot: ${f.name}` }))];
+    return { options, preselect: mine[0]?.value ?? templates[0]?.value ?? null, templates: templates.length };
   } catch {
-    return { options: [], preselect: null };
+    return { options: [], preselect: null, templates: 0 };
   }
 }
