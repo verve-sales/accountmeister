@@ -1751,6 +1751,17 @@ export async function renewalDecisionAction(fd: FormData) {
   }, data.status === "BESTAETIGT" ? "Verlängerung bestätigt – neue Periode angelegt, Einsatzende angepasst." : "Verlängerungsstand gespeichert.");
 }
 
+/** e49: Signal des BD zur Verlängerung – „Kunde will verlängern“ oder „endet“; Sales Operations und Backoffice übernehmen. */
+export async function signalRenewalAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, "/start"), async (actor) => {
+    requireStaffingFlag();
+    const { signalRenewal } = await import("@/modules/engagements/care");
+    await signalRenewal(actor, data.engagementId ?? "", data);
+    throw new PendingInfo(data.signal === "ENDET" ? "Festgehalten: Der Einsatz endet. Sales Operations und Backoffice sind informiert." : "Danke – Sales Operations und Backoffice übernehmen die Verlängerung (Angebot, Bestellung, Vertrag).");
+  }, "");
+}
+
 export async function startRenewalAction(fd: FormData) {
   const data = formToObject(fd);
   return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#verlaengerung`), async (actor) => {

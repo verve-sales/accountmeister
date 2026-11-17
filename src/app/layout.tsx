@@ -16,6 +16,8 @@ import { provisionAccess } from "@/modules/provision/access";
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
 import { unreadCount } from "@/modules/notifications/service";
 import { CloseMenus } from "@/components/CloseMenus";
+import { AppChrome } from "@/components/AppChrome";
+import { canUseAssignments } from "@/modules/assignments/service";
 import type { Actor } from "@/modules/identity/actor";
 
 /** Navigationseintrag „Besetzung“ für BD, Principal, CEO und Sales Operations (keine Sicherheitsgrenze – die liegt in den Services). */
@@ -64,41 +66,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const unread = actor ? await unreadCount(actor).catch(() => 0) : 0;
   // Moco (Etappe 31): Link für Importberechtigte, wenn die Anbindung an ist, oder bei offenen Hinweisen für die Person
   const mocoLink = actor && cfg.MOCO_MODE !== "off" && (actor.roles.has("CEO") || actor.roles.has("PRINCIPAL") || (await (await import("@/modules/moco/sync")).openHintCount(actor).catch(() => 0)) > 0);
-  return (
-    <html lang="de">
-      <body className="min-h-screen">
-        <CloseMenus />
-        {cfg.AUTH_MODE === "development" && (
-          <div className="notice-dev" role="status">
-            Entwicklungsmodus: Anmeldung ohne Passwort, ausschließlich fiktive Daten. KI-Anbieter: {cfg.AI_PROVIDER === "disabled" ? "deaktiviert" : "Testanbieter"}. Kein Produktivbetrieb.
-          </div>
-        )}
-        <header className="border-b" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-          <div className="mx-auto max-w-6xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Link href="/start" className="no-underline flex items-center gap-3" style={{ color: "var(--text)" }} aria-label="Verve AI – Accountmeister, zur Startseite">
-              {/* Logo: public/verve-ai-lockup.png (Verve AI Lockup); Höhe 32px, Breite folgt dem Seitenverhältnis 815:200 */}
-              <Image src="/verve-ai-lockup.png" alt="Verve AI" width={130} height={32} priority style={{ height: 32, width: "auto" }} />
-              <span className="font-semibold">Accountmeister</span>
-            </Link>
-            {actor && (
-              <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm items-center">
-                {nav.main.map((n) => (
-                  <Link key={n.href} href={n.href}>
-                    {n.label}
-                  </Link>
-                ))}
-                <details className="nav-more">
-                  <summary>Mehr ▾</summary>
-                  <div className="nav-more-menu">
-                    {[...nav.more, ...MORE.slice(0, 1), ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte" }] : []), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(1)].map((n) => (
-                      <Link key={n.href} href={n.href}>
-                        {n.label}
-                      </Link>
-                    ))}
-                  </div>
-                </details>
-              </nav>
-            )}
+  const asgAllowed = actor ? await canUseAssignments(actor).catch(() => false) : false;
+  const initialApp = (await cookies()).get("vm_app")?.value === "asg" && asgAllowed ? "asg" : "am";
+  const switcher = asgAllowed ? (
+    <div className="app-switch" role="group" aria-label="Anwendung wechseln">
+      <Link href="/start" data-app-link="am">Accountmeister</Link>
+      <Link href="/assignments" data-app-link="asg">Assignmentmanager</Link>
+    </div>
+  ) : null;
+  const rightSide = (
             <div className="ml-auto text-sm muted flex flex-wrap items-center gap-3">
               {actor ? (
                 <>
@@ -143,10 +119,80 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Link href="/anmelden">Anmelden</Link>
               )}
             </div>
+  );
+  const amHeader = (
+        <header className="border-b" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+          <div className="mx-auto max-w-6xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+            <Link href="/start" className="no-underline flex items-center gap-3" style={{ color: "var(--text)" }} aria-label="Verve AI – Accountmeister, zur Startseite">
+              {/* Logo: public/verve-ai-lockup.png (Verve AI Lockup); Höhe 32px, Breite folgt dem Seitenverhältnis 815:200 */}
+              <Image src="/verve-ai-lockup.png" alt="Verve AI" width={130} height={32} priority style={{ height: 32, width: "auto" }} />
+              <span className="font-semibold">Accountmeister</span>
+            </Link>
+            {actor && (
+              <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm items-center">
+                {nav.main.map((n) => (
+                  <Link key={n.href} href={n.href}>
+                    {n.label}
+                  </Link>
+                ))}
+                <details className="nav-more">
+                  <summary>Mehr ▾</summary>
+                  <div className="nav-more-menu">
+                    {[...nav.more, ...MORE.slice(0, 1), ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte" }] : []), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(1)].map((n) => (
+                      <Link key={n.href} href={n.href}>
+                        {n.label}
+                      </Link>
+                    ))}
+                  </div>
+                </details>
+              </nav>
+            )}
+            {switcher}
+            {rightSide}
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
-        {actor ? <AssistantPanel signedIn /> : null}
+  );
+  const asgHeader = asgAllowed && actor ? (
+    <header className="border-b" style={{ borderColor: "var(--border)", background: "var(--surface)", borderTop: "3px solid var(--accent)" }}>
+      <div className="mx-auto max-w-6xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
+        <Link href="/assignments" className="no-underline flex items-center gap-3" style={{ color: "var(--text)" }} aria-label="Verve AI – Assignmentmanager, zur Übersicht">
+          <Image src="/verve-ai-lockup.png" alt="Verve AI" width={130} height={32} priority style={{ height: 32, width: "auto" }} />
+          <span className="font-semibold">Assignmentmanager</span>
+        </Link>
+        <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm items-center">
+          <Link href="/assignments">Übersicht</Link>
+          <Link href="/assignments/konditionen">Laufzeiten &amp; Konditionen</Link>
+          <Link href="/assignments/checkins">Check-ins</Link>
+          <Link href="/uebergaben">Übergaben</Link>
+          <details className="nav-more">
+            <summary>Mehr ▾</summary>
+            <div className="nav-more-menu">
+              <Link href="/vertragsbuero#erfassen">Assignment erfassen</Link>
+              {cfg.MOCO_MODE !== "off" && <Link href="/moco">Moco</Link>}
+              {(actor.roles.has("CEO") || actor.roles.has("ADMIN")) && <Link href="/verwaltung/sharepoint">SharePoint-Ablage</Link>}
+              <Link href="/einstellungen">Einstellungen</Link>
+              <Link href="/hilfe">Hilfe</Link>
+            </div>
+          </details>
+        </nav>
+        {switcher}
+        {rightSide}
+      </div>
+    </header>
+  ) : null;
+  return (
+    <html lang="de">
+      <body className="min-h-screen">
+        <CloseMenus />
+        {cfg.AUTH_MODE === "development" && (
+          <div className="notice-dev" role="status">
+            Entwicklungsmodus: Anmeldung ohne Passwort, ausschließlich fiktive Daten. KI-Anbieter: {cfg.AI_PROVIDER === "disabled" ? "deaktiviert" : "Testanbieter"}. Kein Produktivbetrieb.
+          </div>
+        )}
+        <AppChrome initial={initialApp} am={amHeader} asg={asgHeader}>
+          <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+          {actor ? <AssistantPanel signedIn /> : null}
+        </AppChrome>
       </body>
     </html>
   );

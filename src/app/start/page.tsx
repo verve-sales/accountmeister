@@ -45,6 +45,7 @@ import { drillHref } from "@/modules/opportunities/drilldown";
 import { TargetProgress } from "@/components/TargetProgress";
 import { eq } from "drizzle-orm";
 import { Aufgaben, Entscheidungen, Vorschlaege } from "@/components/Arbeitsliste";
+import { canUseAssignments } from "@/modules/assignments/service";
 
 const DASHBOARD_VIEW_COOKIE = "am_sicht";
 /** Sekunden seit einem Zeitpunkt (für Laufzeit-Hinweise; außerhalb der Komponente, damit das Rendern rein bleibt). */
@@ -104,7 +105,9 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   ).flat().filter((x): x is { id: string; label: string } => !!x);
   const back = "/start";
   // Hut (Etappe 37): die Arbeitsliste ist persönlich – Verlängerungen der BDs erscheinen bei Principal/GF nur „im Blick“
-  const myRenewals = renewalCards.filter((c) => c.forMe);
+  // e49: Wer nicht im Assignmentmanager arbeitet (BD, Principal), gibt bei Verlängerungen nur das Signal
+  const asgUser = await canUseAssignments(actor);
+  const myRenewals = renewalCards.filter((c) => c.forMe && (asgUser || c.mode === "ANSTOSSEN"));
   const teamRenewals = renewalCards.filter((c) => !c.forMe);
   const nDecide = myRenewals.filter((c) => c.mode === "ENTSCHEIDEN").length + openIncoming.length + support.filter((x) => x.isAddressee && x.status === "ANGEFRAGT").length + reviewItems.length;
   const nTasks = work.assigned.length + checkins.length + actions.length + myRenewals.filter((c) => c.mode === "ANSTOSSEN").length + support.filter((x) => x.isAddressee && x.status === "ANGENOMMEN").length;
@@ -130,7 +133,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
     ) : (
       <>
         {nDecide > 0 ? <Entscheidungen renewals={myRenewals} handovers={openIncoming} support={support} review={reviewItems} back={back} /> : null}
-        {nTasks > 0 ? <Aufgaben work={work.assigned} checkins={checkins} actions={actions} renewals={myRenewals} support={support} back={back} today={today} /> : null}
+        {nTasks > 0 ? <Aufgaben work={work.assigned} checkins={checkins} actions={actions} renewals={myRenewals} support={support} back={back} today={today} renewalSignalOnly={!asgUser} /> : null}
         {nSuggest > 0 ? <Vorschlaege suggestions={suggestions} hints={hints} userNames={userNames} users={users} back={back} aiEnabled={ai.enabled} status={eingangStatus || null} /> : null}
         {[nDecide ? null : "nichts zu entscheiden", nTasks ? null : "nichts fällig", nSuggest ? null : "keine offenen Vorschläge"].filter(Boolean).length > 0 && (
           <p className="muted text-sm">Außerdem: {[nDecide ? null : "nichts zu entscheiden", nTasks ? null : "nichts fällig", nSuggest ? null : "keine offenen Vorschläge"].filter(Boolean).join(" · ")}.</p>

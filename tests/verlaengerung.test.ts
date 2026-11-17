@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { resetConfigCacheForTests } from "@/lib/config";
-import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { NotFoundError, ValidationError } from "@/lib/errors";
 import { loadActor, type Actor } from "@/modules/identity/actor";
 import { assignRole } from "@/modules/governance/service";
 import { createOpportunity } from "@/modules/opportunities/service";
@@ -68,11 +68,11 @@ describe("Etappe 33 (Use Case 1): Verlängerung als Anstoß und Karte", () => {
     const ceoCard = (await listRenewalCards(await actorFor("clemens"))).find((c) => c.engagementId === e.id);
     expect(ceoCard?.forMe).toBe(false);
     expect(ceoCard?.bdUserId).toBe(david.userId);
-    expect((await listRenewalCards(ops)).some((c) => c.engagementId === e.id)).toBe(false);
+    // e49: Sales Operations setzt um und sieht die Karte deshalb zur Entscheidung
+    expect((await listRenewalCards(ops)).find((c) => c.engagementId === e.id)?.mode).toBe("ENTSCHEIDEN");
     expect((await listNotifications(david)).some((n) => n.title.startsWith("Verlängerung bestätigen") && n.title.includes(freelancerName))).toBe(true);
 
-    // Sales Ops darf nicht bestätigen; Anker (nina) sieht den Einsatz gar nicht
-    await expect(decideRenewal(ops, e.id, { decision: "BESTAETIGEN" })).rejects.toBeInstanceOf(ForbiddenError);
+    // Anker (nina) sieht den Einsatz gar nicht
     await expect(decideRenewal(await actorFor("nina"), e.id, { decision: "BESTAETIGEN" })).rejects.toBeInstanceOf(NotFoundError);
 
     // BD bestätigt mit einem Klick

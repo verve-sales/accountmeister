@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { resetConfigCacheForTests } from "@/lib/config";
-import { ConflictError, ForbiddenError, TransitionError, ValidationError } from "@/lib/errors";
+import { ConflictError, TransitionError, ValidationError } from "@/lib/errors";
 import { loadActor, type Actor } from "@/modules/identity/actor";
 import { assignRole } from "@/modules/governance/service";
 import { createOpportunity } from "@/modules/opportunities/service";
@@ -151,8 +151,8 @@ describe("Etappe 29 (E2): Betreuung, Check-ins, Verlängerung, Sales-Signal", ()
     expect(d.cares.filter((c) => !c.toDate).map((c) => c.userId)).toEqual([ops.userId]);
     expect(d.cares.find((c) => c.userId === david.userId)!.toDate).toBeTruthy();
     // Sales Ops hat keine Account-/Statusrechte
-    // Statuswechsel darf Sales Operations (Prozessinhaberin); kommerziell entscheiden nicht
-    await expect(upsertRenewalDecision(ops, e.id, { status: "ABGELEHNT" })).rejects.toBeInstanceOf(ForbiddenError);
+    // e49: Sales Operations führt die Verlängerung zu Ende; wer den Einsatz nicht sieht (Anker), kann nichts entscheiden
+    await expect(upsertRenewalDecision(await actorFor("nina"), e.id, { status: "ABGELEHNT" })).rejects.toThrow();
     // Vorgang abschließen → Betreuung bleibt
     const done = await actOnWorkItem(ops, w.id, { version: acc.version, action: "ABSCHLIESSEN", result: "Übernommen." });
     expect(done.status).toBe("ERLEDIGT");
@@ -248,7 +248,7 @@ describe("Etappe 29 (E2): Betreuung, Check-ins, Verlängerung, Sales-Signal", ()
     // Sales Ops darf vorbereiten, nicht bestätigen
     const ops = await makeSalesOps();
     await setCareDirect(david, e0.id, { role: "CUSTOMER_CARE", userId: ops.userId });
-    await expect(upsertRenewalDecision(ops, e0.id, { status: "BESTAETIGT", proposedFrom: to, proposedTo: plusDaysIso(to, 30), ek: "1", contractFollowUp: "x" })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(upsertRenewalDecision(await actorFor("nina"), e0.id, { status: "BESTAETIGT", proposedFrom: to, proposedTo: plusDaysIso(to, 30), ek: "1", contractFollowUp: "x" })).rejects.toThrow();
     expect((await upsertRenewalDecision(ops, e0.id, { status: "ZU_KLAEREN", availabilityNote: "neue Runde" })).status).toBe("ZU_KLAEREN");
     void TransitionError;
   });

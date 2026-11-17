@@ -44,7 +44,12 @@ export async function engagementAccess(actor: Actor, e: EngagementRow, tx: Tx | 
   if (!account) return null;
   const setup = await tx.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, e.setupId), columns: { bdUserId: true } });
   const commercial = isStaffingManager(actor, account, setup?.bdUserId ?? null, e.bdUserId) || hasRole(actor, "CEO");
-  const ops = !commercial && isSalesOps(actor);
+  // e49: Das Backoffice arbeitet im Assignmentmanager wie Sales Operations (Laufzeiten, Konditionen, Unterlagen)
+  let ops = !commercial && isSalesOps(actor);
+  if (!commercial && !ops) {
+    const { isBackoffice } = await import("@/modules/conversion/profile");
+    ops = await isBackoffice(actor);
+  }
   const manage = commercial || ops;
   const cares = await tx.query.careAssignments.findMany({ where: and(eq(schema.careAssignments.engagementId, e.id), eq(schema.careAssignments.userId, actor.userId), isNull(schema.careAssignments.toDate)) });
   const care = cares.length > 0;

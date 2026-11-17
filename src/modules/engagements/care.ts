@@ -326,7 +326,8 @@ export async function upsertRenewalDecision(actor: Actor, engagementId: string, 
   if (!(a.manage || a.care)) throw new ForbiddenError();
   const i = p.data;
   const e = a.engagement;
-  if (["BESTAETIGT", "ABGELEHNT"].includes(i.status) && !a.commercial) throw new ForbiddenError("Bestätigen oder ablehnen darf der verantwortliche BD, Principal oder CEO (kommerzielle Zuständigkeit); Sales Operations stößt an.");
+  // e49: Sales Operations und Backoffice führen die Verlängerung zu Ende (Angebot, Bestellung, Bestätigung); der BD gibt nur das Signal
+  if (["BESTAETIGT", "ABGELEHNT"].includes(i.status) && !a.manage) throw new ForbiddenError("Bestätigen oder ablehnen dürfen Sales Operations, Backoffice, der verantwortliche BD, Principal oder CEO.");
   const current = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, engagementId), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
   if (i.status === "BESTAETIGT") {
     if (!i.proposedFrom || !i.proposedTo) throw new ValidationError("Bestätigung braucht den bestätigten Zeitraum (von/bis).");
@@ -499,7 +500,7 @@ export async function decideRenewal(actor: Actor, engagementId: string, raw: unk
       return { decision: row!, mocoWritten: false, mocoError: null };
     });
   }
-  if (!a.commercial) throw new ForbiddenError("Bestätigen oder ablehnen darf der verantwortliche BD, Principal oder CEO; Sales Operations stößt an.");
+  if (!a.manage) throw new ForbiddenError("Bestätigen oder ablehnen dürfen Sales Operations, Backoffice, der verantwortliche BD, Principal oder CEO.");
   if (i.decision === "ABLEHNEN") {
     const row = await upsertRenewalDecision(actor, engagementId, { version: current.version, status: "ABGELEHNT", proposedFrom: current.proposedFrom ?? "", proposedTo: current.proposedTo ?? "", conditionsNote: current.conditionsNote ?? "", availabilityNote: `Abgelehnt von ${actor.displayName}${i.note ? `: ${i.note}` : ""}`, commercialOwnerUserId: actor.userId });
     await resolveNotifications(db, actor.workspaceId, `/einsaetze/${engagementId}#verlaengerung`);
@@ -575,6 +576,50 @@ export async function decideRenewal(actor: Actor, engagementId: string, raw: unk
   return { decision: row, mocoWritten, mocoError };
 }
 
+export const renewalSignalInput = z.object({ signal: z.enum(["VERLAENGERN", "ENDET"]), wishEnd: dateStr, note: opt(1000) });
+
+/**
+ * Signal des BD zur Verlängerung (e49): Der BD klärt mit dem Kunden nur das Ob – „Kunde will verlängern“ (gern mit
+ * Wunschende) oder „endet“. Alles Weitere (Einkauf, Vermittler, Angebot, Bestellung, Vertrag, Bestätigung) machen
+ * Sales Operations und Backoffice im Assignmentmanager; sie werden benachrichtigt.
+ */
+export async function signalRenewal(actor: Actor, engagementId: string, raw: unknown) {
+  const p = renewalSignalInput.safeParse(raw);
+  if (!p.success) throw new ValidationError(issues(p.error));
+  const a = await requireEngagement(actor, engagementId);
+  if (!(a.manage || a.care)) throw new ForbiddenError();
+  const e = a.engagement;
+  const i = p.data;
+  if (!["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status)) throw new TransitionError("Das Signal gilt für einen laufenden Einsatz.");
+  if (i.signal === "VERLAENGERN" && i.wishEnd && e.plannedEnd && i.wishEnd <= e.plannedEnd) throw new ValidationError("Das Wunschende muss nach dem heutigen Ende liegen.");
+  const current = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, engagementId), inArray(schema.renewalDecisions.status, [...RENEWAL_OPEN])) });
+  const stamp = `${actor.displayName} am ${todayIso().split("-").reverse().join(".")}`;
+  const line = i.signal === "VERLAENGERN" ? `Kunde will verlängern${i.wishEnd ? ` bis ${i.wishEnd.split("-").reverse().join(".")}` : ""} (${stamp})${i.note ? `: ${i.note}` : ""}` : `Kunde verlängert nicht (${stamp})${i.note ? `: ${i.note}` : ""}`;
+  const values = {
+    status: i.signal === "VERLAENGERN" ? "IN_ABSTIMMUNG" : "ABGELEHNT",
+    proposedFrom: i.signal === "VERLAENGERN" && e.plannedEnd ? plusDaysIso(e.plannedEnd, 1) : current?.proposedFrom ?? null,
+    proposedTo: i.signal === "VERLAENGERN" ? i.wishEnd || current?.proposedTo || null : current?.proposedTo ?? null,
+    conditionsNote: current?.conditionsNote ?? (i.signal === "VERLAENGERN" ? "Konditionen unverändert" : null),
+    availabilityNote: `${current?.availabilityNote ? `${current.availabilityNote}\n` : ""}${line}`.slice(0, 4000),
+    commercialOwnerUserId: e.bdUserId,
+    triggerDate: current?.triggerDate ?? todayIso(),
+    ...(i.signal === "ENDET" ? { decidedBy: actor.userId, decidedAt: new Date() } : {}),
+    updatedAt: new Date(),
+  };
+  const row = await db.transaction(async (tx) => {
+    let r;
+    if (current) [r] = await tx.update(schema.renewalDecisions).set({ ...values, version: current.version + 1 }).where(eq(schema.renewalDecisions.id, current.id)).returning();
+    else [r] = await tx.insert(schema.renewalDecisions).values({ workspaceId: actor.workspaceId, engagementId, ...values, createdBy: actor.userId }).returning();
+    await recordAudit(tx, actor, "renewal.signal", "ENGAGEMENT", engagementId, { signal: i.signal, wunschende: i.wishEnd || null });
+    return r!;
+  });
+  await resolveNotifications(db, actor.workspaceId, `/einsaetze/${engagementId}#verlaengerung`);
+  const { backofficeUserIds } = await import("@/modules/conversion/profile");
+  const recipients = [...new Set([...(await salesOpsUsers(actor.workspaceId)), ...(await backofficeUserIds(actor.workspaceId))])];
+  await notify(db, { workspaceId: actor.workspaceId, userIds: recipients, kind: "ZUGEWIESEN", title: `${i.signal === "VERLAENGERN" ? "Verlängerung umsetzen" : "Einsatz endet"}: ${await engagementLabel(db, e)} – ${line.slice(0, 160)}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId, dedupeKey: `renewal-signal:${row.id}:${row.version}` });
+  return row;
+}
+
 export type RenewalCard = {
   decisionId: string;
   version: number;
@@ -634,7 +679,7 @@ export async function listRenewalCards(actor: Actor): Promise<RenewalCard[]> {
     if (!a) continue;
     const inDecision = d.status !== "ZU_KLAEREN" && !!d.proposedTo;
     let mode: RenewalCard["mode"] | null = null;
-    if (inDecision && a.commercial) mode = "ENTSCHEIDEN";
+    if (inDecision && a.manage) mode = "ENTSCHEIDEN";
     else if (!inDecision && (a.ops || a.care || a.commercial)) mode = "ANSTOSSEN";
     if (!mode) continue;
     const delegates: RenewalCard["delegates"] = [];
@@ -668,7 +713,7 @@ export async function listRenewalCards(actor: Actor): Promise<RenewalCard[]> {
       bdName: e.bdUserId ? un.get(e.bdUserId) ?? null : null,
       forMe,
       contacts: contacts.get(e.id) ?? { renewal: null, order: null, approach: null, source: null },
-      canDecide: !!a.commercial,
+      canDecide: !!a.manage,
       orderReference: d.orderReference,
     });
   }

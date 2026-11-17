@@ -157,7 +157,7 @@ export function Entscheidungen({ renewals, handovers, support, review, back }: {
   );
 }
 
-export function Aufgaben({ work, checkins, actions, renewals, support, back, today }: { work: WorkItemView[]; checkins: CheckinItem[]; actions: ActionItem[]; renewals: RenewalCard[]; support: SupportItem[]; back: string; today: string }) {
+export function Aufgaben({ work, checkins, actions, renewals, support, back, today, renewalSignalOnly = false }: { work: WorkItemView[]; checkins: CheckinItem[]; actions: ActionItem[]; renewals: RenewalCard[]; support: SupportItem[]; back: string; today: string; renewalSignalOnly?: boolean }) {
   const soonCheckins = checkins.filter((c) => c.overdue || c.dueDate <= addDays(today, 7));
   const laterCheckins = checkins.filter((c) => !soonCheckins.includes(c));
   const dueActions = actions.filter((a) => a.status === "VORGESCHLAGEN" || (a.dueDate && a.dueDate <= addDays(today, 7)));
@@ -169,7 +169,7 @@ export function Aufgaben({ work, checkins, actions, renewals, support, back, tod
   const n = work.length + checkins.length + actions.length + starts.length + mySupport.length;
   const items: ReactNode[] = [
     ...soonCheckins.map((c) => <CheckinRow key={`c-${c.id}`} c={c} back={back} />),
-    ...starts.map((c) => <RenewalStartCard key={`rs-${c.decisionId}`} c={c} back={back} />),
+    ...starts.map((c) => <RenewalStartCard key={`rs-${c.decisionId}`} c={c} back={back} signalOnly={renewalSignalOnly} />),
     ...mySupport.map((s) => <SupportCard key={`s-${s.id}`} s={s} back={back} />),
     ...dueActions.map((a) => <ActionRow key={`a-${a.id}`} a={a} back={back} today={today} />),
   ];

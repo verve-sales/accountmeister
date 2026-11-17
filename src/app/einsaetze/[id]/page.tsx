@@ -8,7 +8,8 @@ import { DomainError } from "@/lib/errors";
 import { getConfig } from "@/lib/config";
 import { docSideLabel, docTypeLabel, docTypeValues, engagementStatusLabel, getEngagementDetail, signedStatusLabel, careRoleLabel } from "@/modules/engagements/service";
 import { checkinStatusLabel, listRenewalCards, renewalStatusLabel } from "@/modules/engagements/care";
-import { RenewalDecisionCard, RenewalStartForm } from "@/components/Renewal";
+import { RenewalDecisionCard, RenewalSignalForm, RenewalStartForm } from "@/components/Renewal";
+import { canUseAssignments } from "@/modules/assignments/service";
 import { scopeUnitLabel, rateUnitLabel } from "@/modules/staffing/service";
 import { workTargets } from "@/modules/work/service";
 import { Feedback, type SearchParams } from "@/components/Feedback";
@@ -70,6 +71,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const nameHit = (n: string) => lastNameKey.length >= 3 && n.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").includes(lastNameKey);
   const offers = spFiles ? [...offerFiles.filter((f) => nameHit(f.name)), ...offerFiles.filter((f) => !nameHit(f.name))].map((f) => ({ value: f.value, name: f.name })) : null;
   const offerPreselect = offerFiles.filter((f) => nameHit(f.name)).length === 1 ? offerFiles.find((f) => nameHit(f.name))!.value : null;
+  const asgUser = await canUseAssignments(actor);
   const nextDue = [e.nextCheckin, openRenewal ? e.pingDate : null, e.status === "PAUSIERT" ? e.reviewDate : null].filter((x): x is string => !!x).sort()[0] ?? null;
 
   return (
@@ -98,14 +100,14 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           {nextDue && <span style={nextDue < new Date().toISOString().slice(0, 10) ? { color: RED, fontWeight: 600 } : undefined}>nächste Frist {fmtDate(nextDue)}</span>}
           <span className="muted text-xs ml-auto">{a.commercial ? "BD-Kontext" : a.ops ? "Sales Operations" : a.readOnly ? "Coach (nur lesen)" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
         </div>
-        {!final && (a.manage || a.care) && !(openRenewal && openRenewal.proposedTo) && (
+        {!final && (a.manage || a.care) && (asgUser || !(openRenewal && openRenewal.proposedTo)) && (
           <details className="mt-2">
-            <summary className="btn btn-small" style={{ display: "inline-block", color: "#fff" }}>{a.commercial ? "Verlängern" : "Verlängerung anstoßen"}</summary>
-            <div className="card mt-2"><RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} canDecide={!!a.commercial} offers={offers} offerPreselect={offerPreselect} /></div>
+            <summary className="btn btn-small" style={{ display: "inline-block", color: "#fff" }}>{!asgUser ? "Verlängerung: Signal geben" : a.manage ? "Verlängern" : "Verlängerung anstoßen"}</summary>
+            <div className="card mt-2">{!asgUser ? <RenewalSignalForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} /> : <RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} defaultEnd={openRenewal?.proposedTo ?? null} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} canDecide={!!a.manage} offers={offers} offerPreselect={offerPreselect} />}</div>
           </details>
         )}
         {renewalCard && renewalCard.mode === "ENTSCHEIDEN" && <ul className="mt-2 list-none p-0"><RenewalDecisionCard c={renewalCard} back={`${back}#verlaengerung`} /></ul>}
-        {openRenewal && openRenewal.proposedTo && !(renewalCard && renewalCard.mode === "ENTSCHEIDEN") && <p className="text-sm mt-2" style={{ color: "#b7791f" }}>Verlängerung bis {fmtDate(openRenewal.proposedTo)} angestoßen – Entscheidung liegt beim BD{openRenewal.ownerName ? ` (${openRenewal.ownerName})` : ""}.</p>}
+        {openRenewal && openRenewal.proposedTo && !(renewalCard && renewalCard.mode === "ENTSCHEIDEN") && <p className="text-sm mt-2" style={{ color: "#b7791f" }}>Verlängerung bis {fmtDate(openRenewal.proposedTo)} angestoßen – Sales Operations und Backoffice setzen um.</p>}
       </div>
       <Feedback params={sp} />
 

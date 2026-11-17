@@ -3,7 +3,7 @@ import { fmtDate } from "@/lib/labels";
 import { plusDaysIso } from "@/modules/work/calendar";
 import type { RenewalCard as Card } from "@/modules/engagements/care";
 import { approachLabel } from "@/modules/engagements/contacts";
-import { decideRenewalAction, startRenewalAction } from "@/app/actions";
+import { decideRenewalAction, signalRenewalAction, startRenewalAction } from "@/app/actions";
 
 const RED = "#c0392b";
 const AMBER = "#b7791f";
@@ -29,7 +29,7 @@ function addMonths(iso: string, months: number): string {
 }
 
 /** „Verlängerung anstoßen“ – ein Datum, Konditionen unverändert als Vorgabe, optional Notiz (Use Case 1, Schritt 2). */
-export function RenewalStartForm({ engagementId, currentEnd, back, compact = false, lastRates, canDecide = false, offers, offerPreselect }: { engagementId: string; currentEnd: string | null; back: string; compact?: boolean; lastRates?: { ek: string | null; vk: string | null; unit: string } | null; /** darf selbst bestätigen: ein Schritt statt zwei */ canDecide?: boolean; /** e48e: Angebote des Kunden aus SharePoint (passende zuerst) */ offers?: { value: string; name: string }[] | null; offerPreselect?: string | null }) {
+export function RenewalStartForm({ engagementId, currentEnd, back, compact = false, lastRates, canDecide = false, offers, offerPreselect, defaultEnd }: { engagementId: string; currentEnd: string | null; /** Wunschende aus dem Signal des BD */ defaultEnd?: string | null; back: string; compact?: boolean; lastRates?: { ek: string | null; vk: string | null; unit: string } | null; /** darf selbst bestätigen: ein Schritt statt zwei */ canDecide?: boolean; /** e48e: Angebote des Kunden aus SharePoint (passende zuerst) */ offers?: { value: string; name: string }[] | null; offerPreselect?: string | null }) {
   const base = currentEnd ?? new Date().toISOString().slice(0, 10);
   const plus6 = addMonths(base, 6);
   const idp = `rs-${engagementId.slice(0, 6)}`;
@@ -39,7 +39,7 @@ export function RenewalStartForm({ engagementId, currentEnd, back, compact = fal
       <input type="hidden" name="back" value={back} />
       <div>
         <label className="label" htmlFor={`${idp}-end`}>Neues Ende</label>
-        <input id={`${idp}-end`} type="date" name="newEnd" className="input" required defaultValue={plus6} min={plusDaysIso(base, 1)} list={`${idp}-ends`} />
+        <input id={`${idp}-end`} type="date" name="newEnd" className="input" required defaultValue={defaultEnd && defaultEnd > base ? defaultEnd : plus6} min={plusDaysIso(base, 1)} list={`${idp}-ends`} />
         <datalist id={`${idp}-ends`}>
           <option value={addMonths(base, 3)}>+3 Monate</option>
           <option value={plus6}>+6 Monate</option>
@@ -138,7 +138,29 @@ export function RenewalDecisionCard({ c, back }: { c: Card; back: string }) {
 }
 
 /** Karte „Verlängerung klären“ für Sales Operations/Betreuung: anstoßen oder Ende bestätigen lassen. */
-export function RenewalStartCard({ c, back }: { c: Card; back: string }) {
+/** Signal des BD (e49): nur das Ob klären – den Rest machen Sales Operations und Backoffice im Assignmentmanager. */
+export function RenewalSignalForm({ engagementId, currentEnd, back }: { engagementId: string; currentEnd: string | null; back: string }) {
+  const base = currentEnd ?? new Date().toISOString().slice(0, 10);
+  const idp = `sg-${engagementId.slice(0, 6)}`;
+  return (
+    <form action={signalRenewalAction} className="flex flex-wrap items-end gap-2 text-sm">
+      <input type="hidden" name="engagementId" value={engagementId} />
+      <input type="hidden" name="back" value={back} />
+      <div>
+        <label className="label" htmlFor={`${idp}-end`}>Wunschende (falls bekannt)</label>
+        <input id={`${idp}-end`} type="date" name="wishEnd" className="input" min={plusDaysIso(base, 1)} />
+      </div>
+      <div style={{ flex: "1 1 14rem" }}>
+        <label className="label" htmlFor={`${idp}-note`}>Notiz (optional)</label>
+        <input id={`${idp}-note`} name="note" className="input" placeholder="z. B. Herr Soldatow will verlängern, Budget steht" />
+      </div>
+      <button className="btn btn-small" type="submit" name="signal" value="VERLAENGERN" style={{ background: "#2f7d32", borderColor: "#2f7d32" }}>Kunde will verlängern</button>
+      <button className="btn btn-secondary btn-small" type="submit" name="signal" value="ENDET">Endet</button>
+    </form>
+  );
+}
+
+export function RenewalStartCard({ c, back, signalOnly = false }: { c: Card; back: string; /** BD: nur das Signal geben */ signalOnly?: boolean }) {
   const urgent = c.daysToEnd !== null && c.daysToEnd <= 28;
   return (
     <li className="card" style={{ borderLeft: `4px solid ${urgent ? RED : "var(--border)"}` }}>
@@ -149,7 +171,8 @@ export function RenewalStartCard({ c, back }: { c: Card; back: string }) {
         <span className="muted text-xs ml-auto">Ende {c.currentEnd ? fmtDate(c.currentEnd) : "offen"}{c.daysToEnd !== null ? ` · noch ${c.daysToEnd} Tage` : ""}</span>
       </div>
       <RenewalContactLine c={c} />
-      <div className="mt-2"><RenewalStartForm engagementId={c.engagementId} currentEnd={c.currentEnd} back={back} compact canDecide={c.canDecide} /></div>
+      <div className="mt-2">{signalOnly ? <RenewalSignalForm engagementId={c.engagementId} currentEnd={c.currentEnd} back={back} /> : <RenewalStartForm engagementId={c.engagementId} currentEnd={c.currentEnd} back={back} compact canDecide={c.canDecide} />}</div>
+      {signalOnly && <p className="muted text-xs mt-1">Du klärst nur, ob der Kunde verlängert. Angebot, Bestellung und Vertrag übernehmen Sales Operations und Backoffice.</p>}
     </li>
   );
 }
