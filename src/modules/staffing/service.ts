@@ -54,7 +54,7 @@ export const candidacyStatusLabel: Record<string, string> = {
   NICHT_VERFUEGBAR: "nicht verfügbar",
 };
 
-export const scopeUnitLabel: Record<string, string> = { TAGE_PRO_WOCHE: "Tage/Woche", STUNDEN_PRO_WOCHE: "Stunden/Woche", PROZENT: "%" };
+export const scopeUnitLabel: Record<string, string> = { TAGE_PRO_WOCHE: "Tage/Woche", STUNDEN_PRO_WOCHE: "Stunden/Woche", PROZENT: "%", TAGE_GESAMT: "Tage gesamt" };
 export const rateUnitLabel: Record<string, string> = { TAG: "€/Tag", STUNDE: "€/Stunde" };
 
 const issues = (e: z.ZodError) => e.issues.map((i) => i.message).join("; ");

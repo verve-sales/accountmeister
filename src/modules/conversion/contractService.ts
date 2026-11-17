@@ -77,7 +77,7 @@ export async function contractDefaults(actor: Actor, engagementId: string): Prom
     if (period.scopeUnit === "TAGE_PRO_WOCHE" && beginn && ende) {
       const weeks = (new Date(ende).getTime() - new Date(beginn).getTime()) / (7 * 86400000);
       kontingent = String(Math.max(1, Math.round(weeks * period.scopeAmount)));
-    } else if (!period.scopeUnit) kontingent = String(period.scopeAmount);
+    } else if (!period.scopeUnit || period.scopeUnit === "TAGE_GESAMT") kontingent = String(period.scopeAmount);
   }
   const ortAusPosition = (position?.location ?? "").split(/[,(/;]/)[0]!.replace(/remote|vor ort/gi, "").trim();
   return {

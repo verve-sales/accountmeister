@@ -1645,6 +1645,25 @@ export async function changeEngagementStatusAction(fd: FormData) {
   }, "Einsatzstatus geändert.");
 }
 
+/** e49c: Konditionen ändern – neuer Satz ab Datum, sofort bestätigt. */
+export async function changeConditionsAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#konditionen`), async (actor) => {
+    requireStaffingFlag();
+    const { changeConditions } = await import("@/modules/engagements/service");
+    await changeConditions(actor, data.engagementId ?? "", data);
+  }, "Neue Konditionen gespeichert – Backoffice und Sales Operations sind informiert.");
+}
+
+export async function removePeriodAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#konditionen`), async (actor) => {
+    requireStaffingFlag();
+    const { removePlanPeriod } = await import("@/modules/engagements/service");
+    await removePlanPeriod(actor, data.engagementId ?? "", data.periodId ?? "");
+  }, "Plan-Periode entfernt.");
+}
+
 export async function addPeriodAction(fd: FormData) {
   const data = formToObject(fd);
   return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#konditionen`), async (actor) => {
@@ -1778,15 +1797,24 @@ export async function startRenewalAction(fd: FormData) {
   return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#verlaengerung`), async (actor) => {
     requireStaffingFlag();
     const { startRenewal } = await import("@/modules/engagements/care");
-    const r = await startRenewal(actor, data.engagementId ?? "", data, { direct: !!data.direct });
+    // e49c: „Neues Angebot erzeugen“ – die Verlängerung bekommt ein eigenes Angebot mit eigener Nummer
+    const newOffer = data.offerPick === "NEU";
+    if (newOffer && !(data.offerNumber ?? "").trim()) throw new DomainError("VALIDATION", "Für das neue Angebot bitte die Angebotsnummer aus Moco eintragen – oder bei „Angebot“ „kein Angebot“ wählen.", 400);
+    const r = await startRenewal(actor, data.engagementId ?? "", newOffer ? { ...data, offerPick: "" } : data, { direct: !!data.direct });
+    let offerNote = "";
+    if (newOffer) {
+      const { offerForRenewal } = await import("@/modules/sharepoint/offer");
+      const o = await offerForRenewal(actor, data.engagementId ?? "", { offerNumber: data.offerNumber ?? "", vk: data.vk ?? "", personDays: data.personDays ?? "" });
+      offerNote = ` Angebot ${data.offerNumber} erzeugt und abgelegt (${o.fileName}) – bitte in Excel prüfen.`;
+    }
     if (data.direct) {
       // e44: wer selbst entscheiden darf, verlängert in einem Schritt
       const { decideRenewal } = await import("@/modules/engagements/care");
       const d = await decideRenewal(actor, data.engagementId ?? "", { decision: "BESTAETIGEN", contractFollowUp: data.contractFollowUp ?? "", orderReference: data.orderReference ?? "" });
       if (d.pendingApproval) throw new PendingInfo("Geänderte Konditionen bei einem Account-Lead-Kunden: Die Verlängerung liegt jetzt zur Freigabe bei der Geschäftsführung.");
-      throw new PendingInfo(`Verlängert bis ${d.decision.proposedTo} – Periode, Einsatz- und Auftragsende gesetzt${d.mocoWritten ? ", Projektende in Moco aktualisiert" : d.mocoError ? `; Moco konnte nicht geschrieben werden (${d.mocoError.slice(0, 120)}) – Aufgabe an Sales Operations` : ""}.`);
+      throw new PendingInfo(`Verlängert bis ${d.decision.proposedTo} – Periode, Einsatz- und Auftragsende gesetzt${d.mocoWritten ? ", Projektende in Moco aktualisiert" : d.mocoError ? `; Moco konnte nicht geschrieben werden (${d.mocoError.slice(0, 120)}) – Aufgabe an Sales Operations` : ""}.${offerNote}`);
     }
-    throw new PendingInfo(`Verlängerung bis ${r.proposedTo} angestoßen – die Entscheidung liegt jetzt beim BD (und Principal) auf der Startseite.`);
+    throw new PendingInfo(`Verlängerung bis ${r.proposedTo} vorgemerkt – sie wird bestätigt, sobald die Bestellung da ist.${offerNote}`);
   }, "Verlängerung angestoßen.");
 }
 

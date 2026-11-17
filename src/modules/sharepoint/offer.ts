@@ -157,6 +157,31 @@ export async function generateOffer(actor: Actor, engagementId: string, raw: unk
   return { fileName, webUrl: item.webUrl, documentId: document.id, personDays: i.personDays ? Number(i.personDays) : await readNumber(bytes, ERGO_SHEET, ERGO_CELLS.personDays), dailyRate: i.dailyRate ? Number(i.dailyRate) : null };
 }
 
+/**
+ * Angebot zur Verlängerung (e49c): eine Verlängerung – erst recht zu neuen Konditionen – ist ein neues Angebot mit
+ * eigener Nummer. Grundlage ist das letzte Angebot der Person (sonst die Vorlage); Zeitraum aus der Verlängerung,
+ * Tagessatz aus dem neuen bzw. geltenden VK (Stundensatz × 8).
+ */
+export async function offerForRenewal(actor: Actor, engagementId: string, input: { offerNumber: string; vk?: string; personDays?: string }, deps: { client?: SpClient } = {}): Promise<OfferResult> {
+  const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, engagementId) });
+  if (!e) throw new ValidationError("Einsatz nicht gefunden.");
+  const [acc, fl, internal, ren, periods] = await Promise.all([
+    db.query.accounts.findFirst({ where: eq(schema.accounts.id, e.accountId), columns: { name: true } }),
+    e.freelancerId ? db.query.freelancers.findFirst({ where: eq(schema.freelancers.id, e.freelancerId), columns: { displayName: true } }) : Promise.resolve(null),
+    e.internalUserId ? db.query.users.findFirst({ where: eq(schema.users.id, e.internalUserId), columns: { displayName: true } }) : Promise.resolve(null),
+    db.query.renewalDecisions.findFirst({ where: eq(schema.renewalDecisions.engagementId, engagementId), orderBy: desc(schema.renewalDecisions.createdAt) }),
+    db.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, engagementId) }),
+  ]);
+  if (!ren?.proposedTo) throw new ValidationError("Für das Angebot fehlt das neue Ende der Verlängerung.");
+  const bases = await offerBases({ accountName: acc?.name ?? "", personName: fl?.displayName ?? internal?.displayName ?? "" }, deps);
+  if (!bases?.preselect) throw new ValidationError(`Für das neue Angebot fehlt die Grundlage: Bitte das letzte Angebot unter Kunden › ${acc?.name ?? "Kunde"} › Angebote oder eine Vorlage unter Vorlagen › Angebot Kunde ablegen (Excel).`);
+  const { currentPeriod } = await import("@/modules/engagements/service");
+  const cur = currentPeriod(periods);
+  const vk = (input.vk ?? "").replace(",", ".") || cur?.vk || "";
+  const dailyRate = vk ? (Number(vk) * ((cur?.rateUnit ?? "TAG") === "STUNDE" ? 8 : 1)).toFixed(2) : "";
+  return generateOffer(actor, engagementId, { basePick: bases.preselect, offerNumber: input.offerNumber, from: ren.proposedFrom ?? todayIso(), until: ren.proposedTo, personDays: input.personDays ?? "", dailyRate }, deps);
+}
+
 /** Grundlagen für ein neues Angebot: Angebote des Kunden (passende Person zuerst) und Vorlagen aus „Vorlagen › Angebot Kunde“. */
 export async function offerBases(input: { accountName: string; personName: string }, deps: { client?: SpClient } = {}): Promise<{ options: { value: string; label: string }[]; preselect: string | null } | null> {
   if (!deps.client && !sharePointEnabled()) return null;

@@ -380,8 +380,9 @@ export const renewalStartInput = z.object({
 });
 
 async function latestPeriod(engagementId: string) {
-  const rows = await db.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, engagementId), orderBy: [desc(schema.engagementPeriods.validFrom), desc(schema.engagementPeriods.createdAt)] });
-  return rows.find((r) => r.kind === "BESTAETIGT") ?? rows[0] ?? null;
+  // e49c: abgelöste Perioden zählen nicht – sonst käme nach einer Korrektur wieder der alte Satz
+  const { currentPeriod } = await import("./service");
+  return currentPeriod(await db.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, engagementId) }));
 }
 
 async function principalsFor(workspaceId: string, accountId: string): Promise<string[]> {

@@ -286,7 +286,7 @@ export const periodInput = z.object({
   vk: money,
   rateUnit: z.enum(["TAG", "STUNDE"]).default("TAG"),
   scopeAmount: z.coerce.number().int().min(0).max(1000).optional().or(z.literal("")),
-  scopeUnit: z.enum(["TAGE_PRO_WOCHE", "STUNDEN_PRO_WOCHE", "PROZENT", ""]).optional(),
+  scopeUnit: z.enum(["TAGE_PRO_WOCHE", "STUNDEN_PRO_WOCHE", "PROZENT", "TAGE_GESAMT", ""]).optional(),
   source: opt(300),
   note: opt(1000),
   /** abgelöste Periode (Satzänderung/Verlängerung) */
@@ -301,6 +301,12 @@ export async function addPeriod(actor: Actor, engagementId: string, raw: unknown
   const a = await requireManagedEngagement(actor, engagementId);
   const i = p.data;
   if (i.validTo && i.validTo < i.validFrom) throw new ValidationError("„Gültig bis“ liegt vor „gültig ab“.");
+  // e49c: unplausiblen Umfang abfangen (z. B. „100 Tage/Woche“ – gemeint ist das Kontingent)
+  if (typeof i.scopeAmount === "number" && i.scopeAmount > 0) {
+    if (i.scopeUnit === "TAGE_PRO_WOCHE" && i.scopeAmount > 7) throw new ValidationError(`${i.scopeAmount} Tage je Woche gibt es nicht – für ein Kontingent bitte die Einheit „Tage gesamt“ wählen.`);
+    if (i.scopeUnit === "STUNDEN_PRO_WOCHE" && i.scopeAmount > 60) throw new ValidationError(`${i.scopeAmount} Stunden je Woche sind zu viel – bitte prüfen.`);
+    if (i.scopeUnit === "PROZENT" && i.scopeAmount > 100) throw new ValidationError("Mehr als 100 % geht nicht.");
+  }
   const run = async (tx: Tx) => {
     if (i.kind === "BESTAETIGT") {
       const confirmed = await tx.query.engagementPeriods.findMany({ where: and(eq(schema.engagementPeriods.engagementId, engagementId), eq(schema.engagementPeriods.kind, "BESTAETIGT"), isNull(schema.engagementPeriods.supersededById)) });
@@ -329,6 +335,72 @@ export async function addPeriod(actor: Actor, engagementId: string, raw: unknown
     await handoverForChange(actor, engagementId, "KONDITIONEN", `Neue Konditionen ab ${i.validFrom.split("-").reverse().join(".")}${i.vk ? `: VK ${i.vk} je ${unit}` : ""}${i.scopeAmount ? `, Kontingent ${i.scopeAmount} ${i.scopeUnit ?? ""}`.trimEnd() : ""}.${a.engagement.freelancerId ? " Freelancer: Nachtrag erzeugen (Einsatz › Vertrag erzeugen ist mit den neuen Werten vorbelegt) und unterschrieben ablegen." : ""}`);
   }
   return row;
+}
+
+type PeriodRow = typeof schema.engagementPeriods.$inferSelect;
+/** Aktuell maßgebliche Periode (e49c): nicht abgelöst, jüngstes „gültig ab“; bei Gleichstand die bestätigte, dann die zuletzt angelegte. */
+export function currentPeriod<T extends Pick<PeriodRow, "supersededById" | "validFrom" | "kind" | "createdAt">>(periods: T[]): T | null {
+  return (
+    [...periods]
+      .filter((p) => !p.supersededById)
+      .sort((a, b) => b.validFrom.localeCompare(a.validFrom) || Number(b.kind === "BESTAETIGT") - Number(a.kind === "BESTAETIGT") || b.createdAt.getTime() - a.createdAt.getTime())[0] ?? null
+  );
+}
+
+export const conditionsInput = z.object({
+  validFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Bitte angeben, ab wann die neuen Konditionen gelten."),
+  vk: money,
+  ek: money,
+  rateUnit: z.enum(["TAG", "STUNDE"]),
+  scopeAmount: z.coerce.number().int().min(0).max(1000).optional().or(z.literal("")),
+  scopeUnit: z.enum(["TAGE_PRO_WOCHE", "STUNDEN_PRO_WOCHE", "PROZENT", "TAGE_GESAMT", ""]).optional(),
+  note: opt(1000),
+});
+
+/**
+ * Konditionen ändern (e49c) – der einfache Weg: neuer Satz ab einem Datum, bis zum Ende des Einsatzes, sofort bestätigt.
+ * Leere Felder übernehmen den bisherigen Wert. Beginnt die Änderung am oder vor dem Start der aktuellen Periode, wird
+ * diese abgelöst (Korrektur); sonst gilt die neue Periode ab dem Datum zusätzlich.
+ */
+export async function changeConditions(actor: Actor, engagementId: string, raw: unknown) {
+  const p = conditionsInput.safeParse(raw);
+  if (!p.success) throw new ValidationError(issues(p.error));
+  const i = p.data;
+  if (!i.vk && !i.ek && (i.scopeAmount === "" || i.scopeAmount === undefined)) throw new ValidationError("Bitte mindestens den neuen VK, EK oder Umfang eintragen.");
+  const a = await requireManagedEngagement(actor, engagementId);
+  const e = a.engagement;
+  const cur = currentPeriod(await db.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, engagementId) }));
+  const validTo = e.plannedEnd && e.plannedEnd >= i.validFrom ? e.plannedEnd : "";
+  return addPeriod(actor, engagementId, {
+    kind: "BESTAETIGT",
+    validFrom: i.validFrom,
+    validTo,
+    vk: i.vk || cur?.vk || "",
+    ek: i.ek || cur?.ek || "",
+    rateUnit: i.rateUnit,
+    scopeAmount: i.scopeAmount === "" || i.scopeAmount === undefined ? cur?.scopeAmount ?? "" : i.scopeAmount,
+    scopeUnit: i.scopeUnit || cur?.scopeUnit || "",
+    source: "Konditionen geändert",
+    note: i.note || "",
+    supersedesId: cur && cur.validFrom >= i.validFrom ? cur.id : cur && cur.kind === "PLAN" ? cur.id : "",
+    correction: "true",
+  });
+}
+
+/** Eine Plan-Periode entfernen (e49c), z. B. eine versehentlich angelegte. Bestätigte Perioden bleiben als Historie. */
+export async function removePlanPeriod(actor: Actor, engagementId: string, periodId: string) {
+  await requireManagedEngagement(actor, engagementId);
+  const row = await db.query.engagementPeriods.findFirst({ where: and(eq(schema.engagementPeriods.id, periodId), eq(schema.engagementPeriods.engagementId, engagementId)) });
+  if (!row) throw new NotFoundError("Periode");
+  if (row.kind !== "PLAN") throw new ValidationError("Bestätigte Perioden bleiben als Historie – bitte über „Konditionen ändern“ korrigieren.");
+  const others = await db.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, engagementId) });
+  if (others.filter((x) => !x.supersededById && x.id !== row.id).length === 0 && !others.some((x) => x.supersededById === row.id)) throw new ValidationError("Das ist die einzige Periode des Einsatzes – bitte über „Konditionen ändern“ korrigieren.");
+  await db.transaction(async (tx) => {
+    // was diese Periode abgelöst hatte, gilt wieder
+    await tx.update(schema.engagementPeriods).set({ supersededById: null }).where(eq(schema.engagementPeriods.supersededById, row.id));
+    await tx.delete(schema.engagementPeriods).where(eq(schema.engagementPeriods.id, row.id));
+    await recordAudit(tx, actor, "engagement.period_removed", "ENGAGEMENT", engagementId, { von: row.validFrom, bis: row.validTo, vk: row.vk });
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import { PendingButton } from "@/components/PendingButton";
 import { markSeen } from "@/modules/notifications/service";
 import { DomainError } from "@/lib/errors";
 import { getConfig } from "@/lib/config";
-import { docSideLabel, docTypeLabel, docTypeValues, engagementStatusLabel, getEngagementDetail, signedStatusLabel, careRoleLabel } from "@/modules/engagements/service";
+import { docSideLabel, docTypeLabel, docTypeValues, engagementStatusLabel, getEngagementDetail, signedStatusLabel, careRoleLabel, currentPeriod } from "@/modules/engagements/service";
 import { checkinStatusLabel, listRenewalCards, renewalStatusLabel } from "@/modules/engagements/care";
 import { RenewalDecisionCard, RenewalSignalForm, RenewalStartForm } from "@/components/Renewal";
 import { canUseAssignments } from "@/modules/assignments/service";
@@ -20,7 +20,7 @@ import { DeleteBlock } from "@/components/DeleteBlock";
 import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { approachLabel, approachValues, loadRenewalContacts } from "@/modules/engagements/contacts";
-import { addSharePointDocumentAction, addContractDocumentAction, uploadSignedVersionAction, setOrderReferenceAction, generateOfferAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
+import { addSharePointDocumentAction, addContractDocumentAction, uploadSignedVersionAction, setOrderReferenceAction, generateOfferAction, changeConditionsAction, removePeriodAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
 import { contractDefaults } from "@/modules/conversion/contractService";
 
 const eur = (v: string | null, unit: string) => (v ? `${Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${rateUnitLabel[unit] ?? unit}` : "offen");
@@ -57,7 +57,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const openRenewal = d.renewals.find((r) => ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status));
   const mocoHints = a.manage ? await listHints(actor, { subjectType: "ENGAGEMENT", subjectId: e.id, status: "OFFEN" }) : [];
   const renewalCard = (await listRenewalCards(actor)).find((c) => c.engagementId === e.id) ?? null;
-  const lastPeriod = [...d.periods].reverse().find((x) => x.kind === "BESTAETIGT") ?? d.periods[d.periods.length - 1] ?? null;
+  // e49c: maßgeblich ist die jüngste nicht abgelöste Periode (nicht mehr „die letzte bestätigte“ – die kann abgelöst sein)
+  const lastPeriod = currentPeriod(d.periods);
   const personName = e.freelancerName.replace(/ \(intern\)$/, "");
   const today = new Date().toISOString().slice(0, 10);
   const firstMissing = e.procurement.required.find((r) => !r.ok) ?? null;
@@ -71,7 +72,6 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const offerFiles = spFiles?.groups.find((g) => g.kind === "KUNDE_ANGEBOT")?.files ?? [];
   const nameHit = (n: string) => lastNameKey.length >= 3 && n.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").includes(lastNameKey);
   const offers = spFiles ? [...offerFiles.filter((f) => nameHit(f.name)), ...offerFiles.filter((f) => !nameHit(f.name))].map((f) => ({ value: f.value, name: f.name })) : null;
-  const offerPreselect = offerFiles.filter((f) => nameHit(f.name)).length === 1 ? offerFiles.find((f) => nameHit(f.name))!.value : null;
   const asgUser = await canUseAssignments(actor);
   // e49b: Angebot erzeugen – Grundlage ist das letzte Angebot der Person oder eine Vorlage; Zeitraum und Satz aus der jüngsten Verlängerung
   const offerBase = (a.manage || a.care) && !final ? await offerBases({ accountName: e.accountName, personName: personName ?? "" }) : null;
@@ -112,7 +112,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         {!final && (a.manage || a.care) && (asgUser || !(openRenewal && openRenewal.proposedTo)) && (
           <details className="mt-2">
             <summary className="btn btn-small" style={{ display: "inline-block", color: "#fff" }}>{!asgUser ? "Verlängerung: Signal geben" : a.manage ? "Verlängern" : "Verlängerung anstoßen"}</summary>
-            <div className="card mt-2">{!asgUser ? <RenewalSignalForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} /> : <RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} defaultEnd={openRenewal?.proposedTo ?? null} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} canDecide={!!a.manage} offers={offers} offerPreselect={offerPreselect} />}</div>
+            <div className="card mt-2">{!asgUser ? <RenewalSignalForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} /> : <RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} defaultEnd={openRenewal?.proposedTo ?? null} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} canDecide={!!a.manage} offers={offers} canGenerateOffer={!!offerBase?.preselect} />}</div>
           </details>
         )}
         {renewalCard && renewalCard.mode === "ENTSCHEIDEN" && <ul className="mt-2 list-none p-0"><RenewalDecisionCard c={renewalCard} back={`${back}#verlaengerung`} /></ul>}
@@ -382,30 +382,53 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
                 <td>{eur(p.vk, p.rateUnit)}</td>
                 <td>{p.scopeAmount ? `${p.scopeAmount} ${scopeUnitLabel[p.scopeUnit ?? ""] ?? ""}` : "–"}</td>
                 <td>{p.source ?? "–"}{p.note ? ` · ${p.note}` : ""}</td>
-                <td>{p.confirmedName ? `${p.confirmedName}, ${fmtDate(p.confirmedAt)}` : "–"}</td>
+                <td>{p.confirmedName ? `${p.confirmedName}, ${fmtDate(p.confirmedAt)}` : "–"}{lastPeriod?.id === p.id ? <span className="status" style={{ marginLeft: 6 }}>gilt</span> : null}
+                  {a.manage && !final && p.kind === "PLAN" && d.periods.length > 1 && (
+                    <form action={removePeriodAction} className="inline-block" style={{ marginLeft: 6 }}>
+                      <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="periodId" value={p.id} /><input type="hidden" name="back" value={`${back}#konditionen`} />
+                      <button className="btn btn-secondary btn-small" type="submit" title="Plan-Periode entfernen; was sie abgelöst hatte, gilt wieder">Entfernen</button>
+                    </form>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
         {a.manage && !final && (
+          <>
+          <details className="mt-3" open={false} id="konditionen-aendern" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .75rem" }}>
+            <summary className="text-sm cursor-pointer font-semibold">Konditionen ändern (neuer Satz ab …)</summary>
+            <form action={changeConditionsAction} className="flex flex-wrap items-end gap-2 mt-2 text-sm">
+              <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="back" value={`${back}#konditionen`} />
+              <div><label className="label" htmlFor="ccFrom">Gilt ab</label><input id="ccFrom" type="date" name="validFrom" className="input" required defaultValue={lastPeriod && lastPeriod.validFrom > new Date().toISOString().slice(0, 10) ? lastPeriod.validFrom : undefined} /></div>
+              <div><label className="label" htmlFor="ccVk">VK neu</label><input id="ccVk" name="vk" className="input" inputMode="decimal" style={{ width: "9rem" }} placeholder={lastPeriod?.vk ? `bisher ${lastPeriod.vk.replace(".", ",")}` : "z. B. 121,08"} /></div>
+              {e.freelancerId && <div><label className="label" htmlFor="ccEk">EK neu</label><input id="ccEk" name="ek" className="input" inputMode="decimal" style={{ width: "9rem" }} placeholder={lastPeriod?.ek ? `bisher ${lastPeriod.ek.replace(".", ",")}` : "leer = unverändert"} /></div>}
+              <div><label className="label" htmlFor="ccUnit">je</label><select id="ccUnit" name="rateUnit" className="input" defaultValue={lastPeriod?.rateUnit ?? "TAG"}><option value="STUNDE">Stunde</option><option value="TAG">Tag</option></select></div>
+              <div><label className="label" htmlFor="ccScope">Kontingent/Umfang</label><input id="ccScope" type="number" name="scopeAmount" className="input" style={{ width: "7rem" }} placeholder="unverändert" /></div>
+              <div><label className="label" htmlFor="ccScopeUnit">Einheit</label><select id="ccScopeUnit" name="scopeUnit" className="input" defaultValue={lastPeriod?.scopeUnit ?? "TAGE_GESAMT"}>{Object.entries(scopeUnitLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+              <PendingButton className="btn btn-small" busy="Speichere …">Speichern</PendingButton>
+              <span className="muted text-xs" style={{ flexBasis: "100%" }}>Gilt bis zum Ende des Einsatzes und ist sofort bestätigt. Leere Felder bleiben wie bisher. Backoffice und Sales Operations bekommen die Übergabe „Konditionen geändert“.</span>
+            </form>
+          </details>
           <details className="mt-2">
-            <summary>Neue Periode (Satzänderung, Verlängerung, Bestätigung)</summary>
+            <summary className="muted text-sm">Erweitert: Periode von Hand anlegen</summary>
             <form action={addPeriodAction} className="grid sm:grid-cols-4 gap-2 mt-2">
               <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="back" value={`${back}#konditionen`} />
               <div><label className="label">Art</label><select name="kind" className="input" defaultValue="BESTAETIGT"><option value="PLAN">Plan</option><option value="BESTAETIGT">bestätigt</option></select></div>
               <div><label className="label">Gültig ab</label><input type="date" name="validFrom" className="input" required /></div>
               <div><label className="label">Gültig bis</label><input type="date" name="validTo" className="input" /></div>
-              <div><label className="label">je</label><select name="rateUnit" className="input" defaultValue="TAG"><option value="TAG">Tag</option><option value="STUNDE">Stunde</option></select></div>
+              <div><label className="label">je</label><select name="rateUnit" className="input" defaultValue={lastPeriod?.rateUnit ?? "TAG"}><option value="TAG">Tag</option><option value="STUNDE">Stunde</option></select></div>
               <div><label className="label">EK</label><input name="ek" className="input" inputMode="decimal" /></div>
               <div><label className="label">VK</label><input name="vk" className="input" inputMode="decimal" /></div>
               <div><label className="label">Umfang</label><input type="number" name="scopeAmount" className="input" /></div>
-              <div><label className="label">Einheit</label><select name="scopeUnit" className="input" defaultValue="TAGE_PRO_WOCHE">{Object.entries(scopeUnitLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+              <div><label className="label">Einheit</label><select name="scopeUnit" className="input" defaultValue={lastPeriod?.scopeUnit ?? "TAGE_GESAMT"}>{Object.entries(scopeUnitLabel).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
               <div><label className="label">Löst ab</label><select name="supersedesId" className="input" defaultValue=""><option value="">–</option>{d.periods.filter((p) => !p.supersededById).map((p) => <option key={p.id} value={p.id}>{fmtDate(p.validFrom)} – {p.validTo ? fmtDate(p.validTo) : "offen"} ({p.kind})</option>)}</select></div>
               <div className="sm:col-span-2"><label className="label">Quelle / Notiz</label><input name="source" className="input" placeholder="z. B. Nachtrag 1 vom …" /></div>
               <label className="text-sm flex items-center gap-2 self-end"><input type="checkbox" name="correction" value="on" /> Korrektur (Überlappung bewusst)</label>
               <div className="sm:col-span-4"><button className="btn btn-small" type="submit">Periode anlegen</button></div>
             </form>
           </details>
+          </>
         )}
       </section>
 
@@ -540,7 +563,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
               <div><label className="label">bis</label><input type="date" name="proposedTo" className="input" defaultValue={openRenewal?.proposedTo ?? ""} /></div>
               <div><label className="label">EK (bei Bestätigung)</label><input name="ek" className="input" inputMode="decimal" /></div>
               <div><label className="label">VK (bei Bestätigung)</label><input name="vk" className="input" inputMode="decimal" /></div>
-              <div><label className="label">je</label><select name="rateUnit" className="input" defaultValue="TAG"><option value="TAG">Tag</option><option value="STUNDE">Stunde</option></select></div>
+              <div><label className="label">je</label><select name="rateUnit" className="input" defaultValue={lastPeriod?.rateUnit ?? "TAG"}><option value="TAG">Tag</option><option value="STUNDE">Stunde</option></select></div>
               <div><label className="label">Konditionsstand (Notiz)</label><input name="conditionsNote" className="input" defaultValue={openRenewal?.conditionsNote ?? ""} /></div>
               <div><label className="label">Verfügbarkeit Freelancer</label><input name="availabilityNote" className="input" defaultValue={openRenewal?.availabilityNote ?? ""} /></div>
               <div><label className="label">Vertragsfolge</label><input name="contractFollowUp" className="input" defaultValue={openRenewal?.contractFollowUp ?? ""} placeholder="z. B. Nachtrag, neue Bestellung" /></div>

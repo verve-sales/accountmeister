@@ -29,7 +29,7 @@ function addMonths(iso: string, months: number): string {
 }
 
 /** „Verlängerung anstoßen“ – ein Datum, Konditionen unverändert als Vorgabe, optional Notiz (Use Case 1, Schritt 2). */
-export function RenewalStartForm({ engagementId, currentEnd, back, compact = false, lastRates, canDecide = false, offers, offerPreselect, defaultEnd }: { engagementId: string; currentEnd: string | null; /** Wunschende aus dem Signal des BD */ defaultEnd?: string | null; back: string; compact?: boolean; lastRates?: { ek: string | null; vk: string | null; unit: string } | null; /** darf selbst bestätigen: ein Schritt statt zwei */ canDecide?: boolean; /** e48e: Angebote des Kunden aus SharePoint (passende zuerst) */ offers?: { value: string; name: string }[] | null; offerPreselect?: string | null }) {
+export function RenewalStartForm({ engagementId, currentEnd, back, compact = false, lastRates, canDecide = false, offers, defaultEnd, canGenerateOffer = false }: { engagementId: string; currentEnd: string | null; /** Wunschende aus dem Signal des BD */ defaultEnd?: string | null; back: string; compact?: boolean; lastRates?: { ek: string | null; vk: string | null; unit: string } | null; /** darf selbst bestätigen: ein Schritt statt zwei */ canDecide?: boolean; /** e48e: Angebote des Kunden aus SharePoint (passende zuerst) */ offers?: { value: string; name: string }[] | null; /** e49c: neues Angebot aus dem letzten erzeugen (Grundlage vorhanden) */ canGenerateOffer?: boolean }) {
   const base = currentEnd ?? new Date().toISOString().slice(0, 10);
   const plus6 = addMonths(base, 6);
   const idp = `rs-${engagementId.slice(0, 6)}`;
@@ -59,16 +59,18 @@ export function RenewalStartForm({ engagementId, currentEnd, back, compact = fal
       {offers && (
         <>
           <div className={compact ? "" : "sm:col-span-2"}>
-            <label className="label" htmlFor={`${idp}-offer`}>Angebot (aus SharePoint, optional)</label>
-            <select id={`${idp}-offer`} name="offerPick" className="select" defaultValue={offerPreselect ?? ""} style={{ maxWidth: "100%" }}>
+            <label className="label" htmlFor={`${idp}-offer`}>Angebot</label>
+            <select id={`${idp}-offer`} name="offerPick" className="select" defaultValue={canGenerateOffer ? "NEU" : ""} style={{ maxWidth: "100%" }}>
+              {canGenerateOffer && <option value="NEU">Neues Angebot erzeugen (aus dem letzten Angebot)</option>}
               <option value="">– kein Angebot –</option>
-              {offers.map((o) => <option key={o.value} value={o.value}>{o.name}</option>)}
+              {offers.map((o) => <option key={o.value} value={o.value}>Vorhandenes verknüpfen: {o.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="label" htmlFor={`${idp}-offno`}>Angebotsnummer</label>
-            <input id={`${idp}-offno`} name="offerNumber" className="input" maxLength={100} placeholder="leer = aus dem Dateinamen" />
+            <label className="label" htmlFor={`${idp}-offno`}>Angebotsnummer (aus Moco)</label>
+            <input id={`${idp}-offno`} name="offerNumber" className="input" maxLength={100} placeholder={canGenerateOffer ? "nötig für ein neues Angebot" : "leer = aus dem Dateinamen"} />
           </div>
+          {canGenerateOffer && <div><label className="label" htmlFor={`${idp}-pd`}>Personentage</label><input id={`${idp}-pd`} name="personDays" className="input" inputMode="numeric" placeholder="leer = wie letztes Angebot" /></div>}
         </>
       )}
       <div className={compact ? "" : "sm:col-span-2"}>
@@ -77,7 +79,7 @@ export function RenewalStartForm({ engagementId, currentEnd, back, compact = fal
       </div>
       <div className="flex flex-wrap gap-2">
         {canDecide && <button className="btn btn-small" type="submit" name="direct" value="1" style={{ background: "#2f7d32" }}>Verlängern</button>}
-        <button className={canDecide ? "btn btn-secondary btn-small" : "btn btn-small"} type="submit">{canDecide ? "Erst zur Bestätigung geben" : "Verlängerung anstoßen"}</button>
+        <button className={canDecide ? "btn btn-secondary btn-small" : "btn btn-small"} type="submit">{canDecide ? "Angebot raus – Bestellung abwarten" : "Verlängerung anstoßen"}</button>
       </div>
     </form>
   );

@@ -4,6 +4,7 @@ import { ForbiddenError } from "@/lib/errors";
 import { EXPIRY_URGENT_DAYS, EXPIRY_WINDOW_DAYS } from "@/lib/window";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
+import { currentPeriod } from "@/modules/engagements/service";
 
 /**
  * Assignmentmanager (e49): die Arbeitsoberfläche von Sales Operations, Backoffice und Geschäftsführung auf denselben
@@ -94,7 +95,7 @@ export async function asgOverview(actor: Actor, opts: { includeEndedDays?: numbe
 
   const engagements: AsgEngagement[] = engs.map((e) => {
     const fl = e.freelancerId ? fn.get(e.freelancerId) : null;
-    const p = periods.find((x) => x.engagementId === e.id && x.kind === "BESTAETIGT") ?? periods.find((x) => x.engagementId === e.id) ?? null;
+    const p = currentPeriod(periods.filter((x) => x.engagementId === e.id));
     const ren = renewals.find((r) => r.engagementId === e.id) ?? null;
     const openRen = ren && RENEWAL_OPEN.includes(ren.status) ? ren : null;
     const myDocs = docs.filter((d) => links.some((l) => l.engagementId === e.id && l.documentId === d.id));
@@ -132,7 +133,7 @@ export async function asgOverview(actor: Actor, opts: { includeEndedDays?: numbe
       ek: e.freelancerId ? p?.ek ?? fl?.ekRate ?? null : null,
       vk: p?.vk ?? null,
       rateUnit: p?.rateUnit ?? (e.freelancerId && !p?.ek ? fl?.ekUnit ?? "TAG" : "TAG"),
-      scope: p?.scopeAmount ? `${p.scopeAmount} ${p.scopeUnit === "TAGE_PRO_WOCHE" ? "T./Woche" : p.scopeUnit === "STUNDEN_PRO_WOCHE" ? "Std./Woche" : p.scopeUnit === "PROZENT" ? "%" : ""}`.trim() : null,
+      scope: p?.scopeAmount ? `${p.scopeAmount} ${p.scopeUnit === "TAGE_PRO_WOCHE" ? "T./Woche" : p.scopeUnit === "STUNDEN_PRO_WOCHE" ? "Std./Woche" : p.scopeUnit === "PROZENT" ? "%" : p.scopeUnit === "TAGE_GESAMT" ? "Tage" : ""}`.trim() : null,
       contract: e.freelancerId ? contract : null,
       orderDoc: myDocs.some((d) => d.side === "KUNDE" && d.docType === "BESTELLUNG"),
       bdName: un.get(e.bdUserId) ?? "?",

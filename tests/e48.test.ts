@@ -353,5 +353,39 @@ describe("e48: GF-Start, leisere KI, Dokumentenfluss", () => {
     const ren = (await db.query.renewalDecisions.findFirst({ where: eq(schema.renewalDecisions.engagementId, q.engagement.id), orderBy: (x, { desc }) => desc(x.createdAt) }))!;
     expect(ren.offerNumber).toBe("VCA-T26-11_0042");
     await expect(generateOffer(await actorFor("lars"), q.engagement.id, { basePick: bases!.preselect!, offerNumber: "X-1", from, until })).rejects.toThrow();
+    // Angebot direkt aus der Verlängerung: Grundlage = jüngstes Angebot der Person, Tagessatz = 8 × Stundensatz
+    await db.update(schema.engagementPeriods).set({ rateUnit: "STUNDE" }).where(eq(schema.engagementPeriods.engagementId, q.engagement.id));
+    const { offerForRenewal } = await import("@/modules/sharepoint/offer");
+    const o2 = await offerForRenewal(david, q.engagement.id, { offerNumber: "VCA-T26-11_0043" });
+    const item2 = [...fixtureState().items.values()].find((x) => x.path.endsWith(o2.fileName))!;
+    expect(await readNumber(item2.bytes!, ERGO_SHEET, "X28")).toBe(968.64);
+    expect(await readNumber(item2.bytes!, ERGO_SHEET, "Q54")).toBe(excelDate(until));
+  });
+
+  it("D07: Konditionen ändern – neue Periode gilt (nicht die abgelöste), versehentliche Plan-Periode lässt sich entfernen, unplausibler Umfang wird abgefangen", async () => {
+    env();
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const { changeConditions, currentPeriod, removePlanPeriod } = await import("@/modules/engagements/service");
+    const opp = await createOpportunity(david, { setupId: s.setupId, title: `E49c Konditionen ${u()}`, needDescription: "Satz ändert sich.", kind: "FREELANCER_EXPERTE" });
+    const q = await quickFill(david, opp.id, { title: "Tester", resourceKind: "FREELANCER", newName: `Karla Kondition ${u()} (fiktiv)`, ekRate: "90", vkRate: "115.31", desiredStart: plusDaysIso(todayIso(), -60), plannedEnd: plusDaysIso(todayIso(), 200) });
+    const id = q.engagement.id;
+    const load = () => db.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, id) });
+    const first = currentPeriod(await load())!;
+    // bestätigte Periode, danach versehentlich eine Plan-Periode mit falscher Einheit, die sie ablöst
+    const conf = await addPeriod(david, id, { kind: "BESTAETIGT", validFrom: plusDaysIso(todayIso(), 30), validTo: plusDaysIso(todayIso(), 200), vk: "115.31", rateUnit: "STUNDE", supersedesId: first.id });
+    await expect(addPeriod(david, id, { kind: "PLAN", validFrom: plusDaysIso(todayIso(), 10), vk: "121.07", rateUnit: "TAG", scopeAmount: 100, scopeUnit: "TAGE_PRO_WOCHE" })).rejects.toThrow(/Tage gesamt/);
+    const wrong = await addPeriod(david, id, { kind: "PLAN", validFrom: plusDaysIso(todayIso(), 10), vk: "121.07", rateUnit: "TAG", scopeAmount: 100, scopeUnit: "TAGE_GESAMT", supersedesId: conf.id });
+    await removePlanPeriod(david, id, wrong.id);
+    expect(currentPeriod(await load())!.id).toBe(conf.id);
+    await expect(removePlanPeriod(david, id, conf.id)).rejects.toThrow(/Historie/);
+    // richtiger Weg: Konditionen ändern ab demselben Datum → löst die bestätigte ab, EK und Einheit bleiben
+    const next = await changeConditions(david, id, { validFrom: conf.validFrom, vk: "121,08", rateUnit: "STUNDE", scopeAmount: "100", scopeUnit: "TAGE_GESAMT" });
+    const cur = currentPeriod(await load())!;
+    expect(cur.id).toBe(next.id);
+    expect(cur).toMatchObject({ vk: "121.08", rateUnit: "STUNDE", kind: "BESTAETIGT", scopeAmount: 100, scopeUnit: "TAGE_GESAMT", validTo: plusDaysIso(todayIso(), 200) });
+    expect((await load()).find((x) => x.id === conf.id)!.supersededById).toBe(next.id);
+    expect(await db.query.backofficeHandovers.findFirst({ where: and(eq(schema.backofficeHandovers.engagementId, id), eq(schema.backofficeHandovers.kind, "KONDITIONEN")) })).toBeTruthy();
+    await expect(changeConditions(david, id, { validFrom: todayIso(), rateUnit: "STUNDE" })).rejects.toThrow(/mindestens/);
   });
 });
