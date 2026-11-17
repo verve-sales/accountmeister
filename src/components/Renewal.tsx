@@ -46,17 +46,10 @@ export function RenewalStartForm({ engagementId, currentEnd, back, compact = fal
           <option value={addMonths(base, 12)}>+12 Monate</option>
         </datalist>
       </div>
-      <div>
-        <label className="label" htmlFor={`${idp}-cond`}>Konditionen</label>
-        <select id={`${idp}-cond`} name="conditions" className="input" defaultValue="UNVERAENDERT">
-          <option value="UNVERAENDERT">unverändert{lastRates && (lastRates.ek || lastRates.vk) ? ` (EK ${lastRates.ek ?? "–"} / VK ${lastRates.vk ?? "–"})` : ""}</option>
-          <option value="NEU">neu (EK/VK unten)</option>
-        </select>
-      </div>
       {!compact && (
         <>
-          <div><label className="label" htmlFor={`${idp}-ek`}>EK neu</label><input id={`${idp}-ek`} name="ek" className="input" inputMode="decimal" placeholder="nur bei „neu“" /></div>
-          <div><label className="label" htmlFor={`${idp}-vk`}>VK neu</label><input id={`${idp}-vk`} name="vk" className="input" inputMode="decimal" placeholder="nur bei „neu“" /></div>
+          <div><label className="label" htmlFor={`${idp}-vk`}>VK neu{lastRates ? ` je ${lastRates.unit === "STUNDE" ? "Stunde" : "Tag"}` : ""}</label><input id={`${idp}-vk`} name="vk" className="input" inputMode="decimal" placeholder={lastRates?.vk ? `leer = unverändert (${lastRates.vk.replace(".", ",")})` : "leer = unverändert"} /></div>
+          <div><label className="label" htmlFor={`${idp}-ek`}>EK neu{lastRates ? ` je ${lastRates.unit === "STUNDE" ? "Stunde" : "Tag"}` : ""}</label><input id={`${idp}-ek`} name="ek" className="input" inputMode="decimal" placeholder={lastRates?.ek ? `leer = unverändert (${lastRates.ek.replace(".", ",")})` : "leer = unverändert"} /></div>
         </>
       )}
       <div>

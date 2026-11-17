@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { filesFor } from "@/modules/sharepoint/service";
+import { offerBases } from "@/modules/sharepoint/offer";
 import { PendingButton } from "@/components/PendingButton";
 import { markSeen } from "@/modules/notifications/service";
 import { DomainError } from "@/lib/errors";
@@ -19,7 +20,7 @@ import { DeleteBlock } from "@/components/DeleteBlock";
 import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { approachLabel, approachValues, loadRenewalContacts } from "@/modules/engagements/contacts";
-import { addSharePointDocumentAction, addContractDocumentAction, uploadSignedVersionAction, setOrderReferenceAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
+import { addSharePointDocumentAction, addContractDocumentAction, uploadSignedVersionAction, setOrderReferenceAction, generateOfferAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
 import { contractDefaults } from "@/modules/conversion/contractService";
 
 const eur = (v: string | null, unit: string) => (v ? `${Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${rateUnitLabel[unit] ?? unit}` : "offen");
@@ -72,6 +73,14 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const offers = spFiles ? [...offerFiles.filter((f) => nameHit(f.name)), ...offerFiles.filter((f) => !nameHit(f.name))].map((f) => ({ value: f.value, name: f.name })) : null;
   const offerPreselect = offerFiles.filter((f) => nameHit(f.name)).length === 1 ? offerFiles.find((f) => nameHit(f.name))!.value : null;
   const asgUser = await canUseAssignments(actor);
+  // e49b: Angebot erzeugen – Grundlage ist das letzte Angebot der Person oder eine Vorlage; Zeitraum und Satz aus der jüngsten Verlängerung
+  const offerBase = (a.manage || a.care) && !final ? await offerBases({ accountName: e.accountName, personName: personName ?? "" }) : null;
+  const lastRenewal = openRenewal ?? [...d.renewals].sort((x, y) => (y.createdAt?.getTime?.() ?? 0) - (x.createdAt?.getTime?.() ?? 0)).find((r) => r.status === "BESTAETIGT") ?? null;
+  const addMonthsIso = (isoDate: string, m: number) => { const dt = new Date(`${isoDate}T00:00:00Z`); dt.setUTCMonth(dt.getUTCMonth() + m); return dt.toISOString().slice(0, 10); };
+  const endBase = e.plannedEnd ?? new Date().toISOString().slice(0, 10);
+  const offerFrom = lastRenewal?.proposedFrom ?? new Date(Date.parse(`${endBase}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  const offerUntil = lastRenewal?.proposedTo ?? addMonthsIso(endBase, 6);
+  const offerRate = lastPeriod?.vk ? (Number(lastPeriod.vk) * (lastPeriod.rateUnit === "STUNDE" ? 8 : 1)).toFixed(2).replace(".", ",") : "";
   const nextDue = [e.nextCheckin, openRenewal ? e.pingDate : null, e.status === "PAUSIERT" ? e.reviewDate : null].filter((x): x is string => !!x).sort()[0] ?? null;
 
   return (
@@ -227,6 +236,24 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           <h2 className="font-semibold">Verträge und Bestellungen</h2>
           <span className="muted text-xs">Zwei Vertragsseiten, getrennt von den Dokumenten. {e.procurement.profile ? `Pflicht laut Profil: ${e.procurement.required.map((r) => `${docSideLabel[r.side]} ${docTypeLabel[r.docType]}${r.ok ? " ✓" : ""}`).join(", ") || "keine"}.` : <>Kein freigegebenes Beschaffungsprofil – <Link href={`/kunden/${e.accountId}#beschaffungsprofil`}>am Kunden pflegen</Link>.</>}</span>
         </div>
+        {offerBase && !final && (a.manage || a.care) && (
+          <details className="mb-3" id="angebot-erzeugen" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .75rem" }}>
+            <summary className="text-sm cursor-pointer font-semibold">Angebot für {personName} erzeugen</summary>
+            {offerBase.options.length === 0 ? <p className="muted text-sm mt-2">Noch keine Grundlage: Lege das letzte Angebot unter Kunden › {e.accountName} › Angebote oder eine Vorlage unter Vorlagen › Angebot Kunde ab (Excel).</p> : (
+              <form action={generateOfferAction} className="grid sm:grid-cols-4 gap-2 mt-2 text-sm">
+                <input type="hidden" name="engagementId" value={e.id} /><input type="hidden" name="back" value={`${back}#vertraege`} />
+                <div className="sm:col-span-2"><label className="label" htmlFor="ofBase">Grundlage</label><select id="ofBase" name="basePick" className="select" required defaultValue={offerBase.preselect ?? ""}><option value="" disabled>Bitte wählen …</option>{offerBase.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                <div><label className="label" htmlFor="ofNo">Angebotsnummer (aus Moco)</label><input id="ofNo" name="offerNumber" className="input" required minLength={3} maxLength={100} placeholder="z. B. VCA-M26-11_0011" /></div>
+                <div><label className="label" htmlFor="ofDate">Angebotsdatum</label><input id="ofDate" type="date" name="offerDate" className="input" defaultValue={new Date().toISOString().slice(0, 10)} /></div>
+                <div><label className="label" htmlFor="ofFrom">Zeitraum von</label><input id="ofFrom" type="date" name="from" className="input" required defaultValue={offerFrom} /></div>
+                <div><label className="label" htmlFor="ofTo">bis</label><input id="ofTo" type="date" name="until" className="input" required defaultValue={offerUntil} /></div>
+                <div><label className="label" htmlFor="ofPd">Personentage</label><input id="ofPd" name="personDays" className="input" inputMode="numeric" placeholder="leer = wie Grundlage" /></div>
+                <div><label className="label" htmlFor="ofRate">Tagessatz</label><input id="ofRate" name="dailyRate" className="input" inputMode="decimal" defaultValue={offerRate} placeholder="leer = wie Grundlage" /></div>
+                <div className="sm:col-span-4 flex flex-wrap items-center gap-3"><PendingButton className="btn btn-small" busy="Erzeuge Angebot …">Angebot erzeugen und ablegen</PendingButton><span className="muted text-xs">Kopiert die Grundlage und ändert nur Nummer, Datum, Zeitraum, Personentage und Tagessatz. Ablage: Kunden › {e.accountName} › Angebote › Jahr. Bitte vor dem Versand in Excel prüfen.{lastPeriod?.rateUnit === "STUNDE" && lastPeriod.vk ? ` Tagessatz vorbelegt mit 8 × ${lastPeriod.vk.replace(".", ",")} €/Stunde.` : ""}</span></div>
+              </form>
+            )}
+          </details>
+        )}
         {cd && (
           <details className="mb-3" id="vertrag-erzeugen" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .75rem" }}>
             <summary className="text-sm cursor-pointer font-semibold">Projekteinzelvertrag mit {cd.freelancerName} erzeugen</summary>

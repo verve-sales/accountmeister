@@ -1672,6 +1672,17 @@ export async function addContractDocumentAction(fd: FormData) {
   }, "Unterlage gespeichert.");
 }
 
+/** e49b: Angebot aus dem letzten Angebot bzw. der Vorlage erzeugen und in SharePoint ablegen. */
+export async function generateOfferAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#vertraege`), async (actor) => {
+    requireStaffingFlag();
+    const { generateOffer } = await import("@/modules/sharepoint/offer");
+    const r = await generateOffer(actor, data.engagementId ?? "", data);
+    throw new PendingInfo(`Angebot erzeugt und abgelegt: ${r.fileName}${r.personDays !== null ? ` · ${r.personDays} Personentage` : ""}${r.dailyRate !== null ? ` · Tagessatz ${r.dailyRate.toFixed(2).replace(".", ",")} €` : ""}. Bitte in Excel prüfen – der Link steht unten bei den Unterlagen.`);
+  }, "");
+}
+
 /** e48c: Bestellnummer am Einsatz nachtragen (Backoffice wird informiert, SharePoint nachgeführt). */
 export async function setOrderReferenceAction(fd: FormData) {
   const data = formToObject(fd);

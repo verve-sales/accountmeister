@@ -411,6 +411,13 @@ export async function startRenewal(actor: Actor, engagementId: string, raw: unkn
   if (!["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status)) throw new TransitionError("Verlängert wird ein laufender Einsatz.");
   const currentEnd = e.plannedEnd ?? todayIso();
   if (i.newEnd <= currentEnd) throw new ValidationError(`Das neue Ende muss nach dem heutigen Ende (${currentEnd}) liegen.`);
+  // e49b: Ein eingetragener Satz gilt immer – auch wenn „unverändert“ gewählt blieb. Komma oder Punkt, höchstens zwei Nachkommastellen.
+  for (const k of ["ek", "vk"] as const) {
+    const v = (i[k] ?? "").trim().replace(/\s|€/g, "").replace(",", ".");
+    if (v && !/^\d{1,7}(\.\d{1,2})?$/.test(v)) throw new ValidationError(`${k.toUpperCase()} bitte als Betrag angeben, z. B. 121,08.`);
+    i[k] = v;
+  }
+  if (i.ek || i.vk) i.conditions = "NEU";
   if (i.conditions === "NEU" && !i.ek && !i.vk) throw new ValidationError("Neue Konditionen brauchen EK oder VK.");
   const last = await latestPeriod(engagementId);
   const unit = i.rateUnit ?? last?.rateUnit ?? "TAG";

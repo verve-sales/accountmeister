@@ -27,6 +27,8 @@ export interface SpClient {
   /** Inhalt eines Ordners (eine Ebene); fehlt der Ordner, leer. */
   children(driveId: string, path: string[]): Promise<SpEntry[]>;
   item(driveId: string, itemId: string): Promise<SpEntry>;
+  /** Inhalt einer Datei laden (z. B. das letzte Angebot als Grundlage für das nächste). */
+  download(driveId: string, itemId: string): Promise<ArrayBuffer>;
   /** Datei in einen anderen Ordner derselben Bibliothek verschieben (Ordner wird angelegt); bei Namensgleichheit nummeriert. */
   move(driveId: string, itemId: string, folder: string[]): Promise<SpItem>;
 }
@@ -144,6 +146,12 @@ export class GraphSpClient implements SpClient {
     return { id: x.id, name: x.name, webUrl: x.webUrl, folder: !!x.folder, modified: x.lastModifiedDateTime ?? null };
   }
 
+  async download(driveId: string, itemId: string): Promise<ArrayBuffer> {
+    const res = await fetch(`${GRAPH}/drives/${driveId}/items/${encodeURIComponent(itemId)}/content`, { headers: { authorization: `Bearer ${await this.token()}` }, redirect: "follow" });
+    if (!res.ok) throw new SharePointError(`SharePoint: HTTP ${res.status} beim Laden der Datei`, res.status);
+    return res.arrayBuffer();
+  }
+
   async move(driveId: string, itemId: string, folder: string[]): Promise<SpItem> {
     const target = await this.ensureFolder(driveId, folder);
     const r = await this.call<SpItem>("PATCH", `/drives/${driveId}/items/${encodeURIComponent(itemId)}?@microsoft.graph.conflictBehavior=rename`, { parentReference: { id: target.id } });
@@ -152,7 +160,7 @@ export class GraphSpClient implements SpClient {
 }
 
 /** Im Speicher, für Entwicklung und Tests (SHAREPOINT_MODE=fixture). Zustand je Prozess. */
-type FixtureState = { libs: (SpLibrary & { drive: string; cols: string[] })[]; items: Map<string, { path: string; fields: Record<string, string | null>; file?: boolean }>; seq: number; fail?: string | null };
+type FixtureState = { libs: (SpLibrary & { drive: string; cols: string[] })[]; items: Map<string, { path: string; fields: Record<string, string | null>; file?: boolean; bytes?: ArrayBuffer }>; seq: number; fail?: string | null };
 const g = globalThis as unknown as { __spFixture?: FixtureState };
 export function fixtureState(): FixtureState {
   if (!g.__spFixture) g.__spFixture = { libs: [], items: new Map(), seq: 0, fail: null };
@@ -211,14 +219,14 @@ export class FixtureSpClient implements SpClient {
     }
     return { ...last!, created };
   }
-  async upload(driveId: string, folder: string[], fileName: string) {
+  async upload(driveId: string, folder: string[], fileName: string, bytes?: ArrayBuffer) {
     this.check();
     await this.ensureFolder(driveId, folder);
     let name = fileName;
     for (let n = 1; this.find(`${driveId}/${[...folder, name].join("/")}`); n++) name = fileName.replace(/(\.[^.]+)?$/, ` ${n}$1`);
     const p = `${driveId}/${[...folder, name].join("/")}`;
     const id = this.next("item-");
-    this.s.items.set(id, { path: p, fields: {}, file: true });
+    this.s.items.set(id, { path: p, fields: {}, file: true, bytes });
     return { id, webUrl: `https://fixture.sharepoint.local/${encodeURI(p)}` };
   }
   async children(driveId: string, path: string[]) {
@@ -241,6 +249,12 @@ export class FixtureSpClient implements SpClient {
     this.check();
     const it = this.s.items.get(itemId);
     if (it) it.fields = { ...it.fields, ...fields };
+  }
+  async download(_driveId: string, itemId: string) {
+    this.check();
+    const it = this.s.items.get(itemId);
+    if (!it?.bytes) throw new SharePointError("SharePoint: HTTP 404", 404);
+    return it.bytes;
   }
   async move(driveId: string, itemId: string, folder: string[]) {
     this.check();
