@@ -20,7 +20,7 @@ import { DeleteBlock } from "@/components/DeleteBlock";
 import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { approachLabel, approachValues, loadRenewalContacts } from "@/modules/engagements/contacts";
-import { addSharePointDocumentAction, addContractDocumentAction, uploadSignedVersionAction, setOrderReferenceAction, generateOfferAction, changeConditionsAction, removePeriodAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
+import { addSharePointDocumentAction, addContractDocumentAction, uploadSignedVersionAction, setOrderReferenceAction, generateOfferAction, changeConditionsAction, removePeriodAction, revertRenewalAction, addPeriodAction, changeEngagementStatusAction, checkinAction, createCheckinAction, linkContractDocumentAction, renewalDecisionAction, requestCareHandoverAction, setCareDirectAction, setContractDocumentStatusAction, updateEngagementAction, engagementContactsAction, generateContractAction } from "../../actions";
 import { contractDefaults } from "@/modules/conversion/contractService";
 
 const eur = (v: string | null, unit: string) => (v ? `${Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${rateUnitLabel[unit] ?? unit}` : "offen");
@@ -73,6 +73,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const nameHit = (n: string) => lastNameKey.length >= 3 && n.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss").includes(lastNameKey);
   const offers = spFiles ? [...offerFiles.filter((f) => nameHit(f.name)), ...offerFiles.filter((f) => !nameHit(f.name))].map((f) => ({ value: f.value, name: f.name })) : null;
   const asgUser = await canUseAssignments(actor);
+  // e49d: die jüngste bestätigte Verlängerung lässt sich zurücknehmen
+  const revertable = [...d.renewals].filter((r) => r.status === "BESTAETIGT" && r.proposedFrom && r.proposedTo).sort((x, y) => (y.proposedTo ?? "").localeCompare(x.proposedTo ?? ""))[0] ?? null;
   // e49b: Angebot erzeugen – Grundlage ist das letzte Angebot der Person oder eine Vorlage; Zeitraum und Satz aus der jüngsten Verlängerung
   const offerBase = (a.manage || a.care) && !final ? await offerBases({ accountName: e.accountName, personName: personName ?? "" }) : null;
   const lastRenewal = openRenewal ?? [...d.renewals].sort((x, y) => (y.createdAt?.getTime?.() ?? 0) - (x.createdAt?.getTime?.() ?? 0)).find((r) => r.status === "BESTAETIGT") ?? null;
@@ -548,7 +550,18 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         {d.renewals.length === 0 ? <p className="muted text-sm">Noch keine Verlängerungsentscheidung. Sie entsteht automatisch {e.pingDate ? `ab ${fmtDate(e.pingDate)}` : "sobald ein Ende oder eine Frist hinterlegt ist"} (90 Tage vor Ende bzw. 30 Tage vor der Frist) – oder jetzt manuell.</p> : (
           <ul className="text-sm space-y-1">
             {d.renewals.map((r) => (
-              <li key={r.id}><span className="status">{renewalStatusLabel[r.status] ?? r.status}</span> Auslöser {fmtDate(r.triggerDate)}{r.proposedFrom ? ` · Zeitraum ${fmtDate(r.proposedFrom)} – ${fmtDate(r.proposedTo)}` : ""}{r.conditionsNote ? ` · ${r.conditionsNote}` : ""}{r.availabilityNote ? ` · Verfügbarkeit: ${r.availabilityNote}` : ""}{r.contractFollowUp ? ` · Vertragsfolge: ${r.contractFollowUp}` : ""}{r.ownerName ? ` · kommerziell: ${r.ownerName}` : ""}{r.decidedAt ? ` · entschieden ${fmtDate(r.decidedAt)}` : ""}</li>
+              <li key={r.id}><span className="status">{renewalStatusLabel[r.status] ?? r.status}</span> Auslöser {fmtDate(r.triggerDate)}{r.proposedFrom ? ` · Zeitraum ${fmtDate(r.proposedFrom)} – ${fmtDate(r.proposedTo)}` : ""}{r.conditionsNote ? ` · ${r.conditionsNote}` : ""}{r.availabilityNote ? ` · Verfügbarkeit: ${r.availabilityNote}` : ""}{r.contractFollowUp ? ` · Vertragsfolge: ${r.contractFollowUp}` : ""}{r.ownerName ? ` · kommerziell: ${r.ownerName}` : ""}{r.decidedAt ? ` · entschieden ${fmtDate(r.decidedAt)}` : ""}
+                {a.manage && !final && r.id === revertable?.id && (
+                  <details className="inline-block" style={{ marginLeft: 8 }}>
+                    <summary className="text-xs" style={{ cursor: "pointer" }}>zurücknehmen</summary>
+                    <form action={revertRenewalAction} className="inline-flex flex-wrap gap-2 items-center mt-1">
+                      <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="renewalId" value={r.id} /><input type="hidden" name="back" value={`${back}#verlaengerung`} />
+                      <span className="text-xs">Ende wieder {r.proposedFrom ? fmtDate(new Date(Date.parse(`${r.proposedFrom}T00:00:00Z`) - 86400000).toISOString().slice(0, 10)) : "?"}, Konditionen ab {fmtDate(r.proposedFrom)} entfallen{e.mocoProjectId ? ", Moco wird zurückgesetzt" : ""}.</span>
+                      <PendingButton className="btn btn-secondary btn-small" busy="Nehme zurück …">Verlängerung zurücknehmen</PendingButton>
+                    </form>
+                  </details>
+                )}
+              </li>
             ))}
           </ul>
         )}

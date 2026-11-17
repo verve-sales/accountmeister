@@ -1781,6 +1781,17 @@ export async function renewalDecisionAction(fd: FormData) {
   }, data.status === "BESTAETIGT" ? "Verlängerung bestätigt – neue Periode angelegt, Einsatzende angepasst." : "Verlängerungsstand gespeichert.");
 }
 
+/** e49d: bestätigte Verlängerung zurücknehmen (Ende, Perioden, Moco, SharePoint gehen auf den Stand davor). */
+export async function revertRenewalAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#verlaengerung`), async (actor) => {
+    requireStaffingFlag();
+    const { revertRenewal } = await import("@/modules/engagements/care");
+    const r = await revertRenewal(actor, data.engagementId ?? "", data.renewalId ?? "");
+    throw new PendingInfo(`Verlängerung zurückgenommen – das Ende steht wieder auf ${r.prevEnd.split("-").reverse().join(".")}${r.mocoWritten ? ", Moco ist zurückgesetzt" : ""}. Jetzt über „Verlängern“ neu anlegen.`);
+  }, "");
+}
+
 /** e49: Signal des BD zur Verlängerung – „Kunde will verlängern“ oder „endet“; Sales Operations und Backoffice übernehmen. */
 export async function signalRenewalAction(fd: FormData) {
   const data = formToObject(fd);

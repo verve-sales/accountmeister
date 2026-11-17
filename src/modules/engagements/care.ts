@@ -584,6 +584,63 @@ export async function decideRenewal(actor: Actor, engagementId: string, raw: unk
   return { decision: row, mocoWritten, mocoError };
 }
 
+/**
+ * Bestätigte Verlängerung zurücknehmen (e49d), z. B. weil sie mit falschem Satz oder Datum bestätigt wurde:
+ * Einsatz- und Auftragsende gehen auf den Stand davor zurück, die Perioden des verlängerten Zeitraums entfallen
+ * (was sie abgelöst hatten, gilt wieder), Moco und SharePoint werden nachgeführt, die Verlängerung verschwindet.
+ * Danach lässt sie sich sauber neu anlegen. Nur die jüngste Verlängerung, und nur solange der Einsatz läuft.
+ */
+export async function revertRenewal(actor: Actor, engagementId: string, renewalId: string, client?: MocoClient) {
+  const a = await requireEngagement(actor, engagementId);
+  if (!a.manage) throw new ForbiddenError("Eine Verlängerung nehmen Sales Operations, Backoffice, der verantwortliche BD, Principal oder CEO zurück.");
+  const e = a.engagement;
+  if (["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(e.status)) throw new TransitionError("Der Einsatz ist beendet.");
+  const all = await db.query.renewalDecisions.findMany({ where: eq(schema.renewalDecisions.engagementId, engagementId), orderBy: desc(schema.renewalDecisions.createdAt) });
+  const r = all.find((x) => x.id === renewalId);
+  if (!r) throw new NotFoundError("Verlängerung");
+  if (r.status !== "BESTAETIGT") throw new ValidationError("Zurücknehmen lässt sich nur eine bestätigte Verlängerung.");
+  const latest = all.filter((x) => x.status === "BESTAETIGT").sort((x, y) => (y.proposedTo ?? "").localeCompare(x.proposedTo ?? ""))[0];
+  if (latest?.id !== r.id) throw new ValidationError("Bitte zuerst die jüngere Verlängerung zurücknehmen.");
+  if (!r.proposedFrom || !r.proposedTo) throw new ValidationError("Dieser Verlängerung fehlt der Zeitraum – bitte das Ende am Einsatz von Hand korrigieren.");
+  const prevEnd = plusDaysIso(r.proposedFrom, -1);
+  await db.transaction(async (tx) => {
+    await tx.update(schema.renewalDecisions).set({ resultPeriodId: null }).where(eq(schema.renewalDecisions.id, r.id));
+    // Perioden, die erst mit dem verlängerten Zeitraum beginnen, entfallen; was sie abgelöst hatten, gilt wieder
+    const periods = await tx.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, engagementId) });
+    const gone = periods.filter((p) => p.validFrom >= r.proposedFrom! || p.id === r.resultPeriodId).map((p) => p.id);
+    if (gone.length) {
+      await tx.update(schema.renewalDecisions).set({ resultPeriodId: null }).where(inArray(schema.renewalDecisions.resultPeriodId, gone));
+      await tx.update(schema.engagementPeriods).set({ supersededById: null }).where(and(eq(schema.engagementPeriods.engagementId, engagementId), inArray(schema.engagementPeriods.supersededById, gone)));
+      await tx.delete(schema.engagementPeriods).where(inArray(schema.engagementPeriods.id, gone));
+    }
+    await tx.update(schema.engagements).set({ plannedEnd: prevEnd, version: e.version + 1, updatedAt: new Date() }).where(eq(schema.engagements.id, engagementId));
+    if (e.orderId) await tx.update(schema.orders).set({ plannedEnd: prevEnd, updatedAt: new Date() }).where(eq(schema.orders.id, e.orderId));
+    // offene Übergabe „verlängert“ ist damit gegenstandslos
+    await tx.delete(schema.backofficeHandovers).where(and(eq(schema.backofficeHandovers.engagementId, engagementId), eq(schema.backofficeHandovers.kind, "VERLAENGERT"), eq(schema.backofficeHandovers.status, "OFFEN")));
+    await tx.delete(schema.renewalDecisions).where(eq(schema.renewalDecisions.id, r.id));
+    await recordAudit(tx, actor, "renewal.reverted", "ENGAGEMENT", engagementId, { zeitraum: `${r.proposedFrom} – ${r.proposedTo}`, konditionen: r.conditionsNote, endeWieder: prevEnd, perioden: gone.length });
+  });
+  let mocoWritten = false;
+  if (e.mocoProjectId && (client || mocoEnabled())) {
+    try {
+      await (client ?? getMocoClient()).updateProjectFinishDate(e.mocoProjectId, prevEnd);
+      mocoWritten = true;
+    } catch {
+      /* Hinweis geht unten an Sales Operations */
+    }
+  }
+  try {
+    const { syncEngagementDocs } = await import("@/modules/sharepoint/documents");
+    await syncEngagementDocs(engagementId);
+  } catch (err) {
+    console.error("SharePoint nach Rücknahme", (err as Error).message);
+  }
+  const { backofficeUserIds } = await import("@/modules/conversion/profile");
+  const recipients = [...new Set([...(await salesOpsUsers(actor.workspaceId)), ...(await backofficeUserIds(actor.workspaceId)), e.bdUserId])];
+  await notify(db, { workspaceId: actor.workspaceId, userIds: recipients, kind: "KOMMENTAR", title: `Verlängerung zurückgenommen: ${await engagementLabel(db, e)} – Ende wieder ${prevEnd.split("-").reverse().join(".")}${e.mocoProjectId ? (mocoWritten ? " (Moco aktualisiert)" : " – Projektende in Moco bitte von Hand zurücksetzen") : ""}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId });
+  return { prevEnd, mocoWritten };
+}
+
 export const renewalSignalInput = z.object({ signal: z.enum(["VERLAENGERN", "ENDET"]), wishEnd: dateStr, note: opt(1000) });
 
 /**

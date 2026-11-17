@@ -388,4 +388,35 @@ describe("e48: GF-Start, leisere KI, Dokumentenfluss", () => {
     expect(await db.query.backofficeHandovers.findFirst({ where: and(eq(schema.backofficeHandovers.engagementId, id), eq(schema.backofficeHandovers.kind, "KONDITIONEN")) })).toBeTruthy();
     await expect(changeConditions(david, id, { validFrom: todayIso(), rateUnit: "STUNDE" })).rejects.toThrow(/mindestens/);
   });
+
+  it("D08: Bestätigte Verlängerung zurücknehmen – Ende, Perioden und Übergabe gehen auf den Stand davor; danach neu anlegbar", async () => {
+    env();
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const { startRenewal, decideRenewal, revertRenewal } = await import("@/modules/engagements/care");
+    const { changeConditions, currentPeriod } = await import("@/modules/engagements/service");
+    const end0 = plusDaysIso(todayIso(), 40);
+    const opp = await createOpportunity(david, { setupId: s.setupId, title: `E49d Rücknahme ${u()}`, needDescription: "Verlängerung falsch bestätigt.", kind: "FREELANCER_EXPERTE" });
+    const q = await quickFill(david, opp.id, { title: "Tester", resourceKind: "FREELANCER", newName: `Rita Ruecknahme ${u()} (fiktiv)`, ekRate: "90", vkRate: "115.31", desiredStart: plusDaysIso(todayIso(), -60), plannedEnd: end0 });
+    const id = q.engagement.id;
+    await db.update(schema.engagements).set({ status: "AKTIV" }).where(eq(schema.engagements.id, id));
+    const before = currentPeriod(await db.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, id) }))!;
+    await startRenewal(david, id, { newEnd: plusDaysIso(end0, 181) }, { direct: true });
+    const d = await decideRenewal(david, id, { decision: "BESTAETIGEN" });
+    // nachträglich korrigierter Satz im verlängerten Zeitraum
+    await changeConditions(david, id, { validFrom: plusDaysIso(end0, 1), vk: "121,08", rateUnit: "TAG" });
+    await expect(revertRenewal(await actorFor("lars"), id, d.decision.id)).rejects.toThrow();
+    const r = await revertRenewal(david, id, d.decision.id);
+    expect(r.prevEnd).toBe(end0);
+    const e = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, id) }))!;
+    expect(e.plannedEnd).toBe(end0);
+    const periods = await db.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, id) });
+    expect(periods.map((p) => p.id)).toEqual([before.id]);
+    expect(await db.query.renewalDecisions.findMany({ where: eq(schema.renewalDecisions.engagementId, id) })).toHaveLength(0);
+    expect(await db.query.backofficeHandovers.findFirst({ where: and(eq(schema.backofficeHandovers.engagementId, id), eq(schema.backofficeHandovers.kind, "VERLAENGERT")) })).toBeUndefined();
+    // neu und richtig
+    await startRenewal(david, id, { newEnd: plusDaysIso(end0, 181), vk: "121,08" }, { direct: true });
+    await decideRenewal(david, id, { decision: "BESTAETIGEN" });
+    expect(currentPeriod(await db.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, id) }))!.vk).toBe("121.08");
+  });
 });
