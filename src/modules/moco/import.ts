@@ -1,3 +1,4 @@
+import { findSameFreelancer } from "@/modules/staffing/dedupe";
 import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema, type Tx } from "@/db/client";
@@ -361,6 +362,8 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
       }
       if (it.personKind === "FREELANCER") {
         let fid = action === "LINK" ? targetOf(it) : null;
+        // Automatischer Dublettencheck: gleiche Moco-ID, E-Mail oder gleicher Name → bestehenden Freelancer verknüpfen
+        if (!fid) fid = (await findSameFreelancer(db, ws, { name: it.name, email: it.email, mocoUserId: it.mocoId }))?.id ?? null;
         if (!fid) {
           const [f] = await db.insert(schema.freelancers).values({ workspaceId: ws, displayName: it.name, email: it.email, mocoUserId: it.mocoId, createdBy: actor.userId, availabilitySource: "Moco" }).returning({ id: schema.freelancers.id });
           fid = f!.id;

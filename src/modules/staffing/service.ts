@@ -10,6 +10,7 @@ import { notify } from "@/modules/notifications/service";
 import { createWorkItem, FINAL as WORK_FINAL } from "@/modules/work/service";
 import { ensureDefaultTeams } from "@/modules/work/teams";
 import { todayIso } from "@/modules/work/calendar";
+import { findSameFreelancer } from "./dedupe";
 import { canBrowseFreelancerPool, isStaffingManager, positionAccess, requireFullPosition, requireViewablePosition, SEARCH_KINDS, type PositionAccess, type PositionRow } from "./authz";
 
 /**
@@ -351,6 +352,18 @@ export async function createFreelancer(actor: Actor, raw: unknown, tx0?: Tx) {
   if (!p.success) throw new ValidationError(issues(p.error));
   const i = p.data;
   const run = async (tx: Tx) => {
+    // Automatischer Dublettencheck: gleiche E-Mail oder gleicher Name → bestehenden Freelancer weiterverwenden
+    const same = await findSameFreelancer(tx, actor.workspaceId, { name: i.displayName, email: i.email });
+    if (same) {
+      const fill: Partial<typeof schema.freelancers.$inferInsert> = {};
+      if (!same.email && i.email) fill.email = i.email;
+      if (!same.phone && i.phone) fill.phone = i.phone;
+      if (!same.company && i.company) fill.company = i.company;
+      if (!same.skills && i.skills) fill.skills = i.skills;
+      if (!Object.keys(fill).length) return same;
+      const [u] = await tx.update(schema.freelancers).set({ ...fill, updatedAt: new Date() }).where(eq(schema.freelancers.id, same.id)).returning();
+      return u!;
+    }
     const [f] = await tx
       .insert(schema.freelancers)
       .values({ workspaceId: actor.workspaceId, displayName: i.displayName, email: nul(i.email), phone: nul(i.phone), company: nul(i.company), skills: nul(i.skills), availabilityNote: nul(i.availabilityNote), availabilityAsOf: nul(i.availabilityAsOf), availabilitySource: nul(i.availabilitySource), externalCvRef: nul(i.externalCvRef), externalToolRef: nul(i.externalToolRef), createdBy: actor.userId })
@@ -479,7 +492,7 @@ async function resolvePerson(tx: Tx, actor: Actor, position: PositionRow, i: Per
   if (!freelancerId) {
     if (!i.newName || i.newName.length < 2) throw new ValidationError("Bitte einen Freelancer wählen oder einen Namen für einen neuen eintragen.");
     // Gleichnamiger Freelancer im Pool → wiederverwenden statt Dublette
-    const same = await tx.query.freelancers.findFirst({ where: and(eq(schema.freelancers.workspaceId, actor.workspaceId), isNull(schema.freelancers.mergedIntoId), sql`lower(${schema.freelancers.displayName}) = ${i.newName.trim().toLowerCase()}`), columns: { id: true } });
+    const same = await findSameFreelancer(tx, actor.workspaceId, { name: i.newName, email: i.newEmail });
     if (same) freelancerId = same.id;
     else {
       const f = await createFreelancer(actor, { displayName: i.newName, email: i.newEmail, company: i.newCompany, skills: i.newSkills }, tx);

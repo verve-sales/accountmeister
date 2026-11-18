@@ -5,6 +5,7 @@ import { asgOverview, asgTaskLabel, canUseAssignments } from "@/modules/assignme
 import { AsgTimeline } from "@/components/AsgTimeline";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDate } from "@/lib/labels";
+import { canClean, findEngagementDuplicates, findFreelancerDuplicates } from "@/modules/cleanup/service";
 
 const RED = "#c0392b";
 
@@ -17,6 +18,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
   const wer = params.wer === "freelancer" || params.wer === "intern" ? params.wer : "alle";
   const shown = o.engagements.filter((e) => wer === "alle" || (wer === "freelancer" ? e.kind === "FREELANCER" : e.kind === "INTERN"));
   const k = o.kpis;
+  const [flDup, engDup] = canClean(actor) ? await Promise.all([findFreelancerDuplicates(actor), findEngagementDuplicates(actor)]) : [[], []];
   const tiles: { v: number; l: string; href: string; warn?: boolean }[] = [
     { v: k.freelancer, l: "Freelancer im Einsatz", href: "/assignments?wer=freelancer#zeitleiste" },
     { v: k.intern, l: "Interne im Einsatz", href: "/assignments?wer=intern#zeitleiste" },
@@ -31,6 +33,12 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Übersicht</h1>
       <Feedback params={params} />
+      {(flDup.length > 0 || engDup.length > 0) && (
+        <p className="card text-sm" style={{ borderLeft: `3px solid ${RED}` }}>
+          Dubletten gefunden: {flDup.length > 0 && <>{flDup.length} doppelte Freelancer ({flDup.slice(0, 3).map((g) => g.name).join(", ")}{flDup.length > 3 ? " …" : ""})</>}{flDup.length > 0 && engDup.length > 0 && " · "}{engDup.length > 0 && <>{engDup.length} doppelte Einsätze</>}{" "}
+          <Link href={flDup.length ? "/bereinigung#freelancer" : "/bereinigung#einsaetze"}>in der Bereinigung zusammenführen →</Link>
+        </p>
+      )}
       <section className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3" aria-label="Kennzahlen">
         {tiles.map((t) => (
           <Link key={t.l} href={t.href} className="no-underline p-3" style={{ background: "var(--surface-2)", borderRadius: 8, display: "block", color: "var(--text)" }}>

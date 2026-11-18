@@ -1,3 +1,4 @@
+import { freelancerKey } from "@/modules/staffing/dedupe";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { engagementLabel } from "@/modules/engagements/label";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
@@ -68,7 +69,7 @@ export async function runMocoSync(opts: { since?: string; client?: MocoClient; w
     const name = `${u.firstname} ${u.lastname}`.trim();
     if (isFreelancerUnit(u)) {
       if (!u.active) continue;
-      const known = freelancers.find((f) => f.mocoUserId === u.id) ?? (u.email ? freelancers.find((f) => (f.email ?? "").toLowerCase() === u.email) : undefined);
+      const known = freelancers.find((f) => f.mocoUserId === u.id) ?? (u.email ? freelancers.find((f) => (f.email ?? "").toLowerCase() === u.email) : undefined) ?? freelancers.find((f) => !f.mocoUserId && freelancerKey(f.displayName) === freelancerKey(name));
       if (known) {
         if (!known.mocoUserId) await db.update(schema.freelancers).set({ mocoUserId: u.id }).where(eq(schema.freelancers.id, known.id));
         continue;

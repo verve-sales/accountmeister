@@ -24,6 +24,7 @@ export default async function FreelancerPage({ params, searchParams }: { params:
     throw e;
   }
   const f = d.freelancer;
+  if (f.mergedIntoId) redirect(`/besetzung/freelancer/${f.mergedIntoId}`);
   const prof = await getFreelancerProfile(actor, id);
   const pf = prof.freelancer;
   const back = `/besetzung/freelancer/${id}`;

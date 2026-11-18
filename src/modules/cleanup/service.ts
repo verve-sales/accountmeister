@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { db, schema, type Tx } from "@/db/client";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
 import { recordAudit } from "@/modules/audit/audit";
@@ -9,6 +9,7 @@ import { deleteEngagementTx } from "@/modules/moco/import";
 import { engagementAccess, requireManagedEngagement, type EngagementRow } from "@/modules/engagements/authz";
 import { changeEngagementStatus, isOverdueEngagement } from "@/modules/engagements/service";
 import { duplicateGroups, mergePersons } from "@/modules/people/service";
+import { freelancerKey } from "@/modules/staffing/dedupe";
 
 /**
  * Bereinigung (e37): sucht Unstimmigkeiten im Bestand zusammen – nichts wird automatisch geändert. Jede Korrektur
@@ -94,6 +95,9 @@ export type EngRef = { id: string; title: string; status: string; start: string 
 export type EngagementDuplicate = { accountId: string; accountName: string; personName: string; keep: EngRef; drop: EngRef[]; reason: string };
 export type SetupDuplicate = { accountId: string; accountName: string; name: string; keep: { id: string; name: string; score: number }; drop: { id: string; name: string; score: number }[] };
 export type PersonDuplicate = { accountId: string; accountName: string; name: string; keepId: string; dropIds: string[]; emails: string[] };
+
+export type FreelancerRef = { id: string; name: string; email: string | null; moco: number | null; engagements: number; candidacies: number; createdAt: Date };
+export type FreelancerDuplicate = { name: string; keep: FreelancerRef; drop: FreelancerRef[]; reason: string };
 
 export function normSetupName(n: string) {
   return n.toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9äöüß]+/g, "");
@@ -228,6 +232,47 @@ export async function findPersonDuplicates(actor: Actor): Promise<PersonDuplicat
   return out.sort((a, b) => a.accountName.localeCompare(b.accountName));
 }
 
+/** Doppelte Freelancer: gleicher Name (Schreibweise, Reihenfolge, Umlaute egal) oder gleiche E-Mail. */
+export async function findFreelancerDuplicates(actor: Actor): Promise<FreelancerDuplicate[]> {
+  const fls = await db.query.freelancers.findMany({ where: and(eq(schema.freelancers.workspaceId, actor.workspaceId), isNull(schema.freelancers.mergedIntoId)), columns: { id: true, displayName: true, email: true, mocoUserId: true, createdAt: true } });
+  // Union-Find über Name und E-Mail
+  const parent = new Map(fls.map((f) => [f.id, f.id]));
+  const find = (x: string): string => (parent.get(x) === x ? x : find(parent.get(x)!));
+  const join = (a: string, b: string) => parent.set(find(a), find(b));
+  const seen = new Map<string, string>();
+  const byEmail = new Set<string>();
+  for (const f of fls) {
+    for (const k of [`n:${freelancerKey(f.displayName)}`, f.email ? `e:${f.email.trim().toLowerCase()}` : null]) {
+      if (!k) continue;
+      const o = seen.get(k);
+      if (o) {
+        join(f.id, o);
+        if (k.startsWith("e:")) byEmail.add(find(f.id));
+      } else seen.set(k, f.id);
+    }
+  }
+  const groups = new Map<string, typeof fls>();
+  for (const f of fls) groups.set(find(f.id), [...(groups.get(find(f.id)) ?? []), f]);
+  const dup = [...groups.values()].filter((g) => g.length > 1);
+  if (!dup.length) return [];
+  const ids = dup.flat().map((f) => f.id);
+  const [engs, cands] = await Promise.all([
+    db.query.engagements.findMany({ where: inArray(schema.engagements.freelancerId, ids), columns: { freelancerId: true } }),
+    db.query.candidacies.findMany({ where: inArray(schema.candidacies.freelancerId, ids), columns: { freelancerId: true } }),
+  ]);
+  const cnt = (rows: { freelancerId: string | null }[], id: string) => rows.filter((r) => r.freelancerId === id).length;
+  return dup
+    .map((g) => {
+      const refs: FreelancerRef[] = g.map((f) => ({ id: f.id, name: f.displayName, email: f.email, moco: f.mocoUserId, engagements: cnt(engs, f.id), candidacies: cnt(cands, f.id), createdAt: f.createdAt }));
+      const score = (r: FreelancerRef) => (r.moco ? 100 : 0) + r.engagements * 10 + r.candidacies * 3 + (r.email ? 1 : 0);
+      refs.sort((a, b) => score(b) - score(a) || a.createdAt.getTime() - b.createdAt.getTime());
+      const sameName = new Set(g.map((f) => freelancerKey(f.displayName))).size === 1;
+      const root = find(g[0]!.id);
+      return { name: refs[0]!.name, keep: refs[0]!, drop: refs.slice(1), reason: sameName ? (byEmail.has(root) ? "gleicher Name und gleiche E-Mail" : "gleicher Name") : "gleiche E-Mail" };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+}
+
 export type InternalFinding = { accountId: string; accountName: string; status: string; engagements: { id: string; title: string; status: string }[]; openHints: number };
 
 /** Kunden, die interne Moco-Firmen sind (Konfiguration MOCO_INTERNAL_COMPANIES), mit ihren Einsätzen. */
@@ -269,15 +314,16 @@ export async function findOverdueEngagements(actor: Actor): Promise<OverdueRef[]
 
 export async function cleanupReport(actor: Actor) {
   requireCleaner(actor);
-  const [overdue, engagementDuplicates, setupDuplicates, personDuplicates, internal] = await Promise.all([
+  const [overdue, engagementDuplicates, setupDuplicates, personDuplicates, internal, freelancerDuplicates] = await Promise.all([
     findOverdueEngagements(actor),
     findEngagementDuplicates(actor),
     findSetupDuplicates(actor),
     findPersonDuplicates(actor),
     findInternalAccounts(actor),
+    findFreelancerDuplicates(actor),
   ]);
-  const total = overdue.length + engagementDuplicates.length + setupDuplicates.length + personDuplicates.length + internal.length;
-  return { overdue, engagementDuplicates, setupDuplicates, personDuplicates, internal, total };
+  const total = overdue.length + engagementDuplicates.length + setupDuplicates.length + personDuplicates.length + internal.length + freelancerDuplicates.length;
+  return { overdue, engagementDuplicates, setupDuplicates, personDuplicates, internal, freelancerDuplicates, total };
 }
 
 /** Nur die Anzahl (für Hinweise in Navigation und Sales-Ops-Sicht). */
@@ -405,6 +451,48 @@ export async function mergeSetups(actor: Actor, keepId: string, dropIds: string[
     }
   });
   return { kept: keep.id, removed: drops.length, duplicatesDropped: dropped };
+}
+
+const FREELANCER_FILL = ["email", "phone", "company", "skills", "availabilityNote", "availabilityAsOf", "availabilitySource", "externalCvRef", "externalToolRef", "street", "postalCity", "residence", "taxNumber", "representativeName", "representativeRole", "roles", "industries", "languages", "certificates", "availableFrom", "capacityNote", "travelNote", "profileLink", "ekRate", "paymentTermDays", "invoiceNote"] as const;
+
+/**
+ * Doppelte Freelancer zusammenführen: Einsätze, Kandidaturen, Aufträge, Unterlagen usw. zeigen danach auf den
+ * behaltenen Datensatz; fehlende Stammdaten (auch Moco-Verknüpfung und EK) werden übernommen. Der andere Datensatz
+ * bleibt als „zusammengeführt“ stehen (Verweis), taucht aber nirgends mehr auf. Danach liegen die Einsätze derselben
+ * Person beim selben Kunden zusammen – überlappende erscheinen unter „Doppelte Einsätze“.
+ */
+export async function mergeFreelancers(actor: Actor, keepId: string, dropIds: string[]) {
+  requireCleaner(actor);
+  const keep0 = await db.query.freelancers.findFirst({ where: and(eq(schema.freelancers.id, keepId), eq(schema.freelancers.workspaceId, actor.workspaceId), isNull(schema.freelancers.mergedIntoId)) });
+  if (!keep0) throw new NotFoundError("Freelancer");
+  const drops = await db.query.freelancers.findMany({ where: and(inArray(schema.freelancers.id, [...new Set(dropIds)].filter((d) => d !== keepId).concat("-")), eq(schema.freelancers.workspaceId, actor.workspaceId), isNull(schema.freelancers.mergedIntoId)) });
+  if (!drops.length) throw new ValidationError("Bitte mindestens einen weiteren Freelancer wählen.");
+  const { loadForeignKeys } = await import("@/modules/accounts/deletion");
+  let moved = 0;
+  await db.transaction(async (tx) => {
+    const fks = await loadForeignKeys(tx);
+    let keep = keep0;
+    for (const d of drops) {
+      const patch: Record<string, unknown> = {};
+      for (const k of FREELANCER_FILL) if ((keep[k] == null || keep[k] === "") && d[k] != null && d[k] !== "") patch[k] = d[k];
+      if (patch.ekRate !== undefined) patch.ekUnit = d.ekUnit;
+      if (!keep.mocoUserId && d.mocoUserId) {
+        patch.mocoUserId = d.mocoUserId;
+        await tx.update(schema.freelancers).set({ mocoUserId: null }).where(eq(schema.freelancers.id, d.id));
+      }
+      if (Object.keys(patch).length) {
+        const [u] = await tx.update(schema.freelancers).set({ ...patch, version: keep.version + 1, updatedAt: new Date() }).where(eq(schema.freelancers.id, keep.id)).returning();
+        keep = u!;
+      }
+      const r = await repointReferences(tx, fks, "freelancers", d.id, keep.id);
+      moved += r.moved;
+      await repointSubjects(tx, ["FREELANCER"], d.id, keep.id);
+      await tx.update(schema.freelancers).set({ mergedIntoId: keep.id, mocoUserId: null, updatedAt: new Date() }).where(eq(schema.freelancers.id, d.id));
+      await recordAudit(tx, actor, "freelancer.merged", "FREELANCER", keep.id, { entfernt: d.id, name: d.displayName });
+    }
+  });
+  const engDups = (await findEngagementDuplicates(actor)).filter((g) => g.personName === keep0.displayName || drops.some((d) => d.displayName === g.personName));
+  return { kept: keepId, removed: drops.length, moved, engagementDuplicates: engDups.length };
 }
 
 /** Personen-Dubletten eines Kunden zusammenführen (älteste bleibt). */

@@ -2129,6 +2129,16 @@ export async function cleanupMergePersonsAction(fd: FormData) {
   }, "");
 }
 
+export async function cleanupMergeFreelancersAction(fd: FormData) {
+  const keep = String(fd.get("keep") ?? "");
+  const drops = fd.getAll("drop").filter((x): x is string => typeof x === "string");
+  return run("/bereinigung#freelancer", async (actor) => {
+    const { mergeFreelancers } = await import("@/modules/cleanup/service");
+    const r = await mergeFreelancers(actor, keep, drops);
+    throw new PendingInfo(r.engagementDuplicates ? `Freelancer zusammengeführt. Jetzt noch die ${r.engagementDuplicates === 1 ? "doppelte Einsatz-Gruppe" : `${r.engagementDuplicates} doppelten Einsatz-Gruppen`} unter „Doppelte Einsätze“ zusammenführen.` : "Freelancer zusammengeführt.");
+  }, "");
+}
+
 export async function cleanupInternalAction(fd: FormData) {
   const accountId = String(fd.get("accountId") ?? "");
   return run("/bereinigung#intern", async (actor) => {

@@ -6,7 +6,7 @@ import { engagementStatusLabel } from "@/modules/engagements/service";
 import { Feedback } from "@/components/Feedback";
 import { PendingButton } from "@/components/PendingButton";
 import { fmtDate } from "@/lib/labels";
-import { cleanupCloseOverdueAction, cleanupInternalAction, cleanupMergeEngagementsAction, cleanupMergePersonsAction, cleanupMergeSetupsAction } from "@/app/actions";
+import { cleanupCloseOverdueAction, cleanupInternalAction, cleanupMergeEngagementsAction, cleanupMergeFreelancersAction, cleanupMergePersonsAction, cleanupMergeSetupsAction } from "@/app/actions";
 
 export const metadata = { title: "Bereinigung" };
 
@@ -32,6 +32,7 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
 
       <nav className="flex flex-wrap gap-3 text-sm" aria-label="Abschnitte">
         <a href="#ende">Ende überschritten <Count n={r.overdue.length} /></a>
+        <a href="#freelancer">Doppelte Freelancer <Count n={r.freelancerDuplicates.length} /></a>
         <a href="#einsaetze">Doppelte Einsätze <Count n={r.engagementDuplicates.length} /></a>
         <a href="#intern">Interne Moco-Projekte <Count n={r.internal.length} /></a>
         <a href="#setups">Doppelte Setups <Count n={r.setupDuplicates.length} /></a>
@@ -60,6 +61,28 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
             <PendingButton busy="Schließe ab …">Ausgewählte abschließen</PendingButton>
           </form>
         )}
+      </section>
+
+      <section className="card space-y-2" id="freelancer">
+        <h2 className="font-semibold">Doppelte Freelancer ({r.freelancerDuplicates.length})</h2>
+        <p className="muted text-sm">Gleicher Name (Schreibweise, Reihenfolge und Zusätze wie „(fiktiv)“ egal) oder gleiche E-Mail. Der fett markierte Datensatz bleibt; Einsätze, Kandidaturen, Unterlagen und fehlende Stammdaten ziehen um. Danach die Einsätze unter „Doppelte Einsätze“ zusammenführen.</p>
+        {r.freelancerDuplicates.map((g) => (
+          <form key={g.keep.id} action={cleanupMergeFreelancersAction} className="text-sm" style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
+            <input type="hidden" name="keep" value={g.keep.id} />
+            {g.drop.map((d) => <input key={d.id} type="hidden" name="drop" value={d.id} />)}
+            <div className="flex flex-wrap gap-2 items-baseline">
+              <span><strong>{g.name}</strong> <span className="muted text-xs">{g.drop.length + 1}× angelegt · {g.reason}</span></span>
+              <PendingButton busy="Führe zusammen …" className="btn btn-small ml-auto">Zusammenführen</PendingButton>
+            </div>
+            <ul className="muted text-xs mt-1" style={{ listStyle: "none", padding: 0 }}>
+              {[g.keep, ...g.drop].map((f, i) => (
+                <li key={f.id} style={i === 0 ? { color: "var(--text)", fontWeight: 600 } : undefined}>
+                  {i === 0 ? "bleibt: " : "geht auf: "}<Link href={`/besetzung/freelancer/${f.id}`}>{f.name}</Link>{f.email ? ` · ${f.email}` : ""}{f.moco ? " · Moco" : ""} · {f.engagements} Einsätze · {f.candidacies} Kandidaturen
+                </li>
+              ))}
+            </ul>
+          </form>
+        ))}
       </section>
 
       <section className="card space-y-3" id="einsaetze">
