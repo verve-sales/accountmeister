@@ -673,14 +673,23 @@ export class TestProvider implements AIProvider {
         return out;
       }
     }
+    // e53: Auftrag „lege (einen neuen) Kunden X an“ → Karte KUNDE, sofort ausführen
+    const newCustomer = lastUser.match(/(?:lege?|leg)\s+(?:bitte\s+)?(?:einfach\s+)?(?:einen\s+)?(?:neuen\s+)?kunden\s+(.{2,80}?)\s+an\b/i);
+    if (newCustomer) {
+      const name = newCustomer[1]!.trim().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bGmbh\b/, "GmbH").replace(/\bAg\b/, "AG");
+      const item: AssistantItem = { type: "KUNDE", name, orgType: "SONSTIGE", setupName: "Allgemein", contextNote: "", evidenceQuote: newCustomer[0] };
+      const out = `Mach ich.\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items: [item], execute: [0], missing: [] })}`;
+      onDelta?.(out);
+      return out;
+    }
     // Delegation (Etappe 27): „Sales Ops soll …“, „frag <Name>, …“, „erinnere mich …“ → Karte VORGANG
     const deleg = lastUser.match(/^(?:bitte\s+)?(?:(sales\s*op(?:eration)?s)\s+(?:soll|möge|bitte)|erinnere\s+mich(?:\s+daran)?,?|frag(?:e)?\s+([A-ZÄÖÜ][\wäöüß]+(?:\s+[A-ZÄÖÜ][\wäöüß]+)?),?)\s+(.{3,250}?)(?:\s+(bis\s+[\wäöüß. ]{2,30}))?[.!]?$/i);
     if (deleg) {
       const [, ops, person, what, due] = deleg;
       const title = what!.replace(/^(dass|ob)\s+/i, "").trim();
       const serviceKey = /ausschreibung/i.test(title) ? "AUSSCHREIBUNG" : /profil/i.test(title) ? "PROFIL" : /angebot/i.test(title) ? "ANGEBOT" : /unterlagen|nachweis/i.test(title) ? "UNTERLAGEN" : "";
-      const item: AssistantItem = { type: "VORGANG", title: title.charAt(0).toUpperCase() + title.slice(1), description: "", target: ops ? "SALES_OPS" : person ? "PERSON" : "ICH", personName: person ?? "", serviceKey: ops ? serviceKey : "", dueHint: due ?? "", evidenceQuote: lastUser.slice(0, 200) };
-      const out = `Ich lege dafür einen Vorgang an – ${ops ? "als Anfrage an Sales Operations" : person ? `als Anfrage an ${person}` : "als Aufgabe für dich"}. Mit „Übernehmen“ geht er los.\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items: [item], missing: [] })}`;
+      const item: AssistantItem = { type: "VORGANG", title: title.charAt(0).toUpperCase() + title.slice(1), description: "", target: ops ? "SALES_OPS" : person ? "PERSON" : "ICH", personName: person ?? "", serviceKey: ops ? serviceKey : "", dueHint: due ?? "", priority: /dringend|wichtig|asap/i.test(lastUser) ? "HOCH" : "", accountName: "", evidenceQuote: lastUser.slice(0, 200) };
+      const out = `Mach ich.\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items: [item], execute: [0], missing: [] })}`;
       onDelta?.(out);
       return out;
     }

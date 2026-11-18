@@ -64,7 +64,8 @@ export function canViewAccount(actor: Actor, account: AccountRow): boolean {
 }
 
 export function canCreateAccount(actor: Actor): boolean {
-  return hasRole(actor, "BD") || hasRole(actor, "PRINCIPAL");
+  // e53: Geschäftsführung und Sales Operations legen ebenfalls Kunden an
+  return hasRole(actor, "BD") || hasRole(actor, "PRINCIPAL") || hasRole(actor, "CEO") || isSalesOps(actor);
 }
 
 /**
@@ -116,7 +117,7 @@ export function canEditSetup(actor: Actor, ctx: SetupContext): boolean {
 /** Wer darf ein Setup für einen Kunden anlegen? Anker (Kontext) und BD; Principal ebenfalls. */
 export function canCreateSetup(actor: Actor, account: AccountRow): boolean {
   if (!canViewAccount(actor, account) && !hasRole(actor, "BD") && !hasRole(actor, "ANKER")) return false;
-  return hasRole(actor, "ANKER", account.id) || hasRole(actor, "BD", account.id) || hasRole(actor, "PRINCIPAL", account.id);
+  return hasRole(actor, "ANKER", account.id) || hasRole(actor, "BD", account.id) || hasRole(actor, "PRINCIPAL", account.id) || hasRole(actor, "CEO") || isSalesOps(actor);
 }
 
 // ---------------------------------------------------------------------------

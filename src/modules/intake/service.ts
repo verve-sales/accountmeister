@@ -36,7 +36,7 @@ export const emptyProposal = (): IntakeProposal => ({ organization: null, setup:
 
 /** Dokument hochladen und Anlagevorschlag erzeugen (Kundenanlage aus Dokument). */
 export async function startIntake(actor: Actor, raw: unknown, file: UploadedFile | null, deps: { provider?: AIProvider } = {}) {
-  if (!canCreateAccount(actor)) throw new ForbiddenError("Nur BD oder Principal legen Kunden an.");
+  if (!canCreateAccount(actor)) throw new ForbiddenError("Kunden legen BD, Principal, Geschäftsführung oder Sales Operations an.");
   const upload = await uploadDocument(actor, { ...(raw as Record<string, string>), setupId: "" }, file);
   const source = await db.query.sources.findFirst({ where: eq(schema.sources.id, upload.sourceId) });
   if (!source) throw new NotFoundError("Quelle");

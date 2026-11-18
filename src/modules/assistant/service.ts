@@ -1,6 +1,6 @@
 import { createAction } from "@/modules/actions/service";
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNull, lt, notInArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema, type Tx } from "@/db/client";
 import { getConfig } from "@/lib/config";
@@ -32,7 +32,7 @@ import { insertSuggestionCard } from "./suggestions";
 import { createWorkItem } from "@/modules/work/service";
 import { changePositionStatus, createPosition, openReadiness, quickFill } from "@/modules/staffing/service";
 import { ensureDefaultTeams } from "@/modules/work/teams";
-import { parseRelativeDue } from "@/modules/work/calendar";
+import { parseRelativeDue, plusDaysIso, todayIso } from "@/modules/work/calendar";
 
 /**
  * Assistent (Etappe 8, E-041): ein Dialog je Nutzer und Kontext (allgemein, Kunde, Setup). Der Assistent antwortet
@@ -234,7 +234,22 @@ export async function buildContextText(actor: Actor, res: Resolved, mention?: st
     // Einsortierung (Etappe 14): nur so kann das Modell einen eingefügten Text/E-Mail-Text einem bekannten Kunden zuordnen.
     const known = (await listVisibleAccounts(actor)).filter((a) => a.status !== "ARCHIVED").map((a) => a.name);
     if (known.length) lines.push(`Bekannte Kunden (nur exakt so vorschlagen, wenn einer davon gemeint ist – nie abwandeln oder neue Namen erfinden): ${known.join("; ")}`);
+    // e53: Fragen zum Bestand – für im Gespräch genannte Kunden den Stand mitgeben
+    if (mention) {
+      const t = ` ${mention.toLowerCase().replace(/[^a-z0-9äöüß]+/g, " ")} `;
+      const accs = (await listVisibleAccounts(actor)).filter((a) => a.status !== "ARCHIVED" && a.name.toLowerCase().replace(/[^a-z0-9äöüß]+/g, " ").split(" ").filter((w) => w.length >= 4 && !["gmbh", "group", "gruppe", "informationstechnologie", "deutschland"].includes(w)).some((w) => t.includes(` ${w} `))).slice(0, 3);
+      for (const a of accs) lines.push(await accountBrief(actor, a.id, a.name));
+    }
   }
+  // e53: eigene offene Aufgaben (für „was steht an?“)
+  const today = todayIso();
+  const [myWork, myActions] = await Promise.all([
+    db.query.workItems.findMany({ where: and(eq(schema.workItems.workspaceId, actor.workspaceId), eq(schema.workItems.assigneeUserId, actor.userId), notInArray(schema.workItems.status, ["ERLEDIGT", "ABGELEHNT", "VERWORFEN"])), columns: { title: true, dueDate: true, priority: true }, limit: 30 }),
+    db.query.actions.findMany({ where: and(eq(schema.actions.workspaceId, actor.workspaceId), eq(schema.actions.ownerUserId, actor.userId), inArray(schema.actions.status, ["ANGENOMMEN", "IN_ARBEIT"])), columns: { title: true, dueDate: true, priority: true }, limit: 30 }),
+  ]);
+  const mine = [...myWork, ...myActions].sort((x, y) => (x.dueDate ?? "9999").localeCompare(y.dueDate ?? "9999")).slice(0, 12);
+  if (mine.length) lines.push(`Meine offenen Aufgaben (heute ${today}): ${mine.map((m) => `${m.title}${m.dueDate ? ` [fällig ${m.dueDate}${m.dueDate < today ? ", überfällig" : ""}]` : ""}${m.priority === "HOCH" ? " [hoch]" : ""}`).join("; ")}`);
+  else lines.push(`Meine offenen Aufgaben: keine (heute ${today}).`);
   if (res.account) lines.push(`Kunde: ${res.account.name} (${res.account.orgType})`);
   if (res.ctx) {
     lines.push(`Setup: ${res.ctx.setup.name} [${res.ctx.setup.status}]${res.ctx.setup.contextNote ? ` – ${res.ctx.setup.contextNote}` : ""}`);
@@ -270,6 +285,16 @@ export async function buildContextText(actor: Actor, res: Resolved, mention?: st
     }
   }
   return lines.join("\n");
+}
+
+/** e53: Kurzstand eines Kunden für Fragen zum Bestand – laufende Einsätze mit Ende, offene Chancen. */
+async function accountBrief(actor: Actor, accountId: string, name: string): Promise<string> {
+  const [engs, setups] = await Promise.all([findRunningEngagements(actor, { accountId }).catch(() => []), db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, accountId), columns: { id: true } })]);
+  const opps = setups.length ? await db.query.opportunities.findMany({ where: and(inArray(schema.opportunities.setupId, setups.map((x) => x.id)), notInArray(schema.opportunities.status, ["BEENDET", "BEAUFTRAGT"])), columns: { title: true, status: true }, limit: 15 }) : [];
+  const parts = [`Stand ${name}:`];
+  parts.push(engs.length ? `laufende Einsätze ${engs.map((e) => `${e.person} (Ende ${e.end ?? "offen"})`).join(", ")}` : "keine laufenden Einsätze");
+  parts.push(opps.length ? `offene Chancen ${opps.map((o) => `${o.title} [${o.status}]`).join(", ")}` : "keine offenen Chancen");
+  return parts.join(" ");
 }
 
 export async function getThreadView(actor: Actor, rawContext: unknown) {
@@ -316,7 +341,7 @@ export async function sendMessage(actor: Actor, raw: unknown, deps: { provider?:
   let cards: AssistantCard[] = [];
   let missing: string[] = [];
   let aiJobId: string | null = null;
-  let note = "";
+  let executeIdx: number[] = [];
 
   if (info.enabled && provider.assistantReply) {
     const cfg = getConfig();
@@ -375,13 +400,9 @@ export async function sendMessage(actor: Actor, raw: unknown, deps: { provider?:
       }
       cards = outcome.items.map((item) => ({ id: randomUUID(), item, status: "NEU" as const }));
       missing = outcome.missing;
-      const notes: string[] = [];
-      if (outcome.rejected > 0) notes.push(`${outcome.rejected} Vorschlag/Vorschläge ohne belegbare Textstelle wurden verworfen.`);
-      if (outcome.invalid > 0) notes.push(`${outcome.invalid} Karte(n) waren nicht schemakonform und wurden verworfen.`);
-      if (secondStep) notes.push("Die Karten wurden in einem zweiten Schritt aus der Antwort erzeugt.");
-      if (cards.length === 0 && /\b(angelegt|erstellt|gespeichert|erzeugt|angehängt|vorbereitet)\b/i.test(replyText)) notes.push("Hinweis: Ich lege nichts selbst an – gespeichert wird nur, was du aus einer Karte übernimmst. Diesmal kamen keine Karten zustande; schreib kurz, was angelegt werden soll (z. B. „Kunde X anlegen“), dann schlage ich Karten vor.");
-      else if (cards.length === 0 && parsedOut.json === null && !secondStep) notes.push("Die Antwort enthielt keine auswertbaren Karten.");
-      note = notes.join(" ");
+      executeIdx = outcome.execute;
+      // e53: keine Meta-Hinweise mehr im Gespräch (verworfene Karten, zweiter Schritt) – das steht im KI-Protokoll
+      if (cards.length === 0 && /\b(angelegt|erstellt|gespeichert|eingetragen)\b/i.test(replyText)) replyText = `${replyText}\n\nAchtung: Dabei ist nichts angelegt worden – schreib mir kurz, was genau ich anlegen soll (z. B. „lege Kunde X an“).`;
       if (job) await db.update(schema.aiJobs).set({ status: cards.length > 0 || parsedOut.json !== null || secondStep ? "ERFOLGREICH" : "FEHLER", itemCount: cards.length, rejectedCount: outcome.rejected + outcome.invalid, error: cards.length === 0 && parsedOut.json === null && !secondStep ? "Keine Karten" : null, tokensIn: usage?.tokensIn ?? null, tokensOut: usage?.tokensOut ?? null, model: usage?.model || job.model, finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
       if (!replyText.trim()) replyText = cards.length ? `Ich habe ${cards.length} Vorschläge abgeleitet.` : "Ich konnte daraus nichts Belastbares ableiten.";
     } catch (e) {
@@ -396,10 +417,45 @@ export async function sendMessage(actor: Actor, raw: unknown, deps: { provider?:
     missing = howTo ? [] : missingNow;
     deps.onDelta?.(replyText);
   }
-  if (note) replyText = `${replyText}\n\n${note}`;
+  // e53: Aufträge sofort ausführen – nur, was die Person in ihrer letzten Nachricht ausdrücklich verlangt hat
+  let curThread = thread;
+  const done: string[] = [];
+  const failed: string[] = [];
+  if (executeIdx.length) {
+    const lastNorm = normalize(text);
+    const chosen = executeIdx.map((i) => cards[i]!).filter((c) => c && EXECUTABLE.has(c.item.type) && (text.includes(c.item.evidenceQuote) || lastNorm.includes(normalize(c.item.evidenceQuote))));
+    chosen.sort((a, b) => (EXEC_ORDER.indexOf(a.item.type) + 1 || 9) - (EXEC_ORDER.indexOf(b.item.type) + 1 || 9));
+    let curRes = res;
+    for (const c of chosen) {
+      try {
+        const r = await applyItem(actor, curThread, curRes, c.item);
+        c.status = "UEBERNOMMEN";
+        c.auto = true;
+        c.resultType = r.type;
+        c.resultId = r.id;
+        c.note = r.note;
+        done.push((r.note ?? "").replace(/\s\/[a-z][\w/#-]*$/i, ""));
+        await recordAudit(db, actor, "assistant.card_applied", "ASSISTANT_CARD", c.id, { type: c.item.type, resultType: r.type, resultId: r.id, auftrag: true });
+        if (r.rebind) {
+          await db.update(schema.assistantThreads).set({ contextType: r.rebind.type, contextId: r.rebind.id, title: r.rebind.title, updatedAt: new Date() }).where(eq(schema.assistantThreads.id, threadId));
+          curThread = await requireThread(actor, threadId);
+          curRes = await resolveContext(actor, { type: curThread.contextType, id: curThread.contextId ?? "" });
+        }
+      } catch (e) {
+        c.error = e instanceof Error ? e.message.slice(0, 300) : "Fehler";
+        failed.push(c.error);
+      }
+    }
+  }
+  if (done.length || failed.length) {
+    const head = [done.length ? `Erledigt: ${done.join(" ")}` : "", failed.length ? `Nicht geklappt: ${failed.join(" ")}` : ""].filter(Boolean).join("\n\n");
+    // „Mach ich.“ o. Ä. ist nach der Erledigung überflüssig
+    const rest = replyText.trim().replace(/^(mach ich|erledige ich|lege ich (gleich )?an|wird gemacht|gerne)[.!]?\s*/i, "");
+    replyText = rest ? `${head}\n\n${rest}` : head;
+  }
   const [saved] = await db.insert(schema.assistantMessages).values({ threadId, seq: prior.length + 2, role: "ASSISTENT", text: replyText, cards, missing, aiJobId }).returning();
   await db.update(schema.assistantThreads).set({ updatedAt: new Date() }).where(eq(schema.assistantThreads.id, threadId));
-  return { message: saved!, cards, missing };
+  return { message: saved!, cards, missing, thread: curThread !== thread ? { contextType: curThread.contextType, contextId: curThread.contextId, title: curThread.title } : null };
 }
 
 /** Ohne KI: Bedienfragen direkt mit dem passenden Hilfe-Abschnitt beantworten (wörtlich, nichts dazuerfunden). */
@@ -441,27 +497,35 @@ export function splitReply(full: string): { prose: string; json: unknown | null 
 }
 
 /** Karten einzeln prüfen: Schema je Element, Textstelle im erlaubten Text. */
-export function validateCards(json: unknown, allowedText: string): { items: AssistantItem[]; missing: string[]; rejected: number; invalid: number } {
-  if (!json || typeof json !== "object") return { items: [], missing: [], rejected: 0, invalid: 0 };
-  const obj = json as { items?: unknown; missing?: unknown };
+export function validateCards(json: unknown, allowedText: string): { items: AssistantItem[]; missing: string[]; rejected: number; invalid: number; execute: number[] } {
+  if (!json || typeof json !== "object") return { items: [], missing: [], rejected: 0, invalid: 0, execute: [] };
+  const obj = json as { items?: unknown; missing?: unknown; execute?: unknown };
   const rawItems = Array.isArray(obj.items) ? obj.items : [];
+  const wanted = new Set(Array.isArray(obj.execute) ? obj.execute.filter((x): x is number => typeof x === "number" && Number.isInteger(x)) : []);
   const norm = normalize(allowedText);
   const items: AssistantItem[] = [];
+  const execute: number[] = [];
   let rejected = 0;
   let invalid = 0;
-  for (const raw of rawItems.slice(0, 40)) {
+  rawItems.slice(0, 40).forEach((raw, idx) => {
     const r = assistantItemSchema.safeParse(raw);
     if (!r.success) {
       invalid++;
-      continue;
+      return;
     }
     const q = r.data.evidenceQuote;
-    if (allowedText.includes(q) || norm.includes(normalize(q))) items.push(r.data);
-    else rejected++;
-  }
+    if (allowedText.includes(q) || norm.includes(normalize(q))) {
+      if (wanted.has(idx)) execute.push(items.length);
+      items.push(r.data);
+    } else rejected++;
+  });
   const missing = Array.isArray(obj.missing) ? obj.missing.filter((x): x is string => typeof x === "string" && x.trim().length >= 3).map((x) => x.trim().slice(0, 300)).slice(0, 8) : [];
-  return { items: items.slice(0, 30), missing, rejected, invalid };
+  return { items: items.slice(0, 30), missing, rejected, invalid, execute: execute.filter((i) => i < 30) };
 }
+
+/** e53: Diese Kartenarten führt der Assistent bei einem ausdrücklichen Auftrag sofort aus. */
+const EXECUTABLE = new Set(["KUNDE", "EINSORTIERUNG", "SETUP", "PERSON", "CHANCE", "BESETZUNG", "VORGANG", "ANSPRECHPARTNER", "SIGNAL"]);
+const EXEC_ORDER = ["KUNDE", "EINSORTIERUNG", "SETUP"];
 
 // ---------------------------------------------------------------------------
 // Karten übernehmen / verwerfen
@@ -557,11 +621,19 @@ export type CardEnv = {
 export async function applyCard(actor: Actor, res: Resolved, item: AssistantItem, env: CardEnv): Promise<ApplyResult> {
   const origin = env.origin;
   if (item.type === "KUNDE") {
-    if (!canCreateAccount(actor)) throw new ForbiddenError("Nur BD oder Principal legen Kunden an.");
-    const account = await createAccount(actor, { name: item.name, orgType: item.orgType, responsibleBdUserId: hasRole(actor, "BD") ? actor.userId : null });
+    if (!canCreateAccount(actor)) throw new ForbiddenError("Kunden legen BD, Principal, Geschäftsführung oder Sales Operations an.");
+    // e53: Dublettencheck – gibt es den Kunden schon (Schreibweise, Rechtsform egal), wird er weiterverwendet
+    const key = (n: string) => n.toLowerCase().replace(/\b(gmbh|ag|se|kg|co|mbh|ug|e\.?v|inc|ltd|group|gruppe)\b\.?/g, " ").replace(/[^a-z0-9äöüß]+/g, "");
+    const existing = (await listVisibleAccounts(actor)).find((a) => key(a.name) === key(item.name) && key(item.name).length >= 3);
+    const account = existing ?? (await createAccount(actor, { name: item.name, orgType: item.orgType, responsibleBdUserId: hasRole(actor, "BD") ? actor.userId : null }));
+    if (existing) {
+      const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, existing.id) });
+      const same = setups.find((x) => x.name.toLowerCase() === item.setupName.toLowerCase()) ?? (setups.length === 1 ? setups[0] : undefined);
+      if (same) return { type: "SETUP", id: same.id, note: `Kunde „${existing.name}“ gibt es schon – das Gespräch gehört jetzt zu „${existing.name} · ${same.name}“.`, rebind: { type: "SETUP", id: same.id, title: "Assistent · Setup" } };
+    }
     const setup = await createSetup(actor, { accountId: account.id, name: item.setupName, contextNote: item.contextNote || `Angelegt aus ${origin}.`, bdUserId: hasRole(actor, "BD") ? actor.userId : null, creatorContribution: "ANKER_KONTEXT" });
     await env.sourceFor(setup.id);
-    return { type: "SETUP", id: setup.id, note: `Kunde „${account.name}“ und Setup „${setup.name}“ angelegt; das Gespräch gehört jetzt zu diesem Setup.`, rebind: { type: "SETUP", id: setup.id, title: "Assistent · Setup" } };
+    return { type: "SETUP", id: setup.id, note: existing ? `Kunde „${account.name}“ gibt es schon; Setup „${setup.name}“ dort angelegt.` : `Kunde „${account.name}“ mit Setup „${setup.name}“ angelegt.`, rebind: { type: "SETUP", id: setup.id, title: "Assistent · Setup" } };
   }
   if (item.type === "SETUP") {
     if (!res.account) throw new ValidationError("Für ein Setup fehlt der Kunde – sag mir zuerst, um welche Organisation es geht.");
@@ -629,7 +701,9 @@ export async function applyCard(actor: Actor, res: Resolved, item: AssistantItem
   }
   // Etappe 27: Vorgang – an Kunde/Setup/Chance des Gesprächs, an mich, eine Person oder Sales Operations
   if (item.type === "VORGANG") {
-    const subject = res.ctx ? { subjectType: "SETUP", subjectId: res.ctx.setup.id } : res.account ? { subjectType: "KUNDE", subjectId: res.account.id } : { subjectType: "OHNE", subjectId: "" };
+    // e53: im allgemeinen Kontext den genannten Kunden zuordnen (nur exakte, sichtbare Treffer)
+    const named = !res.account && item.accountName ? (await listVisibleAccounts(actor)).find((a) => a.name.toLowerCase() === item.accountName.trim().toLowerCase()) : undefined;
+    const subject = res.ctx ? { subjectType: "SETUP", subjectId: res.ctx.setup.id } : res.account ? { subjectType: "KUNDE", subjectId: res.account.id } : named ? { subjectType: "KUNDE", subjectId: named.id } : { subjectType: "OHNE", subjectId: "" };
     let target = "me";
     let who = "dich";
     let serviceTypeId = "";
@@ -656,8 +730,9 @@ export async function applyCard(actor: Actor, res: Resolved, item: AssistantItem
       }
     }
     const title = fields.hinweis ? `${fields.hinweis}: ${item.title}`.slice(0, 300) : item.title;
-    const w = await createWorkItem(actor, { title, description: item.description, ...subject, target, serviceTypeId, dueDate: parseRelativeDue(item.dueHint) ?? parseDueHint(item.dueHint) ?? "", reviewRequired: target !== "me" ? "on" : "false" });
-    return { type: "VORGANG", id: w.id, note: target === "me" ? "Aufgabe für dich angelegt (Meine Arbeit)." : `Anfrage an ${who} gesendet – wartet auf Annahme.` };
+    const w = await createWorkItem(actor, { title, description: item.description, ...subject, target, serviceTypeId, dueDate: parseRelativeDue(item.dueHint) ?? parseDueHint(item.dueHint) ?? plusDaysIso(todayIso(), 7), priority: item.priority === "HOCH" ? "HOCH" : "NORMAL", reviewRequired: target !== "me" ? "on" : "false" });
+    const when = w.dueDate ? ` – fällig ${w.dueDate.split("-").reverse().join(".")}${w.priority === "HOCH" ? ", Priorität hoch" : ""}` : "";
+    return { type: "VORGANG", id: w.id, note: target === "me" ? `Aufgabe für dich angelegt${when} (Startseite, Zeitleiste).` : `Anfrage an ${who} gesendet${when} – wartet auf Annahme.` };
   }
   // Etappe 26: Karten auf Kundenebene (Kundenagenda, Beschaffung, Risiko, Hebel, Team, SOS)
   if (item.type === "INITIATIVE" || item.type === "BESCHAFFUNG" || item.type === "RISIKO" || item.type === "HEBEL" || item.type === "TEAM" || item.type === "SOS") {

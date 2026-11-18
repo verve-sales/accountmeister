@@ -255,8 +255,11 @@ describe("Etappe 27: Assistent legt Vorgänge an", () => {
     const r = await sendMessage(david, { threadId: view.thread.id, text: "Sales Ops soll die Ausschreibung der Netzleitstelle aufbereiten bis Freitag" });
     const card = r.cards.find((c) => c.item.type === "VORGANG");
     expect(card?.item).toMatchObject({ target: "SALES_OPS", serviceKey: "AUSSCHREIBUNG", dueHint: "bis Freitag" });
-    const res = await decideCard(david, { threadId: view.thread.id, messageId: r.message.id, cardId: card!.id, decision: "UEBERNEHMEN" });
-    expect(res.card.note).toMatch(/Sales Operations/);
+    // e53: ausdrücklicher Auftrag → sofort erledigt, kein Klick nötig
+    expect(card?.status).toBe("UEBERNOMMEN");
+    expect(card?.auto).toBe(true);
+    expect(card?.note).toMatch(/Sales Operations/);
+    expect(r.message.text).toMatch(/^Erledigt: /);
     const w = await db.query.workItems.findFirst({ where: and(eq(schema.workItems.requesterUserId, david.userId), eq(schema.workItems.subjectId, s.accountId)), orderBy: (x, { desc }) => [desc(x.createdAt)] });
     expect(w?.title).toMatch(/Ausschreibung aufbereiten: Die Ausschreibung der Netzleitstelle aufbereiten/);
     expect(w?.teamId).toBeTruthy();
@@ -265,8 +268,8 @@ describe("Etappe 27: Assistent legt Vorgänge an", () => {
     const r2 = await sendMessage(david, { threadId: view.thread.id, text: "Erinnere mich, die Referenzliste zu aktualisieren" });
     const c2 = r2.cards.find((c) => c.item.type === "VORGANG")!;
     expect(c2.item).toMatchObject({ target: "ICH" });
-    const res2 = await decideCard(david, { threadId: view.thread.id, messageId: r2.message.id, cardId: c2.id, decision: "UEBERNEHMEN" });
-    expect(res2.card.note).toMatch(/für dich/);
+    expect(c2.note).toMatch(/für dich/);
+    await expect(decideCard(david, { threadId: view.thread.id, messageId: r2.message.id, cardId: c2.id, decision: "UEBERNEHMEN" })).rejects.toThrow();
   });
 });
 

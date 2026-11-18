@@ -14,7 +14,7 @@ export const createAccountInput = z.object({
 });
 
 export async function createAccount(actor: Actor, raw: unknown) {
-  if (!canCreateAccount(actor)) throw new ForbiddenError("Nur BD oder Principal legen Kunden an.");
+  if (!canCreateAccount(actor)) throw new ForbiddenError("Kunden legen BD, Principal, Geschäftsführung oder Sales Operations an.");
   const parsed = createAccountInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;

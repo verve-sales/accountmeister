@@ -22,7 +22,7 @@ export async function POST(req: Request) {
       const send = (s: string) => controller.enqueue(encoder.encode(s));
       try {
         const r = await sendMessage(actor, body, { onDelta: send });
-        send(`\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ message: { id: r.message.id, text: r.message.text }, cards: r.cards, missing: r.missing })}`);
+        send(`\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ message: { id: r.message.id, text: r.message.text }, cards: r.cards, missing: r.missing, thread: r.thread })}`);
       } catch (e) {
         const msg = e instanceof DomainError ? e.message : "Unerwarteter Fehler.";
         if (!(e instanceof DomainError)) console.error(e);

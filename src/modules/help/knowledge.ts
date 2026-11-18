@@ -163,7 +163,7 @@ Im Auftrag: Startvoraussetzungen erfassen und nachweisen, dann „Startbereit“
     title: "Kunde, Setup und Chance anlegen",
     where: "Kunden → „Kunde aus Dialog, Dokument oder Interview anlegen“; im Assistenten über Karten",
     keywords: ["anlegen", "lege", "neu", "neuen", "neuer kunde", "kunde anlegen", "setup anlegen", "chance anlegen", "dokument", "import", "interview", "karte", "karten", "uebernehmen"],
-    body: `Drei Wege: (1) Im Assistenten erzählen oder Text einfügen – er schlägt Karten vor (Kunde, Setup, Person, Beobachtung, Chance, Aktion, Kontakt, Frage); angelegt wird nur, was du aus einer Karte übernimmst. (2) Kunden → „Kunde aus Dokument anlegen“: Dokument hochladen, Vorschläge prüfen. (3) Geführtes Interview.
+    body: `Drei Wege: (1) Im Assistenten „lege Kunde X an“ schreiben – er legt Kunde und Setup direkt an; oder Text einfügen – er schlägt Karten vor, die du übernimmst. (2) Kunden → „Kunde aus Dokument anlegen“: Dokument hochladen, Vorschläge prüfen. (3) Geführtes Interview.
 Eine Chance legst du auch direkt im Setup an (Abschnitt „Chancen“). Chancen sind in Kundensprache formuliert und bleiben „antizipiert“, bis der Kunde den Bedarf ausgesprochen hat.`,
   },
   {
@@ -171,8 +171,8 @@ Eine Chance legst du auch direkt im Setup an (Abschnitt „Chancen“). Chancen 
     title: "Der Assistent",
     where: "Rechts unten auf jeder Seite (Panel „Assistent“); Kontext = aktuelle Kunden-/Setup-Seite oder „Allgemein“",
     keywords: ["assistent", "ki", "karten", "interview modus", "interviewmodus", "einsortierung", "email einfuegen", "mail", "vorschlag", "gespraech"],
-    body: `Der Assistent ist Sparringspartner und Erfasser, kein Entscheider. Er antwortet kurz, schlägt Karten mit wörtlichem Beleg vor und fragt nach, was fehlt. Im Interview-Modus führt er aktiv durch die Themen.
-Im allgemeinen Kontext kannst du eine E-Mail einfügen; er schlägt dann eine Einsortierung zu einem bekannten Kunden vor. Er legt nie selbst etwas an, verschickt nichts und recherchiert nicht im Internet. Rückfragen zur Bedienung beantwortet er aus diesem Hilfe-Wissen.`,
+    body: `Der Assistent kann vier Dinge: (1) Klare Aufträge direkt erledigen – „lege Kunde Westnetz GmbH an“, „erinner mich Freitag, das Angebot nachzufassen“, „Sales Ops soll die Ausschreibung aufbereiten“, „trag Frau Keller als Ansprechpartnerin für Kevins Verlängerung ein“; er meldet „Erledigt: …“ mit Link. Gibt es den Kunden schon, nimmt er den bestehenden. (2) Fragen beantworten – zum Bestand („wann endet Kevin bei ITERGO?“, „was steht bei mir diese Woche an?“) und zur Bedienung. (3) Eingefügte Notizen und Mails auswerten – daraus schlägt er Karten vor (Person, Beobachtung, Chance, Besetzung, Aufgabe), die du mit „Übernehmen“ anlegst. (4) Aufgaben mit Datum und Priorität anlegen („dringend“ = hoch); sie erscheinen in der Zeitleiste auf der Startseite.
+Er verschickt nichts und recherchiert nicht im Internet. Im Interview-Modus führt er aktiv durch die Themen.`,
   },
   {
     id: "rollen",

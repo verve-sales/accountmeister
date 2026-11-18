@@ -163,7 +163,7 @@ describe("e37: Bereinigung und Verlängerungs-Ansprechpartner", () => {
     const fl = (await db.query.freelancers.findFirst({ where: eq(schema.freelancers.id, e.freelancerId!) }))!;
     await db.update(schema.freelancers).set({ displayName: "Martina Kraussbeispiel (fiktiv)" }).where(eq(schema.freelancers.id, fl.id));
     const view = await getThreadView(ceo, { type: "GLOBAL" });
-    expect(view.context.canWrite).toBe(false);
+    expect(view.context.canWrite).toBe(true); // e53: GF legt Kunden an
     const r = await sendMessage(ceo, { threadId: view.thread.id, text: "die fachliche verlängerung von martina kraussbeispiel läuft über einen neuen Ansprechpartner: Fabian Langbeispiel" });
     expect(r.message.text).toMatch(/Beispielkonzern/);
     expect(r.missing).toHaveLength(0);

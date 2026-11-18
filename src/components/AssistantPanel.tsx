@@ -12,7 +12,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 const MARKER = "===KARTEN===";
 
 type Item = Record<string, unknown> & { type: string; evidenceQuote: string };
-type Card = { id: string; item: Item; status: "NEU" | "UEBERNOMMEN" | "VERWORFEN"; resultType?: string; resultId?: string; note?: string };
+type Card = { id: string; item: Item; status: "NEU" | "UEBERNOMMEN" | "VERWORFEN"; resultType?: string; resultId?: string; note?: string; auto?: boolean; error?: string };
+const RESULT_HREF: Record<string, string> = { SETUP: "/setups/", VORGANG: "/vorgaenge/", OPPORTUNITY: "/bedarfe/", POSITION: "/besetzung/", ENGAGEMENT: "/einsaetze/", ACCOUNT: "/kunden/" };
 type Message = { id: string; role: string; text: string; cards: Card[]; missing: string[]; pending?: boolean };
 type OpenPoint = { kind: string; text: string; href: string | null };
 type View = {
@@ -31,7 +32,7 @@ const RISK_LABEL: Record<string, string> = { UMSTRUKTURIERUNG: "Umstrukturierung
 const PROCUREMENT_LABEL: Record<string, string> = { DIREKT: "direkt", VERMITTLER: "über Vermittler", RAHMENVERTRAG: "über Rahmenvertrag" };
 /** Reihenfolge für „Alle übernehmen“: erst Kunde/Einsortierung (bindet das Gespräch), dann Team, dann der Rest. */
 /** Karten, deren Recht nicht am Gesprächskontext hängt (geprüft wird beim Übernehmen am betroffenen Objekt). */
-const OWN_RIGHTS = new Set(["ANSPRECHPARTNER", "EINSORTIERUNG"]);
+const OWN_RIGHTS = new Set(["ANSPRECHPARTNER", "EINSORTIERUNG", "KUNDE", "VORGANG"]);
 const APPLY_ORDER = ["KUNDE", "EINSORTIERUNG", "ANSPRECHPARTNER", "SETUP", "TEAM", "BESCHAFFUNG", "INITIATIVE", "PERSON", "EINSATZ", "CHANCE", "HEBEL", "RISIKO", "SOS", "SIGNAL", "AKTION", "KONTAKT", "FRAGE", "ACCOUNTZIEL", "VORGANG", "BESETZUNG"];
 const ROLE_FAMILY_LABEL: Record<string, string> = { DELIVERY_MANAGEMENT: "Delivery Management", AGILE_LEADERSHIP: "Agile Leadership", BUSINESS_ANALYSE: "Business Analyse & Beratung", SOLUTION_ARCHITEKTUR: "Solution & Architektur", TEST_QS: "Test & Qualitätssicherung" };
 
@@ -258,7 +259,7 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
         prose = idx >= 0 ? buffer.slice(0, idx) : buffer;
         tail = idx >= 0 ? buffer.slice(idx + MARKER.length) : "";
       }
-      let payload: { message?: { id: string; text: string }; cards?: Card[]; missing?: string[]; error?: string } = {};
+      let payload: { message?: { id: string; text: string }; cards?: Card[]; missing?: string[]; error?: string; thread?: { contextType: string; contextId: string | null; title: string } | null } = {};
       try {
         payload = JSON.parse(tail.trim() || "{}");
       } catch {
@@ -266,6 +267,9 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
       }
       if (payload.error) throw new Error(payload.error);
       setMessages((m) => m.map((x) => (x.id === tempId ? { id: payload.message?.id ?? tempId, role: "ASSISTENT", text: payload.message?.text ?? prose.trim(), cards: payload.cards ?? [], missing: payload.missing ?? [] } : x)));
+      // e53: Auftrag hat das Gespräch an einen Kunden/ein Setup gebunden (z. B. „lege Kunde X an“)
+      if (payload.thread && view) setView({ ...view, thread: { ...view.thread, ...payload.thread } });
+      if (payload.cards?.some((c) => c.auto)) router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fehler");
       setMessages((m) => m.filter((x) => x.id !== tempId));
@@ -421,7 +425,7 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
                         </div>
                         {cardDetail(c.item) && <div className="muted text-xs mt-1" style={{ whiteSpace: "pre-wrap" }}>{cardDetail(c.item)}</div>}
                         {"purpose" in c.item && (c.item.purpose ? <div className="text-xs mt-1"><span className="muted">Wofür: </span>{String(c.item.purpose)}</div> : <div className="text-xs mt-1" style={{ color: "#8a6d1f" }}>Wofür unklar – nur übernehmen, wenn du den Zweck kennst.</div>)}
-                        <div className="muted text-xs mt-1">Textstelle: „{c.item.evidenceQuote.length > 120 ? c.item.evidenceQuote.slice(0, 117) + "…" : c.item.evidenceQuote}“</div>
+                        {!c.auto && <div className="muted text-xs mt-1">Textstelle: „{c.item.evidenceQuote.length > 120 ? c.item.evidenceQuote.slice(0, 117) + "…" : c.item.evidenceQuote}“</div>}
                         {c.status === "NEU" && (view?.context.canWrite || OWN_RIGHTS.has(c.item.type)) && (
                           <div className="flex gap-2 mt-2">
                             <button type="button" className="btn btn-small" onClick={() => decide(m.id, c.id, "UEBERNEHMEN")}>Übernehmen</button>
@@ -429,7 +433,8 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
                           </div>
                         )}
                         {c.status === "NEU" && view && !view.context.canWrite && !OWN_RIGHTS.has(c.item.type) && <div className="muted text-xs mt-1">{view.context.label === "Allgemein" ? "Hier fehlt noch der Kunde – übernimm zuerst die Einsortierung oder öffne den Assistenten beim Kunden bzw. im Setup." : "Zum Übernehmen fehlt dir das Bearbeitungsrecht an diesem Kunden bzw. Setup."}</div>}
-                        {c.status !== "NEU" && <div className="text-xs mt-1">{c.status === "UEBERNOMMEN" ? <>Übernommen. <NoteText text={c.note ?? ""} /></> : "Verworfen."}</div>}
+                        {c.status === "NEU" && c.error && <div className="text-xs mt-1" style={{ color: "#c0392b" }}>Konnte nicht direkt erledigt werden: {c.error}</div>}
+                        {c.status !== "NEU" && <div className="text-xs mt-1">{c.status === "UEBERNOMMEN" ? <>{c.auto ? "Erledigt." : "Übernommen."} <NoteText text={c.note ?? ""} />{c.resultType && c.resultId && RESULT_HREF[c.resultType] && !/\/(einsaetze|besetzung|bedarfe|vorgaenge)\//.test(c.note ?? "") ? <> <a href={`${RESULT_HREF[c.resultType]}${c.resultId}`}>öffnen</a></> : null}</> : "Verworfen."}</div>}
                       </li>
                     ))}
                   </ul>
@@ -464,7 +469,7 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
             />
             <div className="flex items-center gap-3 mt-2">
               <button className="btn btn-small" type="submit" disabled={busy || !text.trim() || !view}>{busy ? "…" : "Senden"}</button>
-              <span className="muted text-xs">{view ? (view.ai.enabled ? "Vorschläge sind Vorschläge – nichts wird ohne Klick angelegt. Diktieren: Win + H." : "KI deaktiviert – der Assistent zeigt offene Punkte und fehlende Angaben.") : ""}</span>
+              <span className="muted text-xs">{view ? (view.ai.enabled ? "Klare Aufträge („lege Kunde X an“, „erinner mich Freitag an …“) erledige ich direkt; aus Notizen und Mails mache ich Vorschläge zum Übernehmen. Diktieren: Win + H." : "KI deaktiviert – der Assistent zeigt offene Punkte und fehlende Angaben.") : ""}</span>
             </div>
           </form>
         </aside>

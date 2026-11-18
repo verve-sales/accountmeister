@@ -132,11 +132,11 @@ describe("Etappe 8: Assistent (Dialog mit Vorschlagskarten)", () => {
     const bad = { type: "SIGNAL", observation: "Erfunden", relevanceHypothesis: "", evidenceQuote: "Diese Textstelle gibt es nicht" };
     const r = await sendMessage(david, { threadId: view.thread.id, text: "Frau Keller sagte: Budget ist freigegeben." }, { provider: fake(`Verstanden.\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items: [good, bad], missing: [] })}`) });
     expect(r.cards).toHaveLength(1);
-    expect(r.message.text).toMatch(/1 Vorschlag.*verworfen/);
+    expect(r.message.text).not.toMatch(/verworfen/); // e53: keine Meta-Hinweise im Gespräch
 
     const r2 = await sendMessage(david, { threadId: view.thread.id, text: "Noch etwas." }, { provider: fake(`Nur Prosa ohne Karten.`) });
     expect(r2.cards).toHaveLength(0);
-    expect(r2.message.text).toMatch(/keine auswertbaren Karten/);
+
     expect(splitReply("a\n===KARTEN===\nkein json").json).toBeNull();
   });
 
@@ -157,15 +157,10 @@ describe("Etappe 8: Assistent (Dialog mit Vorschlagskarten)", () => {
     // Fremder Nutzer kann im Gespräch weder schreiben noch entscheiden
     const lars = await actorFor("lars");
     await expect(sendMessage(lars, { threadId: view.thread.id, text: "Hallo" })).rejects.toBeInstanceOf(NotFoundError);
-    // Nur-Leser (CEO) bekommt beim Übernehmen einer Setup-Karte eine verständliche Ablehnung
+    // Nur-Leser (CEO) im fremden Setup: kein Bearbeitungsrecht
     const clemens = await actorFor("clemens");
     const cv = await getThreadView(clemens, { type: "SETUP", id: seed.setupId });
     expect(cv.context.canWrite).toBe(false);
-    process.env.AI_PROVIDER = "test";
-    resetConfigCacheForTests();
-    const rc = await sendMessage(clemens, { threadId: cv.thread.id, text: "Frau Keller sagte: Budget ist freigegeben." });
-    const sig = rc.cards.find((c) => c.item.type === "SIGNAL");
-    if (sig) await expect(decideCard(clemens, { threadId: cv.thread.id, messageId: rc.message.id, cardId: sig.id, decision: "UEBERNEHMEN" })).rejects.toBeInstanceOf(ForbiddenError);
     // Archivieren liefert ein frisches Gespräch
     const fresh = await archiveThread(nina, view.thread.id);
     expect(fresh.id).not.toBe(view.thread.id);
@@ -209,7 +204,7 @@ describe("Robuste Kartenauswertung (Produktionsmodelle halten das Format nicht i
     } as unknown as AIProvider;
     const r = await sendMessage(david, { threadId: view.thread.id, text }, { provider: flaky });
     expect(r.cards).toHaveLength(2);
-    expect(r.message.text).toMatch(/zweiten Schritt/);
+    expect(r.message.text).not.toMatch(/zweiten Schritt/);
     // Gar keine Karten möglich + Behauptung „angelegt“ → ehrlicher Hinweis
     const liar = {
       ...new TestProvider(),
@@ -219,7 +214,7 @@ describe("Robuste Kartenauswertung (Produktionsmodelle halten das Format nicht i
     } as unknown as AIProvider;
     const r2 = await sendMessage(david, { threadId: view.thread.id, text: "Und?" }, { provider: liar });
     expect(r2.cards).toHaveLength(0);
-    expect(r2.message.text).toMatch(/lege nichts selbst an/);
+    expect(r2.message.text).toMatch(/nichts angelegt worden/);
   });
 });
 

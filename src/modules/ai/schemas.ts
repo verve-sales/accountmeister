@@ -244,7 +244,7 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("SOS"), kind: z.enum(["EINSATZ_LAEUFT_AUS", "ANKER_BLOCKIERT", "LAGE_ENG", "SONSTIGES"]), title: z.string().min(3).max(200), situation: z.string().min(10).max(2000), need: z.string().max(500).optional().default(""), ...q }),
   z.object({ type: z.literal("HEBEL"), lever: z.enum(["VERLAENGERN", "AUSWEITEN", "VERTIEFEN", "UEBERTRAGEN", "REAKTIVIEREN"]), title: z.string().min(3).max(300), rationale: z.string().max(1000).optional().default(""), ...q }),
   // Etappe 27: Vorgang – eigene Aufgabe oder Anfrage an Team/Person (Kollaborationskern)
-  z.object({ type: z.literal("VORGANG"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), target: z.enum(workTargetCardValues).optional().default("ICH"), personName: z.string().max(200).optional().default(""), serviceKey: z.enum(["AUSSCHREIBUNG", "PROFIL", "UNTERLAGEN", "ANGEBOT", ""]).optional().default(""), dueHint: z.string().max(100).optional().default(""), ...q }),
+  z.object({ type: z.literal("VORGANG"), title: z.string().min(3).max(300), description: z.string().max(2000).optional().default(""), target: z.enum(workTargetCardValues).optional().default("ICH"), personName: z.string().max(200).optional().default(""), serviceKey: z.enum(["AUSSCHREIBUNG", "PROFIL", "UNTERLAGEN", "ANGEBOT", ""]).optional().default(""), dueHint: z.string().max(100).optional().default(""), priority: z.enum(["HOCH", "NORMAL", "NIEDRIG", ""]).optional().default(""), accountName: z.string().max(200).optional().default(""), ...q }),
   // Etappe 30: Besetzung – zu besetzende Position aus Mail/Notiz; personName nur, wenn die Person im Text feststeht
   z.object({
     type: z.literal("BESETZUNG"),
@@ -304,7 +304,7 @@ export const assistantOutputSchema = z.object({
 export type AssistantOutput = z.infer<typeof assistantOutputSchema>;
 
 /** Gespeicherte Karte: Vorschlag plus Entscheidung */
-export type AssistantCard = { id: string; item: AssistantItem; status: "NEU" | "UEBERNOMMEN" | "VERWORFEN"; resultType?: string; resultId?: string; note?: string };
+export type AssistantCard = { id: string; item: AssistantItem; status: "NEU" | "UEBERNOMMEN" | "VERWORFEN"; resultType?: string; resultId?: string; note?: string; /** e53: direkt ausgeführt (Auftrag) */ auto?: boolean; /** e53: Ausführung gescheitert – Karte bleibt zum Übernehmen */ error?: string };
 
 // ---------------------------------------------------------------------------
 // Etappe 9: Strategiefaden und Formularvorschläge
