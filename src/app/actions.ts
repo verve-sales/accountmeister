@@ -1903,8 +1903,8 @@ export async function mocoSyncNowAction(fd: FormData) {
     const { runJob } = await import("@/modules/notifications/worker");
     const { runMocoSync } = await import("@/modules/moco/sync");
     let counts: Record<string, number> = {};
-    await runJob("moco-sync", async () => (counts = (await runMocoSync({ since: data.since || undefined })) as unknown as Record<string, number>));
-    throw new PendingInfo(`Abgleich gelaufen: ${counts.projekteGeprueft ?? 0} Projekte geprüft, ${counts.hinweise ?? 0} neue Hinweise, ${counts.neueNutzer ?? 0} neue Zugänge, ${counts.neueFreelancer ?? 0} neue Freelancer.`);
+    await runJob("moco-sync", async () => (counts = (await runMocoSync({ since: data.since || undefined, full: data.full === "1" })) as unknown as Record<string, number>));
+    throw new PendingInfo(`Abgleich gelaufen: ${counts.projekteGeprueft ?? 0} Projekte geprüft, ${counts.endenUebernommen ?? 0} Enddaten aus Moco übernommen, ${counts.hinweise ?? 0} neue Hinweise, ${counts.neueNutzer ?? 0} neue Zugänge, ${counts.neueFreelancer ?? 0} neue Freelancer.`);
   }, "Abgleich gelaufen.");
 }
 

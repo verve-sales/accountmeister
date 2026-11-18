@@ -5,6 +5,10 @@ import { asgOverview, asgTaskLabel, canUseAssignments } from "@/modules/assignme
 import { AsgTimeline } from "@/components/AsgTimeline";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDate } from "@/lib/labels";
+import { mocoSyncNowAction } from "@/app/actions";
+import { mocoEnabled } from "@/modules/moco/client";
+import { canRunMocoImport } from "@/modules/moco/import";
+import { PendingButton } from "@/components/PendingButton";
 import { canClean, findEngagementDuplicates, findFreelancerDuplicates } from "@/modules/cleanup/service";
 
 const RED = "#c0392b";
@@ -18,6 +22,8 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
   const wer = params.wer === "freelancer" || params.wer === "intern" ? params.wer : "alle";
   const shown = o.engagements.filter((e) => wer === "alle" || (wer === "freelancer" ? e.kind === "FREELANCER" : e.kind === "INTERN"));
   const k = o.kpis;
+  const noEnd = shown.filter((e) => !e.end).length;
+  const canPull = mocoEnabled() && canRunMocoImport(actor);
   const [flDup, engDup] = canClean(actor) ? await Promise.all([findFreelancerDuplicates(actor), findEngagementDuplicates(actor)]) : [[], []];
   const tiles: { v: number; l: string; href: string; warn?: boolean }[] = [
     { v: k.freelancer, l: "Freelancer im Einsatz", href: "/assignments?wer=freelancer#zeitleiste" },
@@ -56,6 +62,18 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
           </span>
           <Link href="/assignments/konditionen" className="text-sm ml-auto">als Tabelle mit Konditionen</Link>
         </div>
+        {(noEnd > 0 || canPull) && (
+          <div className="flex flex-wrap items-center gap-3 mb-2 text-sm">
+            {noEnd > 0 && <span className="muted">{noEnd} ohne Enddatum{canPull ? " – das Projektende aus Moco wird übernommen, sobald es dort gepflegt ist." : ""}</span>}
+            {canPull && (
+              <form action={mocoSyncNowAction} className="ml-auto">
+                <input type="hidden" name="back" value="/assignments#zeitleiste" />
+                <input type="hidden" name="full" value="1" />
+                <PendingButton busy="Hole Enddaten …" className="btn btn-secondary btn-small">Enddaten aus Moco holen</PendingButton>
+              </form>
+            )}
+          </div>
+        )}
         <AsgTimeline engagements={shown} today={o.today} />
       </section>
 

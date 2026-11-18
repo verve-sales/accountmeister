@@ -1,7 +1,7 @@
 import { freelancerKey } from "@/modules/staffing/dedupe";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { engagementLabel } from "@/modules/engagements/label";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { getConfig } from "@/lib/config";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
@@ -45,18 +45,18 @@ async function careUserIds(engagementId: string, bdUserId: string): Promise<stri
   return [...new Set([bdUserId, ...cares.map((c) => c.userId)])];
 }
 
-export type SyncCounts = { projekteGeprueft: number; hinweise: number; neueNutzer: number; neueFreelancer: number };
+export type SyncCounts = { projekteGeprueft: number; hinweise: number; neueNutzer: number; neueFreelancer: number; endenUebernommen: number };
 
 /** Delta-Abgleich: Projekte (inkl. archivierte, geändert seit `since`) und Nutzer. */
-export async function runMocoSync(opts: { since?: string; client?: MocoClient; workspaceId?: string } = {}): Promise<SyncCounts> {
-  const counts: SyncCounts = { projekteGeprueft: 0, hinweise: 0, neueNutzer: 0, neueFreelancer: 0 };
+export async function runMocoSync(opts: { since?: string; full?: boolean; client?: MocoClient; workspaceId?: string } = {}): Promise<SyncCounts> {
+  const counts: SyncCounts = { projekteGeprueft: 0, hinweise: 0, neueNutzer: 0, neueFreelancer: 0, endenUebernommen: 0 };
   if (!mocoEnabled()) return counts;
   const client = opts.client ?? getMocoClient();
   const cfg = getConfig();
   const ws = opts.workspaceId ?? (await db.query.workspaces.findFirst())?.id;
   if (!ws) return counts;
   const lastRun = await db.query.jobRuns.findFirst({ where: and(eq(schema.jobRuns.name, "moco-sync"), eq(schema.jobRuns.ok, true)), orderBy: desc(schema.jobRuns.startedAt) });
-  const since = opts.since ?? (lastRun?.startedAt ? lastRun.startedAt.toISOString().slice(0, 10) : undefined);
+  const since = opts.full ? undefined : opts.since ?? (lastRun?.startedAt ? lastRun.startedAt.toISOString().slice(0, 10) : undefined);
 
   // --- Nutzer: neue automatisch nachziehen, deaktivierte als Hinweis ---------------------------------------
   const mUsers = await client.users({ includeArchived: true });
@@ -140,7 +140,16 @@ export async function runMocoSync(opts: { since?: string; client?: MocoClient; w
       if (contract && !contract.active && ["AKTIV", "PAUSIERT", "GEPLANT", "VORBEREITUNG"].includes(e.status)) {
         counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "CONTRACT_INAKTIV", title: `${await engagementLabel(db, e)}: Zuweisung in Moco inaktiv – Einsatz beenden?`, payload: { mocoProjectId: p.id, mocoContractId: contract.id, finishDate: p.finish_date }, dedupeKey: `contract-inactive:${contract.id}`, notifyUserIds: who, link });
       }
-      if (p.finish_date && e.plannedEnd && p.finish_date !== e.plannedEnd) {
+      // e52: Moco ist führend beim Projektende. Fehlt das Ende im AM oder hat Moco es nach hinten geschoben, wird es
+      // direkt übernommen; nur ein früheres Ende in Moco (z. B. Verlängerung im AM, in Moco noch nicht nachgezogen) wird
+      // als Hinweis zur Prüfung gemeldet.
+      if (p.finish_date && e.status !== "ENDET" && (!e.plannedEnd || p.finish_date > e.plannedEnd)) {
+        await db.update(schema.engagements).set({ plannedEnd: p.finish_date, version: e.version + 1, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
+        if (e.orderId) await db.update(schema.orders).set({ plannedEnd: p.finish_date, updatedAt: new Date() }).where(and(eq(schema.orders.id, e.orderId), or(isNull(schema.orders.plannedEnd), lt(schema.orders.plannedEnd, p.finish_date))));
+        await db.update(schema.mocoHints).set({ status: "UEBERNOMMEN", resolvedAt: new Date() }).where(and(eq(schema.mocoHints.workspaceId, ws), eq(schema.mocoHints.subjectType, "ENGAGEMENT"), eq(schema.mocoHints.subjectId, e.id), eq(schema.mocoHints.kind, "ENDE_GEAENDERT"), eq(schema.mocoHints.status, "OFFEN")));
+        await db.insert(schema.auditEvents).values({ workspaceId: ws, actorUserId: null, action: "engagement.updated", objectType: "ENGAGEMENT", objectId: e.id, changes: { ende: p.finish_date, vorher: e.plannedEnd, quelle: "Moco-Abgleich" } });
+        counts.endenUebernommen++;
+      } else if (p.finish_date && e.plannedEnd && p.finish_date !== e.plannedEnd) {
         counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "ENDE_GEAENDERT", title: `${await engagementLabel(db, e)}: Projektende in Moco jetzt ${p.finish_date} (AM: ${e.plannedEnd})`, payload: { mocoProjectId: p.id, finishDate: p.finish_date, previous: e.plannedEnd }, dedupeKey: `end-changed:${p.id}:${e.id}:${p.finish_date}`, notifyUserIds: who, link });
       }
       const setup = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, e.setupId), columns: { id: true, name: true, mocoProjectGroupId: true } });

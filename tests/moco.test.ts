@@ -177,7 +177,7 @@ describe("Etappe 31: Moco-Anbindung", () => {
     const p1001 = base.find((p) => p.id === 1001)!;
     const p1003 = base.find((p) => p.id === 1003)!;
     client.projectsOverride = [
-      { ...p1001, finish_date: "2027-03-31" },
+      { ...p1001, finish_date: "2026-11-30" }, // früher als im AM → Hinweis zur Prüfung
       { ...p1003, contracts: p1003.contracts.map((c) => (c.id === 9004 ? { ...c, active: false } : c)) },
       { ...p1001, id: 1999, name: "Neues Vorhaben", contracts: [{ ...p1001.contracts[0]!, id: 9999 }] },
       ...base.filter((p) => ![1001, 1003].includes(p.id)),
@@ -195,7 +195,7 @@ describe("Etappe 31: Moco-Anbindung", () => {
     // Übernehmen: Ende nachgezogen; Einsatz beendet mit abgesagten Check-ins; Anker darf nicht
     await expect(resolveHint(await actorFor("nina"), ende.id, "UEBERNEHMEN")).rejects.toThrow();
     await resolveHint(petra, ende.id, "UEBERNEHMEN");
-    expect((await db.query.engagements.findFirst({ where: eq(schema.engagements.id, ende.subjectId!) }))?.plannedEnd).toBe("2027-03-31");
+    expect((await db.query.engagements.findFirst({ where: eq(schema.engagements.id, ende.subjectId!) }))?.plannedEnd).toBe("2026-11-30");
     await resolveHint(petra, inaktiv.id, "UEBERNEHMEN");
     const ended = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, inaktiv.subjectId!) });
     expect(ended?.status).toBe("ABGESCHLOSSEN");
@@ -203,6 +203,14 @@ describe("Etappe 31: Moco-Anbindung", () => {
     // Erneuter Lauf erzeugt keine doppelten Hinweise
     const again = await runMocoSync({ client, workspaceId: petra.workspaceId });
     expect(again.hinweise).toBe(0);
+    // e52: Späteres oder fehlendes Ende in Moco wird ohne Hinweis direkt übernommen
+    const eid = ende.subjectId!;
+    await db.update(schema.engagements).set({ plannedEnd: null }).where(eq(schema.engagements.id, eid));
+    client.projectsOverride = client.projectsOverride!.map((p) => (p.id === 1001 ? { ...p, finish_date: "2027-09-30" } : p));
+    const full = await runMocoSync({ client, workspaceId: petra.workspaceId, full: true });
+    expect(full.endenUebernommen).toBeGreaterThanOrEqual(1);
+    expect(full.hinweise).toBe(0);
+    expect((await db.query.engagements.findFirst({ where: eq(schema.engagements.id, eid) }))?.plannedEnd).toBe("2027-09-30");
   });
 
   it("M04: Webhook – Signatur HMAC-SHA256, Ereignis protokolliert, ungültig abgelehnt", async () => {

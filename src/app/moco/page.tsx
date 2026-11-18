@@ -59,6 +59,11 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
                 <div><label className="label" htmlFor="since">Abgleich ab (leer = seit letztem Lauf)</label><input id="since" type="date" name="since" className="input" /></div>
                 <button className="btn btn-secondary btn-small" type="submit">Abgleich jetzt</button>
               </form>
+              <form action={mocoSyncNowAction}>
+                <input type="hidden" name="back" value="/moco" />
+                <input type="hidden" name="full" value="1" />
+                <button className="btn btn-secondary btn-small" type="submit" title="Alle Projekte prüfen, auch unveränderte – übernimmt fehlende und spätere Enddaten">Vollabgleich (alle Projekte)</button>
+              </form>
             </div>
           )}
           {status.events.length > 0 && <p className="muted text-xs">Letzte Webhook-Ereignisse: {status.events.map((e) => `${e.target}/${e.event}${e.signatureOk ? "" : " (Signatur!)"}${e.error ? " ✗" : ""}`).join(" · ")}</p>}
