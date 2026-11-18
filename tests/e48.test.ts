@@ -419,4 +419,36 @@ describe("e48: GF-Start, leisere KI, Dokumentenfluss", () => {
     await decideRenewal(david, id, { decision: "BESTAETIGEN" });
     expect(currentPeriod(await db.query.engagementPeriods.findMany({ where: eq(schema.engagementPeriods.engagementId, id) }))!.vk).toBe("121.08");
   });
+
+  it("D09: Angebot über das heutige Ende hinaus ohne Verlängerung → Verlängerung „angeboten“ entsteht (Übersicht zeigt sie)", async () => {
+    env();
+    resetFixture();
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    await setupSite(await actorFor("clemens"), { client: new FixtureSpClient() });
+    const acc = (await db.query.accounts.findFirst({ where: eq(schema.accounts.id, s.accountId) }))!;
+    const end0 = plusDaysIso(todayIso(), 40);
+    const opp = await createOpportunity(david, { setupId: s.setupId, title: `E49f Angebot ${u()}`, needDescription: "Angebot ohne Verlängerung.", kind: "FREELANCER_EXPERTE" });
+    const q = await quickFill(david, opp.id, { title: "Tester", resourceKind: "INTERN", internalUserId: david.userId, vkRate: "900", desiredStart: plusDaysIso(todayIso(), -60), plannedEnd: end0 });
+    await db.update(schema.engagements).set({ status: "AKTIV" }).where(eq(schema.engagements.id, q.engagement.id));
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Offer overview");
+    for (const c of ["I9", "O9", "S9", "Q28", "U28", "X28", "M54", "Q54"]) ws.getCell(c).value = c === "S9" ? "ALT_0001" : 1;
+    const buf = (await wb.xlsx.writeBuffer()) as unknown as Uint8Array;
+    const client = new FixtureSpClient() as unknown as import("@/modules/sharepoint/client").SpClient;
+    const libs = await client.libraries();
+    const vorlagen = await client.driveOf(libs.find((l) => l.name === "Vorlagen")!.id);
+    await client.upload(vorlagen, ["Angebot Kunde"], "Angebot_ERGO_Vorlage.xlsx", buf.buffer.slice(0) as ArrayBuffer);
+    const { offerBases, generateOffer } = await import("@/modules/sharepoint/offer");
+    const bases = await offerBases({ accountName: acc.name, personName: "David Demo" });
+    expect(bases!.templates).toBe(1);
+    const until = plusDaysIso(end0, 180);
+    await generateOffer(david, q.engagement.id, { basePick: bases!.options.find((o) => o.label.startsWith("Vorlage"))!.value, offerNumber: "VCA-T26-11_0050", from: plusDaysIso(end0, 1), until, dailyRate: "900" });
+    const ren = (await db.query.renewalDecisions.findFirst({ where: eq(schema.renewalDecisions.engagementId, q.engagement.id) }))!;
+    expect(ren).toMatchObject({ status: "ANGEBOTEN", proposedTo: until, offerNumber: "VCA-T26-11_0050" });
+    const { asgOverview } = await import("@/modules/assignments/service");
+    const e = (await asgOverview(await actorFor("clemens"))).engagements.find((x) => x.id === q.engagement.id)!;
+    expect(e).toMatchObject({ state: "VERLAENGERUNG", renewalTo: until, offerNumber: "VCA-T26-11_0050" });
+  });
 });

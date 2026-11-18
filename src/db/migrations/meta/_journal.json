@@ -358,6 +358,13 @@
       "when": 1794565766475,
       "tag": "0050_verlaengerung_angebot",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1794565767475,
+      "tag": "0051_angebot_verlaengerung",
+      "breakpoints": true
     }
   ]
 }

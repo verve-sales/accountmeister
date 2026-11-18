@@ -149,10 +149,21 @@ export async function generateOffer(actor: Actor, engagementId: string, raw: unk
   const { addContractDocument } = await import("@/modules/engagements/service");
   const { document } = await addContractDocument(actor, engagementId, { side: "KUNDE", docType: "ANGEBOT", title: `Angebot ${i.offerNumber} – ${person}`.slice(0, 200), reference: i.offerNumber, validFrom: i.from, validTo: i.until, signedStatus: "ENTWURF", link: item.webUrl }, null);
   await db.update(schema.contractDocuments).set({ spDriveId: kdrive, spItemId: item.id }).where(eq(schema.contractDocuments.id, document.id));
-  // an der Verlängerung vermerken: offene zuerst, sonst die jüngste zum selben Zeitraum
+  // An der Verlängerung vermerken: offene zuerst, sonst die jüngste zum selben Zeitraum.
+  // e49f: Gibt es noch keine und reicht das Angebot über das heutige Ende hinaus, entsteht die Verlängerung hier –
+  // so zeigt die Übersicht „Verlängerung läuft“, egal ob man über „Verlängern“ oder „Angebot erzeugen“ kommt.
   const rens = await db.query.renewalDecisions.findMany({ where: eq(schema.renewalDecisions.engagementId, engagementId), orderBy: desc(schema.renewalDecisions.createdAt) });
-  const ren = rens.find((r) => ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status)) ?? rens.find((r) => r.status === "BESTAETIGT" && r.proposedTo === i.until) ?? null;
-  if (ren) await db.update(schema.renewalDecisions).set({ offerNumber: i.offerNumber, offerLink: item.webUrl, ...(ren.status === "IN_ABSTIMMUNG" || ren.status === "ZU_KLAEREN" ? { status: "ANGEBOTEN" } : {}), updatedAt: new Date() }).where(eq(schema.renewalDecisions.id, ren.id));
+  const open = rens.find((r) => ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status)) ?? null;
+  const confirmed = rens.find((r) => r.status === "BESTAETIGT" && r.proposedTo === i.until) ?? null;
+  const extends_ = !!e.plannedEnd && i.until > e.plannedEnd;
+  const rateNote = i.dailyRate ? `Angebot ${i.offerNumber}: Tagessatz ${i.dailyRate.replace(".", ",")} €` : `Angebot ${i.offerNumber}`;
+  if (open) {
+    await db.update(schema.renewalDecisions).set({ offerNumber: i.offerNumber, offerLink: item.webUrl, status: "ANGEBOTEN", ...(extends_ && !open.proposedTo ? { proposedFrom: i.from, proposedTo: i.until, conditionsNote: open.conditionsNote ?? rateNote } : {}), version: open.version + 1, updatedAt: new Date() }).where(eq(schema.renewalDecisions.id, open.id));
+  } else if (confirmed) {
+    await db.update(schema.renewalDecisions).set({ offerNumber: i.offerNumber, offerLink: item.webUrl, updatedAt: new Date() }).where(eq(schema.renewalDecisions.id, confirmed.id));
+  } else if (extends_ && ["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status)) {
+    await db.insert(schema.renewalDecisions).values({ workspaceId: actor.workspaceId, engagementId, status: "ANGEBOTEN", triggerDate: todayIso(), proposedFrom: i.from, proposedTo: i.until, conditionsNote: rateNote, offerNumber: i.offerNumber, offerLink: item.webUrl, commercialOwnerUserId: e.bdUserId, createdBy: actor.userId });
+  }
   await recordAudit(db, actor, "offer.generated", "ENGAGEMENT", engagementId, { angebotsnummer: i.offerNumber, grundlage: base.name, datei: fileName });
   return { fileName, webUrl: item.webUrl, documentId: document.id, personDays: i.personDays ? Number(i.personDays) : await readNumber(bytes, ERGO_SHEET, ERGO_CELLS.personDays), dailyRate: i.dailyRate ? Number(i.dailyRate) : null };
 }
