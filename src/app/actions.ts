@@ -331,6 +331,15 @@ export async function createActionAction(fd: FormData) {
   }, "Aktion gespeichert.");
 }
 
+/** e50: Datum und Priorität einer Aufgabe setzen. */
+export async function planActionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(data.back ?? "/start#zeitleiste", async (actor) => {
+    const { planAction } = await import("@/modules/actions/service");
+    await planAction(actor, data.actionId ?? "", data);
+  }, "Termin und Priorität gespeichert.");
+}
+
 export async function changeActionStatusAction(fd: FormData) {
   const data = formToObject(fd);
   return run(data.back ?? "/meine-arbeit", async (actor) => {

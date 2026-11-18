@@ -29,7 +29,9 @@ import { ensureInitiativeRemindersSafe } from "@/modules/agenda/service";
 import { listOpenSosForActor } from "@/modules/sos/service";
 import { SosBanner } from "@/components/SosPanel";
 import { ensureOverdueNotificationsSafe, listMyWork } from "@/modules/work/service";
-import { createOpportunityAction, eingangAction } from "../actions";
+import { createActionAction, createOpportunityAction, eingangAction } from "../actions";
+import { TaskTimeline, type TimelineTask } from "@/components/TaskTimeline";
+import { canSeeTeamTimeline, teamTimeline, type TimelineScope } from "@/modules/tasks/timeline";
 import { listMyCheckins } from "@/modules/engagements/care";
 import { listMyOpenActions } from "@/modules/actions/service";
 import { listMyHandovers } from "@/modules/handovers/service";
@@ -141,6 +143,36 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       </>
     );
   const readOnly = isReadOnlyActor(actor);
+  // e50: Zeitleiste der eigenen Aufgaben (Wunsch der BDs) – ganz oben bei der Erfassung
+  const plus = (n: number) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+  const timelineTasks: TimelineTask[] = [
+    ...actions.filter((x) => x.status !== "VORGESCHLAGEN").map((x) => ({ key: `a-${x.id}`, kind: "AUFGABE" as const, title: x.title, context: x.setupName, due: x.dueDate, priority: (x.priority as TimelineTask["priority"]) ?? "NORMAL", href: x.setupId ? `/setups/${x.setupId}#aktionen` : "/start#aufgaben" })),
+    ...work.assigned.map((w) => ({ key: `w-${w.id}`, kind: "VORGANG" as const, title: w.title, context: w.accountName ?? "", due: w.dueDate, priority: (w.priority === "HOCH" ? "HOCH" : "NORMAL") as TimelineTask["priority"], href: `/vorgaenge/${w.id}` })),
+    ...checkins.map((c) => ({ key: `c-${c.id}`, kind: "CHECKIN" as const, title: `Check-in ${c.side === "KUNDE" ? "Kunde" : "Freelancer"}: ${c.personName}`, context: c.accountName, due: c.dueDate, priority: "NORMAL" as const, href: `/einsaetze/${c.engagementId}#checkins` })),
+    ...myRenewals.filter((r) => r.mode === "ANSTOSSEN").map((r) => ({ key: `r-${r.decisionId}`, kind: "VERLAENGERUNG" as const, title: `Verlängerung: ${r.person}`, context: r.accountName, due: r.currentEnd ? (plus(56) >= r.currentEnd ? today : new Date(Date.parse(`${r.currentEnd}T00:00:00Z`) - 56 * 86400000).toISOString().slice(0, 10)) : today, priority: (r.daysToEnd !== null && r.daysToEnd <= 28 ? "HOCH" : "NORMAL") as TimelineTask["priority"], href: `/einsaetze/${r.engagementId}#verlaengerung` })),
+  ];
+  const taskEntry = !readOnly && quickSetups.length > 0 && (
+    <form action={createActionAction} className="flex flex-wrap gap-2 items-end text-sm mb-3">
+      <input type="hidden" name="back" value="/start#zeitleiste" />
+      <input type="hidden" name="ownerUserId" value={actor.userId} />
+      <div style={{ flex: "2 1 16rem" }}><label className="label" htmlFor="tlTitle">Neue Aufgabe</label><input id="tlTitle" name="title" className="input" required minLength={3} maxLength={300} placeholder="z. B. Profil an Frau Keller schicken" /></div>
+      <div style={{ flex: "1 1 12rem" }}><label className="label" htmlFor="tlSetup">Kunde · Setup</label><select id="tlSetup" name="setupId" className="select" required defaultValue={quickSetups.length === 1 ? quickSetups[0]!.id : ""}><option value="" disabled>Bitte wählen …</option>{quickSetups.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}</select></div>
+      <div><label className="label" htmlFor="tlDue">Fällig</label><input id="tlDue" type="date" name="dueDate" className="input" required defaultValue={plus(7)} /></div>
+      <div><label className="label" htmlFor="tlPrio">Priorität</label><select id="tlPrio" name="priority" className="select" defaultValue="NORMAL"><option value="HOCH">hoch</option><option value="NORMAL">normal</option><option value="NIEDRIG">niedrig</option></select></div>
+      <PendingButton className="btn btn-small" busy="Speichere …">Eintragen</PendingButton>
+    </form>
+  );
+  // e50: Aufgaben je Rolle – Principal und GF schalten auf „Team“
+  const teamAllowed = canSeeTeamTimeline(actor, hat);
+  const scope: TimelineScope = teamAllowed && (params as { zl?: string }).zl === "team" ? "team" : "mine";
+  const shownTasks = scope === "team" ? await teamTimeline(actor, hat) : timelineTasks;
+  const scopeSwitch = teamAllowed ? (
+    <p className="text-sm mb-2 flex gap-3">
+      <Link href="/start#zeitleiste" style={scope === "mine" ? { fontWeight: 700, textDecoration: "underline" } : undefined}>Meine</Link>
+      <Link href="/start?zl=team#zeitleiste" style={scope === "team" ? { fontWeight: 700, textDecoration: "underline" } : undefined}>{hat === "CEO" ? "Ganzes Team" : "Team meiner Kunden"}</Link>
+    </p>
+  ) : null;
+  const timeline = !readOnly && hasAnyContentRole(actor) && <TaskTimeline tasks={shownTasks} today={today} title={scope === "team" ? (hat === "CEO" ? "Aufgaben im Team" : "Aufgaben an meinen Kunden") : undefined}>{scopeSwitch}{scope === "mine" ? taskEntry : null}</TaskTimeline>;
   const quickEntry = !readOnly && hasAnyContentRole(actor) && (
     <section className="card" id="neues">
       <form action={eingangAction} className="flex flex-wrap gap-2 items-end text-sm">
@@ -166,6 +198,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         <h1 className="text-2xl font-semibold">Start</h1>
         <Feedback params={params} />
         {quickEntry}
+        {timeline}
         {arbeitsliste}
         {actor.roles.has("SALES_OPS") ? (
           <p className="text-sm">Sales Operations: <Link href="/einsaetze">alle Einsätze</Link> (Person, Kunde, Ende, Stimmung, Verlängerung) · <Link href="/besetzung">Besetzungen</Link> · <Link href="/meine-arbeit">Meine Arbeit</Link>.</p>
@@ -184,6 +217,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         <Feedback params={params} />
         <SosBanner sos={openSos} />
         <GfKpis o={o} />
+        {timeline}
         {arbeitsliste}
         <GfExpiring o={o} />
         <GfCustomers o={o} />
@@ -223,6 +257,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <Feedback params={params} />
       <SosBanner sos={openSos} />
       {quickEntry}
+      {timeline}
       {readOnly ? (
         <section className="card text-sm">
           <strong>Coach-Zugang (nur lesen).</strong> Zum Durchgehen: <Link href="/meine-bds">Meine BDs</Link> (Kunden je BD mit Stand) · <Link href="/kunden">Kunden</Link> · <Link href="/einsaetze">Einsätze</Link>. Unten die Übersichten zum Aufklappen. Änderungen sind in diesem Zugang nicht möglich.

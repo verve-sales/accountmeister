@@ -16,7 +16,7 @@ import type { listMySuggestions } from "@/modules/suggestions/service";
 import type { WorkItemView } from "@/modules/work/service";
 import type { HintKind } from "@/modules/moco/sync";
 import { hintKindLabel } from "@/modules/moco/sync";
-import { changeActionStatusAction, checkinAction, respondHandoverAction, respondSupportRequestAction } from "@/app/actions";
+import { changeActionStatusAction, planActionAction, checkinAction, respondHandoverAction, respondSupportRequestAction } from "@/app/actions";
 
 /**
  * Startseite als Arbeitsliste (Etappe 33, Zielbild Bedienung): drei Gruppen – Entscheidungen, Aufgaben, Vorschläge –
@@ -122,8 +122,14 @@ function ActionRow({ a, back, today }: { a: ActionItem; back: string; today: str
     <li className="flex flex-wrap items-center gap-2 text-sm" style={{ borderLeft: `3px solid ${overdue ? RED : a.status === "VORGESCHLAGEN" ? AMBER : "var(--border)"}`, paddingLeft: ".6rem" }}>
       <div style={{ minWidth: "16rem", flex: "1 1 16rem" }}>
         <strong>{a.title}</strong>
-        <div className="muted text-xs">{a.setupId ? <Link href={`/setups/${a.setupId}`}>{a.setupName}</Link> : "–"} · {actionStatusLabel[a.status] ?? a.status}{a.dueDate ? ` · fällig ${fmtDate(a.dueDate)}` : ""}{overdue ? " (überfällig)" : ""}</div>
+        <div className="muted text-xs">{a.setupId ? <Link href={`/setups/${a.setupId}`}>{a.setupName}</Link> : "–"} · {actionStatusLabel[a.status] ?? a.status}{a.dueDate ? ` · fällig ${fmtDate(a.dueDate)}` : " · ohne Datum"}{overdue ? " (überfällig)" : ""}{a.priority === "HOCH" ? <strong style={{ color: RED }}> · Priorität hoch</strong> : a.priority === "NIEDRIG" ? " · Priorität niedrig" : ""}</div>
       </div>
+      <form action={planActionAction} className="flex gap-1 items-center">
+        <input type="hidden" name="actionId" value={a.id} /><input type="hidden" name="back" value={back} />
+        <input type="date" name="dueDate" className="input" required defaultValue={a.dueDate ?? ""} aria-label="Fällig" style={{ width: "9.5rem", padding: "2px 6px" }} />
+        <select name="priority" className="select" defaultValue={a.priority ?? "NORMAL"} aria-label="Priorität" style={{ width: "6.5rem", padding: "2px 6px" }}><option value="HOCH">hoch</option><option value="NORMAL">normal</option><option value="NIEDRIG">niedrig</option></select>
+        <button className="btn btn-secondary btn-small" type="submit" title="Datum und Priorität speichern">✓</button>
+      </form>
       <form action={changeActionStatusAction} className="flex flex-wrap gap-1 items-center">
         <input type="hidden" name="actionId" value={a.id} /><input type="hidden" name="version" value={a.version} /><input type="hidden" name="back" value={back} />
         <input name="result" className="input" style={{ width: "11rem" }} placeholder="Ergebnis (optional)" aria-label="Ergebnis" />

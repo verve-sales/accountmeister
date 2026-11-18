@@ -1,0 +1,1 @@
+ALTER TABLE "actions" ADD COLUMN "priority" text DEFAULT 'NORMAL' NOT NULL;

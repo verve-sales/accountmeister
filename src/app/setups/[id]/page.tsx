@@ -1,3 +1,4 @@
+import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 import Link from "next/link";
 import { MoveToSetup } from "@/components/MoveToSetup";
 import { PendingButton } from "@/components/PendingButton";
@@ -409,7 +410,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
       </section>
 
-      <section className="card">
+      <section className="card" id="aktionen">
         <h2 className="font-semibold mb-2">3. Was haben wir als Nächstes vereinbart?</h2>
         {openActions.length === 0 ? <p className="muted text-sm">Keine offenen Aktionen.</p> : (
           <table className="list">
@@ -472,7 +473,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                   {allUsers.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
                 </select>
               </div>
-              <div><label className="label" htmlFor="dueDate">Termin (optional)</label><input id="dueDate" name="dueDate" type="date" className="input" /></div>
+              <div><label className="label" htmlFor="dueDate">Fällig</label><input id="dueDate" name="dueDate" type="date" className="input" required defaultValue={plusDaysIso(todayIso(), 7)} /></div>
+              <div><label className="label" htmlFor="actPrio">Priorität</label><select id="actPrio" name="priority" className="select" defaultValue="NORMAL"><option value="HOCH">hoch</option><option value="NORMAL">normal</option><option value="NIEDRIG">niedrig</option></select></div>
               <div>
                 <label className="label" htmlFor="signalId">Bezug zu Beobachtung (optional)</label>
                 <select id="signalId" name="signalId" className="select" defaultValue="">

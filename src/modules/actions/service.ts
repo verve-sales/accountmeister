@@ -9,6 +9,7 @@ import type { Actor } from "@/modules/identity/actor";
 import { canEditAction, canViewAction, loadSetupContext } from "@/modules/identity/authz";
 import { requireEditableSetup } from "@/modules/setups/service";
 import { syncRunStepFromAction } from "@/modules/playbooks/service";
+import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 
 /**
  * Aktion (Briefing 6.2 „Aktionen“, 9.2): Verantwortlicher, Vereinbarung, Termin, Ergebnis.
@@ -22,6 +23,8 @@ export const createActionInput = z.object({
   agreement: z.string().trim().max(2000).optional().or(z.literal("")),
   ownerUserId: z.string().min(1, "Verantwortliche Person fehlt"),
   dueDate: z.string().optional().or(z.literal("")),
+  /** e50: Priorität; leer = normal */
+  priority: z.enum(["HOCH", "NORMAL", "NIEDRIG", ""]).optional(),
   /** true = im Gespräch gemeinsam vereinbart, direkt „angenommen“; false = Vorschlag */
   agreedInConversation: z.union([z.boolean(), z.enum(["true", "false", "on"])]).optional(),
   reviewId: z.string().optional().or(z.literal("")), // im Weekly vereinbart
@@ -63,7 +66,9 @@ export async function createAction(actor: Actor, raw: unknown) {
         agreement: input.agreement || null,
         ownerUserId: input.ownerUserId,
         status,
-        dueDate: input.dueDate || null,
+        // e50: jede Aufgabe hat ein Datum – ohne Angabe in einer Woche
+        dueDate: /^\d{4}-\d{2}-\d{2}$/.test(input.dueDate ?? "") ? input.dueDate! : plusDaysIso(todayIso(), 7),
+        priority: input.priority || "NORMAL",
         channel: input.channel || null,
         linkedinUrl: input.linkedinUrl || null,
         createdBy: actor.userId,
@@ -74,6 +79,28 @@ export async function createAction(actor: Actor, raw: unknown) {
     await notify(tx, { workspaceId: actor.workspaceId, userIds: [input.ownerUserId], kind: "ZUGEWIESEN", title: `Aktion von ${actor.displayName}: ${a.title}`, link: "/meine-arbeit", actorUserId: actor.userId });
     return a;
   });
+}
+
+export const priorityValues = ["HOCH", "NORMAL", "NIEDRIG"] as const;
+export const priorityLabel: Record<string, string> = { HOCH: "hoch", NORMAL: "normal", NIEDRIG: "niedrig" };
+export const planActionInput = z.object({
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Bitte ein Datum angeben."),
+  priority: z.enum(priorityValues),
+});
+
+/** Datum und Priorität einer offenen Aufgabe ändern (e50) – für die verantwortliche Person und alle, die das Setup bearbeiten. */
+export async function planAction(actor: Actor, actionId: string, raw: unknown) {
+  const p = planActionInput.safeParse(raw);
+  if (!p.success) throw new ValidationError(p.error.issues.map((i) => i.message).join("; "));
+  const a = await db.query.actions.findFirst({ where: and(eq(schema.actions.id, actionId), eq(schema.actions.workspaceId, actor.workspaceId)) });
+  if (!a) throw new NotFoundError("Aufgabe");
+  if (a.ownerUserId !== actor.userId) {
+    if (!a.setupId) throw new ForbiddenError();
+    await requireEditableSetup(actor, a.setupId);
+  }
+  if (["ERLEDIGT", "VERWORFEN"].includes(a.status)) throw new TransitionError("Die Aufgabe ist abgeschlossen.");
+  await db.update(schema.actions).set({ dueDate: p.data.dueDate, priority: p.data.priority, updatedAt: new Date() }).where(eq(schema.actions.id, a.id));
+  await recordAudit(db, actor, "action.planned", "ACTION", a.id, { faellig: p.data.dueDate, prioritaet: p.data.priority });
 }
 
 const transitions: Record<ActionStatus, ActionStatus[]> = {
@@ -132,6 +159,9 @@ export async function listMyOpenActions(actor: Actor) {
     where: and(eq(schema.actions.workspaceId, actor.workspaceId), eq(schema.actions.ownerUserId, actor.userId), ne(schema.actions.status, "ERLEDIGT"), ne(schema.actions.status, "VERWORFEN")),
     orderBy: [asc(schema.actions.dueDate), asc(schema.actions.createdAt)],
   });
+  // e50: hohe Priorität zuerst, dann nach Datum
+  const rank: Record<string, number> = { HOCH: 0, NORMAL: 1, NIEDRIG: 2 };
+  rows.sort((a, b) => (rank[a.priority] ?? 1) - (rank[b.priority] ?? 1) || (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"));
   const setupIds = [...new Set(rows.map((r) => r.setupId).filter((x): x is string => !!x))];
   const setups = setupIds.length ? await db.query.projectSetups.findMany({ where: inArray(schema.projectSetups.id, setupIds) }) : [];
   const names = new Map(setups.map((s) => [s.id, s.name]));

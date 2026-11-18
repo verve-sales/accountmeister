@@ -383,6 +383,8 @@ export const actions = pgTable(
     ownerUserId: text("owner_user_id").notNull().references(() => users.id),
     status: actionStatusEnum("status").notNull().default("VORGESCHLAGEN"),
     dueDate: date("due_date"),
+    /** e50: Priorität für die Zeitleiste – HOCH | NORMAL | NIEDRIG */
+    priority: text("priority").notNull().default("NORMAL"),
     result: text("result"),
     /** Kanal der Aktion (Etappe 18); null = nicht angegeben. Bei LINKEDIN kann ein Profillink hinterlegt werden. */
     channel: actionChannelEnum("channel"),
