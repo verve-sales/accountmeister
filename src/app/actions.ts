@@ -2232,7 +2232,8 @@ export async function generateContractAction(engagementId: string, fd: FormData)
     const { generateFreelancerContract } = await import("@/modules/conversion/contractService");
     const r = await generateFreelancerContract(actor, engagementId, fdObject(fd));
     const sp = r.sharepoint ? " Abgelegt in SharePoint unter Freelancer › Verträge." : r.sharepointError ? ` SharePoint-Ablage fehlgeschlagen (${r.sharepointError.slice(0, 160)}) – bitte von Hand ablegen und den Link am Dokument eintragen.` : "";
-    throw new PendingInfo(`Vertrag erzeugt: „${r.fileName}“ liegt als Entwurf unter den Unterlagen.${sp} Herunterladen, prüfen, unterschreiben und versenden – danach den Stand auf „versendet“ setzen.`);
+    const tpl = r.template ? ` Vorlage: „${r.template}“ aus SharePoint.` : " Eingebaute Vorlage – eine eigene Word-Vorlage unter SharePoint › Vorlagen › Vertrag hat Vorrang.";
+    throw new PendingInfo(`Vertrag erzeugt: „${r.fileName}“ liegt als Entwurf unter den Unterlagen.${tpl}${sp} Herunterladen, prüfen, unterschreiben und versenden – danach den Stand auf „versendet“ setzen.`);
   }, "");
 }
 

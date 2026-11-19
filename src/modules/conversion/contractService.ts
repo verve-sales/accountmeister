@@ -127,7 +127,7 @@ export const contractInput = z.object({
 
 const fileSafe = (s: string) => s.normalize("NFKD").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").slice(0, 60);
 
-export async function generateFreelancerContract(actor: Actor, engagementId: string, raw: unknown, opts: { templateDir?: string } = {}) {
+export async function generateFreelancerContract(actor: Actor, engagementId: string, raw: unknown, opts: { templateDir?: string; spClient?: import("@/modules/sharepoint/client").SpClient } = {}) {
   const p = contractInput.safeParse(raw);
   if (!p.success) throw new ValidationError(p.error.issues.map((i) => i.message).join("; "));
   const i = p.data;
@@ -160,13 +160,22 @@ export async function generateFreelancerContract(actor: Actor, engagementId: str
     ort: i.ort,
     datum: deDate(i.datum),
   };
-  const buf = await renderContract(data, opts);
+  // e54: eigene Vorlage aus SharePoint „Vorlagen › Vertrag“ hat Vorrang; ohne sie gilt die eingebaute
+  let own: { name: string; bytes: ArrayBuffer } | null = null;
+  try {
+    const { contractTemplateFromSharePoint } = await import("@/modules/sharepoint/contractTemplate");
+    own = await contractTemplateFromSharePoint(data.variant, { client: opts.spClient });
+  } catch (err) {
+    console.error("Vertragsvorlage aus SharePoint", (err as Error).message);
+  }
+  const templateLabel = own ? `SharePoint: ${own.name}` : CONTRACT_TEMPLATE_VERSION;
+  const buf = await renderContract(data, { templateDir: opts.templateDir, templateBytes: own?.bytes });
   const last = f.displayName.replace(/\(.*?\)/g, "").trim().split(/\s+/).pop() ?? "Freelancer";
   const name = `${todayIso()}_Projekteinzelvertrag_${fileSafe(a.account.name)}_${fileSafe(last)}.docx`;
   const bytes = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   const file = { name, type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: buf.length, arrayBuffer: async () => bytes };
-  const { document } = await addContractDocument(actor, e.id, { side: "FREELANCER", docType: "EINZELBEAUFTRAGUNG", title: `Projekteinzelvertrag ${f.displayName} ab ${deDate(i.beginn)}`.slice(0, 200), versionLabel: CONTRACT_TEMPLATE_VERSION, validFrom: i.beginn, validTo: i.ende, signedStatus: "ENTWURF", reviewNote: `Erzeugt aus der Vorlage ${CONTRACT_TEMPLATE_VERSION} (${company ? "Gesellschaft" : "Einzelperson"}).` }, file, { skipSharePoint: true });
-  await recordAudit(db, actor, "contract.generated", "ENGAGEMENT", e.id, { vorlage: CONTRACT_TEMPLATE_VERSION, fassung: data.variant, dokument: document.id });
+  const { document } = await addContractDocument(actor, e.id, { side: "FREELANCER", docType: "EINZELBEAUFTRAGUNG", title: `Projekteinzelvertrag ${f.displayName} ab ${deDate(i.beginn)}`.slice(0, 200), versionLabel: (own ? own.name : CONTRACT_TEMPLATE_VERSION).slice(0, 100), validFrom: i.beginn, validTo: i.ende, signedStatus: "ENTWURF", reviewNote: `Erzeugt aus der Vorlage ${templateLabel} (${company ? "Gesellschaft" : "Einzelperson"}).` }, file, { skipSharePoint: true });
+  await recordAudit(db, actor, "contract.generated", "ENGAGEMENT", e.id, { vorlage: templateLabel, fassung: data.variant, dokument: document.id });
   // SharePoint-Ablage (e45): Freelancer › Person › Verträge. Ein Fehler hält die Erzeugung nicht auf, er wird gemeldet.
   let sharepoint: { webUrl: string } | null = null;
   let sharepointError: string | null = null;
@@ -177,5 +186,5 @@ export async function generateFreelancerContract(actor: Actor, engagementId: str
     sharepointError = (err as Error).message;
     console.error("SharePoint-Ablage", sharepointError);
   }
-  return { document, fileName: name, sharepoint, sharepointError };
+  return { document, fileName: name, sharepoint, sharepointError, template: own ? own.name : null };
 }
