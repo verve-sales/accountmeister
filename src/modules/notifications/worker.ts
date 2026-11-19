@@ -54,6 +54,11 @@ export function startNotificationWorker(): void {
           for (const ws of await db.query.workspaces.findMany({ columns: { id: true } })) beendet += await ensureOrdersEnded(ws.id);
           return { catchups: await ensureCatchups(), checkinHinweise: await notifyDueCheckins(), verlaengerungen: await ensureRenewalDecisions(), auftraegeBeendet: beendet };
         });
+        // Vermittler-Anfragen (e57): ohne verschicktes Profil nach 14 Tagen beenden
+        await runJob("vermittler-ablauf", async () => {
+          const { expireIntermediaryRequests } = await import("@/modules/assignments/service");
+          return { beendet: await expireIntermediaryRequests() };
+        });
         // Übergaben ans Backoffice (Etappe 51): nach zwei Tagen ohne Quittung erinnern
         await runJob("uebergaben-erinnerung", async () => {
           const { remindOpenHandovers } = await import("@/modules/conversion/handover");

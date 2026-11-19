@@ -300,3 +300,104 @@ export async function asgOpportunities(actor: Actor, engagements: AsgEngagement[
   const withoutPerson = positions.filter((p) => !staffed.has(p.id) && om.has(p.opportunityId)).length;
   return { items: items.sort((x, y) => x.start.localeCompare(y.start)), withoutPerson };
 }
+
+// ---------------------------------------------------------------------------
+// e57: Vermittler-Anfragen (Hays, Gulp …) – bearbeiten Sales Operations und Geschäftsführung
+// ---------------------------------------------------------------------------
+
+export const INTERMEDIARY_EXPIRY_DAYS = 14;
+const REQ_OPEN = ["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG"] as const;
+
+export type IntermediaryRequest = { opportunityId: string; title: string; intermediary: string; endCustomer: string | null; person: string | null; phase: AsgOppPhase; rate: string | null; start: string | null; ageDays: number; expiresInDays: number | null };
+
+export async function asgIntermediaryRequests(actor: Actor): Promise<IntermediaryRequest[]> {
+  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Den Assignmentmanager nutzen Sales Operations, Backoffice und Geschäftsführung.");
+  const ws = actor.workspaceId;
+  const accounts = await db.query.accounts.findMany({ where: and(eq(schema.accounts.workspaceId, ws), eq(schema.accounts.accountKind, "VERMITTLER")), columns: { id: true, name: true } });
+  if (!accounts.length) return [];
+  const opps = await db.query.opportunities.findMany({ where: and(inArray(schema.opportunities.accountId, accounts.map((a) => a.id)), inArray(schema.opportunities.status, [...REQ_OPEN])), orderBy: desc(schema.opportunities.createdAt) });
+  if (!opps.length) return [];
+  const positions = await db.query.staffingPositions.findMany({ where: inArray(schema.staffingPositions.opportunityId, opps.map((o) => o.id)) });
+  const cands = positions.length ? await db.query.candidacies.findMany({ where: and(inArray(schema.candidacies.positionId, positions.map((p) => p.id)), eq(schema.candidacies.isActive, true)) }) : [];
+  const [fls, users] = await Promise.all([
+    db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(cands.map((c) => c.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+    db.query.users.findMany({ where: eq(schema.users.workspaceId, ws), columns: { id: true, displayName: true } }),
+  ]);
+  const an = new Map(accounts.map((a) => [a.id, a.name]));
+  const today = todayIso();
+  return opps.map((o) => {
+    const pos = positions.filter((p) => p.opportunityId === o.id);
+    const c = cands.find((x) => pos.some((p) => p.id === x.positionId)) ?? null;
+    const person = c ? (c.freelancerId ? fls.find((f) => f.id === c.freelancerId)?.displayName : users.find((u) => u.id === c.internalUserId)?.displayName) ?? null : null;
+    const a = OPP_PHASE[o.status] ?? "ANFRAGE";
+    const b = c ? CAND_PHASE[c.status] : undefined;
+    const phase = b && PHASE_RANK.indexOf(b) > PHASE_RANK.indexOf(a) ? b : a;
+    const age = dayDiff(today, o.updatedAt.toISOString().slice(0, 10));
+    return {
+      opportunityId: o.id,
+      title: o.title,
+      intermediary: an.get(o.accountId) ?? "?",
+      endCustomer: o.endCustomerNote,
+      person,
+      phase,
+      rate: c?.vkRate ? `${String(c.vkRate).replace(".", ",")} €/${c.rateUnit === "STUNDE" ? "Std." : "Tag"}` : null,
+      start: pos[0]?.desiredStart ?? null,
+      ageDays: age,
+      expiresInDays: PHASE_RANK.indexOf(phase) < PHASE_RANK.indexOf("ANGEBOT") ? Math.max(INTERMEDIARY_EXPIRY_DAYS - age, 0) : null,
+    };
+  });
+}
+
+async function requireRequest(actor: Actor, opportunityId: string) {
+  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Vermittler-Anfragen bearbeiten Sales Operations und Geschäftsführung.");
+  const o = await db.query.opportunities.findFirst({ where: and(eq(schema.opportunities.id, opportunityId), eq(schema.opportunities.workspaceId, actor.workspaceId)) });
+  if (!o) throw new ForbiddenError("Anfrage nicht gefunden.");
+  const acc = await db.query.accounts.findFirst({ where: eq(schema.accounts.id, o.accountId), columns: { accountKind: true } });
+  if (acc?.accountKind !== "VERMITTLER") throw new ForbiddenError("Das ist keine Vermittler-Anfrage.");
+  return o;
+}
+
+/** „CV verschickt“: Chance und Kandidaturen auf „vorgestellt“ – ab hier wird sie zum Lead für Moco. */
+export async function markRequestProfileSent(actor: Actor, opportunityId: string) {
+  const o = await requireRequest(actor, opportunityId);
+  const positions = await db.query.staffingPositions.findMany({ where: eq(schema.staffingPositions.opportunityId, o.id), columns: { id: true } });
+  await db.transaction(async (tx) => {
+    if (["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT"].includes(o.status)) await tx.update(schema.opportunities).set({ status: "PROFIL_ANGEBOT_VORGESTELLT", version: o.version + 1, updatedAt: new Date() }).where(eq(schema.opportunities.id, o.id));
+    if (positions.length) {
+      const cands = await tx.query.candidacies.findMany({ where: and(inArray(schema.candidacies.positionId, positions.map((p) => p.id)), eq(schema.candidacies.isActive, true), inArray(schema.candidacies.status, ["IDENTIFIZIERT", "KONTAKT", "QUALIFIZIERT", "VORGESCHLAGEN", "FREIGEGEBEN"])) });
+      for (const c of cands) {
+        await tx.update(schema.candidacies).set({ status: "VORGESTELLT", updatedAt: new Date() }).where(eq(schema.candidacies.id, c.id));
+        await tx.insert(schema.candidacyEvents).values({ workspaceId: actor.workspaceId, candidacyId: c.id, kind: "STATUS", fromStatus: c.status, toStatus: "VORGESTELLT", createdBy: actor.userId });
+      }
+    }
+    await recordAuditTx(tx, actor, "intermediary.profile_sent", o.id);
+  });
+}
+
+/** „Passt nicht“: Anfrage beenden – ohne Begründung. */
+export async function closeRequest(actor: Actor, opportunityId: string, reason = "Passt nicht.") {
+  const o = await requireRequest(actor, opportunityId);
+  await db.transaction(async (tx) => {
+    await tx.update(schema.opportunities).set({ status: "BEENDET", version: o.version + 1, updatedAt: new Date() }).where(eq(schema.opportunities.id, o.id));
+    await tx.update(schema.staffingPositions).set({ status: "ABGEBROCHEN", statusReason: reason, updatedAt: new Date() }).where(and(eq(schema.staffingPositions.opportunityId, o.id), inArray(schema.staffingPositions.status, ["ENTWURF", "OFFEN", "PAUSIERT"])));
+    await recordAuditTx(tx, actor, "intermediary.closed", o.id);
+  });
+}
+
+async function recordAuditTx(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], actor: Actor, action: string, oppId: string) {
+  const { recordAudit } = await import("@/modules/audit/audit");
+  await recordAudit(tx, actor, action, "OPPORTUNITY", oppId, {});
+}
+
+/** Täglich: Vermittler-Anfragen ohne verschicktes Profil laufen nach 14 Tagen ohne Bewegung aus. */
+export async function expireIntermediaryRequests(): Promise<number> {
+  const cutoff = new Date(Date.now() - INTERMEDIARY_EXPIRY_DAYS * 86400000);
+  const accounts = await db.query.accounts.findMany({ where: eq(schema.accounts.accountKind, "VERMITTLER"), columns: { id: true } });
+  if (!accounts.length) return 0;
+  const stale = (await db.query.opportunities.findMany({ where: and(inArray(schema.opportunities.accountId, accounts.map((a) => a.id)), inArray(schema.opportunities.status, ["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT"])) })).filter((o) => o.updatedAt < cutoff);
+  for (const o of stale) {
+    await db.update(schema.opportunities).set({ status: "BEENDET", version: o.version + 1, updatedAt: new Date() }).where(eq(schema.opportunities.id, o.id));
+    await db.update(schema.staffingPositions).set({ status: "ABGEBROCHEN", statusReason: `Abgelaufen – ${INTERMEDIARY_EXPIRY_DAYS} Tage ohne Profil.`, updatedAt: new Date() }).where(and(eq(schema.staffingPositions.opportunityId, o.id), inArray(schema.staffingPositions.status, ["ENTWURF", "OFFEN", "PAUSIERT"])));
+  }
+  return stale.length;
+}

@@ -241,6 +241,9 @@ export async function buildContextText(actor: Actor, res: Resolved, mention?: st
       for (const a of accs) lines.push(await accountBrief(actor, a.id, a.name));
     }
   }
+  // e57: Verve-Kolleg:innen (für „Jens“, „Pat“ in Vorschlägen an Vermittler)
+  const team = await db.query.users.findMany({ where: and(eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")), columns: { displayName: true } });
+  if (team.length) lines.push(`Verve-Kolleg:innen (keine Kundenpersonen): ${team.map((u) => u.displayName.replace(/\s*\(.*?\)\s*/g, " ").trim()).join("; ")}`);
   // e53: eigene offene Aufgaben (für „was steht an?“)
   const today = todayIso();
   const [myWork, myActions] = await Promise.all([
@@ -524,8 +527,8 @@ export function validateCards(json: unknown, allowedText: string): { items: Assi
 }
 
 /** e53: Diese Kartenarten führt der Assistent bei einem ausdrücklichen Auftrag sofort aus. */
-const EXECUTABLE = new Set(["KUNDE", "EINSORTIERUNG", "SETUP", "PERSON", "CHANCE", "BESETZUNG", "VORGANG", "ANSPRECHPARTNER", "SIGNAL", "EINSATZ_VERLAENGERN"]);
-const EXEC_ORDER = ["KUNDE", "EINSORTIERUNG", "SETUP"];
+const EXECUTABLE = new Set(["VERMITTLER_ANFRAGE", "KUNDE", "EINSORTIERUNG", "SETUP", "PERSON", "CHANCE", "BESETZUNG", "VORGANG", "ANSPRECHPARTNER", "SIGNAL", "EINSATZ_VERLAENGERN"]);
+const EXEC_ORDER = ["VERMITTLER_ANFRAGE", "KUNDE", "EINSORTIERUNG", "SETUP"];
 
 // ---------------------------------------------------------------------------
 // Karten übernehmen / verwerfen
@@ -616,6 +619,97 @@ export type CardEnv = {
   /** Wofür: bereits aufgelöste Chance (Kürzel) */
   opportunityId?: string | null;
 };
+
+const orgKey = (n: string) => n.toLowerCase().replace(/\b(gmbh|ag|se|kg|co|mbh|ug|e\.?v|inc|ltd|group|gruppe|holding|deutschland)\b\.?/g, " ").replace(/[^a-z0-9äöüß]+/g, "");
+
+/** Verve-Kolleg:in per Namen – voller Name, sonst eindeutiger Vorname bzw. Vornamensanfang („Pat“ → „Patriot …“). */
+async function matchColleague(workspaceId: string, name: string) {
+  const full = await matchUserByName(workspaceId, name);
+  if (full) return full;
+  const q = name.toLowerCase().replace(/\(.*?\)/g, "").trim();
+  if (q.length < 3 || q.includes(" ")) return null;
+  const users = await db.query.users.findMany({ where: and(eq(schema.users.workspaceId, workspaceId), eq(schema.users.status, "ACTIVE")), columns: { id: true, displayName: true } });
+  const hit = users.filter((u) => (u.displayName.toLowerCase().split(/\s+/)[0] ?? "").startsWith(q));
+  return hit.length === 1 ? hit[0]! : null;
+}
+
+/**
+ * e57: Vermittler-Anfrage (Hays, Gulp …). Der Vermittler ist der Kunde (Kundenart VERMITTLER, Setup „Anfragen“);
+ * je vorgeschlagener Person entsteht eine eigene Chance mit Position und Kandidatur – das ist später je ein Lead in
+ * Moco (übertragen erst ab „Profil/Angebot verschickt“). Ohne Personen entsteht eine Chance mit offener Position.
+ */
+async function applyIntermediaryRequest(actor: Actor, res: Resolved, item: Extract<AssistantItem, { type: "VERMITTLER_ANFRAGE" }>, env: CardEnv): Promise<ApplyResult> {
+  const { isSalesOpsOnly } = await import("@/modules/identity/actor");
+  const iso = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+  // 1) Vermittler als Kunde (bestehend oder neu)
+  const known = (await listVisibleAccounts(actor)).find((a) => orgKey(a.name) === orgKey(item.intermediaryName) && orgKey(item.intermediaryName).length >= 3) ?? (res.account && orgKey(res.account.name) === orgKey(item.intermediaryName) ? res.account : undefined);
+  let account = known ? await getAccount(actor, known.id) : null;
+  if (!account) {
+    if (!canCreateAccount(actor)) throw new ForbiddenError("Kunden legen BD, Principal, Geschäftsführung oder Sales Operations an.");
+    account = await createAccount(actor, { name: item.intermediaryName, orgType: "SONSTIGE", responsibleBdUserId: isSalesOpsOnly(actor) ? null : actor.userId });
+  }
+  if (account.accountKind !== "VERMITTLER") await db.update(schema.accounts).set({ accountKind: "VERMITTLER", updatedAt: new Date() }).where(eq(schema.accounts.id, account.id));
+  // 2) Setup „Anfragen“
+  const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, account.id) });
+  let setupRow = setups.find((x) => x.status !== "ARCHIVIERT" && x.name.toLowerCase() === "anfragen") ?? null;
+  if (!setupRow) {
+    const ceo = await db.query.roleAssignments.findFirst({ where: and(eq(schema.roleAssignments.workspaceId, actor.workspaceId), eq(schema.roleAssignments.role, "CEO")) });
+    const bd = isSalesOpsOnly(actor) ? account.responsibleBdUserId ?? ceo?.userId ?? null : actor.userId;
+    setupRow = await createSetup(actor, { accountId: account.id, name: "Anfragen", contextNote: `Anfragen von ${account.name} (Vermittler) – je vorgeschlagener Person eine Chance.`, bdUserId: bd, creatorContribution: "ANKER_KONTEXT" });
+  }
+  const ctx = await loadSetupContext(actor, setupRow.id);
+  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError(`Das Setup „Anfragen“ bei ${account.name} darfst du nicht bearbeiten.`);
+  await env.sourceFor(ctx.setup.id).catch(() => null);
+  const notes: string[] = [];
+  // 3) Ansprechpartner beim Vermittler
+  if (item.contactName.trim().length >= 3) {
+    const persons = await db.query.persons.findMany({ where: eq(schema.persons.accountId, account.id), columns: { id: true, displayName: true } });
+    if (!persons.some((p) => p.displayName.toLowerCase() === item.contactName.trim().toLowerCase())) {
+      const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item.contactEmail.trim()) ? item.contactEmail.trim() : "";
+      await createPerson(actor, { accountId: account.id, displayName: item.contactName.trim(), functionTitle: item.contactFunction, knownResponsibility: "", email, phone: item.contactPhone.trim().slice(0, 50), setupId: ctx.setup.id, accessClass: "ACCOUNT_TEAM" });
+      notes.push(`Ansprechpartner ${item.contactName.trim()} angelegt.`);
+    }
+  }
+  // 4) je Person eine Chance mit Position und Kandidatur
+  const description = [item.endCustomer ? `Endkunde laut ${account.name}: ${item.endCustomer}` : "", item.durationHint ? `Laufzeit: ${item.durationHint}` : "", item.tasks].filter(Boolean).join("\n").slice(0, 4000) || item.evidenceQuote;
+  const posBase = { title: item.title.slice(0, 200), tasks: item.tasks, mustHave: item.mustHave, niceToHave: item.niceToHave, location: item.location, language: item.language, desiredStart: iso(item.desiredStart), plannedEnd: iso(item.plannedEnd), endOpen: "false", scopeAmount: item.scopeAmount ?? "", scopeUnit: item.scopeUnit, internalNotes: `Vermittler-Anfrage ${account.name} (${env.origin}).` };
+  const people = item.candidates.length ? item.candidates : [null];
+  const created: string[] = [];
+  let firstOpp: string | null = null;
+  for (const c of people) {
+    const intern = c?.resourceKind === "INTERN";
+    const user = c && intern ? await matchColleague(actor.workspaceId, c.name) : null;
+    let freelancerId: string | null = null;
+    if (c && !intern) {
+      const { findSameFreelancer } = await import("@/modules/staffing/dedupe");
+      const { createFreelancer } = await import("@/modules/staffing/service");
+      freelancerId = (await findSameFreelancer(db, actor.workspaceId, { name: c.name }))?.id ?? (await createFreelancer(actor, { displayName: c.name, availabilitySource: `Vermittler-Anfrage ${account.name}` })).id;
+    }
+    const who = user?.displayName ?? (c ? c.name : "");
+    const opp = await createOpportunity(actor, { setupId: ctx.setup.id, title: `${item.title}${who ? ` – ${who.replace(/\s*\(.*?\)/g, "")}` : ""}`.slice(0, 300), needDescription: description, trigger: env.origin, kind: intern ? "VERVE_EXPERTE" : "FREELANCER_EXPERTE", roleName: item.title.slice(0, 200), headcount: 1, horizon: iso(item.desiredStart).slice(0, 7), anticipated: false });
+    firstOpp ??= opp.id;
+    const sent = c?.status === "VORGESTELLT";
+    await db.update(schema.opportunities).set({ endCustomerNote: item.endCustomer || null, ...(sent ? { status: "PROFIL_ANGEBOT_VORGESTELLT" as const } : {}), updatedAt: new Date() }).where(eq(schema.opportunities.id, opp.id));
+    const pos = await createPosition(actor, opp.id, { ...posBase, resourceKind: intern ? "INTERN" : "FREELANCER" });
+    if (!openReadiness(pos).length) await changePositionStatus(actor, pos.id, { version: pos.version, status: "OFFEN" });
+    if (c && (user || freelancerId)) {
+      const [cand] = await db.insert(schema.candidacies).values({ workspaceId: actor.workspaceId, positionId: pos.id, freelancerId, internalUserId: user?.id ?? null, handlerUserId: actor.userId, createdBy: actor.userId, status: sent ? "VORGESTELLT" : "VORGESCHLAGEN", vkRate: /^\d+([.,]\d{1,2})?$/.test(c.rate.trim()) ? c.rate.trim().replace(",", ".") : null, rateUnit: c.rateUnit === "STUNDE" ? "STUNDE" : "TAG", notes: c.note || null }).returning();
+      await db.insert(schema.candidacyEvents).values({ workspaceId: actor.workspaceId, candidacyId: cand!.id, kind: "STATUS", toStatus: cand!.status, createdBy: actor.userId });
+      created.push(`${who}${sent ? " (Profil verschickt)" : ""}${c.rate ? `, ${c.rate} €/${c.rateUnit === "STUNDE" ? "Std." : "Tag"}` : ""}`);
+    } else if (c) {
+      created.push(`${c.name} (nicht eindeutig unter den Kolleg:innen – bitte an der Position wählen)`);
+    }
+    await recordAudit(db, actor, "intermediary.request", "OPPORTUNITY", opp.id, { vermittler: account.name, person: who || null });
+  }
+  // 5) Rückmeldefrist als Aufgabe
+  const due = iso(item.replyBy);
+  if (due && due >= todayIso()) {
+    await createAction(actor, { setupId: ctx.setup.id, title: `Rückmeldung an ${account.name}: ${item.title}`.slice(0, 300), ownerUserId: actor.userId, dueDate: due, priority: "HOCH", opportunityId: firstOpp ?? "", agreedInConversation: true });
+    notes.push(`Rückmeldung bis ${due.split("-").reverse().join(".")} als Aufgabe.`);
+  }
+  const head = created.length ? `${created.length === 1 ? "Eine Chance" : `${created.length} Chancen`} bei ${account.name} (Vermittler) angelegt: ${created.join("; ")}.` : `Chance „${item.title}“ bei ${account.name} (Vermittler) mit offener Position angelegt.`;
+  return { type: "OPPORTUNITY", id: firstOpp!, note: [head, ...notes].join(" "), rebind: { type: "SETUP", id: ctx.setup.id, title: "Assistent · Setup" } };
+}
 
 /**
  * e56: Karten, die ein Setup brauchen, im Kundenkontext ohne Rückfrage zuordnen – das zuletzt bearbeitete Setup, das
@@ -725,6 +819,7 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     const f = editable[0]!;
     return { type: "ENGAGEMENT", id: f.id, note: `${item.contactName} ${created ? `bei ${f.accountName} neu angelegt und ` : ""}als Ansprechpartner (${item.role === "FACHLICH" ? "fachlich" : "Bestellung/Vertrag"}) für die Verlängerung von ${f.person} eingetragen – ${f.accountName}, Setup „${f.setupName}“${item.approach ? `; spricht an: ${approachLabel[item.approach]}` : ""}${editable.length > 1 ? ` (${editable.length} Einsätze)` : ""}. /einsaetze/${f.id}#ansprechpartner` };
   }
+  if (item.type === "VERMITTLER_ANFRAGE") return applyIntermediaryRequest(actor, res, item, env);
   // e56: Verlängerung eines laufenden Einsatzes – Signal am Einsatz (Sales Ops und Backoffice setzen um), keine Chance
   if (item.type === "EINSATZ_VERLAENGERN") {
     const found = await findRunningEngagements(actor, { accountId: res.account?.id ?? null, personName: item.engagementPerson });

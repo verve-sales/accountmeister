@@ -369,6 +369,13 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
     if (item.type === "VERLAENGERUNG" && item.newEnd && !ISO.test(item.newEnd)) item.newEnd = "";
     valid.push({ item, resolved: r });
   }
+  // e57: Vermittler-Anfrage gehört zum Vermittler, nicht zu einem im Text erwähnten Endkunden
+  const vm = valid.find((v) => v.item.type === "VERMITTLER_ANFRAGE")?.item as Extract<IntakeItem, { type: "VERMITTLER_ANFRAGE" }> | undefined;
+  if (vm && (!i.route.account || norm(i.route.account.name).split(" ")[0] !== norm(vm.intermediaryName).split(" ")[0])) {
+    const acc = (await listVisibleAccounts(actor)).find((a) => norm(a.name).split(" ")[0] === norm(vm.intermediaryName).split(" ")[0]) ?? null;
+    i.route = { ...i.route, ctx: null, account: acc, confident: !!acc, setupUnsure: false, reason: `Vermittler-Anfrage von ${vm.intermediaryName}` };
+    conflict = null;
+  }
   // e48: KI und Regel widersprechen sich → Zuordnung offen lassen, der Mensch entscheidet mit einem Klick
   if (conflict && i.route.account) {
     i.route = { ...i.route, ctx: null, account: null, confident: false, setupUnsure: false, reason: `unklar – erkannt „${i.route.account.name}“ (${i.route.reason}), die KI sieht „${conflict}“` };
@@ -433,12 +440,12 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
 type Resolved = { opportunityId?: string | null; engagementId?: string | null; actionId?: string | null; questionId?: string | null; personId?: string | null; initiativeId?: string | null; dueDate?: string; count?: number };
 
 /** Rangfolge der Karten (e48): was eine Entscheidung oder eine neue Chance auslöst, zuerst. */
-const CARD_RANK = ["VERLAENGERUNG", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS", "STIMMUNG", "ERLEDIGT", "AKTION", "VORGANG", "FREELANCER", "ANSPRECHPARTNER", "EINSATZ", "FRAGE", "SIGNAL", "KONTAKT", "RISIKO", "INITIATIVE", "HEBEL", "BESCHAFFUNG", "TEAM", "ACCOUNTZIEL"];
+const CARD_RANK = ["VERMITTLER_ANFRAGE", "VERLAENGERUNG", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS", "STIMMUNG", "ERLEDIGT", "AKTION", "VORGANG", "FREELANCER", "ANSPRECHPARTNER", "EINSATZ", "FRAGE", "SIGNAL", "KONTAKT", "RISIKO", "INITIATIVE", "HEBEL", "BESCHAFFUNG", "TEAM", "ACCOUNTZIEL"];
 /** Struktur-Karten (Kunde/Setup zuordnen) zählen nicht gegen die Obergrenze */
 const STRUCTURE = new Set(["KUNDE", "EINSORTIERUNG", "SETUP"]);
 /** Nebenkarten fallen weg, sobald die Mail etwas Handfestes enthält */
 const SECONDARY = new Set(["SIGNAL", "FRAGE", "RISIKO", "INITIATIVE", "HEBEL", "KONTAKT", "BESCHAFFUNG", "TEAM", "ACCOUNTZIEL"]);
-const CONCRETE = new Set(["VERLAENGERUNG", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS"]);
+const CONCRETE = new Set(["VERMITTLER_ANFRAGE", "VERLAENGERUNG", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS"]);
 export const MAX_MAIN_CARDS = 3;
 export const MAX_PERSON_CARDS = 2;
 
@@ -454,6 +461,8 @@ type Carded = { item: IntakeItem; resolved: Resolved };
  */
 export async function curateCards(workspaceId: string, accountId: string | null, cards: Carded[]): Promise<Carded[]> {
   let out = [...cards];
+  // e57: Eine Vermittler-Anfrage bringt Kunde, Ansprechpartner, Chance(n), Position und Kandidaturen selbst mit
+  if (out.some((c) => c.item.type === "VERMITTLER_ANFRAGE")) out = out.filter((c) => ["VERMITTLER_ANFRAGE", "VORGANG", "EINSATZ_VERLAENGERN", "VERLAENGERUNG"].includes(c.item.type));
   // 1) Besetzungen in die Chance
   const chances = out.filter((c) => c.item.type === "CHANCE");
   const open = out.filter((c) => c.item.type === "BESETZUNG" && !(c.item as Extract<IntakeItem, { type: "BESETZUNG" }>).personName);
@@ -556,6 +565,7 @@ function cardKey(item: IntakeItem): unknown {
 
 const typeLabel: Record<string, string> = {
   KUNDE: "Neuer Kunde", SETUP: "Neues Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Neue Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Aufgabe", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Vorhaben", VORGANG: "Vorgang", BESETZUNG: "Besetzung", TEAM: "Team", EINSORTIERUNG: "Kunde zuordnen", ANSPRECHPARTNER: "Verlängerung läuft über",
+  VERMITTLER_ANFRAGE: "Vermittler-Anfrage", EINSATZ_VERLAENGERN: "Verlängerung",
   VERLAENGERUNG: "Verlängerung", CHANCE_STATUS: "Chance: neuer Stand", ERLEDIGT: "Erledigt", STIMMUNG: "Stimmung", FREELANCER: "Freelancer",
 };
 export const eingangTypeLabel = typeLabel;
@@ -583,6 +593,7 @@ export function describeCard(item: IntakeItem, labels: Map<string, string> = new
     case "BESETZUNG": return { title: `${t}: ${item.title}`, detail: [item.personName && `Person: ${item.personName}`, item.desiredStart && `Start ${item.desiredStart}`, item.mustHave].filter(Boolean).join(" · "), purpose: item.chanceTitle, priority: "KONKRETE_ANFRAGE" };
     case "EINSATZ": return { title: `${t}: ${item.title}`, detail: [item.consultantName, item.plannedEnd && `Ende ${item.plannedEnd}`, item.endHint].filter(Boolean).join(" · "), purpose: "", priority: "PLANUNGSANLASS" };
     case "ANSPRECHPARTNER": return { title: `${t}: ${item.engagementPerson} → ${item.contactName}`, detail: [item.functionTitle, item.email].filter(Boolean).join(" · "), purpose: "", priority: "NEUE_INFORMATION" };
+    case "VERMITTLER_ANFRAGE": return { title: `${t} ${item.intermediaryName}: ${item.title}${item.candidates.length ? ` · ${item.candidates.map((c) => c.name).join(", ")}` : ""}`, detail: [item.endCustomer && `Endkunde: ${item.endCustomer}`, item.desiredStart && `Start ${item.desiredStart.split("-").reverse().join(".")}`, item.durationHint, item.location, item.candidates.map((c) => `${c.name}${c.status === "VORGESTELLT" ? " (Profil verschickt)" : ""}${c.rate ? ` ${c.rate} €/${c.rateUnit === "STUNDE" ? "Std." : "Tag"}` : ""}`).join("; ")].filter(Boolean).join(" · "), purpose: "", priority: "KONKRETE_ANFRAGE" };
     case "EINSORTIERUNG": return { title: `${t}: ${item.accountName}${item.setupName ? ` · ${item.setupName}` : ""}`, detail: item.reasoning, purpose: "", priority: "NEUE_INFORMATION" };
     case "VORGANG": return { title: `${t}: ${item.title}`, detail: item.description, purpose: "", priority: "KONKRETE_ANFRAGE" };
     case "INITIATIVE": case "HEBEL": return { title: `${t}: ${item.title}`, detail: "", purpose: "", priority: "PLANUNGSANLASS" };

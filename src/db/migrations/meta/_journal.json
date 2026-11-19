@@ -372,6 +372,13 @@
       "when": 1795000929349,
       "tag": "0052_aufgaben_prioritaet",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1795108376962,
+      "tag": "0053_vermittler",
+      "breakpoints": true
     }
   ]
 }

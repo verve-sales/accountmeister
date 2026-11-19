@@ -2335,3 +2335,20 @@ export async function addSharePointDocumentAction(fd: FormData) {
     await linkSharePointFile(actor, data.engagementId ?? "", data.pick ?? "", { signedStatus: data.signedStatus ?? "", reference: data.reference ?? "" });
   }, "Unterlage aus SharePoint übernommen.");
 }
+
+// e57: Vermittler-Anfragen im Assignmentmanager
+export async function requestProfileSentAction(opportunityId: string) {
+  return run("/assignments#vermittler", async (actor) => {
+    const { markRequestProfileSent } = await import("@/modules/assignments/service");
+    await markRequestProfileSent(actor, opportunityId);
+    throw new PendingInfo("Als „CV verschickt“ markiert – die Anfrage kann jetzt als Lead nach Moco.");
+  }, "");
+}
+
+export async function requestCloseAction(opportunityId: string) {
+  return run("/assignments#vermittler", async (actor) => {
+    const { closeRequest } = await import("@/modules/assignments/service");
+    await closeRequest(actor, opportunityId);
+    throw new PendingInfo("Anfrage beendet.");
+  }, "");
+}

@@ -176,6 +176,8 @@ export const accounts = pgTable("accounts", {
   responsibleBdUserId: text("responsible_bd_user_id").references(() => users.id),
   /** Beschaffungsweg (Etappe 26): direkt, über Vermittler oder Rahmenvertrag – bestimmt Zugang, Angebotsweg und Marge */
   procurementChannel: text("procurement_channel"), // DIREKT | VERMITTLER | RAHMENVERTRAG | null = unbekannt
+  /** e57: KUNDE (Endkunde) | VERMITTLER (Hays, Gulp … – Anfragen ohne bekannten Endkunden; rechnet ab) */
+  accountKind: text("account_kind").notNull().default("KUNDE"),
   intermediaryName: text("intermediary_name"),
   procurementNote: text("procurement_note"),
   /** e48: Rechnungsanschrift und Rechnungsweg (z. B. „PDF an kreditoren@…, Bestellnummer im Betreff“) – für Backoffice und Buchhaltung */
@@ -1182,6 +1184,8 @@ export const opportunities = pgTable(
     title: text("title").notNull(),
     needDescription: text("need_description").notNull(), // Bedarfsbeschreibung in Kundensprache
     trigger: text("trigger"), // konkreter Anlass (Identify Pain), nur dokumentiert
+    /** e57: Endkunde laut Vermittler (Freitext, z. B. „großes Versicherungsunternehmen“) */
+    endCustomerNote: text("end_customer_note"),
     status: opportunityStatusEnum("status").notNull().default("IN_KLAERUNG"),
     // Wofür (Etappe 10): Art der Chance, Standardrolle, Anzahl, Zeithorizont – alles außer der Art optional
     kind: chanceKindEnum("kind").notNull().default("VERVE_EXPERTE"),

@@ -57,6 +57,7 @@ async function loadOpenOpportunities(workspaceId: string, ids?: string[]) {
       opp: schema.opportunities,
       accountName: schema.accounts.name,
       accountMocoCompanyId: schema.accounts.mocoCompanyId,
+      accountKind: schema.accounts.accountKind,
       setupTitle: schema.projectSetups.name,
       ownerName: schema.users.displayName,
       ownerMocoUserId: schema.users.mocoUserId,
@@ -66,7 +67,10 @@ async function loadOpenOpportunities(workspaceId: string, ids?: string[]) {
     .innerJoin(schema.projectSetups, eq(schema.projectSetups.id, schema.opportunities.setupId))
     .innerJoin(schema.users, eq(schema.users.id, schema.opportunities.ownerUserId))
     .where(and(...where));
-  return rows.sort((a, b) => a.accountName.localeCompare(b.accountName, "de") || a.opp.title.localeCompare(b.opp.title, "de"));
+  // e57: Vermittler-Anfragen werden erst ab „Profil/Angebot verschickt“ zum Lead – sonst füllt sich die Moco-Pipeline mit Anfragen ohne Reaktion
+  return rows
+    .filter((r) => r.accountKind !== "VERMITTLER" || ["PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG"].includes(r.opp.status))
+    .sort((a, b) => a.accountName.localeCompare(b.accountName, "de") || a.opp.title.localeCompare(b.opp.title, "de"));
 }
 
 async function actorMocoUserId(actor: Actor): Promise<number | null> {

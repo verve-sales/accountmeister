@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
-import { asgOpportunities, asgOverview, asgTaskLabel, canUseAssignments } from "@/modules/assignments/service";
+import { asgIntermediaryRequests, asgOppPhaseLabel, asgOpportunities, asgOverview, asgTaskLabel, canUseAssignments } from "@/modules/assignments/service";
 import { AsgTimeline } from "@/components/AsgTimeline";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDate } from "@/lib/labels";
-import { mocoSyncNowAction } from "@/app/actions";
+import { mocoSyncNowAction, requestCloseAction, requestProfileSentAction } from "@/app/actions";
 import { mocoEnabled } from "@/modules/moco/client";
 import { canRunMocoImport } from "@/modules/moco/import";
 import { PendingButton } from "@/components/PendingButton";
@@ -22,6 +22,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
   const wer = params.wer === "freelancer" || params.wer === "intern" ? params.wer : "alle";
   const shown = o.engagements.filter((e) => wer === "alle" || (wer === "freelancer" ? e.kind === "FREELANCER" : e.kind === "INTERN"));
   const k = o.kpis;
+  const requests = await asgIntermediaryRequests(actor);
   // e55: Chancen einblenden (Umschalter über der Zeitleiste)
   const withOpps = params.chancen === "1";
   const oppData = withOpps ? await asgOpportunities(actor, o.engagements) : { items: [], withoutPerson: 0 };
@@ -58,6 +59,35 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
           </Link>
         ))}
       </section>
+
+      {requests.length > 0 && (
+        <section className="card" id="vermittler">
+          <div className="flex flex-wrap items-baseline gap-3 mb-1">
+            <h2 className="font-semibold">Vermittler-Anfragen ({requests.length})</h2>
+            <span className="muted text-xs">je vorgeschlagener Person eine Chance · ab „CV verschickt“ Lead in Moco · ohne CV nach 14 Tagen automatisch beendet</span>
+          </div>
+          <table className="list text-sm">
+            <thead><tr><th>Anfrage</th><th>Vermittler</th><th>Endkunde</th><th>Person</th><th>Phase</th><th>Satz</th><th>Start</th><th></th></tr></thead>
+            <tbody>
+              {requests.map((r) => (
+                <tr key={r.opportunityId}>
+                  <td><Link href={`/bedarfe/${r.opportunityId}`}><strong>{r.title}</strong></Link></td>
+                  <td>{r.intermediary}</td>
+                  <td className="muted">{r.endCustomer ?? "–"}</td>
+                  <td>{r.person ?? <span className="muted">noch offen</span>}</td>
+                  <td>{asgOppPhaseLabel[r.phase]}{r.expiresInDays !== null && <span className="muted text-xs" style={{ color: r.expiresInDays <= 3 ? RED : undefined }}> · läuft in {r.expiresInDays} T. aus</span>}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{r.rate ?? "–"}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>{r.start ? fmtDate(r.start) : "–"}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    {r.expiresInDays !== null && <form action={requestProfileSentAction.bind(null, r.opportunityId)} style={{ display: "inline" }}><PendingButton busy="…" className="btn btn-small">CV verschickt</PendingButton></form>}{" "}
+                    <form action={requestCloseAction.bind(null, r.opportunityId)} style={{ display: "inline" }}><PendingButton busy="…" className="btn btn-secondary btn-small">passt nicht</PendingButton></form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       <section className="card" id="zeitleiste">
         <div className="flex flex-wrap items-baseline gap-3 mb-2">
