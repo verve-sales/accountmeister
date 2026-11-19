@@ -524,7 +524,7 @@ export function validateCards(json: unknown, allowedText: string): { items: Assi
 }
 
 /** e53: Diese Kartenarten führt der Assistent bei einem ausdrücklichen Auftrag sofort aus. */
-const EXECUTABLE = new Set(["KUNDE", "EINSORTIERUNG", "SETUP", "PERSON", "CHANCE", "BESETZUNG", "VORGANG", "ANSPRECHPARTNER", "SIGNAL"]);
+const EXECUTABLE = new Set(["KUNDE", "EINSORTIERUNG", "SETUP", "PERSON", "CHANCE", "BESETZUNG", "VORGANG", "ANSPRECHPARTNER", "SIGNAL", "EINSATZ_VERLAENGERN"]);
 const EXEC_ORDER = ["KUNDE", "EINSORTIERUNG", "SETUP"];
 
 // ---------------------------------------------------------------------------
@@ -617,8 +617,50 @@ export type CardEnv = {
   opportunityId?: string | null;
 };
 
+/**
+ * e56: Karten, die ein Setup brauchen, im Kundenkontext ohne Rückfrage zuordnen – das zuletzt bearbeitete Setup, das
+ * die Person bearbeiten darf, sonst ein neues „Allgemein“.
+ */
+async function ensureSetupContext(actor: Actor, res0: Resolved, origin: string): Promise<{ res: Resolved; note: string }> {
+  let res = res0;
+  let autoSetupNote = "";
+  if (!res.ctx && res.account) {
+    const setups = (await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, res.account.id), orderBy: desc(schema.projectSetups.updatedAt) })).filter((x) => x.status !== "ARCHIVIERT");
+    let chosen: SetupContext | null = null;
+    for (const x of setups) {
+      const c = await loadSetupContext(actor, x.id);
+      if (c && canEditSetup(actor, c)) {
+        chosen = c;
+        break;
+      }
+    }
+    if (!chosen && canCreateSetup(actor, res.account)) {
+      const created = await createSetup(actor, { accountId: res.account.id, name: "Allgemein", contextNote: `Angelegt aus ${origin}.`, bdUserId: hasRole(actor, "BD") ? actor.userId : null, creatorContribution: "ANKER_KONTEXT" });
+      chosen = await loadSetupContext(actor, created.id);
+    }
+    if (chosen) {
+      res = { ...res, ctx: chosen };
+      autoSetupNote = ` (Setup „${chosen.setup.name}“)`;
+    }
+  }
+  return { res, note: autoSetupNote };
+}
+
+const NEEDS_SETUP = new Set(["SIGNAL", "BESETZUNG", "CHANCE", "AKTION", "KONTAKT", "FRAGE"]);
+
 /** Eine Karte übernehmen (Assistent und Eingangs-Auswertung teilen sich diese Logik). */
-export async function applyCard(actor: Actor, res: Resolved, item: AssistantItem, env: CardEnv): Promise<ApplyResult> {
+export async function applyCard(actor: Actor, res0: Resolved, item: AssistantItem, env: CardEnv): Promise<ApplyResult> {
+  if (!res0.ctx && res0.account && NEEDS_SETUP.has(item.type)) {
+    const { res, note } = await ensureSetupContext(actor, res0, env.origin);
+    const r = await applyCardInner(actor, res, item, env);
+    const withNote = note && r.note ? { ...r, note: r.note.replace(/^([^.]*)\./, `$1${note}.`) } : r;
+    // Gespräch hängt danach am Setup – Folgekarten brauchen dann nichts mehr aufzulösen
+    return res.ctx && !withNote.rebind ? { ...withNote, rebind: { type: "SETUP", id: res.ctx.setup.id, title: "Assistent · Setup" } } : withNote;
+  }
+  return applyCardInner(actor, res0, item, env);
+}
+
+async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, env: CardEnv): Promise<ApplyResult> {
   const origin = env.origin;
   if (item.type === "KUNDE") {
     if (!canCreateAccount(actor)) throw new ForbiddenError("Kunden legen BD, Principal, Geschäftsführung oder Sales Operations an.");
@@ -682,6 +724,19 @@ export async function applyCard(actor: Actor, res: Resolved, item: AssistantItem
     await env.sourceFor(editable[0]!.setupId).catch(() => null);
     const f = editable[0]!;
     return { type: "ENGAGEMENT", id: f.id, note: `${item.contactName} ${created ? `bei ${f.accountName} neu angelegt und ` : ""}als Ansprechpartner (${item.role === "FACHLICH" ? "fachlich" : "Bestellung/Vertrag"}) für die Verlängerung von ${f.person} eingetragen – ${f.accountName}, Setup „${f.setupName}“${item.approach ? `; spricht an: ${approachLabel[item.approach]}` : ""}${editable.length > 1 ? ` (${editable.length} Einsätze)` : ""}. /einsaetze/${f.id}#ansprechpartner` };
+  }
+  // e56: Verlängerung eines laufenden Einsatzes – Signal am Einsatz (Sales Ops und Backoffice setzen um), keine Chance
+  if (item.type === "EINSATZ_VERLAENGERN") {
+    const found = await findRunningEngagements(actor, { accountId: res.account?.id ?? null, personName: item.engagementPerson });
+    const pool = found.length ? found : res.account ? await findRunningEngagements(actor, { personName: item.engagementPerson }) : [];
+    if (!pool.length) throw new ValidationError(`Kein laufender Einsatz von „${item.engagementPerson}“ gefunden${res.account ? ` bei ${res.account.name}` : ""}.`);
+    if (new Set(pool.map((f) => f.accountId)).size > 1) throw new ValidationError(`„${item.engagementPerson}“ hat laufende Einsätze bei mehreren Kunden (${[...new Set(pool.map((f) => f.accountName))].join(", ")}) – bitte sag, welcher gemeint ist.`);
+    const f = [...pool].sort((x, y) => (y.end ?? "").localeCompare(x.end ?? ""))[0]!;
+    const wishEnd = /^\d{4}-\d{2}-\d{2}$/.test(item.wishEnd) ? item.wishEnd : parseDueHint(item.endHint || item.wishEnd) ?? "";
+    const { signalRenewal } = await import("@/modules/engagements/care");
+    await signalRenewal(actor, f.id, { signal: item.signal, wishEnd, note: item.note });
+    const de = (d: string) => d.split("-").reverse().join(".");
+    return { type: "ENGAGEMENT", id: f.id, note: item.signal === "ENDET" ? `Am Einsatz von ${f.person} bei ${f.accountName} vermerkt: endet${f.end ? ` zum ${de(f.end)}` : ""}. Sales Operations und Backoffice sind informiert. /einsaetze/${f.id}` : `Verlängerung für ${f.person} bei ${f.accountName} (Setup „${f.setupName}“) angestoßen${wishEnd ? ` – Wunschende ${de(wishEnd)}` : ""}. Sales Operations und Backoffice setzen um. /einsaetze/${f.id}` };
   }
   if (item.type === "EINSORTIERUNG") {
     const accounts = await listVisibleAccounts(actor);
@@ -792,8 +847,7 @@ export async function applyCard(actor: Actor, res: Resolved, item: AssistantItem
     const order = await recordExistingEngagement(actor, res.account.id, { setupId: res.ctx.setup.id, title: item.title, kind: item.kind, plannedEnd, evidenceText: `Aus dem Assistenten übernommen: „${item.evidenceQuote.slice(0, 400)}“`, consultantName: item.consultantName });
     return { type: "ORDER", id: order.id, note: `Laufender Einsatz nachgetragen${plannedEnd ? ` (Ende ${plannedEnd} – die Verlängerungsregel greift rechtzeitig)` : " – Einsatzende bitte im Health-Check ergänzen"}.` };
   }
-  // Alles Weitere braucht ein Setup mit Bearbeitungsrecht
-  if (!res.ctx) throw new ValidationError("Dafür braucht es ein Setup. Lege zuerst Kunde und Setup an (Karten „Kunde“/„Setup“) oder öffne den Assistenten in einem Setup.");
+  if (!res.ctx) throw new ValidationError(res.account ? `Bei ${res.account.name} gibt es kein Setup, das du bearbeiten darfst – bitte den zuständigen BD fragen.` : "Dafür fehlt der Kunde – sag mir, um welchen Kunden es geht.");
   if (!canEditSetup(actor, res.ctx)) throw new ForbiddenError("Sie sind an diesem Setup nicht bearbeitend beteiligt.");
   const setupId = res.ctx.setup.id;
   const sourceId = await env.sourceFor(setupId);

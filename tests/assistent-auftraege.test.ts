@@ -48,3 +48,40 @@ describe("e53: Assistent erledigt Aufträge direkt", () => {
     expect(v.execute).toEqual([0]);
   });
 });
+
+describe("e56: Verlängerung am bestehenden Einsatz, Setup ohne Rückfrage", () => {
+  it("A03: Im Kundenkontext wird die Verlängerung am Einsatz angestoßen und eine Chance im vorhandenen Setup angelegt", async () => {
+    process.env.FEATURE_BESETZUNG = "true";
+    resetConfigCacheForTests();
+    const { ASSISTANT_CARDS_MARKER } = await import("@/modules/ai/schemas");
+    const { TestProvider } = await import("@/modules/ai/providers/test");
+    const { createOpportunity } = await import("@/modules/opportunities/service");
+    const { quickFill } = await import("@/modules/staffing/service");
+    const { plusDaysIso, todayIso } = await import("@/modules/work/calendar");
+    const { ensureSeed } = await import("./helpers");
+    const s = await ensureSeed();
+    const david = await actorFor("david");
+    const tag = Date.now().toString(36);
+    const opp = await createOpportunity(david, { setupId: s.setupId, title: `A03 ${tag}`, needDescription: "Testbedarf Verlängerung.", kind: "VERVE_EXPERTE" });
+    const name = `Paula Probe${tag}`;
+    const q = await quickFill(david, opp.id, { title: "Projektleitung", resourceKind: "FREELANCER", newName: `${name} (fiktiv)`, ekRate: "700", vkRate: "1000", desiredStart: plusDaysIso(todayIso(), -60), plannedEnd: plusDaysIso(todayIso(), 40) });
+    await db.update(schema.engagements).set({ status: "AKTIV", actualStart: plusDaysIso(todayIso(), -60) }).where(eq(schema.engagements.id, q.engagement.id));
+    const text = `${name} bei uns: die möchten ev verlängern bis 30.04.2027, außerdem suchen sie einen Tester`;
+    const reply = `Mach ich.\n${ASSISTANT_CARDS_MARKER}\n${JSON.stringify({ items: [
+      { type: "EINSATZ_VERLAENGERN", engagementPerson: `${name} (fiktiv)`, signal: "VERLAENGERN", wishEnd: "2027-04-30", note: "noch unsicher", evidenceQuote: "die möchten ev verlängern bis 30.04.2027" },
+      { type: "CHANCE", title: "Tester gesucht", needDescription: "Kunde sucht einen Tester", kind: "FREELANCER_EXPERTE", roleName: "Test Management", headcount: null, horizon: "", anticipated: true, evidenceQuote: "suchen sie einen Tester" },
+    ], execute: [0, 1], missing: [] })}`;
+    const provider = { ...new TestProvider(), info: () => ({ id: "test", enabled: true, model: "test", description: "Fake" }), assistantReply: async () => reply } as never;
+    const view = await getThreadView(david, { type: "ACCOUNT", id: s.accountId });
+    const r = await sendMessage(david, { threadId: view.thread.id, text }, { provider });
+    expect(r.cards.every((c) => c.status === "UEBERNOMMEN")).toBe(true);
+    expect(r.message.text).toMatch(/Verlängerung für .* angestoßen – Wunschende 30\.04\.2027/);
+    expect(r.message.text).toMatch(/Setup/);
+    const ren = await db.query.renewalDecisions.findFirst({ where: eq(schema.renewalDecisions.engagementId, q.engagement.id) });
+    expect(ren?.status).toBe("IN_ABSTIMMUNG");
+    expect(ren?.proposedTo).toBe("2027-04-30");
+    const chance = await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, r.cards[1]!.resultId!) });
+    expect(chance?.accountId).toBe(s.accountId);
+    expect(r.thread?.contextType).toBe("SETUP");
+  });
+});

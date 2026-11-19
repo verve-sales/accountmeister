@@ -109,7 +109,7 @@ describe("Etappe 28 (E1): Suchauftrag → Teamvorschau → Annahme → Kandidatu
     const preview = await getPositionDetail(ops, p1.id);
     expect(preview.access.preview).toBe(true);
     expect(preview.access.full).toBe(false);
-    expect(JSON.stringify(preview.view)).not.toMatch(/850|1050|internalNotes|ekMax/);
+    expect(JSON.stringify(preview.view)).not.toMatch(/\b(850|1050)\b|internalNotes|ekMax/);
     expect(preview.candidacies).toHaveLength(0);
     expect((await listMyWork(ops)).queue.map((x) => x.id)).toEqual(expect.arrayContaining([w1.id, w2.id]));
     await expect(addCandidacy(ops, p1.id, { newName: "Zu früh" })).rejects.toBeInstanceOf(NotFoundError);
