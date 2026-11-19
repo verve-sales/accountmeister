@@ -744,6 +744,20 @@ const NEEDS_SETUP = new Set(["SIGNAL", "BESETZUNG", "CHANCE", "AKTION", "KONTAKT
 
 /** Eine Karte übernehmen (Assistent und Eingangs-Auswertung teilen sich diese Logik). */
 export async function applyCard(actor: Actor, res0: Resolved, item: AssistantItem, env: CardEnv): Promise<ApplyResult> {
+  // e58: Chance zu einem laufenden Einsatz (mögliche Verlängerung) – immer im Setup dieses Einsatzes
+  if (item.type === "CHANCE" && item.engagementPerson.trim()) {
+    const found = await findRunningEngagements(actor, { accountId: res0.account?.id ?? null, personName: item.engagementPerson });
+    const pool = found.length ? found : await findRunningEngagements(actor, { personName: item.engagementPerson });
+    if (new Set(pool.map((f) => f.accountId)).size === 1) {
+      const f = [...pool].sort((x, y) => (y.end ?? "").localeCompare(x.end ?? ""))[0]!;
+      const ctx = await loadSetupContext(actor, f.setupId);
+      if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError(`Im Setup „${f.setupName}“ bei ${f.accountName} darfst du keine Chancen anlegen – bitte den zuständigen BD.`);
+      const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, f.id), columns: { freelancerId: true } });
+      const chance = { ...item, kind: e?.freelancerId ? ("FREELANCER_EXPERTE" as const) : ("VERVE_EXPERTE" as const), headcount: 1, positions: [] };
+      const r = await applyCardInner(actor, { ref: { type: "SETUP", id: ctx.setup.id }, ctx, account: ctx.account, canWrite: true }, chance, env);
+      return { ...r, note: `Chance „${item.title}“ für ${f.person} bei ${f.accountName} im Setup „${f.setupName}“ angelegt${f.end ? ` (Einsatz läuft bis ${f.end.split("-").reverse().join(".")})` : ""}. /bedarfe/${r.id}`, rebind: { type: "SETUP", id: ctx.setup.id, title: "Assistent · Setup" } };
+    }
+  }
   if (!res0.ctx && res0.account && NEEDS_SETUP.has(item.type)) {
     const { res, note } = await ensureSetupContext(actor, res0, env.origin);
     const r = await applyCardInner(actor, res, item, env);
