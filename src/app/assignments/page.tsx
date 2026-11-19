@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
-import { asgOverview, asgTaskLabel, canUseAssignments } from "@/modules/assignments/service";
+import { asgOpportunities, asgOverview, asgTaskLabel, canUseAssignments } from "@/modules/assignments/service";
 import { AsgTimeline } from "@/components/AsgTimeline";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDate } from "@/lib/labels";
@@ -13,8 +13,8 @@ import { canClean, findEngagementDuplicates, findFreelancerDuplicates } from "@/
 
 const RED = "#c0392b";
 
-export default async function AssignmentsPage({ searchParams }: { searchParams: SearchParams & Promise<{ wer?: string }> }) {
-  const params = (await searchParams) as { wer?: string } & Awaited<SearchParams>;
+export default async function AssignmentsPage({ searchParams }: { searchParams: SearchParams & Promise<{ wer?: string; chancen?: string }> }) {
+  const params = (await searchParams) as { wer?: string; chancen?: string } & Awaited<SearchParams>;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
   if (!(await canUseAssignments(actor))) redirect("/start");
@@ -22,6 +22,11 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
   const wer = params.wer === "freelancer" || params.wer === "intern" ? params.wer : "alle";
   const shown = o.engagements.filter((e) => wer === "alle" || (wer === "freelancer" ? e.kind === "FREELANCER" : e.kind === "INTERN"));
   const k = o.kpis;
+  // e55: Chancen einblenden (Umschalter über der Zeitleiste)
+  const withOpps = params.chancen === "1";
+  const oppData = withOpps ? await asgOpportunities(actor, o.engagements) : { items: [], withoutPerson: 0 };
+  const shownOpps = oppData.items.filter((x) => wer === "alle" || (wer === "freelancer" ? x.kind === "FREELANCER" : x.kind === "INTERN"));
+  const q = (w: string, c: boolean) => { const sp = new URLSearchParams(); if (w !== "alle") sp.set("wer", w); if (c) sp.set("chancen", "1"); const t = sp.toString(); return `/assignments${t ? `?${t}` : ""}#zeitleiste`; };
   const noEnd = shown.filter((e) => !e.end).length;
   const canPull = mocoEnabled() && canRunMocoImport(actor);
   const [flDup, engDup] = canClean(actor) ? await Promise.all([findFreelancerDuplicates(actor), findEngagementDuplicates(actor)]) : [[], []];
@@ -58,8 +63,9 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
         <div className="flex flex-wrap items-baseline gap-3 mb-2">
           <h2 className="font-semibold">Wer ist wo bis wann</h2>
           <span className="text-sm flex gap-3">
-            {[["alle", "alle"], ["freelancer", "Freelancer"], ["intern", "Interne"]].map(([v, l]) => <Link key={v} href={v === "alle" ? "/assignments#zeitleiste" : `/assignments?wer=${v}#zeitleiste`} style={wer === v ? { fontWeight: 700, textDecoration: "underline" } : undefined}>{l}</Link>)}
+            {[["alle", "alle"], ["freelancer", "Freelancer"], ["intern", "Interne"]].map(([v, l]) => <Link key={v} href={q(v!, withOpps)} style={wer === v ? { fontWeight: 700, textDecoration: "underline" } : undefined}>{l}</Link>)}
           </span>
+          <Link href={q(wer, !withOpps)} className="text-sm" style={withOpps ? { fontWeight: 700 } : undefined}>{withOpps ? "☑" : "☐"} Chancen einblenden</Link>
           <Link href="/assignments/konditionen" className="text-sm ml-auto">als Tabelle mit Konditionen</Link>
         </div>
         {(noEnd > 0 || canPull) && (
@@ -74,7 +80,8 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
             )}
           </div>
         )}
-        <AsgTimeline engagements={shown} today={o.today} />
+        {withOpps && <p className="muted text-xs mb-2">Chancen erscheinen über die Kandidatur einer Person an einer Position – Phase von „vermutet“ (hell) bis „ausgewählt“ (kräftig), rot umrandet bei Überschneidung.{oppData.withoutPerson > 0 ? ` ${oppData.withoutPerson} offene Position${oppData.withoutPerson === 1 ? "" : "en"} noch ohne Person.` : ""}{shownOpps.length === 0 ? " Derzeit keine Chance mit benannter Person." : ""}</p>}
+        <AsgTimeline engagements={shown} opportunities={shownOpps} today={o.today} />
       </section>
 
       <section className="card" id="aufgaben">

@@ -211,3 +211,92 @@ export async function asgCheckins(actor: Actor): Promise<AsgCheckin[]> {
     })
     .sort((a, b) => (a.side === b.side ? a.due.localeCompare(b.due) : a.side === "FREELANCER" ? -1 : 1));
 }
+
+// ---------------------------------------------------------------------------
+// e55: Chancen in der Zeitleiste – wer ist wo im Gespräch, in welcher Phase
+// ---------------------------------------------------------------------------
+
+/** Phasen in aufsteigender Verbindlichkeit (Darstellung: eine Farbe, von hell nach kräftig). */
+export type AsgOppPhase = "VERMUTET" | "ANFRAGE" | "BESTAETIGT" | "ANGEBOT" | "AUSWAHL";
+export const asgOppPhaseLabel: Record<AsgOppPhase, string> = { VERMUTET: "vermutet", ANFRAGE: "Anfrage", BESTAETIGT: "Bedarf bestätigt", ANGEBOT: "Profil/Angebot verschickt", AUSWAHL: "ausgewählt, Bestellung offen" };
+const PHASE_RANK: AsgOppPhase[] = ["VERMUTET", "ANFRAGE", "BESTAETIGT", "ANGEBOT", "AUSWAHL"];
+const OPP_PHASE: Record<string, AsgOppPhase> = { ANTIZIPIERT: "VERMUTET", IN_KLAERUNG: "ANFRAGE", BESTAETIGT: "BESTAETIGT", PROFIL_ANGEBOT_VORGESTELLT: "ANGEBOT", AUSWAHL_BESTELLUNG: "AUSWAHL" };
+const CAND_PHASE: Record<string, AsgOppPhase> = { FREIGEGEBEN: "BESTAETIGT", VORGESTELLT: "ANGEBOT", INTERVIEW: "ANGEBOT", AUSGEWAEHLT: "AUSWAHL" };
+const CAND_OPEN = ["IDENTIFIZIERT", "KONTAKT", "QUALIFIZIERT", "VORGESCHLAGEN", "FREIGEGEBEN", "VORGESTELLT", "INTERVIEW", "AUSGEWAEHLT"];
+
+export type AsgOpportunity = {
+  id: string; // Kandidatur
+  opportunityId: string;
+  positionId: string;
+  personId: string;
+  person: string;
+  kind: "FREELANCER" | "INTERN";
+  accountName: string;
+  title: string;
+  phase: AsgOppPhase;
+  start: string;
+  end: string;
+  /** Zeitraum geschätzt (Position ohne Start bzw. Ende) */
+  estimated: boolean;
+  /** Überschneidung mit einem Einsatz oder einer anderen Chance derselben Person */
+  conflict: string | null;
+};
+
+export async function asgOpportunities(actor: Actor, engagements: AsgEngagement[]): Promise<{ items: AsgOpportunity[]; withoutPerson: number }> {
+  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Den Assignmentmanager nutzen Sales Operations, Backoffice und Geschäftsführung.");
+  const ws = actor.workspaceId;
+  const today = todayIso();
+  const opps = await db.query.opportunities.findMany({ where: and(eq(schema.opportunities.workspaceId, ws), inArray(schema.opportunities.status, Object.keys(OPP_PHASE) as never[])), columns: { id: true, title: true, status: true, accountId: true } });
+  if (!opps.length) return { items: [], withoutPerson: 0 };
+  const positions = await db.query.staffingPositions.findMany({ where: and(inArray(schema.staffingPositions.opportunityId, opps.map((o) => o.id)), inArray(schema.staffingPositions.status, ["ENTWURF", "OFFEN", "PAUSIERT"])) });
+  if (!positions.length) return { items: [], withoutPerson: 0 };
+  const cands = await db.query.candidacies.findMany({ where: and(inArray(schema.candidacies.positionId, positions.map((p) => p.id)), eq(schema.candidacies.isActive, true), inArray(schema.candidacies.status, CAND_OPEN)) });
+  const [accounts, fls, users] = await Promise.all([
+    db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(opps.map((o) => o.accountId))]), columns: { id: true, name: true } }),
+    db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(cands.map((c) => c.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+    db.query.users.findMany({ where: eq(schema.users.workspaceId, ws), columns: { id: true, displayName: true } }),
+  ]);
+  const an = new Map(accounts.map((a) => [a.id, a.name]));
+  const fn = new Map(fls.map((f) => [f.id, f.displayName]));
+  const un = new Map(users.map((u) => [u.id, u.displayName]));
+  const om = new Map(opps.map((o) => [o.id, o]));
+  const pm = new Map(positions.map((p) => [p.id, p]));
+  const items: AsgOpportunity[] = cands
+    .filter((c) => c.freelancerId || c.internalUserId)
+    .map((c) => {
+      const pos = pm.get(c.positionId)!;
+      const o = om.get(pos.opportunityId)!;
+      const a = OPP_PHASE[o.status] ?? "ANFRAGE";
+      const b = CAND_PHASE[c.status];
+      const phase = b && PHASE_RANK.indexOf(b) > PHASE_RANK.indexOf(a) ? b : a;
+      const start = pos.desiredStart && pos.desiredStart > today ? pos.desiredStart : pos.desiredStart ?? today;
+      const end = pos.plannedEnd && pos.plannedEnd > start ? pos.plannedEnd : plusDaysIso(start, 90);
+      return {
+        id: c.id,
+        opportunityId: o.id,
+        positionId: pos.id,
+        personId: c.freelancerId ? `fl:${c.freelancerId}` : `u:${c.internalUserId}`,
+        person: c.freelancerId ? fn.get(c.freelancerId) ?? "?" : un.get(c.internalUserId!) ?? "?",
+        kind: c.freelancerId ? ("FREELANCER" as const) : ("INTERN" as const),
+        accountName: an.get(o.accountId) ?? "?",
+        title: pos.title || o.title,
+        phase,
+        start,
+        end,
+        estimated: !pos.desiredStart || !pos.plannedEnd,
+        conflict: null,
+      };
+    })
+    // Chancen, die schon vorbei sind, interessieren hier nicht
+    .filter((x) => x.end >= today);
+  // Konflikte: Überschneidung mit laufendem Einsatz oder anderer Chance derselben Person
+  const overlap = (s1: string, e1: string, s2: string, e2: string) => s1 <= e2 && s2 <= e1;
+  for (const it of items) {
+    const eng = engagements.find((e) => e.personId === it.personId && e.state !== "BEENDET" && overlap(it.start, it.end, e.start ?? "0000-01-01", e.renewalTo && e.renewalTo > (e.end ?? "") ? e.renewalTo : e.end ?? "9999-12-31"));
+    const other = items.find((x) => x !== it && x.personId === it.personId && x.opportunityId !== it.opportunityId && overlap(it.start, it.end, x.start, x.end));
+    it.conflict = eng ? `überschneidet sich mit dem Einsatz bei ${eng.accountName}${eng.end ? ` (bis ${de(eng.end)})` : ""}` : other ? `überschneidet sich mit der Chance bei ${other.accountName}` : null;
+  }
+  const staffed = new Set(cands.map((c) => c.positionId));
+  const withoutPerson = positions.filter((p) => !staffed.has(p.id) && om.has(p.opportunityId)).length;
+  return { items: items.sort((x, y) => x.start.localeCompare(y.start)), withoutPerson };
+}
