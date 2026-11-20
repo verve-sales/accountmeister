@@ -77,9 +77,15 @@ export function RenewalStartForm({ engagementId, currentEnd, back, compact = fal
         <label className="label" htmlFor={`${idp}-note`}>Notiz (optional)</label>
         <input id={`${idp}-note`} name="note" className="input" placeholder="z. B. Kunde hat mündlich zugesagt, Bestellung folgt" style={{ minWidth: compact ? 200 : undefined }} />
       </div>
+      <div>
+        <label className="label" htmlFor={`${idp}-fu`}>Wiedervorlage (nur bei „möglich“)</label>
+        <input id={`${idp}-fu`} type="date" name="followUp" className="input" />
+      </div>
       <div className="flex flex-wrap gap-2">
         {canDecide && <button className="btn btn-small" type="submit" name="direct" value="1" style={{ background: "#2f7d32" }}>Verlängern</button>}
         <button className={canDecide ? "btn btn-secondary btn-small" : "btn btn-small"} type="submit">{canDecide ? "Angebot raus – Bestellung abwarten" : "Verlängerung anstoßen"}</button>
+        {/* e60: Verlängerung im Raum, für ein Angebot aber noch zu früh – „Neues Ende“ gilt als Wunschende */}
+        <button className="btn btn-secondary btn-small" type="submit" formAction={signalRenewalAction} formNoValidate name="signal" value="MOEGLICH" title="Nur festhalten: erscheint in der Zeitleiste, noch kein Angebot und keine Aufgabe für Sales Ops">Möglich – noch zu früh</button>
       </div>
     </form>
   );
