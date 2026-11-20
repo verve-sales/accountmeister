@@ -20,6 +20,8 @@ import { topCandidatesForOpportunities } from "@/modules/staffing/service";
 import { PlaybookRuns } from "@/components/PlaybookRuns";
 import { Comments, WorkBlock } from "@/components/Work";
 import { DeleteBlock } from "@/components/DeleteBlock";
+import { SetupMergeInto } from "@/components/MergeForms";
+import { canMergeSetupsAt } from "@/modules/cleanup/service";
 import { listPlaybooks, listRuns, listSalesOpsUsers } from "@/modules/playbooks/service";
 import { ALTKUNDEN_CODE } from "@/modules/playbooks/defaults";
 import { groupByFamily, listRoles } from "@/modules/roles/catalog";
@@ -110,6 +112,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const setupCtx = await loadSetupContext(actor, id);
   const analysis = setupCtx ? await analyzeSetup(actor, setupCtx) : null;
   const mayReassign = canReassignResponsibility(actor, d.account);
+  // e59: dieses Setup in ein anderes desselben Kunden überführen
+  const mergeTargets = (await canMergeSetupsAt(actor, d.account.id)) ? (await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, d.account.id), columns: { id: true, name: true, status: true } })).filter((x) => x.id !== d.setup.id && x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })) : [];
   const [runs, setupScoped, accountScoped, salesOps] = await Promise.all([listRuns(actor, { setupId: id }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true }), listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true }), listSalesOpsUsers(actor.workspaceId)]);
   // Kunden-Muster (z. B. Altkunden-Reaktivierung) lassen sich auch direkt auf ein bestehendes Setup anwenden.
   const setupPlaybooks = [...accountScoped, ...setupScoped];
@@ -756,6 +760,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           <p className="muted text-xs mt-1">Chancen, Einsätze, Beobachtungen, Aufgaben, Personen und Quellen wandern mit; dieses Setup verschwindet danach.</p>
         </details>
       )}
+      {mergeTargets.length > 0 && <SetupMergeInto setupId={d.setup.id} setupName={d.setup.name} others={mergeTargets} back={`/kunden/${d.account.id}`} />}
       {(mayReassign || actor.roles.has("ADMIN")) && <DeleteBlock kind="SETUP" id={d.setup.id} label={`${d.account.name} · ${d.setup.name}`} scope="rekursiv mit allen Chancen, Positionen, Einsätzen, Beobachtungen, Aktionen, Weeklys, Quellen, Vorgängen und Beteiligungen" back={back} />}
     </div>
   );

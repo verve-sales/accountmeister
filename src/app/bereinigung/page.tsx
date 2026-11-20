@@ -5,8 +5,9 @@ import { canClean, cleanupReport } from "@/modules/cleanup/service";
 import { engagementStatusLabel } from "@/modules/engagements/service";
 import { Feedback } from "@/components/Feedback";
 import { PendingButton } from "@/components/PendingButton";
+import { EngagementMergeForm, SetupMergeForm } from "@/components/MergeForms";
 import { fmtDate } from "@/lib/labels";
-import { cleanupCloseOverdueAction, cleanupInternalAction, cleanupMergeEngagementsAction, cleanupMergeFreelancersAction, cleanupMergePersonsAction, cleanupMergeSetupsAction } from "@/app/actions";
+import { cleanupCloseOverdueAction, cleanupInternalAction, cleanupMergeFreelancersAction, cleanupMergePersonsAction } from "@/app/actions";
 
 export const metadata = { title: "Bereinigung" };
 
@@ -88,19 +89,7 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
       <section className="card space-y-3" id="einsaetze">
         <h2 className="font-semibold">Doppelte Einsätze ({r.engagementDuplicates.length})</h2>
         <p className="muted text-sm">Gleiche Person beim gleichen Kunden mit überlappender Laufzeit. Beim Zusammenführen bleibt der gewählte Einsatz; Moco-Verknüpfung, Auftrag, Enddatum und Ansprechpartner kommen dazu, wo er selbst nichts hat; Check-ins, Unterlagen, Betreuung und Verlängerung ziehen um. Der andere wird entfernt.</p>
-        {r.engagementDuplicates.map((g) => (
-          <form key={g.keep.id} action={cleanupMergeEngagementsAction} className="space-y-1" style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-            <div className="text-sm"><strong>{g.personName}</strong> · {g.accountName} <span className="muted text-xs">– {g.reason}</span></div>
-            {[g.keep, ...g.drop].map((e, i) => (
-              <label key={e.id} className="flex gap-2 items-baseline text-sm">
-                <input type="hidden" name="ids" value={e.id} />
-                <input type="radio" name="keep" value={e.id} defaultChecked={i === 0} />
-                <span><Link href={`/einsaetze/${e.id}`}>{e.title}</Link> <span className="muted text-xs">{engagementStatusLabel[e.status] ?? e.status} · {e.start ? fmtDate(e.start) : "?"} – {e.end ? fmtDate(e.end) : "offen"}{e.moco ? ` · Moco ${e.moco}` : " · ohne Moco"}{i === 0 ? " · empfohlen (mehr Verlauf)" : ""}</span></span>
-              </label>
-            ))}
-            <PendingButton busy="Führe zusammen …" className="btn btn-small">Zusammenführen (gewählten behalten)</PendingButton>
-          </form>
-        ))}
+        {r.engagementDuplicates.map((g) => <EngagementMergeForm key={g.keep.id} g={g} />)}
       </section>
 
       <section className="card space-y-2" id="intern">
@@ -119,19 +108,7 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
       <section className="card space-y-3" id="setups">
         <h2 className="font-semibold">Doppelte Setups ({r.setupDuplicates.length})</h2>
         <p className="muted text-sm">Gleicher Name beim gleichen Kunden (ohne Groß-/Kleinschreibung und Klammerzusätze). Alles am entfernten Setup – Chancen, Einsätze, Mitglieder, Signale, Aktionen – zieht ins behaltene.</p>
-        {r.setupDuplicates.map((g) => (
-          <form key={g.keep.id} action={cleanupMergeSetupsAction} className="space-y-1" style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-            <div className="text-sm"><Link href={`/kunden/${g.accountId}`}>{g.accountName}</Link></div>
-            {[g.keep, ...g.drop].map((s, i) => (
-              <label key={s.id} className="flex gap-2 items-baseline text-sm">
-                <input type="hidden" name="ids" value={s.id} />
-                <input type="radio" name="keep" value={s.id} defaultChecked={i === 0} />
-                <span><Link href={`/setups/${s.id}`}>{s.name}</Link> <span className="muted text-xs">Umfang {s.score}{i === 0 ? " · empfohlen" : ""}</span></span>
-              </label>
-            ))}
-            <PendingButton busy="Führe zusammen …" className="btn btn-small">Zusammenführen (gewähltes behalten)</PendingButton>
-          </form>
-        ))}
+        {r.setupDuplicates.map((g) => <SetupMergeForm key={g.keep.id} g={g} />)}
       </section>
 
       <section className="card space-y-2" id="personen">

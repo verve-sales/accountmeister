@@ -45,6 +45,8 @@ import { Beschaffungsprofil } from "@/components/Beschaffungsprofil";
 import { getConfig } from "@/lib/config";
 import { listEngagements } from "@/modules/engagements/service";
 import { renewalStatusLabel } from "@/modules/engagements/care";
+import { canClean, canMergeSetupsAt, findEngagementDuplicates, findSetupDuplicates } from "@/modules/cleanup/service";
+import { EngagementMergeForm, SetupMergeForm } from "@/components/MergeForms";
 
 type Bucket = "grundlagen" | "strategie" | "operativ";
 
@@ -102,6 +104,9 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const bucket: Bucket = sp.b === "strategie" || sp.b === "operativ" ? sp.b : "grundlagen";
   // e44: wer ist hier im Einsatz, bis wann – Namen statt nur einer Zahl
   const deployed = getConfig().FEATURE_BESETZUNG === "true" ? (await listEngagements(actor, "laufend").catch(() => ({ items: [] }))).items.filter((e) => e.accountId === account.id) : [];
+  // e59: Aufräumen direkt beim Kunden – doppelte Einsätze und doppelte/Platzhalter-Setups
+  const engDups = canClean(actor) ? await findEngagementDuplicates(actor, undefined, account.id).catch(() => []) : [];
+  const setupDups = (await canMergeSetupsAt(actor, account.id)) ? await findSetupDuplicates(actor, account.id).catch(() => []) : [];
   const back = `/kunden/${id}?b=${bucket}`;
   const keyInitiatives = initiatives.filter((i) => i.kind === "INITIATIVE" && i.status === "OFFEN");
   const cardsByIni = ro ? {} : await listCardsByInitiative(actor, account.id).catch(() => ({} as Record<string, never[]>));
@@ -180,6 +185,14 @@ export default async function KundePage({ params, searchParams }: { params: Prom
               })}
             </tbody>
           </table>
+        </section>
+      )}
+      {(engDups.length > 0 || setupDups.length > 0) && (
+        <section className="card space-y-2" id="aufraeumen" style={{ borderLeft: "4px solid #b7791f" }}>
+          <h2 className="font-semibold">Aufräumen</h2>
+          <p className="muted text-sm">{[engDups.length ? `${engDups.length === 1 ? "Ein Einsatz ist" : `${engDups.length} Einsätze sind`} doppelt angelegt` : "", setupDups.length ? "ein Setup ist doppelt bzw. ein Platzhalter („Ohne Bereich“, „Allgemein“) neben einem echten Setup" : ""].filter(Boolean).join(", ")}. Zusammenführen verliert nichts: alles zieht in den behaltenen Eintrag. Am besten zuerst die Setups, dann die Einsätze.</p>
+          {setupDups.map((g) => <SetupMergeForm key={g.keep.id} g={g} back={`/kunden/${account.id}#aufraeumen`} showAccount={false} />)}
+          {engDups.map((g) => <EngagementMergeForm key={g.keep.id} g={g} back={`/kunden/${account.id}#aufraeumen`} showAccount={false} />)}
         </section>
       )}
       <nav aria-label="Bereiche der Kundenansicht" className="flex flex-wrap gap-2 border-b" style={{ borderColor: "var(--border)" }}>

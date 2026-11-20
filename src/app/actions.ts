@@ -2102,7 +2102,8 @@ export async function cleanupCloseOverdueAction(fd: FormData) {
 export async function cleanupMergeEngagementsAction(fd: FormData) {
   const keep = String(fd.get("keep") ?? "");
   const all = fd.getAll("ids").filter((x): x is string => typeof x === "string");
-  return run("/bereinigung#einsaetze", async (actor) => {
+  const back = String(fd.get("back") ?? "") || "/bereinigung#einsaetze";
+  return run(back, async (actor) => {
     const { mergeEngagements } = await import("@/modules/cleanup/service");
     const r = await mergeEngagements(actor, keep, all.filter((x) => x !== keep));
     throw new PendingInfo(`Zusammengeführt: ${r.removed} doppelte(r) Einsatz/Einsätze entfernt, Check-ins, Unterlagen und Verlängerung hängen am behaltenen.`);
@@ -2112,10 +2113,11 @@ export async function cleanupMergeEngagementsAction(fd: FormData) {
 export async function cleanupMergeSetupsAction(fd: FormData) {
   const keep = String(fd.get("keep") ?? "");
   const all = fd.getAll("ids").filter((x): x is string => typeof x === "string");
-  return run("/bereinigung#setups", async (actor) => {
+  const back = String(fd.get("back") ?? "") || "/bereinigung#setups";
+  return run(back, async (actor) => {
     const { mergeSetups } = await import("@/modules/cleanup/service");
     const r = await mergeSetups(actor, keep, all.filter((x) => x !== keep));
-    throw new PendingInfo(`Setups zusammengeführt (${r.removed} entfernt).`);
+    throw new PendingInfo(`Setups zusammengeführt (${r.removed} entfernt) – Chancen, Einsätze und alles Weitere hängen jetzt am behaltenen Setup.`);
   }, "");
 }
 

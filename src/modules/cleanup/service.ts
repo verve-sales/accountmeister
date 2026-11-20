@@ -120,8 +120,8 @@ async function engagementScores(ids: string[]) {
 }
 
 /** Doppelte Einsätze: gleiche Person beim gleichen Kunden, nicht abgeschlossen, Laufzeiten überlappen. */
-export async function findEngagementDuplicates(actor: Actor, rows?: EngagementRow[]): Promise<EngagementDuplicate[]> {
-  const all = rows ?? (await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, actor.workspaceId), notInArray(schema.engagements.status, CLOSED)) }));
+export async function findEngagementDuplicates(actor: Actor, rows?: EngagementRow[], accountId?: string): Promise<EngagementDuplicate[]> {
+  const all = rows ?? (await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, actor.workspaceId), notInArray(schema.engagements.status, CLOSED), accountId ? eq(schema.engagements.accountId, accountId) : undefined) }));
   const open = all.filter((e) => !CLOSED.includes(e.status) && personOf(e));
   const byKey = new Map<string, EngagementRow[]>();
   for (const e of open) {
@@ -193,21 +193,39 @@ async function setupScores(ids: string[]) {
 }
 
 /** Setups eines Kunden mit gleichem Namen (ohne Zusätze in Klammern, Groß-/Kleinschreibung, Satzzeichen). */
-export async function findSetupDuplicates(actor: Actor): Promise<SetupDuplicate[]> {
-  const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.workspaceId, actor.workspaceId), columns: { id: true, name: true, accountId: true, status: true } });
+/** Platzhalter-Setups aus Import oder Schnellerfassung („Ohne Bereich“, „Allgemein“ …) */
+export function isPlaceholderSetup(name: string) {
+  const n = normSetupName(name);
+  return ["ohnebereich", "allgemein", "neuessetup", "setup", "entwurf", "sonstiges", "unbekannt"].includes(n) || n.startsWith("erstkontakt");
+}
+
+/**
+ * Doppelte Setups je Kunde: gleicher Name, oder (e59) ein Platzhalter-Setup neben einem echten Setup – das
+ * Platzhalter-Setup geht dann im echten auf.
+ */
+export async function findSetupDuplicates(actor: Actor, accountId?: string): Promise<SetupDuplicate[]> {
+  const setups = await db.query.projectSetups.findMany({ where: accountId ? and(eq(schema.projectSetups.workspaceId, actor.workspaceId), eq(schema.projectSetups.accountId, accountId)) : eq(schema.projectSetups.workspaceId, actor.workspaceId), columns: { id: true, name: true, accountId: true, status: true } });
+  const live = setups.filter((s) => s.status !== "ARCHIVIERT");
   const groups = new Map<string, typeof setups>();
-  for (const s of setups) {
-    if (s.status === "ARCHIVIERT") continue;
+  for (const s of live) {
     const k = `${s.accountId}|${normSetupName(s.name)}`;
     groups.set(k, [...(groups.get(k) ?? []), s]);
   }
   const dup = [...groups.values()].filter((g) => g.length > 1);
+  const inDup = new Set(dup.flat().map((s) => s.id));
+  const byAccount = new Map<string, typeof setups>();
+  for (const s of live.filter((x) => !inDup.has(x.id))) byAccount.set(s.accountId, [...(byAccount.get(s.accountId) ?? []), s]);
+  for (const g of byAccount.values()) {
+    const ph = g.filter((s) => isPlaceholderSetup(s.name));
+    const real = g.filter((s) => !isPlaceholderSetup(s.name));
+    if (ph.length && real.length === 1) dup.push([real[0]!, ...ph]);
+  }
   if (!dup.length) return [];
   const scores = await setupScores(dup.flat().map((s) => s.id));
   const accounts = await db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(dup.flat().map((s) => s.accountId))]), columns: { id: true, name: true } });
   const an = new Map(accounts.map((a) => [a.id, a.name]));
   return dup.map((g) => {
-    const refs = g.map((s) => ({ id: s.id, name: s.name, score: scores.get(s.id) ?? 0 })).sort((a, b) => b.score - a.score);
+    const refs = g.map((s) => ({ id: s.id, name: s.name, score: scores.get(s.id) ?? 0 })).sort((a, b) => Number(isPlaceholderSetup(a.name)) - Number(isPlaceholderSetup(b.name)) || b.score - a.score);
     return { accountId: g[0]!.accountId, accountName: an.get(g[0]!.accountId) ?? "?", name: refs[0]!.name, keep: refs[0]!, drop: refs.slice(1) };
   });
 }
@@ -422,10 +440,18 @@ export async function mergeEngagements(actor: Actor, keepId: string, dropIds: st
 }
 
 /** Setups eines Kunden zusammenführen: alles, was am entfernten Setup hängt, zieht ins behaltene. */
+/** e59: Setups eines Kunden zusammenführen dürfen Bereinigung (GF, Sales Ops, Administration) und wer die Verantwortung am Kunden umstellen darf. */
+export async function canMergeSetupsAt(actor: Actor, accountId: string): Promise<boolean> {
+  if (canClean(actor)) return true;
+  const acc = await db.query.accounts.findFirst({ where: and(eq(schema.accounts.id, accountId), eq(schema.accounts.workspaceId, actor.workspaceId)) });
+  const { canReassignResponsibility } = await import("@/modules/identity/authz");
+  return !!acc && canReassignResponsibility(actor, acc);
+}
+
 export async function mergeSetups(actor: Actor, keepId: string, dropIds: string[]) {
-  requireCleaner(actor);
   const keep = await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.id, keepId), eq(schema.projectSetups.workspaceId, actor.workspaceId)) });
   if (!keep) throw new NotFoundError("Setup");
+  if (!(await canMergeSetupsAt(actor, keep.accountId))) throw new ForbiddenError("Setups zusammenführen dürfen Geschäftsführung, Sales Operations, Administration, Principal und der zuständige BD.");
   const drops = await db.query.projectSetups.findMany({ where: and(inArray(schema.projectSetups.id, dropIds.filter((d) => d !== keepId).concat("-")), eq(schema.projectSetups.workspaceId, actor.workspaceId)) });
   if (!drops.length) throw new ValidationError("Bitte mindestens ein weiteres Setup wählen.");
   if (drops.some((d) => d.accountId !== keep.accountId)) throw new ValidationError("Nur Setups desselben Kunden lassen sich zusammenführen.");
