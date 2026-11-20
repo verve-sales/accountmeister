@@ -47,12 +47,12 @@ export function startNotificationWorker(): void {
         await runJob("ueberfaellig", async () => ({ hinweise: await generateOverdueNotifications() }));
         // Einsatzregeln (Etappe 29): Catch-ups, fällige Check-ins, Verlängerung – idempotent über Schlüssel
         await runJob("einsatz-regeln", async () => {
-          const { ensureCatchups, notifyDueCheckins, ensureRenewalDecisions } = await import("@/modules/engagements/care");
+          const { ensureCatchups, notifyDueCheckins, ensureRenewalDecisions, remindPossibleRenewals } = await import("@/modules/engagements/care");
           const { ensureOrdersEnded } = await import("@/modules/health/service");
           const { db } = await import("@/db/client");
           let beendet = 0;
           for (const ws of await db.query.workspaces.findMany({ columns: { id: true } })) beendet += await ensureOrdersEnded(ws.id);
-          return { catchups: await ensureCatchups(), checkinHinweise: await notifyDueCheckins(), verlaengerungen: await ensureRenewalDecisions(), auftraegeBeendet: beendet };
+          return { catchups: await ensureCatchups(), checkinHinweise: await notifyDueCheckins(), verlaengerungen: await ensureRenewalDecisions(), wiedervorlagen: await remindPossibleRenewals(), auftraegeBeendet: beendet };
         });
         // Vermittler-Anfragen (e57): ohne verschicktes Profil nach 14 Tagen beenden
         await runJob("vermittler-ablauf", async () => {

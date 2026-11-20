@@ -81,7 +81,7 @@ export type RoundAccount = {
 export type RoundGroup = { userId: string | null; name: string; level: "PRINCIPAL" | "ACCOUNT_LEAD" | null; accounts: RoundAccount[] };
 export type RadarLine = { accountId: string; name: string; kind: AccountKind; responsibleName: string | null; openChances: number; prep: { note: string | null; authorName: string; at: Date } | null; mayPrepare: boolean };
 
-const renewalText: Record<string, string> = { ZU_KLAEREN: "Verlängerung zu klären", IN_ABSTIMMUNG: "Verlängerung in Abstimmung", ANGEBOTEN: "Verlängerung angeboten", BESTAETIGT: "verlängert", ABGELEHNT: "endet (keine Verlängerung)", ERLEDIGT: "erledigt" };
+const renewalText: Record<string, string> = { ZU_KLAEREN: "Verlängerung zu klären", MOEGLICH: "Verlängerung möglich", IN_ABSTIMMUNG: "Verlängerung in Abstimmung", ANGEBOTEN: "Verlängerung angeboten", BESTAETIGT: "verlängert", ABGELEHNT: "endet (keine Verlängerung)", ERLEDIGT: "erledigt" };
 
 export async function buildRound(actor: Actor, today = todayIso()) {
   if (!canSeeRound(actor)) throw new ForbiddenError("Die Kundenrunde sehen die Geschäftsführung und die Kundenverantwortlichen.");

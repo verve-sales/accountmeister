@@ -12,6 +12,13 @@ export const OPP_STYLE: Record<AsgOppPhase, { background: string; color: string;
   ANGEBOT: { background: "#4f76b3", color: "#fff", border: "1.5px solid #4f76b3" },
   AUSWAHL: { background: "#1f3f6b", color: "#fff", border: "1.5px solid #1f3f6b" },
 };
+/** e60: Verlängerung hinter dem Einsatz – gleiche Logik wie bei den Chancen, in der Verlängerungsfarbe */
+const REN_STYLE: Record<string, { label: string; short: string; border: string; background: string }> = {
+  MOEGLICH: { label: "möglich, noch zu früh", short: "möglich", border: "dotted", background: "transparent" },
+  ZU_KLAEREN: { label: "zu klären", short: "", border: "dotted", background: "transparent" },
+  IN_ABSTIMMUNG: { label: "in Abstimmung", short: "in Abstimmung", border: "dashed", background: "#6a4fa31a" },
+  ANGEBOTEN: { label: "Angebot verschickt", short: "Angebot", border: "solid", background: "#6a4fa355" },
+};
 const PHASES: AsgOppPhase[] = ["VERMUTET", "ANFRAGE", "BESTAETIGT", "ANGEBOT", "AUSWAHL"];
 const MONTHS = ["Jan", "Feb", "Mrz", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
@@ -56,7 +63,10 @@ export function AsgTimeline({ engagements, opportunities = [], today, monthsBack
               return (
                 <span key={e.id}>
                   <Link href={`/einsaetze/${e.id}`} className="tl-bar" title={tip} style={{ left: `${l}%`, width: `${Math.max(r - l, 0.8)}%`, background: ASG_COLOR[e.state] }}>{e.accountName}{e.end ? ` · bis ${fmtDate(e.end)}` : ""}</Link>
-                  {e.renewalTo && e.end && e.renewalTo > e.end && <span className="tl-ext" title={`Verlängerung bis ${fmtDate(e.renewalTo)} in Arbeit`} style={{ left: `${r}%`, width: `${Math.max(pos(e.renewalTo) - r, 0)}%`, borderColor: ASG_COLOR.VERLAENGERUNG }} />}
+                  {e.renewalTo && e.end && e.renewalTo > e.end && (() => {
+                    const ph = REN_STYLE[e.renewalStatus ?? ""] ?? REN_STYLE.IN_ABSTIMMUNG!;
+                    return <span className="tl-ext" title={`Verlängerung bis ${fmtDate(e.renewalTo)} · ${ph.label}`} style={{ left: `${r}%`, width: `${Math.max(pos(e.renewalTo) - r, 0)}%`, borderColor: ASG_COLOR.VERLAENGERUNG, borderStyle: ph.border, background: ph.background, color: "#4b3778", fontSize: ".7rem", lineHeight: "1.1rem", paddingLeft: ".3rem", overflow: "hidden", whiteSpace: "nowrap" }}>{ph.short}</span>;
+                  })()}
                   {[...new Set(e.checkinDots)].filter((d) => d >= fromIso && d <= toIso).map((d) => <span key={`${e.id}-${d}`} className="tl-dot" title={`Check-in fällig ${fmtDate(d)}`} style={{ left: `${pos(d)}%`, background: d < today ? "#c0392b" : "#5f5f5a" }} />)}
                 </span>
               );
@@ -73,7 +83,7 @@ export function AsgTimeline({ engagements, opportunities = [], today, monthsBack
       ))}
       <p className="muted text-xs mt-2 flex flex-wrap gap-x-4 gap-y-1">
         {used.map((s) => <span key={s}><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: ASG_COLOR[s], marginRight: 4 }} />{asgStateLabel[s]}</span>)}
-        <span><span style={{ display: "inline-block", width: 14, height: 8, border: `2px dashed ${ASG_COLOR.VERLAENGERUNG}`, marginRight: 4 }} />Verlängerung in Arbeit</span>
+        {(["MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"] as const).filter((k) => visible.some((e) => e.renewalStatus === k && e.renewalTo)).map((k) => <span key={k}><span style={{ display: "inline-block", width: 14, height: 8, border: `2px ${REN_STYLE[k]!.border} ${ASG_COLOR.VERLAENGERUNG}`, background: REN_STYLE[k]!.background, marginRight: 4 }} />Verlängerung {REN_STYLE[k]!.label}</span>)}
         <span><span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 999, background: "#5f5f5a", marginRight: 4 }} />Check-in fällig</span>
         <span><span style={{ display: "inline-block", width: 0, height: 10, borderLeft: "2px solid #c0392b", marginRight: 4 }} />heute</span>
         {usedPhases.length > 0 && <span className="muted">Chancen:</span>}

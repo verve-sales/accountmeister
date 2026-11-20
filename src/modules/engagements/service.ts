@@ -219,7 +219,7 @@ export async function changeEngagementStatus(actor: Actor, id: string, raw: unkn
     patch.actualEnd = i.actualDate;
   }
   if (i.status === "ABGESCHLOSSEN") {
-    const openRenewal = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
+    const openRenewal = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
     if (openRenewal) throw new ValidationError("Die Verlängerungsentscheidung ist noch offen – erst entscheiden (bestätigt/abgelehnt/erledigt).");
   }
   return db.transaction(async (tx) => {

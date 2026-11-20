@@ -1808,7 +1808,7 @@ export async function signalRenewalAction(fd: FormData) {
     requireStaffingFlag();
     const { signalRenewal } = await import("@/modules/engagements/care");
     await signalRenewal(actor, data.engagementId ?? "", data);
-    throw new PendingInfo(data.signal === "ENDET" ? "Festgehalten: Der Einsatz endet. Sales Operations und Backoffice sind informiert." : "Danke – Sales Operations und Backoffice übernehmen die Verlängerung (Angebot, Bestellung, Vertrag).");
+    throw new PendingInfo(data.signal === "ENDET" ? "Festgehalten: Der Einsatz endet. Sales Operations und Backoffice sind informiert." : data.signal === "MOEGLICH" ? `Festgehalten: Verlängerung möglich – noch kein Angebot. Steht in der Zeitleiste${data.followUp ? `, Wiedervorlage am ${data.followUp.split("-").reverse().join(".")}` : ""}.` : "Danke – Sales Operations und Backoffice übernehmen die Verlängerung (Angebot, Bestellung, Vertrag).");
   }, "");
 }
 

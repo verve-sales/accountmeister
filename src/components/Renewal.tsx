@@ -134,7 +134,7 @@ export function RenewalDecisionCard({ c, back }: { c: Card; back: string }) {
 
 /** Karte „Verlängerung klären“ für Sales Operations/Betreuung: anstoßen oder Ende bestätigen lassen. */
 /** Signal des BD (e49): nur das Ob klären – den Rest machen Sales Operations und Backoffice im Assignmentmanager. */
-export function RenewalSignalForm({ engagementId, currentEnd, back }: { engagementId: string; currentEnd: string | null; back: string }) {
+export function RenewalSignalForm({ engagementId, currentEnd, back, possible }: { engagementId: string; currentEnd: string | null; back: string; /** e60: schon als „möglich“ vermerkt */ possible?: { to: string | null; followUp: string | null } | null }) {
   const base = currentEnd ?? new Date().toISOString().slice(0, 10);
   const idp = `sg-${engagementId.slice(0, 6)}`;
   return (
@@ -143,13 +143,18 @@ export function RenewalSignalForm({ engagementId, currentEnd, back }: { engageme
       <input type="hidden" name="back" value={back} />
       <div>
         <label className="label" htmlFor={`${idp}-end`}>Wunschende (falls bekannt)</label>
-        <input id={`${idp}-end`} type="date" name="wishEnd" className="input" min={plusDaysIso(base, 1)} />
+        <input id={`${idp}-end`} type="date" name="wishEnd" className="input" min={plusDaysIso(base, 1)} defaultValue={possible?.to ?? undefined} />
+      </div>
+      <div>
+        <label className="label" htmlFor={`${idp}-fu`}>Wiedervorlage (bei „möglich“)</label>
+        <input id={`${idp}-fu`} type="date" name="followUp" className="input" defaultValue={possible?.followUp ?? undefined} />
       </div>
       <div style={{ flex: "1 1 14rem" }}>
         <label className="label" htmlFor={`${idp}-note`}>Notiz (optional)</label>
         <input id={`${idp}-note`} name="note" className="input" placeholder="z. B. Herr Soldatow will verlängern, Budget steht" />
       </div>
-      <button className="btn btn-small" type="submit" name="signal" value="VERLAENGERN" style={{ background: "#2f7d32", borderColor: "#2f7d32" }}>Kunde will verlängern</button>
+      <button className="btn btn-secondary btn-small" type="submit" name="signal" value="MOEGLICH" title="Verlängerung im Raum, für ein Angebot aber noch zu früh – nur festhalten, noch kein Prozess">{possible ? "Möglich – aktualisieren" : "Möglich – noch zu früh"}</button>
+      <button className="btn btn-small" type="submit" name="signal" value="VERLAENGERN" style={{ background: "#2f7d32", borderColor: "#2f7d32" }}>{possible ? "Jetzt umsetzen" : "Kunde will verlängern"}</button>
       <button className="btn btn-secondary btn-small" type="submit" name="signal" value="ENDET">Endet</button>
     </form>
   );
@@ -166,7 +171,8 @@ export function RenewalStartCard({ c, back, signalOnly = false }: { c: Card; bac
         <span className="muted text-xs ml-auto">Ende {c.currentEnd ? fmtDate(c.currentEnd) : "offen"}{c.daysToEnd !== null ? ` · noch ${c.daysToEnd} Tage` : ""}</span>
       </div>
       <RenewalContactLine c={c} />
-      <div className="mt-2">{signalOnly ? <RenewalSignalForm engagementId={c.engagementId} currentEnd={c.currentEnd} back={back} /> : <RenewalStartForm engagementId={c.engagementId} currentEnd={c.currentEnd} back={back} compact canDecide={c.canDecide} />}</div>
+      {c.status === "MOEGLICH" && <p className="text-xs mt-1" style={{ color: "#6a4fa3" }}>Verlängerung möglich{c.proposedTo ? ` bis ${fmtDate(c.proposedTo)}` : ""}{c.followUpDate ? ` · Wiedervorlage ${fmtDate(c.followUpDate)}` : ""} – jetzt umsetzen, verschieben oder endet?</p>}
+      <div className="mt-2">{signalOnly || c.status === "MOEGLICH" ? <RenewalSignalForm engagementId={c.engagementId} currentEnd={c.currentEnd} back={back} possible={c.status === "MOEGLICH" ? { to: c.proposedTo, followUp: c.followUpDate } : null} /> : <RenewalStartForm engagementId={c.engagementId} currentEnd={c.currentEnd} back={back} compact canDecide={c.canDecide} />}</div>
       {signalOnly && <p className="muted text-xs mt-1">Du klärst nur, ob der Kunde verlängert. Angebot, Bestellung und Vertrag übernehmen Sales Operations und Backoffice.</p>}
     </li>
   );

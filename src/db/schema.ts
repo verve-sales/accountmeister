@@ -2390,7 +2390,9 @@ export const renewalDecisions = pgTable(
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     engagementId: text("engagement_id").notNull().references(() => engagements.id),
     triggerDate: date("trigger_date"),
-    status: text("status").notNull().default("ZU_KLAEREN"), // ZU_KLAEREN | IN_ABSTIMMUNG | ANGEBOTEN | BESTAETIGT | ABGELEHNT | ERLEDIGT
+    status: text("status").notNull().default("ZU_KLAEREN"), // ZU_KLAEREN | MOEGLICH | IN_ABSTIMMUNG | ANGEBOTEN | BESTAETIGT | ABGELEHNT | ERLEDIGT
+    /** e60: Wiedervorlage für eine mögliche Verlängerung (Stufe MOEGLICH) */
+    followUpDate: date("follow_up_date"),
     proposedFrom: date("proposed_from"),
     proposedTo: date("proposed_to"),
     conditionsNote: text("conditions_note"),

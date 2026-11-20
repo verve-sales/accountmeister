@@ -153,7 +153,7 @@ export async function generateOffer(actor: Actor, engagementId: string, raw: unk
   // e49f: Gibt es noch keine und reicht das Angebot über das heutige Ende hinaus, entsteht die Verlängerung hier –
   // so zeigt die Übersicht „Verlängerung läuft“, egal ob man über „Verlängern“ oder „Angebot erzeugen“ kommt.
   const rens = await db.query.renewalDecisions.findMany({ where: eq(schema.renewalDecisions.engagementId, engagementId), orderBy: desc(schema.renewalDecisions.createdAt) });
-  const open = rens.find((r) => ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status)) ?? null;
+  const open = rens.find((r) => ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status)) ?? null;
   const confirmed = rens.find((r) => r.status === "BESTAETIGT" && r.proposedTo === i.until) ?? null;
   const extends_ = !!e.plannedEnd && i.until > e.plannedEnd;
   const rateNote = i.dailyRate ? `Angebot ${i.offerNumber}: Tagessatz ${i.dailyRate.replace(".", ",")} €` : `Angebot ${i.offerNumber}`;

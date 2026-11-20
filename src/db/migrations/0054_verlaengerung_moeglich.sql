@@ -1,0 +1,1 @@
+ALTER TABLE "renewal_decisions" ADD COLUMN "follow_up_date" date;

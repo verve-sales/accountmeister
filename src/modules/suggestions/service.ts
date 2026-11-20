@@ -36,10 +36,10 @@ export async function engagementContext(accountId: string) {
   const [fls, us, renewals] = await Promise.all([
     db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...engs.map((e) => e.freelancerId).filter((x): x is string => !!x), "-"]), columns: { id: true, displayName: true } }),
     db.query.users.findMany({ where: inArray(schema.users.id, [...engs.map((e) => e.internalUserId).filter((x): x is string => !!x), "-"]), columns: { id: true, displayName: true } }),
-    db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, engs.map((e) => e.id)), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) }),
+    db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, engs.map((e) => e.id)), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) }),
   ]);
   const name = (e: (typeof engs)[number]) => (e.freelancerId ? fls.find((f) => f.id === e.freelancerId)?.displayName : e.internalUserId ? us.find((u) => u.id === e.internalUserId)?.displayName : null) ?? e.title.split(" – ").pop() ?? e.title;
-  const label: Record<string, string> = { ZU_KLAEREN: "zu klären", IN_ABSTIMMUNG: "in Abstimmung", ANGEBOTEN: "angeboten" };
+  const label: Record<string, string> = { ZU_KLAEREN: "zu klären", MOEGLICH: "möglich", IN_ABSTIMMUNG: "in Abstimmung", ANGEBOTEN: "angeboten" };
   return engs.map((e, i) => {
     const r = renewals.find((x) => x.engagementId === e.id);
     return { ref: `E${i + 1}`, id: e.id, opportunityId: e.opportunityId, person: name(e).replace(/\s*\((fiktiv|intern)\)\s*/gi, " ").trim(), title: e.title, plannedEnd: e.plannedEnd, renewal: r ? `${label[r.status] ?? r.status}${r.proposedTo ? ` bis ${r.proposedTo}` : ""}` : null };
@@ -599,7 +599,7 @@ function addMonthsIso(iso: string, months: number): string {
 export async function renewalDefaults(s: Pick<SuggestionRow, "objectId" | "proposedDate">) {
   const e = s.objectId ? await db.query.engagements.findFirst({ where: eq(schema.engagements.id, s.objectId) }) : null;
   if (!e) return null;
-  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
+  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
   const base = e.plannedEnd ?? new Date().toISOString().slice(0, 10);
   return { engagementId: e.id, title: e.title, currentEnd: e.plannedEnd, newEnd: s.proposedDate || open?.proposedTo || addMonthsIso(base, 12), openStatus: open?.status ?? null };
 }
@@ -617,7 +617,7 @@ async function acceptRenewalSuggestion(actor: Actor, s: SuggestionRow, newEnd: s
   if (!e) throw new NotFoundError("Einsatz");
   const a = await engagementAccess(actor, e);
   if (!a || !(a.manage || a.care)) throw new ForbiddenError("Für diesen Einsatz dürfen Sie keine Verlängerung anstoßen.");
-  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
+  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
   const quote = `Laut ${s.trigger}: „${s.evidenceQuote.slice(0, 200)}“${note ? ` – ${note}` : ""}`;
   if (!open || open.proposedTo !== newEnd) await startRenewal(actor, e.id, { newEnd, conditions: "UNVERAENDERT", note: quote.slice(0, 1000) });
   if (a.commercial) {

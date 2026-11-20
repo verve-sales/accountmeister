@@ -209,7 +209,7 @@ export async function buildLagebild(actor: Actor, route: Route): Promise<{ text:
   lines.push(`Chancen:\n${activeOpps.map((o, i) => `- C${i + 1}: ${o.title} [${o.status}, ${o.kind}]${o.needDescription ? ` – ${o.needDescription.slice(0, 120)}` : ""}`).join("\n") || "- keine"}`);
   const fls = await db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...engs.map((e) => e.freelancerId).filter((x): x is string => !!x), "-"]), columns: { id: true, displayName: true } });
   const us = await db.query.users.findMany({ where: inArray(schema.users.id, [...engs.map((e) => e.internalUserId).filter((x): x is string => !!x), "-"]), columns: { id: true, displayName: true } });
-  const renewals = engs.length ? await db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, engs.map((e) => e.id)), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) }) : [];
+  const renewals = engs.length ? await db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, engs.map((e) => e.id)), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) }) : [];
   engs.forEach((e, i) => {
     refs.E.set(`E${i + 1}`, e.id);
     const who = (e.freelancerId ? fls.find((f) => f.id === e.freelancerId)?.displayName : us.find((u) => u.id === e.internalUserId)?.displayName) ?? e.title;
@@ -440,12 +440,12 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
 type Resolved = { opportunityId?: string | null; engagementId?: string | null; actionId?: string | null; questionId?: string | null; personId?: string | null; initiativeId?: string | null; dueDate?: string; count?: number };
 
 /** Rangfolge der Karten (e48): was eine Entscheidung oder eine neue Chance auslöst, zuerst. */
-const CARD_RANK = ["VERMITTLER_ANFRAGE", "VERLAENGERUNG", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS", "STIMMUNG", "ERLEDIGT", "AKTION", "VORGANG", "FREELANCER", "ANSPRECHPARTNER", "EINSATZ", "FRAGE", "SIGNAL", "KONTAKT", "RISIKO", "INITIATIVE", "HEBEL", "BESCHAFFUNG", "TEAM", "ACCOUNTZIEL"];
+const CARD_RANK = ["VERMITTLER_ANFRAGE", "VERLAENGERUNG", "EINSATZ_VERLAENGERN", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS", "STIMMUNG", "ERLEDIGT", "AKTION", "VORGANG", "FREELANCER", "ANSPRECHPARTNER", "EINSATZ", "FRAGE", "SIGNAL", "KONTAKT", "RISIKO", "INITIATIVE", "HEBEL", "BESCHAFFUNG", "TEAM", "ACCOUNTZIEL"];
 /** Struktur-Karten (Kunde/Setup zuordnen) zählen nicht gegen die Obergrenze */
 const STRUCTURE = new Set(["KUNDE", "EINSORTIERUNG", "SETUP"]);
 /** Nebenkarten fallen weg, sobald die Mail etwas Handfestes enthält */
 const SECONDARY = new Set(["SIGNAL", "FRAGE", "RISIKO", "INITIATIVE", "HEBEL", "KONTAKT", "BESCHAFFUNG", "TEAM", "ACCOUNTZIEL"]);
-const CONCRETE = new Set(["VERMITTLER_ANFRAGE", "VERLAENGERUNG", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS"]);
+const CONCRETE = new Set(["VERMITTLER_ANFRAGE", "VERLAENGERUNG", "EINSATZ_VERLAENGERN", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS"]);
 export const MAX_MAIN_CARDS = 3;
 export const MAX_PERSON_CARDS = 2;
 
@@ -594,6 +594,7 @@ export function describeCard(item: IntakeItem, labels: Map<string, string> = new
     case "EINSATZ": return { title: `${t}: ${item.title}`, detail: [item.consultantName, item.plannedEnd && `Ende ${item.plannedEnd}`, item.endHint].filter(Boolean).join(" · "), purpose: "", priority: "PLANUNGSANLASS" };
     case "ANSPRECHPARTNER": return { title: `${t}: ${item.engagementPerson} → ${item.contactName}`, detail: [item.functionTitle, item.email].filter(Boolean).join(" · "), purpose: "", priority: "NEUE_INFORMATION" };
     case "VERMITTLER_ANFRAGE": return { title: `${t} ${item.intermediaryName}: ${item.title}${item.candidates.length ? ` · ${item.candidates.map((c) => c.name).join(", ")}` : ""}`, detail: [item.endCustomer && `Endkunde: ${item.endCustomer}`, item.desiredStart && `Start ${item.desiredStart.split("-").reverse().join(".")}`, item.durationHint, item.location, item.candidates.map((c) => `${c.name}${c.status === "VORGESTELLT" ? " (Profil verschickt)" : ""}${c.rate ? ` ${c.rate} €/${c.rateUnit === "STUNDE" ? "Std." : "Tag"}` : ""}`).join("; ")].filter(Boolean).join(" · "), purpose: "", priority: "KONKRETE_ANFRAGE" };
+    case "EINSATZ_VERLAENGERN": return { title: `${item.signal === "MOEGLICH" ? "Verlängerung möglich" : item.signal === "ENDET" ? "Endet" : "Verlängerung"}: ${item.engagementPerson}${item.wishEnd ? ` bis ${item.wishEnd.split("-").reverse().join(".")}` : ""}`, detail: [item.note, item.followUp && `Wiedervorlage ${item.followUp.split("-").reverse().join(".")}`, item.followUpHint].filter(Boolean).join(" · "), purpose: "", priority: "KONKRETE_ANFRAGE" };
     case "EINSORTIERUNG": return { title: `${t}: ${item.accountName}${item.setupName ? ` · ${item.setupName}` : ""}`, detail: item.reasoning, purpose: "", priority: "NEUE_INFORMATION" };
     case "VORGANG": return { title: `${t}: ${item.title}`, detail: item.description, purpose: "", priority: "KONKRETE_ANFRAGE" };
     case "INITIATIVE": case "HEBEL": return { title: `${t}: ${item.title}`, detail: "", purpose: "", priority: "PLANUNGSANLASS" };
@@ -728,7 +729,7 @@ export async function renewalDefaultsFor(engagementId: string | null, fromText: 
   if (!engagementId) return null;
   const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, engagementId) });
   if (!e) return null;
-  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
+  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
   return { engagementId: e.id, title: e.title, status: e.status, currentEnd: e.plannedEnd, newEnd: fromText || open?.proposedTo || addMonthsIso(e.plannedEnd ?? todayIso(), 12), fromText: !!fromText, openStatus: open?.status ?? null };
 }
 
@@ -741,7 +742,7 @@ async function applyRenewal(actor: Actor, engagementId: string, item: Extract<In
   const a = await engagementAccess(actor, e);
   if (!a || !(a.manage || a.care)) throw new ForbiddenError("Für diesen Einsatz dürfen Sie keine Verlängerung bearbeiten.");
   const quote = `Laut ${trigger}: „${item.evidenceQuote.slice(0, 200)}“`;
-  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
+  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
   if (item.decision === "ENDET") {
     if (!a.commercial) throw new ForbiddenError("„Endet ohne Verlängerung“ entscheidet der BD, Principal oder CEO.");
     if (open) await upsertRenewalDecision(actor, e.id, { version: open.version, status: "ABGELEHNT", proposedFrom: open.proposedFrom ?? "", proposedTo: open.proposedTo ?? "", conditionsNote: open.conditionsNote ?? "", availabilityNote: `Keine Verlängerung – ${quote}`.slice(0, 500), commercialOwnerUserId: actor.userId });

@@ -24,7 +24,7 @@ import { getMocoClient, mocoEnabled, type MocoClient } from "@/modules/moco/clie
 
 export const CATCHUP_DAYS = 42;
 export const checkinStatusLabel: Record<string, string> = { FAELLIG: "fällig", ANGEFRAGT: "angefragt", GEPLANT: "geplant", ERLEDIGT: "erledigt", VERSCHOBEN: "verschoben", ABGESAGT: "entfallen" };
-export const renewalStatusLabel: Record<string, string> = { ZU_KLAEREN: "zu klären", IN_ABSTIMMUNG: "in Abstimmung", ANGEBOTEN: "angeboten", BESTAETIGT: "bestätigt", ABGELEHNT: "abgelehnt", ERLEDIGT: "erledigt" };
+export const renewalStatusLabel: Record<string, string> = { ZU_KLAEREN: "zu klären", MOEGLICH: "möglich (noch zu früh)", IN_ABSTIMMUNG: "in Abstimmung", ANGEBOTEN: "angeboten", BESTAETIGT: "bestätigt", ABGELEHNT: "abgelehnt", ERLEDIGT: "erledigt" };
 
 const issues = (e: z.ZodError) => e.issues.map((i) => i.message).join("; ");
 const opt = (max: number) => z.string().trim().max(max).optional().or(z.literal(""));
@@ -305,7 +305,7 @@ export async function listMyCheckins(actor: Actor) {
 
 export const renewalInput = z.object({
   version: z.coerce.number().int().positive().optional(),
-  status: z.enum(["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN", "BESTAETIGT", "ABGELEHNT", "ERLEDIGT"]),
+  status: z.enum(["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN", "BESTAETIGT", "ABGELEHNT", "ERLEDIGT"]),
   proposedFrom: dateStr,
   proposedTo: dateStr,
   conditionsNote: opt(1000),
@@ -328,7 +328,7 @@ export async function upsertRenewalDecision(actor: Actor, engagementId: string, 
   const e = a.engagement;
   // e49: Sales Operations und Backoffice führen die Verlängerung zu Ende (Angebot, Bestellung, Bestätigung); der BD gibt nur das Signal
   if (["BESTAETIGT", "ABGELEHNT"].includes(i.status) && !a.manage) throw new ForbiddenError("Bestätigen oder ablehnen dürfen Sales Operations, Backoffice, der verantwortliche BD, Principal oder CEO.");
-  const current = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, engagementId), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
+  const current = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, engagementId), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
   if (i.status === "BESTAETIGT") {
     if (!i.proposedFrom || !i.proposedTo) throw new ValidationError("Bestätigung braucht den bestätigten Zeitraum (von/bis).");
     if (!i.conditionsNote && !i.ek && !i.vk) throw new ValidationError("Bestätigung braucht den Konditionsstand (EK/VK oder Notiz).");
@@ -363,7 +363,7 @@ export async function upsertRenewalDecision(actor: Actor, engagementId: string, 
 // mit einem Klick; das System schreibt Periode, Einsatzende, Auftragsende und das Projektende nach Moco.
 // ---------------------------------------------------------------------------
 
-export const RENEWAL_OPEN = ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"] as const;
+export const RENEWAL_OPEN = ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"] as const;
 
 export const renewalStartInput = z.object({
   newEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Neues Ende als Datum angeben."),
@@ -641,7 +641,7 @@ export async function revertRenewal(actor: Actor, engagementId: string, renewalI
   return { prevEnd, mocoWritten };
 }
 
-export const renewalSignalInput = z.object({ signal: z.enum(["VERLAENGERN", "ENDET"]), wishEnd: dateStr, note: opt(1000) });
+export const renewalSignalInput = z.object({ signal: z.enum(["VERLAENGERN", "MOEGLICH", "ENDET"]), wishEnd: dateStr, note: opt(1000), followUp: dateStr });
 
 /**
  * Signal des BD zur Verlängerung (e49): Der BD klärt mit dem Kunden nur das Ob – „Kunde will verlängern“ (gern mit
@@ -658,6 +658,21 @@ export async function signalRenewal(actor: Actor, engagementId: string, raw: unk
   if (!["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status)) throw new TransitionError("Das Signal gilt für einen laufenden Einsatz.");
   if (i.signal === "VERLAENGERN" && i.wishEnd && e.plannedEnd && i.wishEnd <= e.plannedEnd) throw new ValidationError("Das Wunschende muss nach dem heutigen Ende liegen.");
   const current = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, engagementId), inArray(schema.renewalDecisions.status, [...RENEWAL_OPEN])) });
+  // e60: „möglich – noch zu früh“: festhalten, in der Zeitleiste zeigen, Wiedervorlage – aber noch keinen Prozess starten
+  if (i.signal === "MOEGLICH") {
+    if (i.wishEnd && e.plannedEnd && i.wishEnd <= e.plannedEnd) throw new ValidationError("Das Wunschende muss nach dem heutigen Ende liegen.");
+    if (current && ["IN_ABSTIMMUNG", "ANGEBOTEN"].includes(current.status)) throw new TransitionError("Die Verlängerung ist schon in Umsetzung – „möglich“ passt nicht mehr.");
+    const stampM = `${actor.displayName} am ${todayIso().split("-").reverse().join(".")}`;
+    const lineM = `Verlängerung möglich${i.wishEnd ? ` bis ${i.wishEnd.split("-").reverse().join(".")}` : ""}, noch zu früh (${stampM})${i.note ? `: ${i.note}` : ""}`;
+    const valuesM = { status: "MOEGLICH", proposedFrom: e.plannedEnd ? plusDaysIso(e.plannedEnd, 1) : null, proposedTo: i.wishEnd || current?.proposedTo || null, followUpDate: i.followUp || null, availabilityNote: `${current?.availabilityNote ? `${current.availabilityNote}\n` : ""}${lineM}`.slice(0, 4000), commercialOwnerUserId: e.bdUserId, triggerDate: current?.triggerDate ?? todayIso(), updatedAt: new Date() };
+    return db.transaction(async (tx) => {
+      let r;
+      if (current) [r] = await tx.update(schema.renewalDecisions).set({ ...valuesM, version: current.version + 1 }).where(eq(schema.renewalDecisions.id, current.id)).returning();
+      else [r] = await tx.insert(schema.renewalDecisions).values({ workspaceId: actor.workspaceId, engagementId, ...valuesM, createdBy: actor.userId }).returning();
+      await recordAudit(tx, actor, "renewal.possible", "ENGAGEMENT", engagementId, { wunschende: i.wishEnd || null, wiedervorlage: i.followUp || null });
+      return r!;
+    });
+  }
   const stamp = `${actor.displayName} am ${todayIso().split("-").reverse().join(".")}`;
   const line = i.signal === "VERLAENGERN" ? `Kunde will verlängern${i.wishEnd ? ` bis ${i.wishEnd.split("-").reverse().join(".")}` : ""} (${stamp})${i.note ? `: ${i.note}` : ""}` : `Kunde verlängert nicht (${stamp})${i.note ? `: ${i.note}` : ""}`;
   const values = {
@@ -668,6 +683,7 @@ export async function signalRenewal(actor: Actor, engagementId: string, raw: unk
     availabilityNote: `${current?.availabilityNote ? `${current.availabilityNote}\n` : ""}${line}`.slice(0, 4000),
     commercialOwnerUserId: e.bdUserId,
     triggerDate: current?.triggerDate ?? todayIso(),
+    followUpDate: null,
     ...(i.signal === "ENDET" ? { decidedBy: actor.userId, decidedAt: new Date() } : {}),
     updatedAt: new Date(),
   };
@@ -717,6 +733,8 @@ export type RenewalCard = {
   canDecide: boolean;
   /** schon hinterlegte neue Bestellnummer */
   orderReference: string | null;
+  /** e60: Wiedervorlage einer möglichen Verlängerung */
+  followUpDate: string | null;
 };
 
 /** Verlängerungskarten für die Startseite: offene Entscheidungen (in Abstimmung) für kommerziell Zuständige, zu klärende für Sales Operations/Betreuung. */
@@ -742,9 +760,14 @@ export async function listRenewalCards(actor: Actor): Promise<RenewalCard[]> {
     if (!e || !["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status)) continue;
     const a = await engagementAccess(actor, e);
     if (!a) continue;
-    const inDecision = d.status !== "ZU_KLAEREN" && !!d.proposedTo;
+    const inDecision = !["ZU_KLAEREN", "MOEGLICH"].includes(d.status) && !!d.proposedTo;
     let mode: RenewalCard["mode"] | null = null;
-    if (inDecision && a.manage) mode = "ENTSCHEIDEN";
+    if (d.status === "MOEGLICH") {
+      // e60: erst zur Wiedervorlage (bzw. 4 Wochen vor Ende) wieder als Anstoß – nur für BD/kommerziell, nicht für Sales Ops
+      const daysLeft = e.plannedEnd ? Math.round((new Date(e.plannedEnd).getTime() - new Date(t).getTime()) / 86400000) : 999;
+      const due = (d.followUpDate && d.followUpDate <= t) || daysLeft <= 28;
+      if (due && (a.commercial || a.manage)) mode = "ANSTOSSEN";
+    } else if (inDecision && a.manage) mode = "ENTSCHEIDEN";
     else if (!inDecision && (a.ops || a.care || a.commercial)) mode = "ANSTOSSEN";
     if (!mode) continue;
     const delegates: RenewalCard["delegates"] = [];
@@ -780,6 +803,7 @@ export async function listRenewalCards(actor: Actor): Promise<RenewalCard[]> {
       contacts: contacts.get(e.id) ?? { renewal: null, order: null, approach: null, source: null },
       canDecide: !!a.manage,
       orderReference: d.orderReference,
+      followUpDate: d.followUpDate ?? null,
     });
   }
   return out.sort((x, y) => (x.mode === y.mode ? (x.daysToEnd ?? 9999) - (y.daysToEnd ?? 9999) : x.mode === "ENTSCHEIDEN" ? -1 : 1));
@@ -802,6 +826,20 @@ export async function ensureRenewalDecisions(workspaceId?: string): Promise<numb
       const cares = await tx.query.careAssignments.findMany({ where: and(eq(schema.careAssignments.engagementId, e.id), isNull(schema.careAssignments.toDate)) });
       await notify(tx, { workspaceId: e.workspaceId, userIds: [e.bdUserId, ...cares.map((c) => c.userId)], kind: "ZUGEWIESEN", title: `Verlängerung klären: ${await engagementLabel(db, e)} endet am ${e.plannedEnd ?? e.renewalDeadline}`, link: `/einsaetze/${e.id}#verlaengerung`, dedupeKey: `renewal:engagement:${e.id}` });
     });
+    n++;
+  }
+  return n;
+}
+
+/** e60: Wiedervorlage einer möglichen Verlängerung – Erinnerung an den BD am Tag der Wiedervorlage (einmal je Datum). */
+export async function remindPossibleRenewals(): Promise<number> {
+  const t = todayIso();
+  const due = await db.query.renewalDecisions.findMany({ where: and(eq(schema.renewalDecisions.status, "MOEGLICH")) });
+  let n = 0;
+  for (const d of due.filter((x) => x.followUpDate && x.followUpDate <= t)) {
+    const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, d.engagementId) });
+    if (!e || !["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status)) continue;
+    await notify(db, { workspaceId: d.workspaceId, userIds: [d.commercialOwnerUserId ?? e.bdUserId], kind: "ZUGEWIESEN", title: `Wiedervorlage Verlängerung: ${await engagementLabel(db, e)}${d.proposedTo ? ` (möglich bis ${d.proposedTo.split("-").reverse().join(".")})` : ""} – jetzt umsetzen, verschieben oder endet?`, link: `/einsaetze/${e.id}#verlaengerung`, dedupeKey: `renewal-followup:${d.id}:${d.followUpDate}` });
     n++;
   }
   return n;

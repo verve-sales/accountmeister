@@ -54,7 +54,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const back = `/einsaetze/${id}`;
   const final = ["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(e.status);
   const targets = await workTargets(actor);
-  const openRenewal = d.renewals.find((r) => ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status));
+  const openRenewal = d.renewals.find((r) => ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status));
   const mocoHints = a.manage ? await listHints(actor, { subjectType: "ENGAGEMENT", subjectId: e.id, status: "OFFEN" }) : [];
   const renewalCard = (await listRenewalCards(actor)).find((c) => c.engagementId === e.id) ?? null;
   // e49c: maßgeblich ist die jüngste nicht abgelöste Periode (nicht mehr „die letzte bestätigte“ – die kann abgelöst sein)
@@ -111,14 +111,15 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           {nextDue && <span style={nextDue < new Date().toISOString().slice(0, 10) ? { color: RED, fontWeight: 600 } : undefined}>nächste Frist {fmtDate(nextDue)}</span>}
           <span className="muted text-xs ml-auto">{a.commercial ? "BD-Kontext" : a.ops ? "Sales Operations" : a.readOnly ? "Coach (nur lesen)" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
         </div>
-        {!final && (a.manage || a.care) && (asgUser || !(openRenewal && openRenewal.proposedTo)) && (
+        {!final && (a.manage || a.care) && (asgUser || !(openRenewal && openRenewal.proposedTo && openRenewal.status !== "MOEGLICH")) && (
           <details className="mt-2">
             <summary className="btn btn-small" style={{ display: "inline-block", color: "#fff" }}>{!asgUser ? "Verlängerung: Signal geben" : a.manage ? "Verlängern" : "Verlängerung anstoßen"}</summary>
-            <div className="card mt-2">{!asgUser ? <RenewalSignalForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} /> : <RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} defaultEnd={openRenewal?.proposedTo ?? null} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} canDecide={!!a.manage} offers={offers} canGenerateOffer={!!offerBase?.preselect} />}</div>
+            <div className="card mt-2">{!asgUser ? <RenewalSignalForm engagementId={e.id} currentEnd={e.plannedEnd} back={`${back}#verlaengerung`} possible={openRenewal?.status === "MOEGLICH" ? { to: openRenewal.proposedTo, followUp: openRenewal.followUpDate } : null} /> : <RenewalStartForm engagementId={e.id} currentEnd={e.plannedEnd} defaultEnd={openRenewal?.proposedTo ?? null} back={`${back}#verlaengerung`} lastRates={lastPeriod ? { ek: lastPeriod.ek, vk: lastPeriod.vk, unit: lastPeriod.rateUnit } : null} canDecide={!!a.manage} offers={offers} canGenerateOffer={!!offerBase?.preselect} />}</div>
           </details>
         )}
         {renewalCard && renewalCard.mode === "ENTSCHEIDEN" && <ul className="mt-2 list-none p-0"><RenewalDecisionCard c={renewalCard} back={`${back}#verlaengerung`} /></ul>}
-        {openRenewal && openRenewal.proposedTo && !(renewalCard && renewalCard.mode === "ENTSCHEIDEN") && <p className="text-sm mt-2" style={{ color: "#b7791f" }}>Verlängerung bis {fmtDate(openRenewal.proposedTo)} angestoßen – Sales Operations und Backoffice setzen um.</p>}
+        {openRenewal?.status === "MOEGLICH" && <p className="text-sm mt-2" style={{ color: "#6a4fa3" }}>Verlängerung möglich{openRenewal.proposedTo ? ` bis ${fmtDate(openRenewal.proposedTo)}` : ""} – noch kein Angebot{openRenewal.followUpDate ? `, Wiedervorlage ${fmtDate(openRenewal.followUpDate)}` : ""}. Mit „Jetzt umsetzen“ übernehmen Sales Operations und Backoffice.</p>}
+        {openRenewal && openRenewal.proposedTo && openRenewal.status !== "MOEGLICH" && !(renewalCard && renewalCard.mode === "ENTSCHEIDEN") && <p className="text-sm mt-2" style={{ color: "#b7791f" }}>Verlängerung bis {fmtDate(openRenewal.proposedTo)} angestoßen – Sales Operations und Backoffice setzen um.</p>}
       </div>
       <Feedback params={sp} />
 
@@ -571,7 +572,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
             <form action={renewalDecisionAction} className="grid sm:grid-cols-3 gap-2 mt-2">
               <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="back" value={`${back}#verlaengerung`} />
               {openRenewal && <input type="hidden" name="version" value={openRenewal.version} />}
-              <div><label className="label">Stand</label><select name="status" className="input" defaultValue={openRenewal ? "IN_ABSTIMMUNG" : "ZU_KLAEREN"}><option value="ZU_KLAEREN">zu klären</option><option value="IN_ABSTIMMUNG">in Abstimmung</option><option value="ANGEBOTEN">angeboten</option>{a.manage && <option value="BESTAETIGT">bestätigt (neue Periode)</option>}{a.manage && <option value="ABGELEHNT">abgelehnt</option>}<option value="ERLEDIGT">erledigt</option></select></div>
+              <div><label className="label">Stand</label><select name="status" className="input" defaultValue={openRenewal ? "IN_ABSTIMMUNG" : "ZU_KLAEREN"}><option value="ZU_KLAEREN">zu klären</option><option value="MOEGLICH">möglich (noch zu früh)</option><option value="IN_ABSTIMMUNG">in Abstimmung</option><option value="ANGEBOTEN">angeboten</option>{a.manage && <option value="BESTAETIGT">bestätigt (neue Periode)</option>}{a.manage && <option value="ABGELEHNT">abgelehnt</option>}<option value="ERLEDIGT">erledigt</option></select></div>
               <div><label className="label">Zeitraum von</label><input type="date" name="proposedFrom" className="input" defaultValue={openRenewal?.proposedFrom ?? ""} /></div>
               <div><label className="label">bis</label><input type="date" name="proposedTo" className="input" defaultValue={openRenewal?.proposedTo ?? ""} /></div>
               <div><label className="label">EK (bei Bestätigung)</label><input name="ek" className="input" inputMode="decimal" /></div>

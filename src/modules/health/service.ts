@@ -486,7 +486,7 @@ export async function endOrder(actor: Actor, orderId: string, raw: unknown) {
       await tx.update(schema.engagements).set({ status: e.status === "ENDET" ? e.status : "ENDET", actualEnd: e.actualEnd ?? end, plannedEnd: end, version: e.version + 1, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
       const open = await tx.query.checkins.findMany({ where: and(eq(schema.checkins.engagementId, e.id), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])) });
       for (const c of open) await tx.update(schema.checkins).set({ status: "ABGESAGT", note: `${c.note ?? ""}\nEntfallen: Einsatz beendet`.trim(), version: c.version + 1, updatedAt: new Date() }).where(eq(schema.checkins.id, c.id));
-      await tx.update(schema.renewalDecisions).set({ status: "ERLEDIGT", updatedAt: new Date() }).where(and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])));
+      await tx.update(schema.renewalDecisions).set({ status: "ERLEDIGT", updatedAt: new Date() }).where(and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])));
       await recordAudit(tx, actor, "engagement.status", "ENGAGEMENT", e.id, { von: e.status, nach: "ENDET", grund: i.reason || "Auftrag beendet" });
     }
     await recordAudit(tx, actor, "order.ended", "ORDER", orderId, { ende: end, grund: i.reason || null });

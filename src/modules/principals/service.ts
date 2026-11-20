@@ -295,7 +295,7 @@ async function openRenewalCount(accountIds: string[]): Promise<number> {
   if (!accountIds.length) return 0;
   const engs = await db.query.engagements.findMany({ where: and(inArray(schema.engagements.accountId, accountIds), inArray(schema.engagements.status, ["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"])), columns: { id: true } });
   if (!engs.length) return 0;
-  const d = await db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, engs.map((e) => e.id)), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])), columns: { id: true } });
+  const d = await db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, engs.map((e) => e.id)), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])), columns: { id: true } });
   return d.length;
 }
 
@@ -339,7 +339,7 @@ export async function buildTalk(actor: Actor, principalUserId: string, quarterKe
   const fls = await db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(engs.map((e) => e.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } });
   const fn = new Map(fls.map((f) => [f.id, f.displayName]));
   const running = engs.filter((e) => ["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status));
-  const decisions = running.length ? await db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, running.map((e) => e.id)), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])) }) : [];
+  const decisions = running.length ? await db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, running.map((e) => e.id)), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) }) : [];
   const accName = new Map(accounts.map((a) => [a.id, a.name]));
   const openDecisions = decisions
     .map((d) => {

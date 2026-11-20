@@ -295,7 +295,7 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
     ...q,
   }),
   /** e56: Verlängerungssignal für einen laufenden Einsatz (statt einer Chance) */
-  z.object({ type: z.literal("EINSATZ_VERLAENGERN"), engagementPerson: z.string().min(2).max(200), signal: z.enum(["VERLAENGERN", "ENDET"]).optional().default("VERLAENGERN"), wishEnd: z.string().max(10).optional().default(""), endHint: z.string().max(100).optional().default(""), note: z.string().max(1000).optional().default(""), ...q }),
+  z.object({ type: z.literal("EINSATZ_VERLAENGERN"), engagementPerson: z.string().min(2).max(200), signal: z.enum(["VERLAENGERN", "MOEGLICH", "ENDET"]).optional().default("VERLAENGERN"), wishEnd: z.string().max(10).optional().default(""), endHint: z.string().max(100).optional().default(""), followUp: z.string().max(10).optional().default(""), followUpHint: z.string().max(100).optional().default(""), note: z.string().max(1000).optional().default(""), ...q }),
   z.object({ type: z.literal("ANSPRECHPARTNER"), engagementPerson: z.string().min(2).max(200), contactName: z.string().min(2).max(200), role: z.enum(["FACHLICH", "BESTELLUNG"]).optional().default("FACHLICH"), functionTitle: z.string().max(200).optional().default(""), email: z.string().max(200).optional().default(""), approach: z.enum(["SALES_OPS", "BD", "BERATER", ""]).optional().default(""), ...q }),
   z.object({
     type: z.literal("EINSORTIERUNG"),

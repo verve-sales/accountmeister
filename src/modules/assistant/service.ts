@@ -843,8 +843,10 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     const f = [...pool].sort((x, y) => (y.end ?? "").localeCompare(x.end ?? ""))[0]!;
     const wishEnd = /^\d{4}-\d{2}-\d{2}$/.test(item.wishEnd) ? item.wishEnd : parseDueHint(item.endHint || item.wishEnd) ?? "";
     const { signalRenewal } = await import("@/modules/engagements/care");
-    await signalRenewal(actor, f.id, { signal: item.signal, wishEnd, note: item.note });
+    const followUp = /^\d{4}-\d{2}-\d{2}$/.test(item.followUp) ? item.followUp : parseRelativeDue(item.followUpHint) ?? parseDueHint(item.followUpHint) ?? "";
+    await signalRenewal(actor, f.id, { signal: item.signal, wishEnd, note: item.note, followUp });
     const de = (d: string) => d.split("-").reverse().join(".");
+    if (item.signal === "MOEGLICH") return { type: "ENGAGEMENT", id: f.id, note: `Am Einsatz von ${f.person} bei ${f.accountName} vermerkt: Verlängerung möglich${wishEnd ? ` bis ${de(wishEnd)}` : ""}, noch kein Angebot${followUp ? ` – Wiedervorlage ${de(followUp)}` : ""}. Steht in der Zeitleiste; Sales Operations wird erst mit „Jetzt umsetzen“ aktiv. /einsaetze/${f.id}` };
     return { type: "ENGAGEMENT", id: f.id, note: item.signal === "ENDET" ? `Am Einsatz von ${f.person} bei ${f.accountName} vermerkt: endet${f.end ? ` zum ${de(f.end)}` : ""}. Sales Operations und Backoffice sind informiert. /einsaetze/${f.id}` : `Verlängerung für ${f.person} bei ${f.accountName} (Setup „${f.setupName}“) angestoßen${wishEnd ? ` – Wunschende ${de(wishEnd)}` : ""}. Sales Operations und Backoffice setzen um. /einsaetze/${f.id}` };
   }
   if (item.type === "EINSORTIERUNG") {

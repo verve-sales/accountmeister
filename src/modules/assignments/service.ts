@@ -13,7 +13,7 @@ import { currentPeriod } from "@/modules/engagements/service";
  */
 
 const RUNNING = ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT", "ENDET"];
-const RENEWAL_OPEN = ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"];
+const RENEWAL_OPEN = ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"];
 
 export async function canUseAssignments(actor: Actor): Promise<boolean> {
   if (actor.roles.has("SALES_OPS") || hasRole(actor, "CEO") || actor.roles.has("ADMIN")) return true;
@@ -109,7 +109,7 @@ export async function asgOverview(actor: Actor, opts: { includeEndedDays?: numbe
     if (["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(e.status)) state = "BEENDET";
     else if (["VORBEREITUNG", "GEPLANT"].includes(e.status)) state = "GEPLANT";
     else if (daysToEnd !== null && daysToEnd < 0) state = "UEBERSCHRITTEN";
-    else if (openRen && openRen.proposedTo) state = "VERLAENGERUNG";
+    else if (openRen && openRen.proposedTo && openRen.status !== "MOEGLICH") state = "VERLAENGERUNG";
     else if (daysToEnd !== null && daysToEnd <= EXPIRY_URGENT_DAYS && e.status !== "ENDET") state = "DRINGEND";
     else if (daysToEnd !== null && daysToEnd <= EXPIRY_WINDOW_DAYS && e.status !== "ENDET") state = "ENDET_BALD";
     return {
@@ -149,7 +149,7 @@ export async function asgOverview(actor: Actor, opts: { includeEndedDays?: numbe
     const href = `/einsaetze/${e.id}`;
     const base = { person: e.person, accountName: e.accountName };
     if (e.state === "UEBERSCHRITTEN") tasks.push({ key: `ende:${e.id}`, kind: "ENDE", title: "Ende überschritten – abschließen oder verlängern", detail: `Ende war ${de(e.end)}`, ...base, due: e.end, overdue: true, href });
-    else if ((e.state === "DRINGEND" || e.state === "ENDET_BALD") && e.status !== "ENDET") tasks.push({ key: `ren:${e.id}`, kind: "VERLAENGERUNG", title: e.renewalStatus === "ZU_KLAEREN" || !e.renewalStatus ? "Verlängerung klären" : "Verlängerung nachhalten", detail: `endet in ${e.daysToEnd} Tagen`, ...base, due: e.end, overdue: e.state === "DRINGEND", href: `${href}#verlaengerung` });
+    else if ((e.state === "DRINGEND" || e.state === "ENDET_BALD") && e.status !== "ENDET") tasks.push({ key: `ren:${e.id}`, kind: "VERLAENGERUNG", title: e.renewalStatus === "MOEGLICH" ? `Verlängerung möglich${e.renewalTo ? ` bis ${de(e.renewalTo)}` : ""} – BD klärt` : e.renewalStatus === "ZU_KLAEREN" || !e.renewalStatus ? "Verlängerung klären" : "Verlängerung nachhalten", detail: `endet in ${e.daysToEnd} Tagen`, ...base, due: e.end, overdue: e.state === "DRINGEND", href: `${href}#verlaengerung` });
     else if (e.state === "VERLAENGERUNG") tasks.push({ key: `ren:${e.id}`, kind: "VERLAENGERUNG", title: `Verlängerung bis ${de(e.renewalTo)} umsetzen (Angebot, Bestellung, Vertrag)`, detail: e.offerNumber ? `Angebot ${e.offerNumber}` : "noch kein Angebot verknüpft", ...base, due: e.end, overdue: (e.daysToEnd ?? 99) <= EXPIRY_URGENT_DAYS, href: `${href}#verlaengerung` });
     if (["AKTIV", "PAUSIERT", "GEPLANT"].includes(e.status)) {
       if (!e.orderReference) tasks.push({ key: `po:${e.id}`, kind: "BESTELLUNG", title: "Bestellnummer fehlt", detail: e.orderDoc ? "Bestellung liegt vor – Nummer nachtragen" : "Bestellung des Kunden steht aus", ...base, due: null, overdue: false, href });

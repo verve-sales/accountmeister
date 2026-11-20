@@ -320,7 +320,7 @@ export async function findOverdueEngagements(actor: Actor): Promise<OverdueRef[]
     db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(over.map((e) => e.accountId))]), columns: { id: true, name: true } }),
     db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(over.map((e) => e.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
     db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { id: true, displayName: true } }),
-    db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, ids), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "IN_ABSTIMMUNG", "ANGEBOTEN"])), columns: { engagementId: true } }),
+    db.query.renewalDecisions.findMany({ where: and(inArray(schema.renewalDecisions.engagementId, ids), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])), columns: { engagementId: true } }),
   ]);
   const an = new Map(accounts.map((a) => [a.id, a.name]));
   const pn = new Map<string, string>([...fls.map((f) => [`f:${f.id}`, f.displayName] as [string, string]), ...users.map((u) => [`u:${u.id}`, u.displayName] as [string, string])]);
