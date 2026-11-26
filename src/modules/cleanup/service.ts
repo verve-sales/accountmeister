@@ -291,6 +291,26 @@ export async function findFreelancerDuplicates(actor: Actor): Promise<Freelancer
     .sort((a, b) => a.name.localeCompare(b.name, "de"));
 }
 
+/** e62: Plausibilität – Widersprüche, die Zahlen verfälschen (Einsatz ohne Ende, Ende vor Start, Kunde doppelt). */
+export type PlausibilityFinding = { kind: "OHNE_ENDE" | "ENDE_VOR_START" | "KUNDE_DOPPELT"; title: string; detail: string; href: string };
+export async function findPlausibility(actor: Actor): Promise<PlausibilityFinding[]> {
+  const out: PlausibilityFinding[] = [];
+  const engs = await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, actor.workspaceId), inArray(schema.engagements.status, ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET"])) });
+  const accounts = await db.query.accounts.findMany({ where: eq(schema.accounts.workspaceId, actor.workspaceId), columns: { id: true, name: true, status: true, responsibleBdUserId: true } });
+  const an = new Map(accounts.map((a) => [a.id, a.name]));
+  for (const e of engs) {
+    const start = e.actualStart ?? e.plannedStart;
+    const end = e.actualEnd ?? e.plannedEnd;
+    if (!end) out.push({ kind: "OHNE_ENDE", title: e.title, detail: `${an.get(e.accountId) ?? "?"} · läuft ohne Enddatum – Verlängerung und Zeitleiste rechnen damit nicht`, href: `/einsaetze/${e.id}` });
+    else if (start && end < start) out.push({ kind: "ENDE_VOR_START", title: e.title, detail: `${an.get(e.accountId) ?? "?"} · Ende ${end} liegt vor dem Start ${start}`, href: `/einsaetze/${e.id}` });
+  }
+  const key = (n: string) => n.toLowerCase().replace(/\(.*?\)/g, "").replace(/\b(gmbh|ag|se|kg|co|mbh|eg|e\.?v)\b\.?/g, "").replace(/[^a-z0-9äöüß]+/g, "");
+  const groups = new Map<string, typeof accounts>();
+  for (const a of accounts.filter((x) => x.status !== "ARCHIVED")) groups.set(key(a.name), [...(groups.get(key(a.name)) ?? []), a]);
+  for (const g of groups.values()) if (g.length > 1) for (const a of g) out.push({ kind: "KUNDE_DOPPELT", title: a.name, detail: `${g.length}× angelegt – zusammenlegen: Setups über „In ein anderes Setup überführen“, danach den leeren Kunden archivieren`, href: `/kunden/${a.id}` });
+  return out;
+}
+
 export type InternalFinding = { accountId: string; accountName: string; status: string; engagements: { id: string; title: string; status: string }[]; openHints: number };
 
 /** Kunden, die interne Moco-Firmen sind (Konfiguration MOCO_INTERNAL_COMPANIES), mit ihren Einsätzen. */
@@ -332,16 +352,17 @@ export async function findOverdueEngagements(actor: Actor): Promise<OverdueRef[]
 
 export async function cleanupReport(actor: Actor) {
   requireCleaner(actor);
-  const [overdue, engagementDuplicates, setupDuplicates, personDuplicates, internal, freelancerDuplicates] = await Promise.all([
+  const [overdue, engagementDuplicates, setupDuplicates, personDuplicates, internal, freelancerDuplicates, plausibility] = await Promise.all([
     findOverdueEngagements(actor),
     findEngagementDuplicates(actor),
     findSetupDuplicates(actor),
     findPersonDuplicates(actor),
     findInternalAccounts(actor),
     findFreelancerDuplicates(actor),
+    findPlausibility(actor),
   ]);
-  const total = overdue.length + engagementDuplicates.length + setupDuplicates.length + personDuplicates.length + internal.length + freelancerDuplicates.length;
-  return { overdue, engagementDuplicates, setupDuplicates, personDuplicates, internal, freelancerDuplicates, total };
+  const total = overdue.length + engagementDuplicates.length + setupDuplicates.length + personDuplicates.length + internal.length + freelancerDuplicates.length + plausibility.length;
+  return { overdue, engagementDuplicates, setupDuplicates, personDuplicates, internal, freelancerDuplicates, plausibility, total };
 }
 
 /** Nur die Anzahl (für Hinweise in Navigation und Sales-Ops-Sicht). */

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
 import { PendingButton } from "@/components/PendingButton";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { listRunningEingang } from "@/modules/eingang/service";
@@ -349,7 +350,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                     <td><TargetProgress actual={r.actuals.ref ? r.actuals.headsTotal : null} target={r.targets.headsTotal} /></td>
                     <td><TargetProgress actual={r.actuals.ref ? r.actuals.newCustomers.length : null} target={r.targets.newCustomers} /></td>
                     <td><TargetProgress actual={r.actuals.renewals.quote} target={r.targets.renewalQuote} unit=" %" /></td>
-                    <td className="text-xs">{r.overdueAgreements ? <span style={{ color: "#c0392b", fontWeight: 600 }}>{r.overdueAgreements} Vereinbarung(en) überfällig</span> : r.openAgreements ? `${r.openAgreements} Vereinbarung(en) offen` : null}</td>
+                    <td className="text-xs">{r.overdueAgreements ? <span style={{ color: "#c0392b", fontWeight: 600 }}>{pl(r.overdueAgreements, "Vereinbarung", "Vereinbarungen")} überfällig</span> : r.openAgreements ? `${pl(r.openAgreements, "Vereinbarung", "Vereinbarungen")} offen` : null}</td>
                   </tr>
                 ))}
               </tbody>
@@ -395,7 +396,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               label: opportunityStatusLabel[s] ?? s,
               value: chanceCounts[s] ?? 0,
               color: s === "ZURUECKGESTELLT" ? CHART_COLORS.track : CHART_COLORS.sequential[Math.min(Math.floor((i / CHANCE_STEPS.length) * CHART_COLORS.sequential.length), CHART_COLORS.sequential.length - 1)],
-              detail: "Chance(n)",
+              detail: "Chancen",
             }))}
           />
           <p className="text-sm mt-2 flex flex-wrap gap-x-4 gap-y-1">{[...CHANCE_STEPS, "ZURUECKGESTELLT"].filter((st) => (chanceCounts[st] ?? 0) > 0).map((st) => <Link key={st} href={drillHref({ sicht: d.view, stufe: st })}>{opportunityStatusLabel[st] ?? st}: {chanceCounts[st]}</Link>)}</p>
@@ -405,8 +406,8 @@ export default async function StartPage({ searchParams }: { searchParams: Search
 
       {healthGaps.length > 0 && (
         <details className="card" aria-label="Health-Check: fehlende Angaben">
-          <summary className="font-semibold" style={{ color: "var(--warn)" }}>Health-Check: Angaben fehlen bei {healthGaps.length} Kunde(n)</summary>
-          <p className="muted text-xs mb-2">Ohne diese Angaben ist die Sattelfestigkeit unklar – und Verlängerungen werden nicht rechtzeitig angestoßen.</p>
+          <summary className="font-semibold" style={{ color: "var(--warn)" }}>Health-Check: Angaben fehlen bei {pl(healthGaps.length, "Kunde", "Kunden")}</summary>
+          <p className="muted text-xs mb-2">Ohne diese Angaben ist der Health-Check unklar – und Verlängerungen werden nicht rechtzeitig angestoßen.</p>
           <ul className="space-y-2">
             {healthGaps.slice(0, 3).map((h) => (
               <li key={h.accountId} className="flex flex-wrap items-center gap-3 text-sm">
@@ -493,7 +494,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               <div className="flex flex-wrap items-baseline gap-3">
                 <h3 className="font-semibold text-lg"><Link href={`/kunden/${c.accountId}`}>{c.accountName}</Link></h3>
                 {healthBy.get(c.accountId) && <HealthBadge score={healthBy.get(c.accountId)!.score} level={healthBy.get(c.accountId)!.level} coverage={healthBy.get(c.accountId)!.coverage} />}
-                <span className="muted text-sm">{c.chanceCount} Chance(n) · {c.setups.length} Setup(s){c.responsibleBdName ? ` · BD ${c.responsibleBdName}` : " · BD offen"} · letzte Änderung {agoLabel(c.daysSinceActivity)}</span>
+                <span className="muted text-sm">{pl(c.chanceCount, "Chance", "Chancen")} · {pl(c.setups.length, "Setup", "Setups")}{c.responsibleBdName ? ` · BD ${c.responsibleBdName}` : " · BD offen"} · letzte Änderung {agoLabel(c.daysSinceActivity)}</span>
               </div>
               <p className="text-sm mt-2"><span className="muted">Wofür: </span>{c.chanceCount ? <strong>{c.purpose}</strong> : <span style={{ color: "#8a6d1f" }}>{c.purpose}</span>}</p>
               <p className="text-sm mt-1"><span className="muted">Nächster großer Schritt: </span>{c.nextStep}</p>
@@ -517,7 +518,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                   {c.setups.map((s) => (
                     <li key={s.setupId}>
                       <Link href={`/setups/${s.setupId}`}>{s.setupName}</Link>
-                      <span className="muted"> · {s.counts.openActions} Aktion(en){s.counts.overdueActions ? `, ${s.counts.overdueActions} überfällig` : ""} · {s.counts.opportunities} Chance(e) · {s.counts.persons} Person(en){s.counts.openSuggestions ? ` · ${s.counts.openSuggestions} Vorschläge` : ""}</span>
+                      <span className="muted"> · {pl(s.counts.openActions, "Aktion", "Aktionen")}{s.counts.overdueActions ? `, ${s.counts.overdueActions} überfällig` : ""} · {pl(s.counts.opportunities, "Chance", "Chancen")} · {pl(s.counts.persons, "Person", "Personen")}{s.counts.openSuggestions ? ` · ${s.counts.openSuggestions} Vorschläge` : ""}</span>
                       <span className="ml-2"><Link href={`/setups/${s.setupId}/strategie`}>Strategiefaden</Link> · <Link href={`/setups/${s.setupId}?assistent=1`}>Assistent</Link></span>
                     </li>
                   ))}
@@ -529,7 +530,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             <details className="card">
               <summary>Weitere Kunden ({d.accounts.length - FOCUS}) – weniger Aufmerksamkeit nötig</summary>
               <table className="list mt-2 text-sm">
-                <thead><tr><th>Kunde</th><th>Sattelfestigkeit</th><th>Blockiert</th><th>Fehlt</th><th>Züge</th><th>Letzte Änderung</th></tr></thead>
+                <thead><tr><th>Kunde</th><th>Health-Check</th><th>Blockiert</th><th>Fehlt</th><th>Züge</th><th>Letzte Änderung</th></tr></thead>
                 <tbody>
                   {d.accounts.slice(FOCUS).map((c) => (
                     <tr key={c.accountId}>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildTalk, levelLabel, shiftQuarter } from "@/modules/principals/service";
@@ -102,7 +103,7 @@ export default async function PrincipalTalkPage({ params, searchParams }: { para
       </section>
 
       <section className="card space-y-2" id="entscheidungen">
-        {step(3, "Offene Entscheidungen", t.openDecisions.length ? `${t.openDecisions.length} Verlängerung(en)` : undefined)}
+        {step(3, "Offene Entscheidungen", t.openDecisions.length ? `${pl(t.openDecisions.length, "Verlängerung", "Verlängerungen")}` : undefined)}
         {t.openDecisions.length === 0 ? <p className="muted text-sm">Keine offenen Verlängerungen bei den Kunden.</p> : (
           <ul className="space-y-1 text-sm">
             {t.openDecisions.map((d) => (

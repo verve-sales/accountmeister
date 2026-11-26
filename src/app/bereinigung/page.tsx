@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { canClean, cleanupReport } from "@/modules/cleanup/service";
@@ -33,6 +34,7 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
 
       <nav className="flex flex-wrap gap-3 text-sm" aria-label="Abschnitte">
         <a href="#ende">Ende überschritten <Count n={r.overdue.length} /></a>
+        <a href="#plausibel">Plausibilität <Count n={r.plausibility.length} /></a>
         <a href="#freelancer">Doppelte Freelancer <Count n={r.freelancerDuplicates.length} /></a>
         <a href="#einsaetze">Doppelte Einsätze <Count n={r.engagementDuplicates.length} /></a>
         <a href="#intern">Interne Moco-Projekte <Count n={r.internal.length} /></a>
@@ -61,6 +63,16 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
             </table>
             <PendingButton busy="Schließe ab …">Ausgewählte abschließen</PendingButton>
           </form>
+        )}
+      </section>
+
+      <section className="card space-y-2" id="plausibel">
+        <h2 className="font-semibold">Plausibilität ({r.plausibility.length})</h2>
+        <p className="muted text-sm">Angaben, die Zahlen in Health-Check, Zeitleiste und Kundenrunde verfälschen. Korrigiert wird am verlinkten Eintrag.</p>
+        {r.plausibility.length > 0 && (
+          <ul className="text-sm space-y-1">
+            {r.plausibility.map((f, i) => <li key={`${f.kind}-${f.href}-${i}`}><span className="status">{f.kind === "OHNE_ENDE" ? "ohne Ende" : f.kind === "ENDE_VOR_START" ? "Ende vor Start" : "Kunde doppelt"}</span> <Link href={f.href}>{f.title}</Link> <span className="muted text-xs">{f.detail}</span></li>)}
+          </ul>
         )}
       </section>
 
@@ -98,7 +110,7 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
         {r.internal.map((a) => (
           <form key={a.accountId} action={cleanupInternalAction} className="text-sm space-y-1" style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
             <input type="hidden" name="accountId" value={a.accountId} />
-            <div><Link href={`/kunden/${a.accountId}`}><strong>{a.accountName}</strong></Link> <span className="muted text-xs">– {a.engagements.length} Einsatz/Einsätze{a.status === "ARCHIVED" ? " · bereits archiviert" : ""}</span></div>
+            <div><Link href={`/kunden/${a.accountId}`}><strong>{a.accountName}</strong></Link> <span className="muted text-xs">– {pl(a.engagements.length, "Einsatz", "Einsätze")}{a.status === "ARCHIVED" ? " · bereits archiviert" : ""}</span></div>
             {a.engagements.length > 0 && <div className="muted text-xs">{a.engagements.slice(0, 8).map((e) => e.title).join(" · ")}{a.engagements.length > 8 ? " …" : ""}</div>}
             <PendingButton busy="Räume auf …" className="btn btn-small">Einsätze entfernen und Kunde archivieren</PendingButton>
           </form>

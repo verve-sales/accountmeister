@@ -66,6 +66,8 @@ export type Engagement = {
   contractLink: string | null;
   evidenceSourceId: string | null;
   orderReference: string | null;
+  /** e62: laufender Einsatz ohne bestätigten Auftrag (z. B. Schnellbesetzung) – gezählt, bearbeitet wird er am Einsatz */
+  engagementId?: string | null;
 };
 export type Level = "SATTELFEST" | "WACKELIG" | "GEFAEHRDET" | "UNKLAR";
 export const levelLabel: Record<Level, string> = { SATTELFEST: "sattelfest", WACKELIG: "wackelig", GEFAEHRDET: "gefährdet", UNKLAR: "zu wenig Daten" };
@@ -212,6 +214,42 @@ async function loadEngagements(accountIds: string[]): Promise<Map<string, Engage
     };
     out.set(r.accountId, [...(out.get(r.accountId) ?? []), e]);
   }
+  // e62: Laufende Einsätze ohne bestätigten Auftrag zählen genauso (Datenwiderspruch „Im Einsatz (2)“ ↔ „0 Einsätze“ behoben)
+  const counted = new Set(engs.map((e) => e.orderId).filter((x): x is string => !!x));
+  const running = await db.query.engagements.findMany({ where: and(inArray(schema.engagements.accountId, accountIds), inArray(schema.engagements.status, ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET"])) });
+  const extra = running.filter((e) => !(e.orderId && counted.has(e.orderId)) && !(e.status === "ENDET" && !!e.plannedEnd && e.plannedEnd < t));
+  if (extra.length) {
+    const [setups, users, fls] = await Promise.all([
+      db.query.projectSetups.findMany({ where: inArray(schema.projectSetups.id, [...new Set(extra.map((e) => e.setupId))]), columns: { id: true, name: true } }),
+      db.query.users.findMany({ where: inArray(schema.users.id, [...new Set(extra.map((e) => e.internalUserId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+      db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(extra.map((e) => e.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+    ]);
+    for (const e of extra) {
+      const plannedEnd = e.actualEnd ?? e.plannedEnd ?? null;
+      const item: Engagement = {
+        orderId: `eng:${e.id}`,
+        version: e.version,
+        opportunityId: e.opportunityId ?? "",
+        title: e.title,
+        setupId: e.setupId,
+        setupName: setups.find((x) => x.id === e.setupId)?.name ?? "",
+        status: e.status === "AKTIV" || e.status === "PAUSIERT" || e.status === "ENDET" ? "GESTARTET" : "GEPLANT",
+        plannedStart: e.actualStart ?? e.plannedStart ?? null,
+        plannedEnd,
+        renewalDeadline: e.renewalDeadline ?? null,
+        daysToEnd: plannedEnd ? daysBetween(t, plannedEnd) : null,
+        triggerDate: plannedEnd ? renewalTriggerDate({ plannedEnd, renewalDeadline: e.renewalDeadline ?? null } as never) : null,
+        consultantUserId: e.internalUserId ?? null,
+        consultantName: (e.freelancerId ? fls.find((f) => f.id === e.freelancerId)?.displayName : users.find((u) => u.id === e.internalUserId)?.displayName) ?? null,
+        contractSourceId: null,
+        contractLink: null,
+        evidenceSourceId: null,
+        orderReference: e.orderReference ?? null,
+        engagementId: e.id,
+      };
+      out.set(e.accountId, [...(out.get(e.accountId) ?? []), item]);
+    }
+  }
   for (const list of out.values()) list.sort((a, b) => (a.plannedEnd ?? "9999").localeCompare(b.plannedEnd ?? "9999"));
   return out;
 }
@@ -265,6 +303,8 @@ export async function computeHealthFor(accounts: { id: string; name: string }[])
       const noEnd = eng.filter((e) => !e.plannedEnd);
       for (const e of noEnd) {
         d.missing.push(`Einsatzende unbekannt: ${e.title}`);
+        // Einsätze ohne Auftrag: Ende wird am Einsatz gepflegt, nicht im Interview
+        if (e.engagementId) continue;
         questions.push({ key: "ENGAGEMENT_END", orderId: e.orderId, text: `Wann endet der Einsatz „${e.title}“ – und bis wann muss über eine Verlängerung entschieden werden?`, why: "Ohne Enddatum kann die Verlängerung nicht rechtzeitig angestoßen werden." });
       }
       const ends = eng.filter((e) => e.plannedEnd).map((e) => e.plannedEnd!);
@@ -595,7 +635,7 @@ export async function snapshotHealth(actor: Actor, accountId: string) {
       if (log) {
         const [a] = await db
           .insert(schema.actions)
-          .values({ workspaceId: account.workspaceId, setupId: setup.id, title: `Sattelfestigkeit bei ${account.name} gesunken (${prev.score} → ${h!.score})`, agreement: "Health-Check ansehen: Was hat sich verschlechtert? Mit Principal besprechen und Gegenmaßnahme vereinbaren.", ownerUserId: account.responsibleBdUserId, status: "VORGESCHLAGEN", dueDate: new Date(Date.now() + 7 * DAY).toISOString().slice(0, 10), createdBy: actor.userId })
+          .values({ workspaceId: account.workspaceId, setupId: setup.id, title: `Health-Check bei ${account.name} gesunken (${prev.score} → ${h!.score})`, agreement: "Health-Check ansehen: Was hat sich verschlechtert? Mit Principal besprechen und Gegenmaßnahme vereinbaren.", ownerUserId: account.responsibleBdUserId, status: "VORGESCHLAGEN", dueDate: new Date(Date.now() + 7 * DAY).toISOString().slice(0, 10), createdBy: actor.userId })
           .returning();
         await db.update(schema.standardTasks).set({ actionId: a!.id }).where(eq(schema.standardTasks.id, log.id));
       }

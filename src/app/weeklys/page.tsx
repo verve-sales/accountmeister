@@ -29,7 +29,7 @@ export default async function WeeklysPage({ searchParams }: { searchParams: Prom
       <Feedback params={params} />
       <section className="card">
         <h2 className="font-semibold mb-2">Anstehend ({lists.upcoming.length})</h2>
-        {lists.upcoming.length === 0 ? <p className="muted text-sm">Keine anstehenden Weeklys in Ihrem Berechtigungsbereich.</p> : <ReviewTable rows={lists.upcoming} />}
+        {lists.upcoming.length === 0 ? <p className="muted text-sm">Keine anstehenden Weeklys in deinem Berechtigungsbereich.</p> : <ReviewTable rows={lists.upcoming} />}
       </section>
       {lists.open.length > 0 && (
         <section className="card">

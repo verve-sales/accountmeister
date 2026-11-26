@@ -218,7 +218,7 @@ type PersistInput = {
 async function requireEditableCtx(actor: Actor, setupId: string): Promise<SetupContext> {
   const ctx = await loadSetupContext(actor, setupId);
   if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Sie dürfen in dieses Setup nichts importieren.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst in dieses Setup nichts importieren.");
   return ctx;
 }
 

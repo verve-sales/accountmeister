@@ -1,4 +1,5 @@
 import { EXPIRY_WINDOW_DAYS } from "@/lib/window";
+import { pl } from "@/lib/labels";
 import Link from "next/link";
 import { Term } from "@/components/Term";
 import { notFound, redirect } from "next/navigation";
@@ -122,7 +123,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const mayFlags = !ro && (mayKeys || responsible?.userId === actor.userId);
   const tabs: { key: Bucket; label: string; hint: string }[] = [
     { key: "grundlagen", label: "1 Grundlagen", hint: `Health-Check, Kundenagenda, laufende Vorgehen` },
-    { key: "strategie", label: "2 Strategie", hint: `${keyInitiatives.length} Schlüssel-Initiative(n)${iniCards + otherCards.length ? ` · ${iniCards + otherCards.length} KI-Vorschläge` : ""}` },
+    { key: "strategie", label: "2 Strategie", hint: `${pl(keyInitiatives.length, "Schlüssel-Initiative", "Schlüssel-Initiativen")}${iniCards + otherCards.length ? ` · ${iniCards + otherCards.length} KI-Vorschläge` : ""}` },
     { key: "operativ", label: "3 Operativ", hint: `${people.length} Personen${openSos.length ? ` · ${openSos.length} SOS offen` : ""} · Beschaffung, Setups` },
   ];
 
@@ -210,12 +211,12 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       {health && (
         <section className="card">
           <div className="flex flex-wrap items-baseline gap-3 mb-1">
-            <h2 className="font-semibold">Health-Check – wie sicher sitzen wir im Sattel?</h2>
+            <h2 className="font-semibold">Health-Check</h2>
             <Link href={`/kunden/${account.id}/health`} className="btn btn-small ml-auto">{health.questions.length && !ro ? `Interview (${health.questions.length} offene Fragen)` : "Health-Check ansehen"}</Link>
           </div>
           <HealthBadge score={health.score} level={health.level} coverage={health.coverage} size="large" />
           <p className="text-sm mt-2">
-            {deployed.length > 0 ? null : <>{health.engagements.length} Einsatz/Einsätze</>}{deployed.length === 0 && health.engagements.filter((e) => e.plannedEnd).length ? ` · nächstes Ende ${fmtDate(health.engagements.find((e) => e.plannedEnd)!.plannedEnd)}` : ""}
+            {deployed.length > 0 ? null : <>{pl(health.engagements.length, "Einsatz", "Einsätze")}</>}{deployed.length === 0 && health.engagements.filter((e) => e.plannedEnd).length ? ` · nächstes Ende ${fmtDate(health.engagements.find((e) => e.plannedEnd)!.plannedEnd)}` : ""}
             {health.questions.length > 0 && <span className="muted"> · fehlt: {health.questions.slice(0, 2).map((q) => q.key === "ENGAGEMENT_END" ? "Einsatzende" : q.key === "FEEDBACK" ? "Kundenfeedback" : q.key === "LISTING" ? "Listung" : q.key === "RISKS" ? "Risiken" : q.key === "PEOPLE" ? "Ansprechpartner" : "Einsätze").join(", ")}{health.questions.length > 2 ? " …" : ""}</span>}
           </p>
         </section>
@@ -247,7 +248,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
                         <strong>{i.title}</strong>
                         {(i.dueDate || i.dueHint) && <span className="muted text-xs">Termin {i.dueDate ? fmtDate(i.dueDate) : `„${i.dueHint}“`}</span>}
                         <span className="text-xs ml-auto flex gap-3">
-                          <span>{i.chances.filter((c) => c.status !== "BEENDET").length} Chance(n)</span>
+                          <span>{pl(i.chances.filter((c) => c.status !== "BEENDET").length, "Chance", "Chancen")}</span>
                           <span>{openWork(i.id)} Vorgang/Vorgänge offen</span>
                           {cardCount(i.id) > 0 && <span style={{ color: "#b7791f", fontWeight: 600 }}>{cardCount(i.id)} KI-Vorschlag/Vorschläge</span>}
                           <span aria-hidden="true">›</span>
@@ -433,7 +434,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             </div>
             <button className="btn btn-secondary" type="submit">Umstellen</button>
           </form>
-          <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD können Sie die Kundenzuständigkeit jederzeit umstellen – unabhängig von der ursprünglichen Zuordnung.</p>
+          <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD kannst du die Kundenzuständigkeit jederzeit umstellen – unabhängig von der ursprünglichen Zuordnung.</p>
           {account.status !== "ARCHIVED" && (
             <form action={setAccountDormantAction} className="mt-3 flex flex-wrap items-center gap-2 text-sm">
               <input type="hidden" name="accountId" value={account.id} />

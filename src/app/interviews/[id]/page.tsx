@@ -52,7 +52,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
             <ol className="space-y-3">
               {d.turns.map((t) => (
                 <li key={t.id} className={t.role === "KI" ? "" : "pl-6"}>
-                  <div className="muted text-xs">{t.role === "KI" ? "Frage" : "Ihre Antwort"}{t.rationale ? ` · ${t.rationale}` : ""}</div>
+                  <div className="muted text-xs">{t.role === "KI" ? "Frage" : "Deine Antwort"}{t.rationale ? ` · ${t.rationale}` : ""}</div>
                   <div className={t.role === "KI" ? "font-medium" : ""} style={{ whiteSpace: "pre-wrap" }}>{t.text}</div>
                 </li>
               ))}
@@ -63,11 +63,11 @@ export default async function InterviewPage({ params, searchParams }: { params: 
             <section className="card">
               <form action={answerInterviewAction} className="grid gap-3">
                 <input type="hidden" name="interviewId" value={d.interview.id} />
-                <label className="label" htmlFor="text">Ihre Antwort auf: „{openQuestion.text}“</label>
+                <label className="label" htmlFor="text">Deine Antwort auf: „{openQuestion.text}“</label>
                 <textarea id="text" name="text" className="textarea" rows={5} required maxLength={6000} placeholder="In eigenen Worten. Sachverhalte und Vermutungen gern trennen („Ich vermute …“). „Fertig“ beendet das Interview." autoFocus />
                 <div className="flex flex-wrap gap-3 items-center">
                   <button className="btn" type="submit">Antwort senden</button>
-                  <span className="muted text-sm">Diktieren: Windows-Taste + H im Textfeld. Ihre Antworten werden zur Quelle des Vorschlags.</span>
+                  <span className="muted text-sm">Diktieren: Windows-Taste + H im Textfeld. Deine Antworten werden zur Quelle des Vorschlags.</span>
                 </div>
               </form>
             </section>
@@ -85,7 +85,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
                   <input type="hidden" name="back" value={back} />
                   <button className="btn btn-secondary" type="submit">Verwerfen</button>
                 </form>
-                <span className="muted text-sm">{openQuestion ? "Sie können jederzeit abschließen; unbeantwortete Themen bleiben als offene Punkte." : "Alle Themen sind abgedeckt."}</span>
+                <span className="muted text-sm">{openQuestion ? "Du kannst jederzeit abschließen; unbeantwortete Themen bleiben als offene Punkte." : "Alle Themen sind abgedeckt."}</span>
               </div>
             </section>
           )}

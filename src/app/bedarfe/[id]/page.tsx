@@ -441,7 +441,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         <h2 className="font-semibold mb-2">Buying-Center-Berater</h2>
         {bcProposalError && <p className="error text-sm" role="alert">{bcProposalError}</p>}
         <table className="list text-sm">
-          <thead><tr><th>Rolle</th><th>Status</th><th>Person(en)</th><th></th></tr></thead>
+          <thead><tr><th>Rolle</th><th>Status</th><th>Personen</th><th></th></tr></thead>
           <tbody>
             {bc.roleStatus.map((r) => (
               <tr key={r.role}>

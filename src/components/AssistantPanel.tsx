@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { pl } from "@/lib/labels";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 /**
@@ -320,7 +321,7 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
     } finally {
       setBusy(false);
     }
-    if (failed) setError(`${failed} Karte(n) konnten nicht übernommen werden – Hinweis steht an der Karte bzw. oben; bitte einzeln prüfen.`);
+    if (failed) setError(`${pl(failed, "Karte", "Karten")} konnten nicht übernommen werden – Hinweis steht an der Karte bzw. oben; bitte einzeln prüfen.`);
     if (lastThread && lastThread.contextType === "SETUP" && lastThread.contextId && lastThread.contextType !== view.thread.contextType) {
       setView({ ...view, thread: { ...view.thread, ...lastThread } });
       router.push(`/setups/${lastThread.contextId}`);

@@ -118,3 +118,14 @@ details > summary:hover { color: var(--accent); }
 .tl-head { display: grid; grid-template-columns: 13rem 1fr; }
 .tl-months { position: relative; height: 1.4rem; color: var(--muted); }
 .tl-months span { position: absolute; top: 0; padding-left: .25rem; }
+
+/* Technische Bezüge: im Text nur als Info-Zeichen, Details eingeklappt */
+.techref { display: inline-block; margin-left: .2rem; font-size: .75em; color: var(--muted, #6b6b66); cursor: help; vertical-align: super; line-height: 1; }
+.techdetails summary { cursor: pointer; }
+
+/* e62: gruppiertes „Mehr“-Menü */
+.nav-more-grouped { min-width: 15rem; padding: .3rem 0; }
+.nav-more-group { display: flex; flex-direction: column; padding: .25rem 0; }
+.nav-more-group + .nav-more-group { border-top: 1px solid var(--border); }
+.nav-more-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted, #6b6b66); padding: .25rem .9rem .1rem; }
+.nav-hat .nav-more-menu a { padding: .35rem .5rem; }

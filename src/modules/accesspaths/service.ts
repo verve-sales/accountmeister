@@ -34,7 +34,7 @@ export async function createAccessPlan(actor: Actor, raw: unknown) {
   if (!input.targetPersonId && !input.targetFunction) throw new ValidationError("Bitte Zielperson oder gesuchte Funktion angeben.");
   const ctx = await loadSetupContext(actor, input.setupId);
   if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Sie dürfen in diesem Setup keinen Kontaktweg anlegen.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst in diesem Setup keinen Kontaktweg anlegen.");
   if (input.targetPersonId) {
     const p = await db.query.persons.findFirst({ where: and(eq(schema.persons.id, input.targetPersonId), eq(schema.persons.accountId, ctx.account.id)) });
     if (!p) throw new ValidationError("Zielperson gehört nicht zu diesem Kunden.");

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
@@ -38,7 +39,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
       {/* Zielbild (E-045): worauf das Portfolio hinausläuft – Chancen je Art, Rollenfamilie und Reifegrad */}
       <section className="card">
         <h2 className="font-semibold mb-1">Wohin läuft es – Chancen im Portfolio</h2>
-        <p className="muted text-sm mb-3">{chancen.byKind.map((k) => `${k.label}: ${k.positions} Position(en) in ${k.chances} Chance(n)`).join(" · ")}</p>
+        <p className="muted text-sm mb-3">{chancen.byKind.map((k) => `${k.label}: ${pl(k.positions, "Position", "Positionen")} in ${pl(k.chances, "Chance", "Chancen")}`).join(" · ")}</p>
         {chancen.matrix.length === 0 ? (
           <p className="muted text-sm">Noch keine aktiven Chancen. Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten – jede mit Art (Verve-Experte, Freelancer-Experte, Ausschreibung) und Standardrolle.</p>
         ) : (
@@ -87,7 +88,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
                   <td>{e.setups}{e.setupsWithoutWeekly > 0 && <div className="muted text-sm">{e.setupsWithoutWeekly} ohne Weekly</div>}</td>
                   <td>{e.openChanges}</td>
                   <td>{e.openQuestions}</td>
-                  <td>{e.accessGaps}{e.unprovenRelationships > 0 && <div className="muted text-sm">{e.unprovenRelationships} Beziehung(en) ohne Beleg</div>}</td>
+                  <td>{e.accessGaps}{e.unprovenRelationships > 0 && <div className="muted text-sm">{pl(e.unprovenRelationships, "Beziehung", "Beziehungen")} ohne Beleg</div>}</td>
                   <td>{e.agreedPriorities} / {e.proposedPriorities}</td>
                   <td>{e.openActions} / {e.blockedActions}</td>
                   <td>{e.openSupport}</td>
@@ -177,7 +178,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
 
       <section className="card">
         <h2 className="font-semibold mb-2">Führungs-Reviews ({reviews.length})</h2>
-        {reviews.length === 0 ? <p className="muted text-sm">Keine Principal-/BD-Weeklys oder Zielgespräche, an denen Sie teilnehmen.</p> : (
+        {reviews.length === 0 ? <p className="muted text-sm">Keine Principal-/BD-Weeklys oder Zielgespräche, an denen du teilnimmst.</p> : (
           <table className="list">
             <thead><tr><th>Review</th><th>Art</th><th>Termin</th><th>Status</th></tr></thead>
             <tbody>{reviews.map((r) => <tr key={r.id}><td><Link href={`/fuehrung/${r.id}`}>{r.title}</Link></td><td className="text-sm">{reviewTypeLabel[r.type]}</td><td>{fmtDate(r.scheduledFor)}</td><td><Status label={reviewStatusLabel[r.status] ?? r.status} /></td></tr>)}</tbody>

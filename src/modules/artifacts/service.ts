@@ -47,7 +47,7 @@ export async function createDraft(actor: Actor, raw: unknown) {
   if (input.variant === "EXTERN" && !template.externalVariantAllowed) throw new ValidationError("Diese Vorlage sieht keine Kundentext-Variante vor.");
   const ctx = await loadSetupContext(actor, input.setupId);
   if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Sie dürfen in diesem Setup keine Artefakte entwerfen.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst in diesem Setup keine Artefakte entwerfen.");
   if (template.code === "A14" && input.audience !== "PERSOENLICH" && input.audience !== "ACCOUNT_TEAM") {
     throw new ValidationError("Coaching-/Eskalationsnotizen haben einen gesonderten Empfängerkreis (persönlich oder Kundenteam), nie Setup-weit oder Arbeitsraum-weit.");
   }

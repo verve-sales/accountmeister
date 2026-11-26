@@ -34,7 +34,7 @@ async function requireOpportunity(actor: Actor, id: string) {
 
 async function requireEditableOpportunity(actor: Actor, id: string) {
   const r = await requireOpportunity(actor, id);
-  if (!canEditSetup(actor, r.ctx)) throw new ForbiddenError("Sie sind an diesem Setup nicht bearbeitend beteiligt.");
+  if (!canEditSetup(actor, r.ctx)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");
   return r;
 }
 
@@ -101,7 +101,7 @@ export async function createOpportunity(actor: Actor, raw: unknown) {
   const input = parsed.data;
   const ctx = await loadSetupContext(actor, input.setupId);
   if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Sie sind an diesem Setup nicht bearbeitend beteiligt.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");
   const fastTrack = input.fastTrack === "on" || input.fastTrack === "true" || input.fastTrack === true;
   const anticipated = input.anticipated === "on" || input.anticipated === "true" || input.anticipated === true;
   const chance = await resolveChanceFields(actor.workspaceId, input);
@@ -190,7 +190,7 @@ export async function reassignOpportunityOwner(actor: Actor, id: string, raw: un
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const { opp, ctx } = await requireOpportunity(actor, id);
-  if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Sie dürfen die Verantwortlichkeit dieser Chance nicht umstellen.");
+  if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Du darfst die Verantwortlichkeit dieser Chance nicht umstellen.");
   if (opp.status === "BEENDET") throw new TransitionError("Eine beendete Chance wird nicht mehr geändert.");
   if (opp.ownerUserId === input.ownerUserId) throw new ValidationError("Diese Person ist bereits verantwortlich.");
   const newOwner = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.ownerUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });

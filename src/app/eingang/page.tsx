@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
 import { PendingButton } from "@/components/PendingButton";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/db/client";
@@ -60,7 +61,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
 
       <section className="card">
         <h2 className="font-semibold mb-2">Setups mit offener BD-Zuordnung ({open.length})</h2>
-        {open.length === 0 ? <p className="muted text-sm">Keine offenen Zuordnungen in Ihrem Berechtigungsbereich.</p> : (
+        {open.length === 0 ? <p className="muted text-sm">Keine offenen Zuordnungen in deinem Berechtigungsbereich.</p> : (
           <table className="list">
             <thead><tr><th>Setup</th><th>Kunde</th><th>Angelegt</th></tr></thead>
             <tbody>{open.map(({ setup, account }) => <tr key={setup.id}><td><Link href={`/setups/${setup.id}`}>{setup.name}</Link></td><td><Link href={`/kunden/${account.id}`}>{account.name}</Link></td><td>{fmtDate(setup.createdAt)}</td></tr>)}</tbody>
@@ -92,7 +93,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
                         <li key={m.id}>
                           <form action={decideMergeAction} className="flex flex-wrap gap-1 items-end">
                             <input type="hidden" name="itemId" value={m.id} />
-                            <span className="grow min-w-40">{m.mentionedName}{m.mentionedEmail && <span className="muted"> ({m.mentionedEmail})</span>} · {m.candidates.length} Kandidat(en)</span>
+                            <span className="grow min-w-40">{m.mentionedName}{m.mentionedEmail && <span className="muted"> ({m.mentionedEmail})</span>} · {pl(m.candidates.length, "Kandidat", "Kandidaten")}</span>
                             {m.candidates.length > 0 && (
                               <select name="personId" className="select" style={{ width: "16rem" }} defaultValue={m.candidates.length === 1 ? m.candidates[0]!.id : ""} aria-label="Person">
                                 <option value="">– Person wählen –</option>
@@ -124,7 +125,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
       {/* Protokoll importieren */}
       <section className="card">
         <h2 className="font-semibold mb-2">Gesprächsprotokoll importieren</h2>
-        {editableSetups.length === 0 ? <p className="muted text-sm">Sie bearbeiten kein Setup; Import ist nicht möglich.</p> : (
+        {editableSetups.length === 0 ? <p className="muted text-sm">Du bearbeitest kein Setup; Import ist nicht möglich.</p> : (
           <form action={importProtocolAction} className="grid sm:grid-cols-2 gap-3" encType="multipart/form-data">
             <div><label className="label" htmlFor="impTitle">Titel</label><input id="impTitle" name="title" className="input" required minLength={3} placeholder="z. B. Protokoll Kundentermin 18.09." /></div>
             <div>
@@ -149,7 +150,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
       <section className="card">
         <h2 className="font-semibold mb-2">Aus dem eigenen Postfach importieren (Outlook und Teams-Chats)</h2>
         {!conn.state.connected ? (
-          <p className="muted text-sm">Kein Postfach verbunden. <Link href="/einstellungen">Unter Einstellungen verbinden</Link>. Es wird nie ein ganzes Postfach eingelesen – Sie wählen einzelne Mails oder Termine.</p>
+          <p className="muted text-sm">Kein Postfach verbunden. <Link href="/einstellungen">Unter Einstellungen verbinden</Link>. Es wird nie ein ganzes Postfach eingelesen – du wählst einzelne Mails oder Termine.</p>
         ) : (
           <>
             <p className="text-sm muted mb-2">{conn.state.accountLabel} · Berechtigungen: {conn.state.grantedScopes.join(", ")}{conn.state.fixtureMode && " · Fixture-Modus: fiktive Testquellen"}</p>

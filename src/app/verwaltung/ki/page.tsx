@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TechDetails, TechRef } from "@/components/TechDetails";
 import { notFound, redirect } from "next/navigation";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -37,10 +38,10 @@ export default async function KiVerwaltungPage({ searchParams }: { searchParams:
       <section className="card">
         <h2 className="font-semibold mb-2">Anbieter</h2>
         <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
-          <div><dt className="muted">Konfiguriert (AI_PROVIDER)</dt><dd><Status label={o.provider.configured} /> {o.provider.description}</dd></div>
+          <div><dt className="muted">Konfiguriert <TechRef>AI_PROVIDER</TechRef></dt><dd><Status label={o.provider.configured} /> {o.provider.description}</dd></div>
           <div><dt className="muted">Status</dt><dd>{o.provider.enabled ? "aktiv – Inhalte werden zur Verarbeitung an den Anbieter gesendet" : "deaktiviert – keine externe Verarbeitung"}</dd></div>
           {o.provider.baseUrl && <div><dt className="muted">Schnittstelle</dt><dd>{o.provider.baseUrl}</dd></div>}
-          {o.provider.configured === "langdock" && <div><dt className="muted">API-Schlüssel</dt><dd>{o.provider.keyPresent ? "hinterlegt (nur auf dem Server)" : "fehlt – LANGDOCK_API_KEY in .env.production setzen"}</dd></div>}
+          {o.provider.configured === "langdock" && <div><dt className="muted">API-Schlüssel</dt><dd>{o.provider.keyPresent ? "hinterlegt (nur auf dem Server)" : <>fehlt <TechRef>LANGDOCK_API_KEY in .env.production setzen</TechRef></>}</dd></div>}
           <div><dt className="muted">Standardmodell</dt><dd>{o.provider.model}</dd></div>
           <div><dt className="muted">Nutzungsgrenze</dt><dd>{o.provider.dailyLimit} KI-Aufträge je Tag</dd></div>
         </dl>
@@ -50,7 +51,7 @@ export default async function KiVerwaltungPage({ searchParams }: { searchParams:
             <span className="muted text-sm">Ruft nur die Modellliste ab; es werden keine Inhalte gesendet.</span>
           </form>
         )}
-        {o.provider.configured !== "langdock" && <p className="muted text-sm mt-3">Zum Aktivieren: in <code>.env.production</code> auf dem Server <code>AI_PROVIDER=langdock</code> und <code>LANGDOCK_API_KEY=…</code> setzen, dann <code>docker compose up -d</code>. Grundlage: Entscheidung E-037 (Langdock, EU-Hosting, AV-Vertrag).</p>}
+        {o.provider.configured !== "langdock" && <TechDetails summary="So schaltest du die KI ein (Serverkonfiguration)"><p>In <code>.env.production</code> auf dem Server <code>AI_PROVIDER=langdock</code> und <code>LANGDOCK_API_KEY=…</code> setzen, dann <code>docker compose up -d</code>. Grundlage: Entscheidung E-037 (Langdock, EU-Hosting, AV-Vertrag).</p></TechDetails>}
       </section>
 
       <section className="card">
@@ -94,7 +95,7 @@ export default async function KiVerwaltungPage({ searchParams }: { searchParams:
             </tbody>
           </table>
         )}
-        <p className="muted text-sm mt-2">Token-Zahlen stammen vom Anbieter; die Kosten je Modell entnehmen Sie Ihrem Langdock-Vertrag. Auftragsprotokolle enthalten nie Rohtexte, nur Hash und Länge.</p>
+        <p className="muted text-sm mt-2">Token-Zahlen stammen vom Anbieter; die Kosten je Modell stehen im Langdock-Vertrag. Auftragsprotokolle enthalten nie Rohtexte, nur Hash und Länge.</p>
       </section>
 
       <section className="card">

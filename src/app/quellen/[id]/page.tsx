@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
+import { TechRef } from "@/components/TechDetails";
 import { PendingButton } from "@/components/PendingButton";
 import { notFound, redirect } from "next/navigation";
 import { DomainError } from "@/lib/errors";
@@ -40,7 +42,7 @@ export default async function QuellePage({ params, searchParams }: { params: Pro
           <div><dt className="muted">Inhaber</dt><dd>{q.ownerName}</dd></div>
           <div><dt className="muted">Zugriff</dt><dd>{accessClassLabel[q.source.accessClass]}</dd></div>
         </dl>
-        <p className="muted text-sm mt-3">Eine Quelle belegt zunächst eine Aussage, nicht automatisch ihre Richtigkeit oder Bindungswirkung (Briefing 13.3).</p>
+        <p className="muted text-sm mt-3">Eine Quelle belegt zunächst eine Aussage, nicht automatisch ihre Richtigkeit oder Bindungswirkung <TechRef>Briefing 13.3</TechRef>.</p>
         {ai.enabled && !q.document && !q.source.isLocked && (q.source.body ?? "").trim().length >= 12 && (q.canEdit || q.source.ownerUserId === actor.userId) && (
           <form action={reevaluateSourceAction} className="mt-3 flex flex-wrap gap-2 items-center">
             <input type="hidden" name="sourceId" value={q.source.id} />
@@ -56,7 +58,7 @@ export default async function QuellePage({ params, searchParams }: { params: Pro
           <h2 className="font-semibold mb-2">Dokument</h2>
           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm">
             <div><dt className="muted">Datei</dt><dd>{q.document.storagePath && !q.document.deletedAt ? <a href={`/api/dokumente/${q.document.id}`}>{q.document.fileName}</a> : <span>{q.document.fileName} <span className="muted">(Datei entfernt)</span></span>}</dd></div>
-            <div><dt className="muted">Größe</dt><dd>{fmtSize(q.document.sizeBytes)}{q.document.pageCount ? ` · ${q.document.pageCount} Seite(n)/Blätter` : ""}</dd></div>
+            <div><dt className="muted">Größe</dt><dd>{fmtSize(q.document.sizeBytes)}{q.document.pageCount ? ` · ${pl(q.document.pageCount, "Seite", "Seiten")}/Blätter` : ""}</dd></div>
             <div><dt className="muted">Textextraktion</dt><dd><Status label={extractStatusLabel[q.document.extractStatus] ?? q.document.extractStatus} />{q.document.extractNote ? <span className="muted"> {q.document.extractNote}</span> : null}</dd></div>
             <div><dt className="muted">Prüfsumme (SHA-256)</dt><dd className="break-all">{q.document.sha256.slice(0, 16)}…</dd></div>
           </dl>
@@ -77,7 +79,7 @@ export default async function QuellePage({ params, searchParams }: { params: Pro
       </section>
       {(q.source.ownerUserId === actor.userId || hasRole(actor, "PRINCIPAL") || hasRole(actor, "CEO")) && (
         <section className="card">
-          <h2 className="font-semibold mb-2">Sperren und Löschen (Briefing 16.4)</h2>
+          <h2 className="font-semibold mb-2">Sperren und Löschen <TechRef>Briefing 16.4</TechRef></h2>
           <p className="muted text-sm mb-2">Sperren markiert alle Vorschläge, Artefaktfassungen und Aussagen, die sich auf diese Quelle stützen, als „überholt“ – sie müssen erneut geprüft werden. Löschen entfernt danach den Inhalt; Typ, Zeitpunkte und Protokoll bleiben nachvollziehbar.</p>
           {!q.source.isLocked ? (
             <form action={lockSourceAction} className="flex flex-wrap gap-2 items-end">

@@ -265,12 +265,12 @@ export async function startPlaybookRun(actor: Actor, raw: unknown, opts: { propo
     if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
     if (input.accountId && ctx.account.id !== input.accountId) throw new ValidationError("Setup gehört nicht zu diesem Kunden.");
     if (ctx.setup.status === "ARCHIVIERT") throw new TransitionError("Auf ein archiviertes Setup wird kein Vorgehen angewendet.");
-    if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Sie dürfen hier kein Vorgehen starten.");
+    if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Du darfst hier kein Vorgehen starten.");
     account = ctx.account;
   } else {
     account = await db.query.accounts.findFirst({ where: and(eq(schema.accounts.id, input.accountId!), eq(schema.accounts.workspaceId, actor.workspaceId)) });
     if (!account) throw new NotFoundError("Kunde");
-    if (!canReassignResponsibility(actor, account) && !canCreateSetup(actor, account) && !isSalesOps(actor)) throw new ForbiddenError("Sie dürfen für diesen Kunden kein Vorgehen starten.");
+    if (!canReassignResponsibility(actor, account) && !canCreateSetup(actor, account) && !isSalesOps(actor)) throw new ForbiddenError("Du darfst für diesen Kunden kein Vorgehen starten.");
   }
   if (account.status === "ARCHIVED") throw new TransitionError("Der Kunde ist archiviert – bitte zuerst wiederherstellen.");
 
@@ -409,7 +409,7 @@ export async function completeRunStep(actor: Actor, runStepId: string, raw: unkn
   const parsed = completeStepInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const { step, run, ctx } = await requireRunStep(actor, runStepId);
-  if (!canWorkOnRun(actor, run, ctx)) throw new ForbiddenError("Sie dürfen an diesem Vorgehen nicht arbeiten.");
+  if (!canWorkOnRun(actor, run, ctx)) throw new ForbiddenError("Du darfst an diesem Vorgehen nicht arbeiten.");
   if (run.status !== "AKTIV") throw new TransitionError("Dieses Vorgehen ist nicht aktiv.");
   if (step.status !== "OFFEN") throw new TransitionError("Dieser Schritt ist nicht der aktuelle Schritt.");
   return db.transaction(async (tx) => {
@@ -426,7 +426,7 @@ export async function skipRunStep(actor: Actor, runStepId: string, raw: unknown)
   const parsed = skipStepInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const { step, run, ctx } = await requireRunStep(actor, runStepId);
-  if (!canWorkOnRun(actor, run, ctx)) throw new ForbiddenError("Sie dürfen an diesem Vorgehen nicht arbeiten.");
+  if (!canWorkOnRun(actor, run, ctx)) throw new ForbiddenError("Du darfst an diesem Vorgehen nicht arbeiten.");
   if (run.status !== "AKTIV") throw new TransitionError("Dieses Vorgehen ist nicht aktiv.");
   if (step.status !== "OFFEN") throw new TransitionError("Dieser Schritt ist nicht der aktuelle Schritt.");
   return db.transaction(async (tx) => {
@@ -469,7 +469,7 @@ export async function pauseRun(actor: Actor, runId: string, raw: unknown) {
   const parsed = closeRunInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const { run, ctx } = await requireRun(actor, runId);
-  if (!canWorkOnRun(actor, run, ctx)) throw new ForbiddenError("Sie dürfen an diesem Vorgehen nicht arbeiten.");
+  if (!canWorkOnRun(actor, run, ctx)) throw new ForbiddenError("Du darfst an diesem Vorgehen nicht arbeiten.");
   if (run.status !== "AKTIV") throw new TransitionError("Dieses Vorgehen ist nicht aktiv.");
   return db.transaction(async (tx) => {
     const [u] = await tx
@@ -492,7 +492,7 @@ export async function pauseRun(actor: Actor, runId: string, raw: unknown) {
 export async function resumeRun(actor: Actor, runId: string, raw: { version: number | string }) {
   const version = Number(raw.version);
   const { run, ctx } = await requireRun(actor, runId);
-  if (!canWorkOnRun(actor, run, ctx)) throw new ForbiddenError("Sie dürfen an diesem Vorgehen nicht arbeiten.");
+  if (!canWorkOnRun(actor, run, ctx)) throw new ForbiddenError("Du darfst an diesem Vorgehen nicht arbeiten.");
   if (run.status !== "ZURUECKGESTELLT") throw new TransitionError("Nur zurückgestellte Vorgehen können wieder aufgenommen werden.");
   return db.transaction(async (tx) => {
     const [u] = await tx

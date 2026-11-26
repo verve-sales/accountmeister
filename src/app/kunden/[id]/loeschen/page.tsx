@@ -60,7 +60,7 @@ export default async function KundeLoeschenPage({ params, searchParams }: { para
         <>
           <section className="card">
             <h2 className="font-semibold mb-2">Archiviert</h2>
-            <p className="text-sm mb-3">Der Kunde ist archiviert. Sie können ihn wiederherstellen oder im nächsten Schritt endgültig löschen.</p>
+            <p className="text-sm mb-3">Der Kunde ist archiviert. Du kannst ihn wiederherstellen oder im nächsten Schritt endgültig löschen.</p>
             <form action={restoreAccountAction}>
               <input type="hidden" name="accountId" value={account.id} />
               <button className="btn btn-secondary" type="submit">Wiederherstellen</button>

@@ -40,12 +40,6 @@ import { canClean } from "@/modules/cleanup/service";
 
 export const dynamic = "force-dynamic";
 
-/** Weitere Bereiche – immer unter „Mehr“. Die erste Reihe folgt dem Hut (Etappe 37, modules/dashboard/hat.ts). */
-const MORE = [
-  { href: "/vorgehen", label: "Vorgehen" },
-  { href: "/einstellungen", label: "Einstellungen" },
-  { href: "/hilfe", label: "Hilfe" },
-];
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const cfg = getConfig();
@@ -90,30 +84,31 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                       <span style={{ position: "absolute", top: -6, right: -10, background: "#c0392b", color: "#fff", borderRadius: 999, fontSize: 10, lineHeight: "15px", minWidth: 15, padding: "0 4px", textAlign: "center", fontWeight: 700 }}>{unread > 99 ? "99+" : unread}</span>
                     )}
                   </Link>
-                  {hat && available.length > 1 ? (
-                    <details className="nav-more nav-hat" aria-label="Hut wechseln">
-                      <summary title="Ich arbeite gerade als … – bestimmt Navigation und Startseite, nicht deine Rechte">
-                        {actor.displayName} · <strong style={{ color: "var(--text)" }}>als {viewLabel[hat]}</strong> ▾
-                      </summary>
-                      <form action={setHatAction} className="nav-more-menu" style={{ minWidth: 260 }}>
-                        <span className="muted text-xs" style={{ padding: "4px 8px" }}>Ich arbeite als:</span>
-                        {available.map((v) => (
-                          <button key={v} name="hat" value={v} type="submit" className={v === hat ? "btn btn-small" : "btn btn-secondary btn-small"} aria-pressed={v === hat} title={viewDescription[v]} style={{ textAlign: "left" }}>
-                            {viewLabel[v]}
-                          </button>
-                        ))}
+                  {/* e62: ein Personenmenü – Name, Rolle bzw. Startseiten-Ansicht, Einstellungen, Abmelden */}
+                  <details className="nav-more nav-hat" aria-label="Mein Konto">
+                    <summary title="Mein Konto: Ansicht der Startseite, Einstellungen, Abmelden">
+                      {actor.displayName}{hat ? <> · <strong style={{ color: "var(--text)" }}>{viewLabel[hat]}</strong></> : null} ▾
+                    </summary>
+                    <div className="nav-more-menu" style={{ minWidth: 260 }}>
+                      <span className="muted text-xs" style={{ padding: "4px 8px" }}>Rollen: {roles.join(", ") || "keine fachliche Rolle"}{actor.roles.has("ADMIN") ? " · Betriebsverwaltung" : ""}</span>
+                      {hat && available.length > 1 && (
+                        <form action={setHatAction} className="flex flex-col gap-1" style={{ padding: "4px 8px" }}>
+                          <span className="muted text-xs">Startseite zeigen als:</span>
+                          {available.map((v) => (
+                            <button key={v} name="hat" value={v} type="submit" className={v === hat ? "btn btn-small" : "btn btn-secondary btn-small"} aria-pressed={v === hat} title={viewDescription[v]} style={{ textAlign: "left" }}>
+                              {viewLabel[v]}
+                            </button>
+                          ))}
+                        </form>
+                      )}
+                      <Link href="/einstellungen">Einstellungen</Link>
+                      <form action={logoutAction} style={{ padding: "4px 8px" }}>
+                        <button className="btn btn-secondary btn-small" type="submit" style={{ width: "100%" }}>
+                          Abmelden
+                        </button>
                       </form>
-                    </details>
-                  ) : (
-                    <span>
-                      {actor.displayName} · {roles.join(", ") || "keine Rolle"}
-                    </span>
-                  )}
-                  <form action={logoutAction}>
-                    <button className="btn btn-secondary btn-small" type="submit">
-                      Abmelden
-                    </button>
-                  </form>
+                    </div>
+                  </details>
                 </>
               ) : (
                 <Link href="/anmelden">Anmelden</Link>
@@ -137,11 +132,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 ))}
                 <details className="nav-more">
                   <summary>Mehr ▾</summary>
-                  <div className="nav-more-menu">
-                    {[...nav.more, ...MORE.slice(0, 1), ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte" }] : []), ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : []), ...MORE.slice(1)].map((n) => (
-                      <Link key={n.href} href={n.href}>
-                        {n.label}
-                      </Link>
+                  <div className="nav-more-menu nav-more-grouped">
+                    {[
+                      ...nav.groups.map((g) => g.label === "Operations" ? { ...g, links: [...g.links, ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : [])] } : g),
+                      { label: "Wissen und Werkzeuge", links: [{ href: "/vorgehen", label: "Vorgehensmuster" }, ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), { href: "/hilfe", label: "Hilfe" }] },
+                    ].filter((g) => g.links.length > 0).map((g) => (
+                      <div key={g.label} className="nav-more-group">
+                        <span className="nav-more-label">{g.label}</span>
+                        {g.links.map((n) => (
+                          <Link key={n.href} href={n.href}>
+                            {n.label}
+                          </Link>
+                        ))}
+                      </div>
                     ))}
                   </div>
                 </details>
@@ -170,7 +173,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/vertragsbuero#erfassen">Assignment erfassen</Link>
               {cfg.MOCO_MODE !== "off" && <Link href="/moco">Moco</Link>}
               {(actor.roles.has("CEO") || actor.roles.has("ADMIN")) && <Link href="/verwaltung/sharepoint">SharePoint-Ablage</Link>}
-              <Link href="/einstellungen">Einstellungen</Link>
               <Link href="/hilfe">Hilfe</Link>
             </div>
           </details>

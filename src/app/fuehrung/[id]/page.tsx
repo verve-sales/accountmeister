@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TechRef } from "@/components/TechDetails";
 import { notFound, redirect } from "next/navigation";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -49,7 +50,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
             {p.last.note && <details><summary className="text-sm">Notiz des letzten Reviews</summary><pre className="whitespace-pre-wrap text-sm mt-1" style={{ fontFamily: "inherit" }}>{p.last.note}</pre></details>}
             {p.last.decisions.length > 0 && <p className="muted">Damalige Entscheidungen: {p.last.decisions.join(" · ")}</p>}
           </div>
-        ) : <p className="muted text-sm">Kein früheres bestätigtes Review dieser Art, an dem Sie teilgenommen haben.</p>}
+        ) : <p className="muted text-sm">Kein früheres bestätigtes Review dieser Art, an dem du teilgenommen hast.</p>}
 
         {p.portfolio && (
           <div className="mt-3">
@@ -80,7 +81,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
 
         <div className="mt-3">
           <h3 className="text-sm font-semibold mb-1">Offene Unterstützungsaufträge ({p.support.length})</h3>
-          {p.support.length === 0 ? <p className="muted text-sm">Keine offenen Unterstützungsaufträge mit Ihrer Beteiligung.</p> : (
+          {p.support.length === 0 ? <p className="muted text-sm">Keine offenen Unterstützungsaufträge mit deiner Beteiligung.</p> : (
             <ul className="space-y-2">
               {p.support.map((s) => (
                 <li key={s.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
@@ -169,8 +170,8 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
       {isLeader && (
         <section className="card">
           <h2 className="font-semibold mb-2">Vertrauliche Notizen ({p.confidential.length})</h2>
-          <p className="muted text-sm mb-2">Sichtbar nur für den gewählten Empfängerkreis. Erscheint nie im Setup, im Accountplan oder im KI-Kontext (Briefing 11.4).</p>
-          {p.confidential.length === 0 ? <p className="muted text-sm">Keine vertraulichen Notizen für Sie in diesem Review.</p> : (
+          <p className="muted text-sm mb-2">Sichtbar nur für den gewählten Empfängerkreis. Erscheint nie im Setup, im Accountplan oder im KI-Kontext <TechRef>Briefing 11.4</TechRef>.</p>
+          {p.confidential.length === 0 ? <p className="muted text-sm">Keine vertraulichen Notizen für dich in diesem Review.</p> : (
             <ul className="text-sm space-y-2">
               {p.confidential.map((n) => (
                 <li key={n.id} className="border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
@@ -190,7 +191,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
                 <select id="cnAbout" name="aboutUserId" className="select" defaultValue=""><option value="">–</option>{p.participants.filter((x) => x.userId !== actor.userId).map((x) => <option key={x.userId} value={x.userId}>{x.name}</option>)}</select>
               </div>
               <fieldset>
-                <legend className="label">Empfängerkreis (zusätzlich zu Ihnen; nur Teilnehmende)</legend>
+                <legend className="label">Empfängerkreis (zusätzlich zu dir; nur Teilnehmende)</legend>
                 <div className="flex flex-wrap gap-3 text-sm">{p.participants.filter((x) => x.userId !== actor.userId).map((x) => <label key={x.userId} className="flex items-center gap-1"><input type="checkbox" name="audienceUserIds" value={x.userId} /> {x.name}</label>)}</div>
               </fieldset>
               <div className="sm:col-span-2"><button className="btn" type="submit">Vertraulich speichern</button></div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
 import type { Actor } from "@/modules/identity/actor";
 import { canManageStaffingAt, freelancerOptions, positionStatusLabel, scopeUnitLabel, staffingSummary, type PositionView } from "@/modules/staffing/service";
 import { createPositionAction, createStaffingIntakeAction } from "@/app/actions";
@@ -25,7 +26,7 @@ export function PositionList({ items, empty, showAccount = true }: { items: Row[
           <div className="muted text-xs">
             {showAccount ? `${p.accountName} · ${p.opportunityTitle} · ` : ""}BD {p.bdName}
             {p.searcherName ? ` · Suche: ${p.searcherName}` : p.searchStatus === "ANGEFRAGT" ? " · Suche: wartet auf Übernahme" : ""}
-            {typeof p.candidacyCount === "number" ? ` · ${p.candidacyCount} Kandidatur(en), ${p.presentedCount ?? 0} vorgestellt` : ""}
+            {typeof p.candidacyCount === "number" ? ` · ${pl(p.candidacyCount, "Kandidatur", "Kandidaturen")}, ${p.presentedCount ?? 0} vorgestellt` : ""}
             {p.nextDue ? <span style={p.overdue ? { color: RED, fontWeight: 600 } : undefined}> · nächste Frist {fmtDate(p.nextDue)}{p.overdue ? " (überfällig)" : ""}</span> : ""}
           </div>
         </li>

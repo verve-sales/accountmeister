@@ -27,7 +27,7 @@ export async function createSetup(actor: Actor, raw: unknown) {
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const account = await getAccount(actor, input.accountId);
-  if (!canCreateSetup(actor, account)) throw new ForbiddenError("Für diesen Kunden dürfen Sie kein Setup anlegen.");
+  if (!canCreateSetup(actor, account)) throw new ForbiddenError("Für diesen Kunden darfst du kein Setup anlegen.");
   const bdUserId = input.bdUserId ? input.bdUserId : null;
 
   return db.transaction(async (tx) => {
@@ -71,7 +71,7 @@ export async function requireSetupContext(actor: Actor, setupId: string): Promis
 
 export async function requireEditableSetup(actor: Actor, setupId: string): Promise<SetupContext> {
   const ctx = await requireSetupContext(actor, setupId);
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Sie dürfen dieses Setup nicht bearbeiten.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst dieses Setup nicht bearbeiten.");
   return ctx;
 }
 
@@ -216,7 +216,7 @@ export const addMemberInput = z.object({
  *  Kunden Mitglieder umstellen (Delegation, Etappe 19), auch ohne selbst bearbeitendes Mitglied zu sein. */
 async function requireCanChangeMembers(actor: Actor, setupId: string): Promise<SetupContext> {
   const ctx = await requireSetupContext(actor, setupId);
-  if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Sie dürfen die Beteiligten dieses Setups nicht ändern.");
+  if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Du darfst die Beteiligten dieses Setups nicht ändern.");
   return ctx;
 }
 
@@ -257,7 +257,7 @@ export async function reassignSetupBd(actor: Actor, setupId: string, raw: unknow
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const ctx = await requireSetupContext(actor, setupId);
-  if (!canReassignResponsibility(actor, ctx.account) && ctx.setup.bdUserId !== actor.userId) throw new ForbiddenError("Sie dürfen die Setup-Zuständigkeit hier nicht umstellen.");
+  if (!canReassignResponsibility(actor, ctx.account) && ctx.setup.bdUserId !== actor.userId) throw new ForbiddenError("Du darfst die Setup-Zuständigkeit hier nicht umstellen.");
   const newBd = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.bdUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
   if (!newBd) throw new ValidationError("Person nicht gefunden oder inaktiv.");
   await assertCanCarryResponsibility(input.bdUserId);

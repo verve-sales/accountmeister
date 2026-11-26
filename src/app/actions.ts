@@ -474,7 +474,7 @@ export async function changePriorityAction(fd: FormData) {
   const data = formToObject(fd);
   return run(data.back ?? "/kunden", async (actor) => {
     const r = await changePriority(actor, data.priorityId ?? "", data);
-    if (r.pendingAgreement) throw new PendingInfo("Ihre Zustimmung ist gespeichert. „Vereinbart“ wird das Vorhaben, sobald BD und Principal zugestimmt haben.");
+    if (r.pendingAgreement) throw new PendingInfo("Deine Zustimmung ist gespeichert. „Vereinbart“ wird das Vorhaben, sobald BD und Principal zugestimmt haben.");
   }, "Priorität aktualisiert.");
 }
 
@@ -511,7 +511,7 @@ export async function changeArtifactStatusAction(fd: FormData) {
   const data = formToObject(fd);
   return run(`/artefakte/${data.versionId}`, async (actor) => {
     await changeArtifactStatus(actor, data);
-  }, data.status === "FREIGEGEBEN" ? "Freigegeben. Das ist kein Versand und kein Vorstellungsereignis – Kopieren bleibt Ihre Handlung." : "Status geändert.");
+  }, data.status === "FREIGEGEBEN" ? "Freigegeben. Das ist kein Versand und kein Vorstellungsereignis – Kopieren bleibt deine Handlung." : "Status geändert.");
 }
 
 // --- KI-Vorschläge -------------------------------------------------------------
@@ -702,7 +702,7 @@ export async function changeGoalStatusAction(fd: FormData) {
   const data = formToObject(fd);
   return run(`/ziele/${data.goalId}`, async (actor) => {
     const r = await changeGoalStatus(actor, data.goalId ?? "", { version: Number(data.version), status: data.status as never });
-    if (r.pendingAgreement) throw new PendingInfo("Ihre Zustimmung ist gespeichert. „Vereinbart“ wird das Ziel, sobald CEO und Principal zugestimmt haben.");
+    if (r.pendingAgreement) throw new PendingInfo("Deine Zustimmung ist gespeichert. „Vereinbart“ wird das Ziel, sobald CEO und Principal zugestimmt haben.");
   }, "Zielstatus geändert.");
 }
 
@@ -1078,7 +1078,7 @@ export async function startInterviewAction(fd: FormData) {
   return run(back, async (actor) => {
     const iv = await startInterview(actor, data);
     return `/interviews/${iv.id}`;
-  }, "Interview gestartet. Antworten Sie in eigenen Worten – Diktierfunktion (Windows-Taste + H) funktioniert im Textfeld.");
+  }, "Interview gestartet. Antworte in eigenen Worten – Diktierfunktion (Windows-Taste + H) funktioniert im Textfeld.");
 }
 
 export async function answerInterviewAction(fd: FormData) {
@@ -1086,7 +1086,7 @@ export async function answerInterviewAction(fd: FormData) {
   const id = data.interviewId ?? "";
   return run(`/interviews/${id}`, async (actor) => {
     const r = await answerInterview(actor, data);
-    if (r.done) throw new PendingInfo("Alle Themen sind abgedeckt – Sie können das Interview abschließen oder weitere Angaben ergänzen.");
+    if (r.done) throw new PendingInfo("Alle Themen sind abgedeckt – du kannst das Interview abschließen oder weitere Angaben ergänzen.");
   }, "Antwort gespeichert.");
 }
 

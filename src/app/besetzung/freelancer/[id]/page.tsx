@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
+import { TechRef } from "@/components/TechDetails";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getConfig } from "@/lib/config";
@@ -31,7 +33,7 @@ export default async function FreelancerPage({ params, searchParams }: { params:
   return (
     <div className="space-y-5">
       <p className="text-sm"><Link href="/besetzung">Besetzungen</Link></p>
-      <h1 className="text-2xl font-semibold">{f.displayName}</h1>
+      <h1 className="text-2xl font-semibold">{f.displayName}<TechRef>{`Interne ID ${f.id}`}</TechRef></h1>
       <Feedback params={sp} />
       <section className="card text-sm">
         <dl className="grid sm:grid-cols-3 gap-x-6 gap-y-1">
@@ -135,7 +137,7 @@ export default async function FreelancerPage({ params, searchParams }: { params:
             ))}
           </ul>
         )}
-        {d.hiddenCount > 0 && <p className="muted text-xs mt-2">{d.hiddenCount} weitere Kandidatur(en) bei anderen Kunden sind für dich nicht sichtbar.</p>}
+        {d.hiddenCount > 0 && <p className="muted text-xs mt-2">{pl(d.hiddenCount, "weitere Kandidatur", "weitere Kandidaturen")} bei anderen Kunden sind für dich nicht sichtbar.</p>}
       </section>
     </div>
   );

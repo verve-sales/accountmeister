@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildPortfolio, canBrowsePortfolio } from "@/modules/portfolio/service";
@@ -36,7 +37,7 @@ export default async function MeineBdsPage({ searchParams }: { searchParams: Sea
                   <td className="text-xs" style={{ whiteSpace: "nowrap" }}>{r.nextEnd ? <>{fmtDate(r.nextEnd)}{r.nextEndPerson ? <div className="muted">{r.nextEndPerson}</div> : null}</> : <span className="muted">–</span>}</td>
                   <td className="text-xs">{r.chancesInWork} in Arbeit{r.chancesAnticipated ? <span className="muted"> · {r.chancesAnticipated} antizipiert</span> : null}</td>
                   <td className="text-xs" style={r.daysSinceActivity > 14 ? { color: RED, fontWeight: 600 } : undefined}>{agoLabel(r.daysSinceActivity)}</td>
-                  <td className="text-xs">{r.openDecisions ? <span style={{ color: "#b7791f", fontWeight: 600 }}>{r.openDecisions} Verlängerung(en)</span> : <span className="muted">–</span>}</td>
+                  <td className="text-xs">{r.openDecisions ? <span style={{ color: "#b7791f", fontWeight: 600 }}>{pl(r.openDecisions, "Verlängerung", "Verlängerungen")}</span> : <span className="muted">–</span>}</td>
                   <td><HealthBadge score={r.health.score} level={r.health.level} coverage={r.health.coverage} /></td>
                 </tr>
               ))}

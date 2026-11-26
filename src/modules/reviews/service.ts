@@ -41,7 +41,7 @@ export async function createReview(actor: Actor, raw: unknown) {
   const input = parsed.data;
   const ctx = await loadSetupContext(actor, input.setupId);
   if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Sie dürfen für dieses Setup kein Weekly anlegen.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst für dieses Setup kein Weekly anlegen.");
   // Teilnehmer: Angabe oder alle bearbeitenden Setup-Beteiligten
   let participants = input.participantIds?.filter(Boolean) ?? [];
   if (participants.length === 0) {

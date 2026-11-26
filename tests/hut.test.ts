@@ -32,11 +32,14 @@ describe("Etappe 37: Hut statt Rollen-Sammlung", () => {
     expect((await loadHat(david)).available).toEqual(["BD"]);
   });
 
-  it("H02: Navigation folgt dem Hut, alles Weitere landet unter „Mehr“ – nichts geht verloren", () => {
+  it("H02: Feste Hauptnavigation für alle Rollen, alles Weitere gruppiert unter „Mehr“ – nichts geht verloren", () => {
     const all = new Set(["start", "kunden", "bds", "einsaetze", "besetzung", "ziele", "principals", "runde"]);
     const ceo = splitNav("CEO", all);
-    expect(ceo.main.map((n) => n.label)).toEqual(["Start", "Kundenrunde", "Verantwortliche", "Kunden", "Einsätze"]);
-    expect(ceo.more.map((n) => n.label).sort()).toEqual(["Besetzung", "Meine BDs", "Ziele"]);
+    expect(ceo.main.map((n) => n.label)).toEqual(["Start", "Kunden", "Kundenrunde", "Einsätze", "Besetzung"]);
+    expect(ceo.more.map((n) => n.label).sort()).toEqual(["Kundenverantwortliche", "Meine BDs", "Ziele & Portfolio"]);
+    expect(ceo.groups.find((g) => g.label === "Steuerung")!.links).toHaveLength(3);
+    // gleiche Reihenfolge, egal welcher Hut
+    expect(splitNav("BD", all).main.map((n) => n.href)).toEqual(ceo.main.map((n) => n.href));
     const bd = splitNav("BD", new Set(["start", "kunden", "einsaetze", "ziele"]));
     expect(bd.main.map((n) => n.href)).toEqual(["/start", "/kunden", "/einsaetze"]);
     expect(bd.more.map((n) => n.href)).toEqual(["/ziele"]);

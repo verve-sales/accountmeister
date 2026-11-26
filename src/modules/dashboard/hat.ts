@@ -9,8 +9,8 @@ export const ALL_LINKS: Record<string, NavLink> = {
   bds: { href: "/meine-bds", label: "Meine BDs" },
   einsaetze: { href: "/einsaetze", label: "Einsätze" },
   besetzung: { href: "/besetzung", label: "Besetzung" },
-  ziele: { href: "/ziele", label: "Ziele" },
-  principals: { href: "/meine-principals", label: "Verantwortliche" },
+  ziele: { href: "/ziele", label: "Ziele & Portfolio" },
+  principals: { href: "/meine-principals", label: "Kundenverantwortliche" },
   runde: { href: "/kundenrunde", label: "Kundenrunde" },
   salesops: { href: "/vertragsbuero", label: "Sales-Ops-Sicht" },
   bereinigung: { href: "/bereinigung", label: "Bereinigung" },
@@ -28,10 +28,20 @@ export const HAT_NAV: Record<DashboardView, string[]> = {
 /** Ohne Hut (keine fachliche Rolle): die bisherige Grundnavigation. */
 export const DEFAULT_NAV = ["start", "kunden"];
 
-/** Teilt die erlaubten Links in erste Reihe (nach Hut) und „Mehr“. `allowed` = Schlüssel, die die Person überhaupt sehen darf. */
-export function splitNav(hat: DashboardView | null, allowed: Set<string>): { main: NavLink[]; more: NavLink[] } {
-  const order = hat ? HAT_NAV[hat] : DEFAULT_NAV;
-  const main = order.filter((k) => allowed.has(k)).map((k) => ALL_LINKS[k]!);
-  const more = Object.keys(ALL_LINKS).filter((k) => allowed.has(k) && !order.includes(k)).map((k) => ALL_LINKS[k]!);
-  return { main, more };
+/**
+ * e62: Feste Hauptnavigation – gleiche Reihenfolge für alle Rollen (UX-Gutachten Maßnahme 2). Was einer Rolle nicht
+ * zusteht, fehlt; die Reihenfolge der übrigen bleibt stabil. Der Hut bestimmt nur noch die Startseite.
+ */
+export const MAIN_NAV = ["start", "kunden", "runde", "einsaetze", "besetzung"];
+/** „Mehr“ in Gruppen statt einer Sammelliste */
+export const MORE_GROUPS: { label: string; keys: string[] }[] = [
+  { label: "Steuerung", keys: ["principals", "bds", "ziele"] },
+  { label: "Operations", keys: ["salesops", "bereinigung"] },
+];
+
+/** Teilt die erlaubten Links in die feste erste Reihe und gruppiertes „Mehr“. `allowed` = Schlüssel, die die Person überhaupt sehen darf. */
+export function splitNav(_hat: DashboardView | null, allowed: Set<string>): { main: NavLink[]; more: NavLink[]; groups: { label: string; links: NavLink[] }[] } {
+  const main = MAIN_NAV.filter((k) => allowed.has(k)).map((k) => ALL_LINKS[k]!);
+  const groups = MORE_GROUPS.map((g) => ({ label: g.label, links: g.keys.filter((k) => allowed.has(k)).map((k) => ALL_LINKS[k]!) }));
+  return { main, more: groups.flatMap((g) => g.links), groups };
 }

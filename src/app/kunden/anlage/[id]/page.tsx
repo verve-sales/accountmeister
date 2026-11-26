@@ -1,4 +1,5 @@
 import { getConfig } from "@/lib/config";
+import { pl } from "@/lib/labels";
 import Link from "next/link";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { notFound, redirect } from "next/navigation";
@@ -45,7 +46,7 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
       <section className="card text-sm">
         <div className="grid sm:grid-cols-3 gap-x-6 gap-y-1">
           <div><span className="muted">{d.proposal.kind === "INTERVIEW" ? "Interview: " : "Dokument: "}</span>{d.source ? <Link href={`/quellen/${d.source.id}`}>{d.source.title}</Link> : "–"}{d.document ? <> · <Status label={extractStatusLabel[d.document.extractStatus] ?? d.document.extractStatus} /></> : null}</div>
-          <div><span className="muted">KI: </span>{p.aiStatus === "vorschlag" ? "Vorschlag erzeugt" : p.aiStatus === "fehler" ? "Fehler" : "ohne KI"}{p.rejected > 0 ? ` · ${p.rejected} Element(e) ohne Textbeleg verworfen` : ""}</div>
+          <div><span className="muted">KI: </span>{p.aiStatus === "vorschlag" ? "Vorschlag erzeugt" : p.aiStatus === "fehler" ? "Fehler" : "ohne KI"}{p.rejected > 0 ? ` · ${pl(p.rejected, "Element", "Elemente")} ohne Textbeleg verworfen` : ""}</div>
           <div><span className="muted">Erstellt: </span>{d.proposal.createdAt.toLocaleString("de-DE", { timeZone: "Europe/Berlin" })}</div>
         </div>
         {p.aiNote && <p className="mt-2">{p.aiNote}</p>}
@@ -73,7 +74,7 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
             {!d.targetCtx && (<>
             <section className="card">
               <h2 className="font-semibold mb-2">1. Kunde</h2>
-              {existing && <p className="text-sm mb-2">Die KI vermutet, dass das Dokument zum bestehenden Kunden <strong>{existing.name}</strong> gehört. Wählen Sie ihn unten, wenn das stimmt – dann wird kein neuer Kunde angelegt.</p>}
+              {existing && <p className="text-sm mb-2">Die KI vermutet, dass das Dokument zum bestehenden Kunden <strong>{existing.name}</strong> gehört. Wähle ihn unten, wenn das stimmt – dann wird kein neuer Kunde angelegt.</p>}
               <div className="grid sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label" htmlFor="existingAccountId">Bestehender Kunde (statt Neuanlage)</label>
@@ -235,7 +236,7 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
                 <ul className="list-disc ml-5">
                   {p.artifacts.map((a, i) => <li key={i}><strong>{a.code} {getTemplate(a.code)?.name ?? ""}</strong> – {a.why}</li>)}
                 </ul>
-                <p className="muted mt-2">Artefakte legen Sie nach der Übernahme im Setup unter „Artefakte“ an; sie greifen dann auf die hier übernommenen Quellen und Objekte zu.</p>
+                <p className="muted mt-2">Artefakte legst du nach der Übernahme im Setup unter „Artefakte“ an; sie greifen dann auf die hier übernommenen Quellen und Objekte zu.</p>
               </section>
             )}
 

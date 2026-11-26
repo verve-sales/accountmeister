@@ -1,4 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { fmtDate, opportunityStatusLabel } from "@/lib/labels";
+import { engagementStatusLabel } from "@/modules/engagements/service";
 import { db, schema } from "@/db/client";
 import type { Actor } from "@/modules/identity/actor";
 import { listVisibleAccounts } from "@/modules/accounts/service";
@@ -30,7 +32,7 @@ export async function searchAll(actor: Actor, q: string, limit = 8): Promise<{ q
 
   if (getConfig().FEATURE_BESETZUNG === "true") {
     const { items } = await listEngagements(actor, "alle", q);
-    const eins = items.slice(0, limit).map<SearchHit>((e) => ({ kind: "EINSATZ", id: e.id, title: `${e.personName} bei ${e.accountName}`, subtitle: `${e.title}${e.plannedEnd ? ` · Ende ${e.plannedEnd}` : ""} · ${e.status}`, href: `/einsaetze/${e.id}` }));
+    const eins = items.slice(0, limit).map<SearchHit>((e) => ({ kind: "EINSATZ", id: e.id, title: `${e.personName} bei ${e.accountName}`, subtitle: `${e.title}${e.plannedEnd ? ` · Ende ${fmtDate(e.plannedEnd)}` : ""} · ${engagementStatusLabel[e.status] ?? e.status}`, href: `/einsaetze/${e.id}` }));
     if (eins.length) groups.push({ kind: "EINSATZ", label: "Einsätze", hits: eins });
 
     if (canBrowseFreelancerPool(actor)) {
@@ -45,7 +47,7 @@ export async function searchAll(actor: Actor, q: string, limit = 8): Promise<{ q
       db.query.opportunities.findMany({ where: and(eq(schema.opportunities.workspaceId, actor.workspaceId), inArray(schema.opportunities.accountId, [...accIds])), columns: { id: true, title: true, accountId: true, status: true } }),
       db.query.projectSetups.findMany({ where: and(eq(schema.projectSetups.workspaceId, actor.workspaceId), inArray(schema.projectSetups.accountId, [...accIds])), columns: { id: true, name: true, accountId: true } }),
     ]);
-    const ch = opps.filter((o) => has(o.title)).slice(0, limit).map<SearchHit>((o) => ({ kind: "CHANCE", id: o.id, title: o.title, subtitle: `Chance · ${an.get(o.accountId) ?? ""} · ${o.status.toLowerCase().replace(/_/g, " ")}`, href: `/bedarfe/${o.id}` }));
+    const ch = opps.filter((o) => has(o.title)).slice(0, limit).map<SearchHit>((o) => ({ kind: "CHANCE", id: o.id, title: o.title, subtitle: `Chance · ${an.get(o.accountId) ?? ""} · ${opportunityStatusLabel[o.status] ?? o.status}`, href: `/bedarfe/${o.id}` }));
     if (ch.length) groups.push({ kind: "CHANCE", label: "Chancen", hits: ch });
     const st = setups.filter((s) => has(s.name)).slice(0, limit).map<SearchHit>((s) => ({ kind: "SETUP", id: s.id, title: s.name, subtitle: `Setup · ${an.get(s.accountId) ?? ""}`, href: `/setups/${s.id}` }));
     if (st.length) groups.push({ kind: "SETUP", label: "Setups", hits: st });

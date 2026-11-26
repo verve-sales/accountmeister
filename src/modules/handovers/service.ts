@@ -32,14 +32,14 @@ export async function createHandover(actor: Actor, raw: unknown) {
   const input = parsed.data;
 
   // F05: keine Selbstübergabe (Doppelrolle Anker+BD erzeugt keine künstlichen Übergaben an sich selbst).
-  if (input.receiverUserId === actor.userId) throw new ValidationError("Eine Übergabe an sich selbst ist nicht vorgesehen. Übernehmen Sie den Hinweis direkt.");
+  if (input.receiverUserId === actor.userId) throw new ValidationError("Eine Übergabe an sich selbst ist nicht vorgesehen. Übernimm den Hinweis direkt.");
 
   const receiver = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.receiverUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
   if (!receiver) throw new ValidationError("Empfänger nicht gefunden oder inaktiv.");
 
   const setupId = await resolveSetupId(actor, input.subjectType, input.subjectId);
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError("Sie dürfen aus diesem Setup keine Übergabe erstellen.");
+  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst aus diesem Setup keine Übergabe erstellen.");
 
   return db.transaction(async (tx) => {
     const [h] = await tx

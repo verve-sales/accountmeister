@@ -100,7 +100,7 @@ export async function reassignAccountBd(actor: Actor, accountId: string, raw: un
   const input = parsed.data;
   const account = await db.query.accounts.findFirst({ where: and(eq(schema.accounts.id, accountId), eq(schema.accounts.workspaceId, actor.workspaceId)) });
   if (!account) throw new NotFoundError("Kunde");
-  if (!canReassignResponsibility(actor, account)) throw new ForbiddenError("Sie dürfen die Kundenzuständigkeit hier nicht umstellen.");
+  if (!canReassignResponsibility(actor, account)) throw new ForbiddenError("Du darfst die Kundenzuständigkeit hier nicht umstellen.");
   if (account.responsibleBdUserId === input.responsibleBdUserId) throw new ValidationError("Diese Person ist bereits zuständig.");
   const newBd = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.responsibleBdUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
   if (!newBd) throw new ValidationError("Person nicht gefunden oder inaktiv.");

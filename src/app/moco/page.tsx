@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
+import { TechDetails, TechRef } from "@/components/TechDetails";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { canRunMocoImport } from "@/modules/moco/import";
@@ -45,9 +47,9 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
           <h2 className="font-semibold">Verbindung</h2>
           <p>
             Modus: <strong>{status.mode}</strong>
-            {status.subdomain ? ` · ${status.subdomain}.mocoapp.com` : ""} · Webhook-Signatur {status.webhookConfigured ? "hinterlegt" : "fehlt (MOCO_WEBHOOK_SECRET)"} · letzter Abgleich: {status.lastRun ? `${fmtDateTime(status.lastRun.startedAt)} (${status.lastRun.ok ? "ok" : `Fehler: ${status.lastRun.error}`})` : "noch keiner"}
+            {status.subdomain ? ` · ${status.subdomain}.mocoapp.com` : ""} · Webhook-Signatur {status.webhookConfigured ? "hinterlegt" : <>fehlt <TechRef>MOCO_WEBHOOK_SECRET</TechRef></>} · letzter Abgleich: {status.lastRun ? `${fmtDateTime(status.lastRun.startedAt)} (${status.lastRun.ok ? "ok" : `Fehler: ${status.lastRun.error}`})` : "noch keiner"}
           </p>
-          {!status.enabled && <p className="muted">Die Anbindung ist aus. In <code>.env.production</code> setzen: <code>MOCO_MODE=http</code>, <code>MOCO_SUBDOMAIN</code>, <code>MOCO_API_KEY</code> (technischer Nutzer; schreibt nur Leads), optional <code>MOCO_WEBHOOK_SECRET</code>. Webhook-Ziel: <code>/api/moco/webhook</code> (Targets Project, Company, User; Events create/update/delete).</p>}
+          {!status.enabled && <><p className="muted">Die Anbindung ist aus – die Betriebsverwaltung schaltet sie ein.</p><TechDetails><p>In <code>.env.production</code> setzen: <code>MOCO_MODE=http</code>, <code>MOCO_SUBDOMAIN</code>, <code>MOCO_API_KEY</code> (technischer Nutzer; schreibt nur Leads), optional <code>MOCO_WEBHOOK_SECRET</code>. Webhook-Ziel: <code>/api/moco/webhook</code> (Targets Project, Company, User; Events create/update/delete).</p></TechDetails></>}
           {status.enabled && (
             <div className="flex flex-wrap gap-3 items-end">
               <form action={mocoPreviewAction}>
@@ -99,7 +101,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
             <input type="hidden" name="back" value="/moco" />
             <ul className="space-y-1">
               {repair.map((r) => (
-                <li key={r.userId}><label className="flex items-center gap-2"><input type="checkbox" name="userId" value={r.userId} defaultChecked /> <strong>{r.name}</strong> <span className="muted text-xs">{r.email}{r.unit ? ` · Moco-Team ${r.unit}` : ""} · {r.engagements} Einsatz/Einsätze</span></label></li>
+                <li key={r.userId}><label className="flex items-center gap-2"><input type="checkbox" name="userId" value={r.userId} defaultChecked /> <strong>{r.name}</strong> <span className="muted text-xs">{r.email}{r.unit ? ` · Moco-Team ${r.unit}` : ""} · {pl(r.engagements, "Einsatz", "Einsätze")}</span></label></li>
               ))}
             </ul>
             <button className="btn btn-small" type="submit">Ausgewählte in den Freelancer-Pool überführen</button>
@@ -133,7 +135,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
                             </select>
                           )}
                         </td>
-                        <td className="text-xs">{c.blocker ? <span style={{ color: "#c0392b" }}>{c.blocker}</span> : c.mocoUserId && leads!.actorMocoUserId === c.mocoUserId && c.ownerName !== actor.displayName ? <span className="muted">Inhaber in Moco: Sie (Verantwortliche/r ohne Moco-Nutzer)</span> : null}</td>
+                        <td className="text-xs">{c.blocker ? <span style={{ color: "#c0392b" }}>{c.blocker}</span> : c.mocoUserId && leads!.actorMocoUserId === c.mocoUserId && c.ownerName !== actor.displayName ? <span className="muted">Inhaber in Moco: du (Verantwortliche/r ohne Moco-Nutzer)</span> : null}</td>
                       </tr>
                     ))}
                   </tbody>

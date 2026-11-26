@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getConfig } from "@/lib/config";
@@ -65,8 +66,8 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
       </nav>
       {(counts.ende_ueberschritten > 0 || dups.length > 0) && (
         <p className="text-sm" style={{ color: "#8a5a00" }}>
-          {counts.ende_ueberschritten > 0 && <><Link href={`/einsaetze?f=ende_ueberschritten${qs}`}>{counts.ende_ueberschritten} Einsatz/Einsätze mit überschrittenem Ende</Link> stehen nicht mehr unter „laufend“. </>}
-          {dups.length > 0 && <>{dups.length} mögliche Dublette(n) in dieser Liste (markiert). </>}
+          {counts.ende_ueberschritten > 0 && <><Link href={`/einsaetze?f=ende_ueberschritten${qs}`}>{pl(counts.ende_ueberschritten, "Einsatz", "Einsätze")} mit überschrittenem Ende</Link> stehen nicht mehr unter „laufend“. </>}
+          {dups.length > 0 && <>{pl(dups.length, "mögliche Dublette", "mögliche Dubletten")} in dieser Liste (markiert). </>}
           {cleaner ? <Link href="/bereinigung">In der Bereinigung abschließen bzw. zusammenführen →</Link> : <span className="muted">Abschließen und Zusammenführen machen Sales Operations oder Geschäftsführung in der Bereinigung.</span>}
         </p>
       )}

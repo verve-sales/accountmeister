@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { accountKindLabel, ampelLabel, buildRound, canSeeRound, type Ampel, type RoundAccount } from "@/modules/rounds/service";
@@ -107,7 +108,7 @@ export default async function KundenrundePage({ searchParams }: { searchParams: 
                       <div className="flex flex-wrap items-baseline gap-3">
                         <Dot a="GRUEN" />
                         <Link href={`/kunden/${a.accountId}`}><strong>{a.name}</strong></Link>
-                        <span className="muted">Köpfe {a.headsNow}{a.ending.length ? ` · ${a.ending.length} Einsatz/Einsätze enden in 90 T. (geklärt)` : ""}{a.interesting.newChances.length ? ` · ${a.interesting.newChances.length} neue Chance(n)` : ""}{a.interesting.openCards ? ` · ${a.interesting.openCards} KI-Vorschläge` : ""}</span>
+                        <span className="muted">Köpfe {a.headsNow}{a.ending.length ? ` · ${pl(a.ending.length, "Einsatz", "Einsätze")} enden in 90 T. (geklärt)` : ""}{a.interesting.newChances.length ? ` · ${pl(a.interesting.newChances.length, "neue Chance", "neue Chancen")}` : ""}{a.interesting.openCards ? ` · ${a.interesting.openCards} KI-Vorschläge` : ""}</span>
                       </div>
                       <Prep accountId={a.accountId} prep={a.prep} mayPrepare={a.mayPrepare} compact />
                     </li>
@@ -147,7 +148,7 @@ function Interesting({ a }: { a: RoundAccount }) {
     <div>
       <div className="muted text-xs">Interessantes seit der letzten Runde</div>
       {!any && <div className="muted">nichts Neues dokumentiert</div>}
-      {i.newChances.length > 0 && <div>{i.newChances.length} neue Chance(n): {i.newChances.slice(0, 3).map((c, n) => <span key={c.id}>{n ? ", " : ""}<Link href={`/bedarfe/${c.id}`}>{c.title}</Link></span>)}</div>}
+      {i.newChances.length > 0 && <div>{pl(i.newChances.length, "neue Chance", "neue Chancen")}: {i.newChances.slice(0, 3).map((c, n) => <span key={c.id}>{n ? ", " : ""}<Link href={`/bedarfe/${c.id}`}>{c.title}</Link></span>)}</div>}
       {i.openCards > 0 && <div><Link href={`/kunden/${a.accountId}?b=strategie`}>{i.openCards} offene KI-Vorschläge</Link></div>}
       {i.newPersons.length > 0 && <div>Neu beim Kunden: {i.newPersons.slice(0, 3).join(", ")}{i.newPersons.length > 3 ? " …" : ""}</div>}
     </div>

@@ -43,9 +43,9 @@ export async function createPerson(actor: Actor, raw: unknown) {
   const account = await getAccount(actor, input.accountId);
   if (!hasRoleForAccountWrite(actor, account)) {
     // Setup-Bearbeitende dürfen Personen für „ihren“ Kunden anlegen
-    if (!input.setupId) throw new ForbiddenError("Für diesen Kunden dürfen Sie keine Personen anlegen.");
+    if (!input.setupId) throw new ForbiddenError("Für diesen Kunden darfst du keine Personen anlegen.");
     const ctx = await loadSetupContext(actor, input.setupId);
-    if (!ctx || ctx.account.id !== account.id || !canEditSetup(actor, ctx)) throw new ForbiddenError("Für diesen Kunden dürfen Sie keine Personen anlegen.");
+    if (!ctx || ctx.account.id !== account.id || !canEditSetup(actor, ctx)) throw new ForbiddenError("Für diesen Kunden darfst du keine Personen anlegen.");
   }
   // Gibt es die Person beim Kunden schon (gleiche E-Mail oder gleicher Name), wird sie ergänzt statt doppelt angelegt
   const existing = await findExistingPerson(db, account.id, input.displayName, input.email);
@@ -193,7 +193,7 @@ export async function setRelationship(actor: Actor, raw: unknown) {
   const input = parsed.data;
   const ctx = await loadSetupContext(actor, input.setupId);
   if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Sie dürfen Beziehungen in diesem Setup nicht pflegen.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst Beziehungen in diesem Setup nicht pflegen.");
   const person = await requirePerson(actor, input.personId, "read");
   if (person.accountId && person.accountId !== ctx.account.id) throw new ValidationError("Die Person gehört zu einem anderen Kunden.");
   if (statesRequiringEvidence.includes(input.state) && !input.evidenceSourceId && !input.evidenceNote) {
@@ -270,7 +270,7 @@ export async function requirePerson(actor: Actor, personId: string, mode: "read"
         break;
       }
     }
-    if (!allowed) throw new ForbiddenError("Sie dürfen diese Person nicht bearbeiten.");
+    if (!allowed) throw new ForbiddenError("Du darfst diese Person nicht bearbeiten.");
   }
   return person;
 }

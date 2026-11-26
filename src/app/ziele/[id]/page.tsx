@@ -98,7 +98,7 @@ export default async function ZielPage({ params, searchParams }: { params: Promi
                 <input type="hidden" name="version" value={goal.version} />
                 <input type="hidden" name="status" value={t.value} />
                 <button className={t.value === "BEENDET" ? "btn btn-secondary" : "btn"} type="submit" disabled={t.value === "VEREINBART" && alreadyAgreed}>
-                  {t.value === "VEREINBART" && alreadyAgreed ? "Ihre Zustimmung liegt vor" : t.label}
+                  {t.value === "VEREINBART" && alreadyAgreed ? "Deine Zustimmung liegt vor" : t.label}
                 </button>
               </form>
             ))}

@@ -237,7 +237,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         <div className="text-sm mt-2 muted flex flex-wrap gap-3 items-center">
           <span>Beteiligte:</span>
           {[...new Set(opportunities.filter((o) => o.status !== "BEENDET").map((o) => o.ownerUserId))].filter((uid) => !d.members.some((m) => m.userId === uid)).map((uid) => (
-            <span key={`owner-${uid}`} className="inline-flex items-center gap-1">{name(uid)} – verantwortlich für Chance(n)</span>
+            <span key={`owner-${uid}`} className="inline-flex items-center gap-1">{name(uid)} – verantwortlich für Chancen</span>
           ))}
           {d.members.map((m) => (
             <span key={m.userId} className="inline-flex items-center gap-1">
@@ -285,7 +285,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
               </div>
               <div className="flex items-end"><button className="btn btn-secondary" type="submit">Übernehmen</button></div>
             </form>
-            <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD können Sie BD-Zuordnung und Beteiligungen (z. B. Anker) jederzeit umstellen – unabhängig davon, wer sie ursprünglich zugewiesen hat.</p>
+            <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD kannst du BD-Zuordnung und Beteiligungen (z. B. Anker) jederzeit umstellen – unabhängig davon, wer sie ursprünglich zugewiesen hat.</p>
           </details>
         )}
         {d.canEdit && (
@@ -538,7 +538,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                   {s.relevanceHypothesis && <p className="text-sm"><span className="muted">Vermutung: </span>{s.relevanceHypothesis}</p>}
                   {s.usageLimit && <p className="text-sm"><span className="muted">Nutzungsgrenze: </span>{s.usageLimit}</p>}
                   {s.closedReason && <p className="text-sm"><span className="muted">Begründung: </span>{s.closedReason}</p>}
-                  <p className="text-sm mt-1">{s.sourceId && d.sources.some((x) => x.id === s.sourceId) ? <Link href={`/quellen/${s.sourceId}`}>Quelle ansehen</Link> : <span className="muted">Quelle nicht in Ihrem Berechtigungsbereich</span>}</p>
+                  <p className="text-sm mt-1">{s.sourceId && d.sources.some((x) => x.id === s.sourceId) ? <Link href={`/quellen/${s.sourceId}`}>Quelle ansehen</Link> : <span className="muted">Quelle nicht in deinem Berechtigungsbereich</span>}</p>
                   {d.canEdit && s.status !== "BEENDET" && (
                     <div className="mt-2 flex flex-wrap gap-3 items-start">
                       {s.status === "NEU" && !relatedHandover && (
@@ -696,7 +696,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
 
       <section className="card">
         <h2 className="font-semibold mb-2">Quellen</h2>
-        {d.sources.length === 0 ? <p className="muted text-sm">Keine Quellen in Ihrem Berechtigungsbereich.</p> : (
+        {d.sources.length === 0 ? <p className="muted text-sm">Keine Quellen in deinem Berechtigungsbereich.</p> : (
           <table className="list">
             <thead><tr><th>Titel</th><th>Typ</th><th>Quellenzeit</th><th>Inhaber</th><th>Zugriff</th></tr></thead>
             <tbody>
@@ -712,7 +712,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
             </tbody>
           </table>
         )}
-        {d.hiddenSourceCount > 0 && <p className="muted text-sm mt-2">{d.hiddenSourceCount} weitere Quelle(n) sind für Ihre Rolle nicht einsehbar.</p>}
+        {d.hiddenSourceCount > 0 && <p className="muted text-sm mt-2">{d.hiddenSourceCount === 1 ? "Eine weitere Quelle ist" : `${d.hiddenSourceCount} weitere Quellen sind`} für deine Rolle nicht einsehbar.</p>}
         {d.canEdit && (
           <form action={startInterviewAction} className="mt-4 flex flex-wrap items-center gap-3">
             <input type="hidden" name="kind" value="SETUP_ERGAENZUNG" />
@@ -736,7 +736,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                 </select>
               </div>
               <div><label className="label" htmlFor="docSourceTime">Datum des Dokuments (optional)</label><input id="docSourceTime" name="sourceTime" type="datetime-local" className="input" /></div>
-              <p className="muted text-sm sm:col-span-2">Der Text wird auf dem Server extrahiert und als Quelle geführt; die Datei bleibt zum Nachlesen gespeichert. {ai.enabled ? "Auf der Quellenseite können Sie daraus KI-Vorschläge erzeugen lassen." : "KI ist deaktiviert; das Dokument ist trotzdem als Quelle nutzbar."}</p>
+              <p className="muted text-sm sm:col-span-2">Der Text wird auf dem Server extrahiert und als Quelle geführt; die Datei bleibt zum Nachlesen gespeichert. {ai.enabled ? "Auf der Quellenseite kannst du daraus KI-Vorschläge erzeugen lassen." : "KI ist deaktiviert; das Dokument ist trotzdem als Quelle nutzbar."}</p>
               <div className="sm:col-span-2"><button className="btn" type="submit">Dokument hochladen</button></div>
             </form>
           </details>

@@ -306,7 +306,7 @@ async function summarize(p: PrincipalRef, q: Quarter, today: string): Promise<Pr
 
 /** Übersicht „Meine Principals“ – nur Geschäftsführung. */
 export async function buildPrincipalOverview(actor: Actor, quarterKey?: string | null, today = todayIso()) {
-  if (!canSetTargets(actor)) throw new ForbiddenError("„Meine Principals“ sieht die Geschäftsführung.");
+  if (!canSetTargets(actor)) throw new ForbiddenError("„Kundenverantwortliche“ sieht die Geschäftsführung.");
   const q = quarterFromKey(quarterKey) ?? quarterOf(today);
   const principals = await listPrincipals(actor.workspaceId);
   const rows: PrincipalSummary[] = [];

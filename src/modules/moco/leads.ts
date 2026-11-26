@@ -102,7 +102,7 @@ export async function listLeadCandidates(actor: Actor, client: MocoClient = getM
     }
     const mocoUserId = r.ownerMocoUserId ?? myMocoId;
     const existing = findExistingDeal(deals, company?.id ?? null, r.opp.title);
-    const blocker = !company ? "Kunde ist mit keiner Moco-Firma verknüpft (Firma zuerst in Moco anlegen oder Kunden per Prüfliste verknüpfen)." : !mocoUserId ? "Weder die/der Verantwortliche noch Sie sind mit einem Moco-Nutzer verknüpft." : !categories.length && !existing ? "In Moco sind keine Lead-Phasen angelegt." : null;
+    const blocker = !company ? "Kunde ist mit keiner Moco-Firma verknüpft (Firma zuerst in Moco anlegen oder Kunden per Prüfliste verknüpfen)." : !mocoUserId ? "Weder die/der Verantwortliche noch du bist mit einem Moco-Nutzer verknüpft." : !categories.length && !existing ? "In Moco sind keine Lead-Phasen angelegt." : null;
     return {
       opportunityId: r.opp.id,
       title: r.opp.title,

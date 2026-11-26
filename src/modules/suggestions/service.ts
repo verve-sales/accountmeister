@@ -274,7 +274,7 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
   const freshCtx = fresh ? await loadSetupContext(fresh, ctx.setup.id) : null;
   if (!fresh || !freshCtx || !canViewSetup(fresh, freshCtx)) {
     await db.update(schema.aiJobs).set({ status: "ABGELEHNT", error: "Berechtigung während der Verarbeitung entzogen", finishedAt: new Date() }).where(eq(schema.aiJobs.id, job.id));
-    throw new ForbiddenError("Ihre Berechtigung hat sich während der Verarbeitung geändert; es wurde nichts gespeichert.");
+    throw new ForbiddenError("Deine Berechtigung hat sich während der Verarbeitung geändert; es wurde nichts gespeichert.");
   }
 
   const nameToUser = new Map(users.map((u) => [u.displayName, u.id]));
@@ -616,7 +616,7 @@ async function acceptRenewalSuggestion(actor: Actor, s: SuggestionRow, newEnd: s
   const e = await db.query.engagements.findFirst({ where: and(eq(schema.engagements.id, s.objectId), eq(schema.engagements.workspaceId, actor.workspaceId)) });
   if (!e) throw new NotFoundError("Einsatz");
   const a = await engagementAccess(actor, e);
-  if (!a || !(a.manage || a.care)) throw new ForbiddenError("Für diesen Einsatz dürfen Sie keine Verlängerung anstoßen.");
+  if (!a || !(a.manage || a.care)) throw new ForbiddenError("Für diesen Einsatz darfst du keine Verlängerung anstoßen.");
   const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
   const quote = `Laut ${s.trigger}: „${s.evidenceQuote.slice(0, 200)}“${note ? ` – ${note}` : ""}`;
   if (!open || open.proposedTo !== newEnd) await startRenewal(actor, e.id, { newEnd, conditions: "UNVERAENDERT", note: quote.slice(0, 1000) });

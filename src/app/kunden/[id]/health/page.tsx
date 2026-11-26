@@ -145,6 +145,17 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
             <thead><tr><th>Einsatz</th><th>Berater</th><th>Vertrag / Bestellung</th><th>Status</th><th>Start</th><th>Ende · Verlängerungsfrist</th><th>Verlängerung startet</th></tr></thead>
             <tbody>
               {h.engagements.map((e) => (
+                e.engagementId ? (
+                  <tr key={e.orderId}>
+                    <td><Link href={`/einsaetze/${e.engagementId}`}>{e.title}</Link><div className="muted text-xs">{e.setupName}</div></td>
+                    <td className="text-sm">{e.consultantName ?? <span className="muted">–</span>}</td>
+                    <td className="text-sm">{e.orderReference ? <div className="muted text-xs">Ref. {e.orderReference}</div> : <span className="muted text-xs">Unterlagen am Einsatz</span>}</td>
+                    <td className="text-sm">{e.daysToEnd !== null && e.daysToEnd < 0 ? <span style={{ color: "#c0392b", fontWeight: 600 }}>Ende überschritten ({-e.daysToEnd} Tage)</span> : <>{e.status === "GESTARTET" ? "läuft" : "geplant"}{e.daysToEnd !== null && e.daysToEnd >= 0 ? ` · noch ${e.daysToEnd} Tage` : ""}</>}</td>
+                    <td className="text-sm">{fmtDate(e.plannedStart)}</td>
+                    <td className="text-sm">{e.plannedEnd ? fmtDate(e.plannedEnd) : <Link href={`/einsaetze/${e.engagementId}`}>Ende am Einsatz eintragen</Link>}</td>
+                    <td className="text-sm">{e.triggerDate ? fmtDate(e.triggerDate) : <span className="muted">Ende fehlt</span>}</td>
+                  </tr>
+                ) : (
                 <tr key={e.orderId}>
                   <td><Link href={`/bedarfe/${e.opportunityId}`}>{e.title}</Link><div className="muted text-xs">{e.setupName}</div></td>
                   <td className="text-sm">
@@ -214,6 +225,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
                   </td>
                   <td className="text-sm">{e.triggerDate ? fmtDate(e.triggerDate) : <span className="muted">Ende fehlt</span>}</td>
                 </tr>
+                )
               ))}
             </tbody>
           </table>

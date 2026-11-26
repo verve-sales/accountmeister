@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TechRef } from "@/components/TechDetails";
 import { notFound, redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
@@ -61,7 +62,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
       <SetupTabs setupId={id} active="personen" />
       <Feedback params={sp} />
       <p className="muted text-sm">
-        Nur berufliche Angaben. Ein Beziehungsstand braucht Kontext und ab „Vorgestellt“ einen Beleg. Eine bekannte Person ist nicht automatisch Sponsor. Kontaktwege trennen belegte, geplante und hypothetische Verbindungen (Briefing 8).
+        Nur berufliche Angaben. Ein Beziehungsstand braucht Kontext und ab „Vorgestellt“ einen Beleg. Eine bekannte Person ist nicht automatisch Sponsor. Kontaktwege trennen belegte, geplante und hypothetische Verbindungen. <TechRef>Briefing 8</TechRef>
       </p>
 
       {/* Personen */}
@@ -98,7 +99,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                       <div key={r.id} className="mb-1">
                         <Status label={relationshipStateLabel[r.state] ?? r.state} /> {r.holderName}
                         {r.contextNote && <div className="muted">{r.contextNote}</div>}
-                        <div className="muted">{r.evidenceSourceId ? (sources.some((s) => s.id === r.evidenceSourceId) ? <Link href={`/quellen/${r.evidenceSourceId}`}>Beleg ansehen</Link> : "Beleg vorhanden (nicht in Ihrem Berechtigungsbereich)") : "kein Beleg"} · Stand {fmtDate(r.updatedAt)}</div>
+                        <div className="muted">{r.evidenceSourceId ? (sources.some((s) => s.id === r.evidenceSourceId) ? <Link href={`/quellen/${r.evidenceSourceId}`}>Beleg ansehen</Link> : "Beleg vorhanden (nicht in deinem Berechtigungsbereich)") : "kein Beleg"} · Stand {fmtDate(r.updatedAt)}</div>
                       </div>
                     ))}
                   </td>
@@ -341,7 +342,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
               {bc.rows.map((r) => (
                 <tr key={r.person.id}>
                   <td>{r.person.displayName}<div className="muted text-sm">{r.functionTitle ?? "–"}</div></td>
-                  {r.assessmentHidden ? <td colSpan={4} className="muted">Einschätzung für Ihre Rolle nicht sichtbar</td> : (
+                  {r.assessmentHidden ? <td colSpan={4} className="muted">Einschätzung für deine Rolle nicht sichtbar</td> : (
                     <>
                       <td>{r.assessment?.decisionRole ? decisionRoleLabel[r.assessment.decisionRole] ?? r.assessment.decisionRole : <span className="muted">–</span>}</td>
                       <td>{r.assessment ? stanceLabel[r.assessment.stance] : <span className="muted">–</span>}</td>
@@ -367,7 +368,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                             <select name="stance" className="select" defaultValue={r.assessment?.stance ?? "UNBEKANNT"} aria-label="Haltung">{schema.stanceEnum.enumValues.map((v) => <option key={v} value={v}>Haltung: {stanceLabel[v]}</option>)}</select>
                             <select name="influence" className="select" defaultValue={r.assessment?.influence ?? "UNBEKANNT"} aria-label="Einfluss">{schema.influenceEnum.enumValues.map((v) => <option key={v} value={v}>Einfluss: {influenceLabel[v]}</option>)}</select>
                           </div>
-                          <input name="note" className="input" placeholder="Woran machen Sie das fest?" defaultValue={r.assessment?.note ?? ""} maxLength={500} aria-label="Begründung" />
+                          <input name="note" className="input" placeholder="Woran machst du das fest?" defaultValue={r.assessment?.note ?? ""} maxLength={500} aria-label="Begründung" />
                           <select name="sourceId" className="select" defaultValue={r.assessment?.sourceId ?? ""} aria-label="Quelle">
                             <option value="">– Quelle (für Bestätigung nötig) –</option>
                             {sources.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
@@ -384,7 +385,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
           </table>
         )}
       </section>
-      <p className="muted text-sm">Die grafische Beziehungskarte folgt; die Tabelle ist die gleichwertige Darstellung (Briefing 8.4). {personName.size} Personen bekannt.</p>
+      <p className="muted text-sm">Die grafische Beziehungskarte folgt; die Tabelle ist die gleichwertige Darstellung <TechRef>Briefing 8.4</TechRef>. {personName.size} Personen bekannt.</p>
     </div>
   );
 }

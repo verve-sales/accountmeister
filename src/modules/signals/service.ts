@@ -125,7 +125,7 @@ export async function requireSignal(actor: Actor, signalId: string) {
  */
 export async function takeOverSignal(actor: Actor, signalId: string, expectedVersion: number) {
   const { signal, ctx } = await requireSignal(actor, signalId);
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Sie sind an diesem Setup nicht bearbeitend beteiligt.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");
   assertSignalTransition(signal.status, "PRUEFUNG_UEBERNOMMEN");
   return db.transaction(async (tx) => {
     const [updated] = await tx

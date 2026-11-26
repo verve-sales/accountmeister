@@ -190,7 +190,7 @@ export async function buildPortfolio(actor: Actor): Promise<{ entries: Portfolio
     });
   }
   entries.sort((x, y) => y.openChanges + y.blockedActions + y.openSupport - (x.openChanges + x.blockedActions + x.openSupport));
-  return { entries, note: "Zählungen dokumentierter Objekte aus den Accountplänen. Keine Umsatz-, Forecast- oder Potenzialwerte (Briefing 7, 11.3). Rohquellen sind hier nicht enthalten." };
+  return { entries, note: "Zählungen dokumentierter Objekte aus den Accountplänen. Keine Umsatz-, Forecast- oder Potenzialwerte. Rohquellen sind hier nicht enthalten." };
 }
 
 // ---------------------------------------------------------------------------

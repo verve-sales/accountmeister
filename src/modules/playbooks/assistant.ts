@@ -24,7 +24,7 @@ export async function proposeStepDrafts(actor: Actor, runStepId: string, deps: {
   if (!run) throw new NotFoundError("Vorgehen");
   const ctx = await loadSetupContext(actor, run.setupId);
   if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Vorgehen");
-  if (run.ownerUserId !== actor.userId && !canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Sie dürfen an diesem Vorgehen nicht arbeiten.");
+  if (run.ownerUserId !== actor.userId && !canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Du darfst an diesem Vorgehen nicht arbeiten.");
   if (run.status !== "AKTIV" || step.status !== "OFFEN") throw new TransitionError("Entwürfe gibt es für den aktuellen Schritt eines laufenden Vorgehens.");
 
   const [allSteps, persons, opps, signals] = await Promise.all([

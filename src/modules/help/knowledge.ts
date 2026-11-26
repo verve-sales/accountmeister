@@ -37,8 +37,8 @@ Der Hut bestimmt die erste Reihe der Navigation (alles Weitere unter „Mehr“)
   },
   {
     id: "meine-principals",
-    title: "Meine Principals: Quartalsziele und Gespräch",
-    where: "Hut „Geschäftsführung“ → Meine Principals → Gespräch · Hut „Principal“ → Start → „Meine Ziele“",
+    title: "Kundenverantwortliche: Quartalsziele und Gespräch",
+    where: "Hut „Geschäftsführung“ → Mehr › Kundenverantwortliche → Gespräch · Hut „Principal“ → Start → „Meine Ziele“",
     keywords: ["principal", "ziele", "quartal", "koepfe", "neukunden", "verlaengerungsquote", "gespraech", "vereinbarung", "geschaeftsfuehrung", "stichtag"],
     body: `Die Geschäftsführung setzt je Principal und Quartal drei Ziele: Köpfe je Kunde (Summe = Köpfe-Ziel des Principals), Neukunden und Verlängerungsquote in Prozent. Stichtag ist das Quartalsende; im laufenden Quartal zählt der Stand von heute. Kein Umsatz.
 Köpfe: verschiedene Personen mit laufendem Einsatz am Stichtag. Neukunde: der erste Einsatz beim Kunden beginnt im Quartal. Verlängerungsquote: im Quartal entschiedene Verlängerungen, bestätigt ÷ (bestätigt + nicht verlängert).
@@ -51,7 +51,7 @@ Die Gesprächsseite folgt dem Ablauf Lage → Zahlen → offene Entscheidungen �
     keywords: ["kundenrunde", "runde", "account lead", "principal", "kundenverantwortung", "nebengeschaeft", "radar", "prospect", "ex-kunde", "bestandskunde", "ampel", "vorbereiten", "freigabe"],
     body: `Jeder Kunde hat genau eine Kundenverantwortung: Account Lead oder Principal (Verwaltung → Rolle „Principal“ mit Stufe und Kunde). Eine arbeitsraumweite Principal-Rolle gibt Rechte bei allen Kunden, zählt aber keine Kunden – gezählt (Ziele, Kundenrunde) wird nur die kundenbezogene Zuordnung.
 Kundenart: Bestandskunde (laufende Einsätze), Prospect (noch nie ein Einsatz), Ex-Kunde (früher Einsätze) ergeben sich automatisch; „Nebengeschäft“ (kleine Serviceaufträge, Durchreiche) wird am Kunden von Hand markiert – nicht in der Kundenrunde, Köpfe zählen nicht für Ziele. Prospects und Ex-Kunden lassen sich „auf das Radar“ setzen.
-Die Kundenrunde (alle zwei Wochen) zeigt je Kundenverantwortlichem seine Bestandskunden: Sattelfestigkeit (Health-Check), Nachhaltigkeit (Köpfe, Einsätze mit Ende in 90 Tagen, Verlängerungsstand), Interessantes seit der letzten Runde (neue Chancen, KI-Vorschläge, neue Personen). Rot und Gelb stehen oben, Grün wird nur bestätigt; am Ende „Auf dem Radar“. Die Verantwortlichen bestätigen je Kunde vorher (optional mit einem Satz); die Geschäftsführung schließt die Runde ab.
+Die Kundenrunde (alle zwei Wochen) zeigt je Kundenverantwortlichem seine Bestandskunden: Health-Check, Nachhaltigkeit (Köpfe, Einsätze mit Ende in 90 Tagen, Verlängerungsstand), Interessantes seit der letzten Runde (neue Chancen, KI-Vorschläge, neue Personen). Rot und Gelb stehen oben, Grün wird nur bestätigt; am Ende „Auf dem Radar“. Die Verantwortlichen bestätigen je Kunde vorher (optional mit einem Satz); die Geschäftsführung schließt die Runde ab.
 Vier-Augen bei Account Leads: Eine Verlängerung mit geänderten Konditionen geht bei einem Account-Lead-Kunden zur Freigabe an die Geschäftsführung; unveränderte Konditionen werden direkt bestätigt.`,
   },
   {
@@ -190,7 +190,7 @@ Er verschickt nichts und recherchiert nicht im Internet. Im Interview-Modus füh
 Anker: Verve-Kolleg:in im Kundenteam; bringt Kontext, fachliche Rückfragen oder Einführungen ein (Beteiligung je Setup).
 Principal: Führungsrolle, arbeitsraumweit oder je Kunde. Hat volle Rechte auf seinen Kunden: sieht und pflegt Setups und Chancen, stellt BD, Anker und Verantwortliche um. Arbeitsraumweite Principals pflegen außerdem Vorgehensmuster und den strategischen Fokus. Persönliche Notizen anderer bleiben privat.
 Sales Operations: unterstützt alle BDs – sieht und pflegt Kunden, Setups, Chancen und Personen, bereitet Angebote und Ausschreibungen vor. Entscheidungen (z. B. Chance bestätigen) und Verantwortung (Zuständigkeit) bleiben beim BD.
-CEO: CEO-Dashboard (Aktivität, Ist/Ziel, Sattelfestigkeit, Freelancer-Hebel je BD); Zusammenfassungen, keine Rohquellen.
+CEO: CEO-Dashboard (Aktivität, Ist/Ziel, Health-Check, Freelancer-Hebel je BD); Zusammenfassungen, keine Rohquellen.
 Betriebsverwaltung (Admin): Zugänge, Rollen, KI-Konfiguration, Fristenprüfung – ohne inhaltliche Vertriebsrechte.
 Rollen vergibt die Betriebsverwaltung unter Verwaltung → „Rolle zuweisen“ (arbeitsraumweit oder für einen Kunden).`,
   },
@@ -313,7 +313,7 @@ Bearbeiten dürfen arbeitsraumweite Principals, CEO und Betriebsverwaltung; lese
   {
     id: "health",
     title: "Kunden-Health-Check und Verlängerungsregel",
-    where: "Kunde → „Health-Check – wie sicher sitzen wir im Sattel?“ → Interview; Start → Hinweisbanner und „Auslaufende Einsätze“",
+    where: "Kunde → „Health-Check“ → Interview; Start → Hinweisbanner und „Auslaufende Einsätze“",
     keywords: ["health", "health check", "fahrplan", "vertrag", "bestellung", "ping", "restlaufzeit", "healthcheck", "score", "sattel", "sattelfest", "wackelig", "gefaehrdet", "zufriedenheit", "listung", "rahmenvertrag", "risiko", "risiken", "einsatz", "einsaetze", "auslaufend", "verlaengerung", "verlaengerungsregel", "datenlage", "punkte"],
     body: `Der Health-Check bewertet je Kunde mit 0–100 Punkten, wie sicher wir im Sattel sitzen – nach festen, sichtbaren Regeln: Einsätze (25), Beziehungsbreite (20), Zufriedenheit (20), Vertrag & Listung (15), Pipeline (10), Aktivität (10); Risiken im Umfeld ziehen ab. Ab 70 „sattelfest“, ab 45 „wackelig“, darunter „gefährdet“; „zu wenig Daten“, wenn zu viel unbekannt ist. Unbekanntes zählt nicht als schlecht, sondern senkt die getrennt ausgewiesene Datenlage.
 Fehlende Angaben (Zufriedenheit, Listung, Risiken) fragt ein kurzes Interview ab; die Startseite weist unübersehbar darauf hin, bei welchen Kunden Angaben fehlen.
@@ -371,7 +371,7 @@ Rechnung: Nettomarge = Tage × (VK − EK) − Kostenpauschale (40 € je Einsat
     body: `Das CEO-Dashboard zeigt das Gesamtbild ohne Rohquellen (keine Mails, keine persönlichen Notizen):
 - Aktivitätskoeffizient je Kunde: dokumentierte Aktivitäten der letzten 7 Tage × Anzahl beteiligter Rollen (Principal, BD, Anker) ÷ 3 – hoch, wenn viel passiert und die Rollen zusammenarbeiten.
 - Ist- vs. Zielbild: Positionen je vereinbartem Accountziel (Ist aus den dokumentierten Chancen, Ziel aus dem Accountziel).
-- Sattelfestigkeit je Kunde aus dem Health-Check, sortiert nach Handlungsbedarf (viele Einsätze bei niedriger Sattelfestigkeit zuerst); ein Klick auf den Kunden öffnet die Begründung.
+- Health-Check je Kunde, sortiert nach Handlungsbedarf (viele Einsätze bei niedrigem Health-Check zuerst); ein Klick auf den Kunden öffnet die Begründung.
 - Freelancer-Hebel je BD: offene und neue Freelancer-Chancen, vorgestellte Profile, Kunden ohne Freelancer-Chance.
 - Je Kunde eine Karte mit Zielen vs. Ist-Stand, Top-Chancen und der Zusammenarbeit dieser Woche.
 Alles sind Zählungen dokumentierter Objekte – keine Umsatz-, Forecast- oder Wahrscheinlichkeitswerte. Accountziele gelten erst als vereinbart, wenn Principal und CEO zugestimmt haben; das Zielgespräch CEO/Principal liegt unter Ziele & Portfolio → „Führungs-Reviews“.`,
@@ -456,7 +456,7 @@ Zum Ausprobieren (z. B. der KI): einen Testkunden anlegen (fiktive Daten, Name m
     keywords: ["bereich", "org unit", "abteilung", "unbekannt", "beziehungsstand", "im austausch", "aktiver austausch", "kontaktweg", "zugang", "buyingcenter", "person anlegen", "funktion"],
     body: `Bereich: die Organisationseinheit des Kunden, zu der eine Person gehört (Abteilung, Team, Programm – z. B. „ELBE Build & Deliver“). Bereiche sind je Kunde frei; beim Anlegen einer Person oder beim Setzen einer Funktion wählst du einen vorhandenen oder tippst einen neuen ein („… oder neuen Bereich eintippen“) – er wird am Kunden angelegt und steht danach allen zur Auswahl. „– unbekannt –“ heißt nur: noch nicht erfasst.
 Beziehungsstand (je Person und Setup, mit Halter auf Verve-Seite): Name/Funktion bekannt → Vorstellung angefragt → Vorgestellt → Im Austausch → Konkrete Zusammenarbeit; außerdem „Derzeit nicht aktiv“. Ab „Vorgestellt“ braucht ein Stand einen Beleg (Quelle). „Im aktiven Austausch“ im Health-Check zählt die Personen mit Stand „Im Austausch“ oder „Konkrete Zusammenarbeit“ – also die, mit denen tatsächlich gesprochen wird, nicht die nur bekannten Namen. Hängt alles an einer Person, ist die Position verwundbar.
-Kontaktweg (Briefing 8): ein geplanter Weg zu einer Zielperson, die wir noch nicht kennen – über welche belegte Beziehung (wer von uns kennt wen) soll die Vorstellung legitim zustande kommen. Ein Kontaktweg hat Zielperson, Vermittler, nächsten Schritt und Status (Entwurf, offen, erledigt) und trennt belegte, geplante und bloß hypothetische Verbindungen. Er ist kein Kanal (Telefon, Mail) – der steht an der einzelnen Aktion.`,
+Kontaktweg: ein geplanter Weg zu einer Zielperson, die wir noch nicht kennen – über welche belegte Beziehung (wer von uns kennt wen) soll die Vorstellung legitim zustande kommen. Ein Kontaktweg hat Zielperson, Vermittler, nächsten Schritt und Status (Entwurf, offen, erledigt) und trennt belegte, geplante und bloß hypothetische Verbindungen. Er ist kein Kanal (Telefon, Mail) – der steht an der einzelnen Aktion.`,
   },
   {
     id: "regeln",

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TechRef } from "@/components/TechDetails";
 import { notFound, redirect } from "next/navigation";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -36,7 +37,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Verwaltung (Betriebsverwaltung)</h1>
-      <p className="muted text-sm">Zugänge und Rollen oben; Hintergrundläufe, Konfiguration, Bestand und Protokoll darunter eingeklappt. Kein Zugriff auf Setup-Inhalte, Quellen, Notizen oder Vorschläge (Briefing 16.2).</p>
+      <p className="muted text-sm">Zugänge und Rollen oben; Hintergrundläufe, Konfiguration, Bestand und Protokoll darunter eingeklappt. Kein Zugriff auf Setup-Inhalte, Quellen, Notizen oder Vorschläge <TechRef>Briefing 16.2</TechRef>.</p>
       <Feedback params={sp} />
 
       <section className="card text-sm">
@@ -160,7 +161,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
             <tr><td>Protokoll</td><td>{inventory.audit} Ereignisse</td></tr>
           </tbody>
         </table>
-        <p className="muted text-xs mt-1">Aufbewahrungsfristen je Datenklasse: `docs/pilotfreigabe-vorschlag.md` Abschnitt 6. Was davon automatisch ermittelt werden kann, zeigt <Link href="/verwaltung/fristen">Verwaltung → Fristenprüfung</Link>.</p>
+        <p className="muted text-xs mt-1">Aufbewahrungsfristen je Datenklasse laut Löschkonzept <TechRef>docs/pilotfreigabe-vorschlag.md, Abschnitt 6</TechRef>. Was davon automatisch ermittelt werden kann, zeigt <Link href="/verwaltung/fristen">Verwaltung → Fristenprüfung</Link>.</p>
           </div>
         </details>
       </section>

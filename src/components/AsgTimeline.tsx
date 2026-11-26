@@ -20,6 +20,23 @@ const REN_STYLE: Record<string, { label: string; short: string; border: string; 
   ANGEBOTEN: { label: "Angebot verschickt", short: "Angebot", border: "solid", background: "#6a4fa355" },
 };
 const PHASES: AsgOppPhase[] = ["VERMUTET", "ANFRAGE", "BESTAETIGT", "ANGEBOT", "AUSWAHL"];
+/** e62: Spuren je Person – überlappende Einsätze bekommen eine eigene Zeile */
+const LANE = 1.95;
+const spanEnd = (e: AsgEngagement) => (e.renewalTo && e.renewalTo > (e.end ?? "") ? e.renewalTo : e.end ?? "9999-12-31");
+function lanes(rows: AsgEngagement[]): Map<string, number> {
+  const ends: string[] = [];
+  const out = new Map<string, number>();
+  for (const e of [...rows].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))) {
+    const start = e.start ?? "0000-01-01";
+    let k = ends.findIndex((end) => end < start);
+    if (k < 0) k = ends.length;
+    ends.splice(k, 1, spanEnd(e));
+    out.set(e.id, k);
+  }
+  return out;
+}
+const laneOf = (rows: AsgEngagement[], e: AsgEngagement) => lanes(rows).get(e.id) ?? 0;
+const laneCount = (rows: AsgEngagement[]) => (rows.length ? Math.max(...lanes(rows).values()) + 1 : 0);
 const MONTHS = ["Jan", "Feb", "Mrz", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
 /** Zeitleiste wie in einer Ressourcenplanung: je Person eine Zeile, je Einsatz ein Balken; Farbe = Stand. */
@@ -51,23 +68,25 @@ export function AsgTimeline({ engagements, opportunities = [], today, monthsBack
         <div className="tl-months">{months.map((m) => <span key={m.left} style={{ left: `${m.left}%` }}>{m.label}</span>)}</div>
       </div>
       {persons.map((p) => (
-        <div className="tl-row" key={p.id} role="row" style={p.opps.length ? { minHeight: "3.6rem" } : undefined}>
+        <div className="tl-row" key={p.id} role="row" style={{ minHeight: `${0.7 + laneCount(p.rows) * LANE + (p.opps.length ? 1.45 : 0)}rem` }}>
           <div className="tl-name" role="rowheader" title={p.name}><strong>{p.name}</strong>{p.kind === "INTERN" ? <span className="muted"> · intern</span> : null}</div>
           <div className="tl-track">
             {months.map((m) => <span key={m.left} className="tl-grid" style={{ left: `${m.left}%` }} />)}
             <span className="tl-today" style={{ left: `${pos(today)}%` }} title="heute" />
             {p.rows.map((e) => {
+              // e62: parallele Einsätze derselben Person untereinander statt übereinander
+              const top = `${0.35 + laneOf(p.rows, e) * LANE}rem`;
               const l = pos(e.start ?? fromIso);
               const r = pos(e.end ?? toIso);
               const tip = `${e.person} bei ${e.accountName} · ${e.start ? fmtDate(e.start) : "?"} – ${e.end ? fmtDate(e.end) : "offen"} · ${asgStateLabel[e.state]}${e.renewalTo ? ` bis ${fmtDate(e.renewalTo)}` : ""}`;
               return (
                 <span key={e.id}>
-                  <Link href={`/einsaetze/${e.id}`} className="tl-bar" title={tip} style={{ left: `${l}%`, width: `${Math.max(r - l, 0.8)}%`, background: ASG_COLOR[e.state] }}>{e.accountName}{e.end ? ` · bis ${fmtDate(e.end)}` : ""}</Link>
+                  <Link href={`/einsaetze/${e.id}`} className="tl-bar" title={tip} style={{ top, left: `${l}%`, width: `${Math.max(r - l, 0.8)}%`, background: ASG_COLOR[e.state] }}>{e.accountName}{e.end ? ` · bis ${fmtDate(e.end)}` : ""}</Link>
                   {e.renewalTo && e.end && e.renewalTo > e.end && (() => {
                     const ph = REN_STYLE[e.renewalStatus ?? ""] ?? REN_STYLE.IN_ABSTIMMUNG!;
-                    return <span className="tl-ext" title={`Verlängerung bis ${fmtDate(e.renewalTo)} · ${ph.label}`} style={{ left: `${r}%`, width: `${Math.max(pos(e.renewalTo) - r, 0)}%`, borderColor: ASG_COLOR.VERLAENGERUNG, borderStyle: ph.border, background: ph.background, color: "#4b3778", fontSize: ".7rem", lineHeight: "1.1rem", paddingLeft: ".3rem", overflow: "hidden", whiteSpace: "nowrap" }}>{ph.short}</span>;
+                    return <span className="tl-ext" title={`Verlängerung bis ${fmtDate(e.renewalTo)} · ${ph.label}`} style={{ top, left: `${r}%`, width: `${Math.max(pos(e.renewalTo) - r, 0)}%`, borderColor: ASG_COLOR.VERLAENGERUNG, borderStyle: ph.border, background: ph.background, color: "#4b3778", fontSize: ".7rem", lineHeight: "1.1rem", paddingLeft: ".3rem", overflow: "hidden", whiteSpace: "nowrap" }}>{ph.short}</span>;
                   })()}
-                  {[...new Set(e.checkinDots)].filter((d) => d >= fromIso && d <= toIso).map((d) => <span key={`${e.id}-${d}`} className="tl-dot" title={`Check-in fällig ${fmtDate(d)}`} style={{ left: `${pos(d)}%`, background: d < today ? "#c0392b" : "#5f5f5a" }} />)}
+                  {[...new Set(e.checkinDots)].filter((d) => d >= fromIso && d <= toIso).map((d) => <span key={`${e.id}-${d}`} className="tl-dot" title={`Check-in fällig ${fmtDate(d)}`} style={{ top: `calc(${top} + 1.45rem)`, left: `${pos(d)}%`, background: d < today ? "#c0392b" : "#5f5f5a" }} />)}
                 </span>
               );
             })}
@@ -76,7 +95,7 @@ export function AsgTimeline({ engagements, opportunities = [], today, monthsBack
               const r = pos(o.end);
               const st = OPP_STYLE[o.phase];
               const tip = `Chance: ${o.person} bei ${o.accountName} – ${o.title} · ${asgOppPhaseLabel[o.phase]} · ${fmtDate(o.start)} – ${fmtDate(o.end)}${o.estimated ? " (Zeitraum geschätzt)" : ""}${o.conflict ? ` · Achtung: ${o.conflict}` : ""}`;
-              return <Link key={o.id} href={`/bedarfe/${o.opportunityId}`} className="tl-bar tl-opp" title={tip} style={{ top: p.rows.length ? "2.05rem" : ".35rem", left: `${l}%`, width: `${Math.max(r - l, 0.8)}%`, ...st, outline: o.conflict ? "2px solid #c0392b" : undefined, outlineOffset: 1 }}>{o.accountName} · {asgOppPhaseLabel[o.phase]}</Link>;
+              return <Link key={o.id} href={`/bedarfe/${o.opportunityId}`} className="tl-bar tl-opp" title={tip} style={{ top: `${0.35 + laneCount(p.rows) * LANE}rem`, left: `${l}%`, width: `${Math.max(r - l, 0.8)}%`, ...st, outline: o.conflict ? "2px solid #c0392b" : undefined, outlineOffset: 1 }}>{o.accountName} · {asgOppPhaseLabel[o.phase]}</Link>;
             })}
           </div>
         </div>

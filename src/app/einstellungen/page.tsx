@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TechRef } from "@/components/TechDetails";
 import { redirect } from "next/navigation";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
@@ -86,7 +87,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
       </section>
       <section className="card">
         <h2 className="font-semibold mb-2">Mein Postfach (Microsoft 365 / Outlook)</h2>
-        <p className="muted text-sm mb-2">Lesender Zugriff mit minimalen Berechtigungen. Es wird nie ein ganzes Postfach eingelesen: Sie wählen im <Link href="/eingang">Eingang</Link> einzelne Mails oder Termine aus – oder Sie schalten unten den Ordner „Accountmeister“ ein. Kein Senden, keine Terminbuchung.</p>
+        <p className="muted text-sm mb-2">Lesender Zugriff mit minimalen Berechtigungen. Es wird nie ein ganzes Postfach eingelesen: du wählst im <Link href="/eingang">Eingang</Link> einzelne Mails oder Termine aus – oder du schaltest unten den Ordner „Accountmeister“ ein. Kein Senden, keine Terminbuchung.</p>
         <table className="list">
           <tbody>
             <tr><td>Status</td><td>{conn.connection ? <Status label={integrationStatusLabel[conn.connection.status] ?? conn.connection.status} /> : <Status label="Nicht verbunden" />}{conn.state.accountLabel && <span className="muted text-sm ml-2">{conn.state.accountLabel}</span>}</td></tr>
@@ -101,7 +102,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
             <>
               <form action={connectMailboxAction}><input type="hidden" name="mode" value="fixture" /><button className="btn" type="submit">Verbinden (Fixture-Modus)</button></form>
               <a className="btn btn-secondary" href="/api/integrations/microsoft/authorize">Echtes Postfach verbinden</a>
-              <p className="muted text-sm">Führt zur Anmeldung bei Microsoft. Setzt voraus, dass die App-Registrierung die Berechtigungen aus <code>docs/installation-ionos.md</code> Schritt 4b hat – sonst wird ehrlich abgewiesen.</p>
+              <p className="muted text-sm">Führt zur Anmeldung bei Microsoft. Setzt voraus, dass die Betriebsverwaltung der App die nötigen Berechtigungen gegeben hat – sonst wird die Verbindung abgewiesen. <TechRef>docs/installation-ionos.md, Schritt 4b</TechRef></p>
             </>
           ) : (
             <form action={revokeMailboxAction}><button className="btn btn-secondary" type="submit">Verbindung widerrufen</button></form>
@@ -127,10 +128,10 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
             <tr><td>Prompt-/Schemaversion</td><td>{ai.promptVersion}</td></tr>
             <tr><td>Nutzungsgrenze</td><td>{ai.dailyLimit} KI-Aufträge je Arbeitsraum und Tag</td></tr>
             <tr><td>Anmeldung</td><td>{cfg.AUTH_MODE === "development" ? "Entwicklungsanmeldung (nur lokal)" : "Unternehmensanmeldung (OIDC)"}</td></tr>
-            <tr><td>Mail-/Kalenderanbieter</td><td>Microsoft 365 / Outlook über Microsoft Graph (Entscheidung E-018). Echter Abruf möglich, sobald die Berechtigungen in Entra ID gesetzt sind (<code>docs/installation-ionos.md</code> Schritt 4b) – jede Person verbindet ihr eigenes Postfach selbst, oben.</td></tr>
+            <tr><td>Mail-/Kalenderanbieter</td><td>Microsoft 365 / Outlook über Microsoft Graph <TechRef>Entscheidung E-018</TechRef>. Echter Abruf möglich, sobald die Berechtigungen in Entra ID gesetzt sind <TechRef>docs/installation-ionos.md, Schritt 4b</TechRef> – jede Person verbindet ihr eigenes Postfach selbst, oben.</td></tr>
           </tbody>
         </table>
-        <p className="muted text-sm mt-2">Änderungen erfolgen über die Serverkonfiguration (.env), nicht über diese Seite.</p>
+        <p className="muted text-sm mt-2">Änderungen nimmt die Betriebsverwaltung in der Serverkonfiguration vor, nicht auf dieser Seite. <TechRef>.env</TechRef></p>
       </section>
       {(hasRole(actor, "BD") || hasRole(actor, "PRINCIPAL") || hasRole(actor, "CEO")) && (
         <section className="card">

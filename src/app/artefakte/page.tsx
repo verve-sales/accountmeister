@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TechRef } from "@/components/TechDetails";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { listTemplates } from "@/modules/artifacts/service";
@@ -16,7 +17,7 @@ export default async function ArtefakteKatalogPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Artefaktkatalog</h1>
       <p className="muted text-sm">
-        Alle {templates.length} Arbeitsergebnisse aus dem Briefing (A1–A16 sowie Setup, Weekly-Protokoll, Zielvereinbarung) sind registriert – Registerversion {TEMPLATE_REGISTRY_VERSION}. Artefakte entstehen im jeweiligen Kontext (Setup, Kunde, Weekly), nicht über diese Liste. Kein Vorgang muss alle Artefakte anlegen.
+        Alle {templates.length} Arbeitsergebnisse (Setup, Weekly-Protokoll, Zielvereinbarung und weitere) sind registriert <TechRef>{`Briefing A1–A16 · Registerversion ${TEMPLATE_REGISTRY_VERSION}`}</TechRef>. Artefakte entstehen im jeweiligen Kontext (Setup, Kunde, Weekly), nicht über diese Liste. Kein Vorgang muss alle Artefakte anlegen.
       </p>
       <section className="card">
         <table className="list">

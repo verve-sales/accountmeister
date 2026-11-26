@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TechDetails } from "@/components/TechDetails";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getConfig } from "@/lib/config";
@@ -35,8 +36,9 @@ export default async function SharePointPage({ searchParams }: { searchParams: S
         <h2 className="font-semibold">1. Site einrichten</h2>
         {!status.enabled ? (
           <>
-            <p style={{ color: AMBER }}>Die Anbindung ist aus. Auf dem Server in <code>.env.production</code> eintragen und die App neu starten:</p>
-            <pre className="text-xs" style={{ background: "var(--surface-2)", padding: ".6rem", borderRadius: 6, overflowX: "auto" }}>SHAREPOINT_MODE=graph{"\n"}SHAREPOINT_SITE_ID=&lt;Site-ID aus dem Graph Explorer&gt;</pre>
+            <p style={{ color: AMBER }}>Die Anbindung ist aus.</p>
+            <TechDetails summary="So schaltest du sie ein (Serverkonfiguration)"><p>Auf dem Server in <code>.env.production</code> eintragen und die App neu starten:</p>
+            <pre className="text-xs" style={{ background: "var(--surface-2)", padding: ".6rem", borderRadius: 6, overflowX: "auto" }}>SHAREPOINT_MODE=graph{"\n"}SHAREPOINT_SITE_ID=&lt;Site-ID aus dem Graph Explorer&gt;</pre></TechDetails>
           </>
         ) : !status.ok ? (
           <p style={{ color: "#c0392b" }}>Die Site ist nicht erreichbar: {status.error}. Meist fehlt das Recht der App auf die Site (Sites.Selected) oder die Site-ID stimmt nicht.</p>

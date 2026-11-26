@@ -640,7 +640,7 @@ export async function acceptIntakeCard(actor: Actor, s: SuggestionRow, ctx0: Set
     if (!c || !canViewSetup(actor, c)) throw new NotFoundError("Setup");
     ctx = c;
   }
-  if (ctx && !canEditSetup(actor, ctx) && !["VERLAENGERUNG", "STIMMUNG"].includes(item.type)) throw new ForbiddenError("Sie sind an diesem Setup nicht bearbeitend beteiligt.");
+  if (ctx && !canEditSetup(actor, ctx) && !["VERLAENGERUNG", "STIMMUNG"].includes(item.type)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");
   const account = ctx?.account ?? (s.accountId ? await db.query.accounts.findFirst({ where: eq(schema.accounts.id, s.accountId) }) : null) ?? null;
   const sourceId = s.sourceIds[0] ?? null;
   let result: { type: string; id: string; note: string };
@@ -740,7 +740,7 @@ async function applyRenewal(actor: Actor, engagementId: string, item: Extract<In
   const e = await db.query.engagements.findFirst({ where: and(eq(schema.engagements.id, engagementId), eq(schema.engagements.workspaceId, actor.workspaceId)) });
   if (!e) throw new NotFoundError("Einsatz");
   const a = await engagementAccess(actor, e);
-  if (!a || !(a.manage || a.care)) throw new ForbiddenError("Für diesen Einsatz dürfen Sie keine Verlängerung bearbeiten.");
+  if (!a || !(a.manage || a.care)) throw new ForbiddenError("Für diesen Einsatz darfst du keine Verlängerung bearbeiten.");
   const quote = `Laut ${trigger}: „${item.evidenceQuote.slice(0, 200)}“`;
   const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, e.id), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
   if (item.decision === "ENDET") {

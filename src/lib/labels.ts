@@ -133,3 +133,8 @@ export function agoLabel(days: number): string {
   if (days === 1) return "gestern";
   return `vor ${days} Tagen`;
 }
+
+/** e62: Zahl mit richtiger Ein-/Mehrzahl („1 Chance“, „3 Chancen“) statt „Chance(n)“. */
+export function pl(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}

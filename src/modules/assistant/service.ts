@@ -959,7 +959,7 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     return { type: "ORDER", id: order.id, note: `Laufender Einsatz nachgetragen${plannedEnd ? ` (Ende ${plannedEnd} – die Verlängerungsregel greift rechtzeitig)` : " – Einsatzende bitte im Health-Check ergänzen"}.` };
   }
   if (!res.ctx) throw new ValidationError(res.account ? `Bei ${res.account.name} gibt es kein Setup, das du bearbeiten darfst – bitte den zuständigen BD fragen.` : "Dafür fehlt der Kunde – sag mir, um welchen Kunden es geht.");
-  if (!canEditSetup(actor, res.ctx)) throw new ForbiddenError("Sie sind an diesem Setup nicht bearbeitend beteiligt.");
+  if (!canEditSetup(actor, res.ctx)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");
   const setupId = res.ctx.setup.id;
   const sourceId = await env.sourceFor(setupId);
   // Wofür (E-045): purpose gegen bestehende Chancen des Setups auflösen (Titel, unscharf)

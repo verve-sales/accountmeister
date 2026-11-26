@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TechRef } from "@/components/TechDetails";
 import { Term } from "@/components/Term";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -286,9 +287,9 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         <details open={mySuggestions.length > 0 && mySuggestions.length <= 3}>
         <summary className="font-semibold mb-1">Vorschläge ({mySuggestions.length})</summary>
         {!ai.enabled ? (
-          <p className="muted text-sm">KI-Anbieter ist deaktiviert. Es werden keine automatischen Vorschläge erzeugt; manuelle Dokumentation funktioniert vollständig (Briefing 17.5).</p>
+          <p className="muted text-sm">KI-Anbieter ist deaktiviert. Es werden keine automatischen Vorschläge erzeugt; manuelle Dokumentation funktioniert vollständig <TechRef>Briefing 17.5</TechRef>.</p>
         ) : mySuggestions.length === 0 ? (
-          <p className="muted text-sm">Keine offenen Vorschläge in Ihren Setups. Anbieter: {ai.description}</p>
+          <p className="muted text-sm">Keine offenen Vorschläge in deinen Setups. Anbieter: {ai.description}</p>
         ) : (
           <ul className="space-y-3">{mySuggestions.map((x) => <SuggestionCard key={x.id} s={x} ownerName={x.proposedOwnerUserId ? userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide back={back} users={allUsers} />)}</ul>
         )}

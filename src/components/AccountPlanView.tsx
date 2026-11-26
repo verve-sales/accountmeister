@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pl } from "@/lib/labels";
 import type { AccountPlanView as Plan } from "@/modules/accountplan/service";
 import { Status } from "@/components/Status";
 import { accessPlanStatusLabel, actionStatusLabel, fmtDate, fmtDateTime, handoverStatusLabel, priorityKindLabel, priorityStatusLabel, relationshipStateLabel, setupStatusLabel, signalStatusLabel } from "@/lib/labels";
@@ -12,7 +13,7 @@ export function AccountPlanView({ plan, live, children }: { plan: Plan; live: bo
     <div className="space-y-4">
       <p className="muted text-sm">
         {live ? "Live-Übersicht" : "Gespeicherter Stand"} · erzeugt {fmtDateTime(plan.generatedAt)} · zuständiger BD: {plan.account.responsibleBd ?? "offen"}
-        {plan.dataQuality.setupsWithoutConfirmedWeekly > 0 && ` · ${plan.dataQuality.setupsWithoutConfirmedWeekly} Setup(s) ohne bestätigtes Weekly`}
+        {plan.dataQuality.setupsWithoutConfirmedWeekly > 0 && ` · ${pl(plan.dataQuality.setupsWithoutConfirmedWeekly, "Setup", "Setups")} ohne bestätigtes Weekly`}
         {plan.dataQuality.hiddenSourcesNote && ` · ${plan.dataQuality.hiddenSourcesNote}`}
       </p>
 
@@ -48,7 +49,7 @@ export function AccountPlanView({ plan, live, children }: { plan: Plan; live: bo
           {plan.accessGaps.length > 0 && (
             <>
               <h4 className="font-medium mt-3 mb-1 text-sm">Offene Kontaktwege</h4>
-              <ul className="text-sm list-disc ml-5">{plan.accessGaps.map((g, i) => <li key={i}>Ziel {g.target}: {g.occasion} <Status label={accessPlanStatusLabel[g.status] ?? g.status} /> <span className="muted">{g.owner}{g.unprovenSteps > 0 ? `, ${g.unprovenSteps} nicht belegte(r) Schritt(e)` : ""}</span></li>)}</ul>
+              <ul className="text-sm list-disc ml-5">{plan.accessGaps.map((g, i) => <li key={i}>Ziel {g.target}: {g.occasion} <Status label={accessPlanStatusLabel[g.status] ?? g.status} /> <span className="muted">{g.owner}{g.unprovenSteps > 0 ? `, ${pl(g.unprovenSteps, "nicht belegter Schritt", "nicht belegte Schritte")}` : ""}</span></li>)}</ul>
             </>
           )}
         </section>

@@ -27,7 +27,7 @@ export default async function BesetzungenPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-2xl font-semibold">Besetzungen</h1>
+        <h1 className="text-2xl font-semibold">Besetzung</h1>
         <span className="muted text-sm">Positionen an Chancen: Bedarf → Suche (Sales Operations) → Kandidaten → Vorstellung → Auswahl.</span>
         {canBrowseFreelancerPool(actor) && <Link href="/besetzung/freelancer" className="text-sm ml-auto">Freelancer-Pool</Link>}
       </div>

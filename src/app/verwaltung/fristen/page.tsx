@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TechRef } from "@/components/TechDetails";
 import { notFound, redirect } from "next/navigation";
 import { DomainError } from "@/lib/errors";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -31,7 +32,7 @@ export default async function FristenpruefungPage({ searchParams }: { searchPara
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Fristenprüfung</h1>
       <p className="muted text-sm">
-        Was laut Löschkonzept (<Link href="/verwaltung">Verwaltung</Link>, `docs/pilotfreigabe-vorschlag.md` Abschnitt 6) fällig ist. Diese Seite verändert nichts von sich aus – jede Löschung braucht eine bewusste Aktion hier. Datenklassen mit
+        Was laut Löschkonzept (<Link href="/verwaltung">Verwaltung</Link>) fällig ist <TechRef>docs/pilotfreigabe-vorschlag.md, Abschnitt 6</TechRef>. Diese Seite verändert nichts von sich aus – jede Löschung braucht eine bewusste Aktion hier. Datenklassen mit
         Ermessensspielraum (Quellen bei laufendem Auftrag, Bedarfe/Angebote/Aufträge ohne Belegcharakter, vertrauliche Führungsnotizen nach Austritt) sind hier nur als Zahl aufgeführt, nicht automatisch gelöscht.
       </p>
       <Feedback params={sp} />
