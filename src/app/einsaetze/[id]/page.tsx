@@ -66,7 +66,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const setupDefault = (await loadRenewalContacts([{ ...e, renewalContactPersonId: null, orderContactPersonId: null, renewalApproach: null }])).get(e.id)!;
   const canContacts = (a.manage || a.care) && !final;
   const cd = e.freelancerId && (a.manage || a.care) && !final ? await contractDefaults(actor, e.id).catch(() => null) : null;
-  const spFiles = (a.manage || a.care) && !final ? await filesFor({ accountName: e.accountName, freelancerName: e.freelancerId ? e.freelancerName : null }) : null;
+  const spFiles = (a.manage || a.care) && !final ? await filesFor({ accountName: e.accountName, freelancerName: e.freelancerId ? e.freelancerName : null, personName: e.personName ?? null }) : null;
   // e48e: Angebote des Kunden für die Verlängerung – Dateien mit dem Nachnamen der Person zuerst, eindeutiger Treffer vorausgewählt
   const lastNameKey = (e.personName ?? "").replace(/\(.*?\)/g, "").trim().split(/\s+/).pop()?.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss") ?? "";
   const offerFiles = spFiles?.groups.find((g) => g.kind === "KUNDE_ANGEBOT")?.files ?? [];
@@ -330,8 +330,9 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
                     </div>
                     <div><label className="label" htmlFor="spStatus">Status</label><select id="spStatus" name="signedStatus" className="select" defaultValue=""><option value="">wie Ordner</option><option value="ENTWURF">Entwurf</option><option value="VERSENDET">versendet</option><option value="UNTERSCHRIEBEN">unterschrieben</option></select></div>
                     <div><label className="label" htmlFor="spRef">Nummer (optional)</label><input id="spRef" name="reference" className="input" style={{ width: "11rem" }} /></div>
+                    <div><label className="label" htmlFor="spEnd">Neues Ende (bei Angebot)</label><input id="spEnd" type="date" name="newEnd" className="input" defaultValue={openRenewal?.proposedTo ?? undefined} /></div>
                     <PendingButton className="btn btn-small" busy="Übernehme …">Übernehmen</PendingButton>
-                    <p className="muted text-xs" style={{ flexBasis: "100%" }}>Seite und Typ folgen dem Ordner (Bestellungen → Bestellung, Rahmen und Einkauf → Rahmenvertrag, Freelancer › Verträge → Einzelbeauftragung); korrigierbar über „Korrigieren“.</p>
+                    <p className="muted text-xs" style={{ flexBasis: "100%" }}>Seite und Typ folgen dem Ordner (Bestellungen → Bestellung, Rahmen und Einkauf → Rahmenvertrag, Freelancer › Verträge → Einzelbeauftragung); korrigierbar über „Korrigieren“. Ein Angebot mit neuem Ende setzt die Verlängerung auf „angeboten“ – Nummer aus dem Dateinamen, falls nicht eingetragen.</p>
                   </form>
                 )}
               </details>

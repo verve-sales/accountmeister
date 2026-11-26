@@ -285,7 +285,7 @@ export type FileGroup = { kind: PickKind; label: string; files: { value: string;
  * Dateien in den SharePoint-Ordnern eines Kunden und ggf. eines Freelancers, zur Auswahl am Einsatz und im Vorgang.
  * Gibt null zurück, wenn SharePoint aus ist; bei einem Fehler eine leere Liste mit Meldung.
  */
-export async function filesFor(input: { accountName: string; freelancerName?: string | null; kinds?: PickKind[] }, deps: { client?: SpClient } = {}): Promise<{ groups: FileGroup[]; error: string | null } | null> {
+export async function filesFor(input: { accountName: string; freelancerName?: string | null; kinds?: PickKind[]; /** e61: Dateien mit diesem Namen (Nachname) zuerst */ personName?: string | null }, deps: { client?: SpClient } = {}): Promise<{ groups: FileGroup[]; error: string | null } | null> {
   if (!deps.client && !sharePointEnabled()) return null;
   try {
     const client = deps.client ?? (await defaultSpClient());
@@ -303,8 +303,15 @@ export async function filesFor(input: { accountName: string; freelancerName?: st
       // e48b: lose Dateien plus aktuelles und Vorjahr (Einsätze laufen über den Jahreswechsel)
       const y = Number(todayIso().slice(0, 4));
       const base = [owner, def.sub];
-      const lists = await Promise.all([client.children(drive, base), ...(YEAR_SUBS.has(def.sub) ? [client.children(drive, [...base, String(y)]), client.children(drive, [...base, String(y - 1)])] : [])]);
-      const entries = lists.flat().filter((x) => !x.folder).sort((a, b) => (b.modified ?? "").localeCompare(a.modified ?? "") || a.name.localeCompare(b.name, "de"));
+      const paths: string[][] = [base, ...(YEAR_SUBS.has(def.sub) ? [[...base, String(y)], [...base, String(y - 1)]] : [])];
+      const lists = await Promise.all(paths.map((pth) => client.children(drive, pth).then((xs) => xs.map((x) => ({ ...x, path: pth })))));
+      // e61: eine Ebene tiefer mitlesen (z. B. Angebote › 2026 › Berater) – Jahresordner selbst sind schon oben
+      const sub = lists.flat().filter((x) => x.folder && !/^\d{4}$/.test(x.name)).slice(0, 20);
+      const deeper = await Promise.all(sub.map((f) => client.children(drive, [...f.path, f.name]).then((xs) => xs.map((x) => ({ ...x, name: `${f.name} › ${x.name}`, path: [...f.path, f.name] }))).catch(() => [])));
+      const norm = (v: string) => v.toLowerCase().replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss");
+      const lasts = input.personName ? norm(input.personName.replace(/\(.*?\)/g, "")).split(/[\s,]+/).filter((w) => w.length >= 3).slice(-1) : [];
+      const mine = (n: string) => (lasts.some((l) => norm(n).includes(l)) ? 0 : 1);
+      const entries = [...lists.flat(), ...deeper.flat()].filter((x) => !x.folder).sort((a, b) => mine(a.name) - mine(b.name) || (b.modified ?? "").localeCompare(a.modified ?? "") || a.name.localeCompare(b.name, "de"));
       if (entries.length) groups.push({ kind: k, label: def.label, files: entries.map((x) => ({ value: `${drive}|${x.id}|${k}`, name: x.name, webUrl: x.webUrl, modified: x.modified })) });
     }
     return { groups, error: null };
@@ -327,4 +334,23 @@ export async function linkSharePointFile(actor: Actor, engagementId: string, pic
   await db.update(schema.contractDocuments).set({ spDriveId: drive, spItemId: it.id }).where(eq(schema.contractDocuments.id, document.id));
   await recordAudit(db, actor, "contract_document.sharepoint_linked", "ENGAGEMENT", engagementId, { dokument: document.id, ordner: def.label });
   return document;
+}
+
+/**
+ * e61: Angebot aus SharePoint übernehmen = „Angebot raus“: Unterlage am Einsatz, Verlängerung auf „angeboten“ mit
+ * Angebotsnummer (aus dem Dateinamen, sonst eingetragen) und Link – wie ein im Accountmeister erzeugtes Angebot.
+ * Ohne neues Ende (Formular oder offene Verlängerung) wird nur die Unterlage verknüpft.
+ */
+export async function takeOverOfferFromSharePoint(actor: Actor, engagementId: string, pick: string, extra: { newEnd?: string; reference?: string } = {}): Promise<{ renewal: boolean; note: string }> {
+  const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, engagementId) });
+  if (!e) throw new ValidationError("Einsatz nicht gefunden.");
+  const open = await db.query.renewalDecisions.findFirst({ where: and(eq(schema.renewalDecisions.engagementId, engagementId), inArray(schema.renewalDecisions.status, ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"])) });
+  const newEnd = /^\d{4}-\d{2}-\d{2}$/.test(extra.newEnd ?? "") ? extra.newEnd! : open?.proposedTo ?? "";
+  if (!newEnd || (e.plannedEnd && newEnd <= e.plannedEnd)) {
+    await linkSharePointFile(actor, engagementId, pick, { signedStatus: "VERSENDET", reference: extra.reference ?? "" });
+    return { renewal: false, note: "Angebot als Unterlage übernommen. Für „Angebot verschickt“ bei der Verlängerung bitte das neue Ende angeben." };
+  }
+  const { startRenewal } = await import("@/modules/engagements/care");
+  const r = await startRenewal(actor, engagementId, { newEnd, offerPick: pick, offerNumber: extra.reference ?? "" });
+  return { renewal: true, note: `Angebot übernommen – Verlängerung bis ${newEnd.split("-").reverse().join(".")} steht auf „angeboten“${r.offerNumber ? ` (Angebot ${r.offerNumber})` : ""}.` };
 }

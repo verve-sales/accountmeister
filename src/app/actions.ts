@@ -2334,7 +2334,12 @@ export async function removePositionAction(fd: FormData) {
 export async function addSharePointDocumentAction(fd: FormData) {
   const data = formToObject(fd);
   return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#vertraege`), async (actor) => {
-    const { linkSharePointFile } = await import("@/modules/sharepoint/service");
+    const { linkSharePointFile, takeOverOfferFromSharePoint } = await import("@/modules/sharepoint/service");
+    // e61: ein Angebot aus SharePoint wirkt wie „Angebot raus“ bei der Verlängerung
+    if ((data.pick ?? "").endsWith("|KUNDE_ANGEBOT")) {
+      const r = await takeOverOfferFromSharePoint(actor, data.engagementId ?? "", data.pick ?? "", { newEnd: data.newEnd ?? "", reference: data.reference ?? "" });
+      throw new PendingInfo(r.note);
+    }
     await linkSharePointFile(actor, data.engagementId ?? "", data.pick ?? "", { signedStatus: data.signedStatus ?? "", reference: data.reference ?? "" });
   }, "Unterlage aus SharePoint übernommen.");
 }
