@@ -88,13 +88,18 @@ export function extractOrderNumber(...texts: string[]): string | null {
   const t = texts.join("\n");
   const m = /(?:Bestell(?:ung|nummer|-?nr\.?)|PO[- ]?(?:Nr\.?|Number|No\.?)|Purchase Order)\s*[:#.]?\s*(?:Nr\.?\s*)?([A-Z0-9][A-Z0-9\-/]{3,24})/i.exec(t);
   if (m && /\d/.test(m[1]!)) return m[1]!;
-  const sap = /\b(4[0-9]{9})\b/.exec(t);
-  return sap ? sap[1]! : null;
+  // SAP-Bestellnummern (10-stellig, beginnt mit 4) – aber nicht, wenn davor Telefon, Fax oder IBAN steht (Red Team e63)
+  for (const m2 of t.matchAll(/\b(4[0-9]{9})\b/g)) {
+    const before = t.slice(Math.max(0, (m2.index ?? 0) - 16), m2.index).toLowerCase();
+    if (/(tel|fax|mobil|phone|handy|\+\d|iban|konto)/.test(before)) continue;
+    return m2[1]!;
+  }
+  return null;
 }
 
 /** Sieht die Mail bzw. Datei nach einer Kundenbestellung aus? */
 export function looksLikeOrder(subject: string, body: string, fileName: string): boolean {
-  return /bestellung|bestellnummer|purchase order|\bPO\b|auftragsbest|beauftragung|abruf/i.test(`${subject}\n${fileName}\n${body.slice(0, 2000)}`);
+  return /bestellung|bestellnummer|purchase order|\bPO\b|auftragsbest|beauftragung|abruf(?!bar|en\b)/i.test(`${subject}\n${fileName}\n${body.slice(0, 2000)}`);
 }
 
 /** Kundenbestellung (Mail-Anhang) nach Kunden › Kunde › Bestellungen legen. */

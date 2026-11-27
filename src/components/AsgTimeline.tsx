@@ -22,8 +22,8 @@ const REN_STYLE: Record<string, { label: string; short: string; border: string; 
 const PHASES: AsgOppPhase[] = ["VERMUTET", "ANFRAGE", "BESTAETIGT", "ANGEBOT", "AUSWAHL"];
 /** e62: Spuren je Person – überlappende Einsätze bekommen eine eigene Zeile */
 const LANE = 1.95;
-const spanEnd = (e: AsgEngagement) => (e.renewalTo && e.renewalTo > (e.end ?? "") ? e.renewalTo : e.end ?? "9999-12-31");
-function lanes(rows: AsgEngagement[]): Map<string, number> {
+const spanEnd = (e: Pick<AsgEngagement, "end" | "renewalTo">) => (e.renewalTo && e.renewalTo > (e.end ?? "") ? e.renewalTo : e.end ?? "9999-12-31");
+export function lanes(rows: Pick<AsgEngagement, "id" | "start" | "end" | "renewalTo">[]): Map<string, number> {
   const ends: string[] = [];
   const out = new Map<string, number>();
   for (const e of [...rows].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""))) {

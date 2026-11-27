@@ -67,7 +67,7 @@ const LEGAL = /\b(gmbh|ag|se|kg|ohg|gbr|ug|e\.?\s?v\.?|inc|ltd|llc|co|&|und|grou
 export function normName(s: string): string {
   return s
     .toLowerCase()
-    .replace(/[.,;:()\-–_/]/g, " ")
+    .replace(/[.,;:()\-–_/&+]/g, " ")
     .replace(LEGAL, " ")
     .replace(/\s+/g, " ")
     .trim();

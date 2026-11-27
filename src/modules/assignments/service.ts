@@ -77,6 +77,9 @@ export async function asgOverview(actor: Actor, opts: { includeEndedDays?: numbe
   const engs = all.filter((e) => RUNNING.includes(e.status) || (e.status === "ABGESCHLOSSEN" && (e.actualEnd ?? e.plannedEnd ?? "") >= endedSince));
   if (!engs.length) return { today, engagements: [], tasks: [], kpis: { freelancer: 0, intern: 0, ending: 0, renewals: 0, contractsOpen: 0, ordersOpen: 0, handovers: 0, checkinsOverdue: 0 } };
   const ids = engs.map((e) => e.id);
+  // Red Team e63: Den Assignmentmanager darf auch die Administration öffnen – den EK sehen aber nur GF, Sales Ops und Backoffice
+  const { canSeeContractual } = await import("@/modules/conversion/profile");
+  const seesEk = await canSeeContractual(actor);
   const [accounts, fls, users, periods, renewals, checkins, links, handovers] = await Promise.all([
     db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(engs.map((e) => e.accountId))]), columns: { id: true, name: true } }),
     db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(engs.map((e) => e.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true, ekRate: true, ekUnit: true } }),
@@ -130,7 +133,7 @@ export async function asgOverview(actor: Actor, opts: { includeEndedDays?: numbe
       offerNumber: ren?.offerNumber ?? null,
       orderReference: e.orderReference ?? null,
       mocoProjectId: e.mocoProjectId ?? null,
-      ek: e.freelancerId ? p?.ek ?? fl?.ekRate ?? null : null,
+      ek: seesEk && e.freelancerId ? p?.ek ?? fl?.ekRate ?? null : null,
       vk: p?.vk ?? null,
       rateUnit: p?.rateUnit ?? (e.freelancerId && !p?.ek ? fl?.ekUnit ?? "TAG" : "TAG"),
       scope: p?.scopeAmount ? `${p.scopeAmount} ${p.scopeUnit === "TAGE_PRO_WOCHE" ? "T./Woche" : p.scopeUnit === "STUNDEN_PRO_WOCHE" ? "Std./Woche" : p.scopeUnit === "PROZENT" ? "%" : p.scopeUnit === "TAGE_GESAMT" ? "Tage" : ""}`.trim() : null,

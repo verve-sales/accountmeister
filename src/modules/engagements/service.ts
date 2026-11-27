@@ -454,8 +454,10 @@ export function suggestDocType(text: string): { docType: (typeof docTypeValues)[
     [/\bnachtrag|änderungsvereinbarung|amendment\b/i, "NACHTRAG"],
     [/kündigung|kuendigung|termination/i, "KUENDIGUNG"],
     [/geheimhaltung|vertraulichkeitsvereinbarung|non-disclosure|\bnda\b/i, "NDA"],
-    [/bestellung|bestellnummer|purchase order|\bpo[-\s]?nr/i, "BESTELLUNG"],
+    [/bestellung|bestellnummer|purchase order|\bpo[-\s]?nr|bestellen wir|wir bestellen/i, "BESTELLUNG"],
     [/einzelbeauftragung|einzelauftrag|leistungsschein|statement of work|\bsow\b|beauftragung/i, "EINZELBEAUFTRAGUNG"],
+    // Red Team e63: Angebote wurden nie erkannt; „Stellenangebot“ bleibt außen vor (Wortgrenze)
+    [/\bangebot\b|\bangebotsnummer\b|\bquotation\b|\boffer\b/i, "ANGEBOT"],
   ];
   for (const [re, t] of rules) {
     const m = re.exec(text);
