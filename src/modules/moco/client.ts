@@ -68,6 +68,8 @@ export type MocoProject = {
   tags: string[];
   contracts: MocoContract[];
   updated_at?: string;
+  /** e74: Zusatzfelder (z. B. Bestellnummer) – nur gelesen für den Abgleich */
+  custom_properties?: Record<string, string>;
 };
 
 /** Lead-Phase in Moco (Akquise → Phasen), mit Wahrscheinlichkeit in Prozent. */
@@ -210,6 +212,7 @@ export function pickProject(raw: Record<string, unknown>): MocoProject {
       hourly_rate: c.hourly_rate == null ? null : Number(c.hourly_rate),
     })),
     updated_at: raw.updated_at ? String(raw.updated_at) : undefined,
+    custom_properties: raw.custom_properties && typeof raw.custom_properties === "object" ? Object.fromEntries(Object.entries(raw.custom_properties as Record<string, unknown>).map(([k, v]) => [k, v == null ? "" : String(v)])) : undefined,
   };
 }
 
@@ -423,8 +426,12 @@ export class FixtureMocoClient implements MocoClient, MocoWriteClient {
   /** Im Prozess gesetzte Projektenden (Tests, Entwicklung) */
   private static finishDates = new Map<number, string>();
   private withOverrides(rows: MocoProject[]): MocoProject[] {
-    return rows.map((p) => (FixtureMocoClient.finishDates.has(p.id) ? { ...p, finish_date: FixtureMocoClient.finishDates.get(p.id)! } : p));
+    return [...rows, ...FixtureMocoClient.createdProjects].map((p) => ({ ...(FixtureMocoClient.finishDates.has(p.id) ? { ...p, finish_date: FixtureMocoClient.finishDates.get(p.id)! } : p), ...(FixtureMocoClient.patches.get(p.id) ?? {}) }));
   }
+  /** Tests: Änderung von Hand in Moco nachstellen */
+  private static patches = new Map<number, Partial<MocoProject>>();
+  static patchProject(id: number, patch: Partial<MocoProject>) { FixtureMocoClient.patches.set(id, { ...(FixtureMocoClient.patches.get(id) ?? {}), ...patch }); }
+  static patchDeal(id: number, patch: Partial<MocoDeal>) { const d = FixtureMocoClient.createdDeals.find((x) => x.id === id); if (d) Object.assign(d, patch); }
   async projects(opts: { includeArchived?: boolean; updatedFrom?: string } = {}) {
     let rows = this.withOverrides((await this.load("projects")).map(pickProject));
     if (!opts.includeArchived) rows = rows.filter((p) => p.active);
@@ -451,6 +458,7 @@ export class FixtureMocoClient implements MocoClient, MocoWriteClient {
     FixtureMocoClient.createdCompanies = [];
     FixtureMocoClient.createdContacts = [];
     FixtureMocoClient.createdProjects = [];
+    FixtureMocoClient.patches.clear();
   }
   async createCompany(p: { name: string; type: "customer"; currency: string }) {
     const c: MocoCompany = { id: ++FixtureMocoClient.seq, type: "customer", name: p.name, identifier: null, active: true };
@@ -476,7 +484,7 @@ export class FixtureMocoClient implements MocoClient, MocoWriteClient {
     return d;
   }
   async createProject(p: MocoProjectCreate) {
-    const pr: MocoProject = { id: ++FixtureMocoClient.seq, identifier: `P${FixtureMocoClient.seq}`, name: p.name, active: true, billable: true, start_date: p.start_date, finish_date: p.finish_date, hourly_rate: p.hourly_rate ?? null, currency: p.currency, customer: { id: p.customer_id, name: "" }, leader: null, project_group: null, deal: p.deal_id ? { id: p.deal_id, name: "" } : null, tags: p.tags ?? [], contracts: [] };
+    const pr: MocoProject = { id: ++FixtureMocoClient.seq, identifier: `P${FixtureMocoClient.seq}`, name: p.name, active: true, billable: true, start_date: p.start_date, finish_date: p.finish_date, hourly_rate: p.hourly_rate ?? null, currency: p.currency, customer: { id: p.customer_id, name: "" }, leader: null, project_group: null, deal: p.deal_id ? { id: p.deal_id, name: "" } : null, tags: p.tags ?? [], contracts: [], custom_properties: p.custom_properties };
     FixtureMocoClient.createdProjects.push(pr);
     FixtureMocoClient.written.push({ what: "project", payload: p });
     return pr;

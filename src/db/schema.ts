@@ -2672,6 +2672,8 @@ export const orderCases = pgTable(
     offerNumber: text("offer_number"),
     brokerRef: text("broker_ref"),
     orderNumber: text("order_number"),
+    /** e74: Position in einer Sammelbestellung (0 = ganze Bestellung) – mehrere Vorgänge teilen dieselbe Bestellnummer */
+    orderPosition: integer("order_position").notNull().default(0),
     /** Bestellung verlängert einen laufenden Einsatz statt einen neuen anzulegen */
     isRenewal: boolean("is_renewal").notNull().default(false),
     opportunityId: text("opportunity_id").references(() => opportunities.id),
@@ -2691,7 +2693,7 @@ export const orderCases = pgTable(
   (t) => [
     uniqueIndex("order_cases_number_uq").on(t.workspaceId, t.number),
     // R7: dieselbe Bestellung desselben Vertragspartners nur einmal
-    uniqueIndex("order_cases_order_uq").on(t.workspaceId, t.partnerAccountId, t.orderNumber).where(sql`order_number IS NOT NULL AND status <> 'STORNIERT'`),
+    uniqueIndex("order_cases_order_uq").on(t.workspaceId, t.partnerAccountId, t.orderNumber, t.orderPosition).where(sql`order_number IS NOT NULL AND status <> 'STORNIERT'`),
     index("order_cases_status_idx").on(t.workspaceId, t.status),
   ],
 );

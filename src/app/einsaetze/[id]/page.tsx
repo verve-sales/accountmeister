@@ -59,6 +59,10 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const final = ["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(e.status);
   const targets = await workTargets(actor);
   const openRenewal = d.renewals.find((r) => ["ZU_KLAEREN", "MOEGLICH", "IN_ABSTIMMUNG", "ANGEBOTEN"].includes(r.status));
+  // e74: Einsatz ohne Vorgang aus „Angebot & Bestellung“ = Altbestand; die nächste Bestellung per Upload holt ihn ins Verfahren
+  const { db: dbc, schema: sch } = await import("@/db/client");
+  const { eq: eqq } = await import("drizzle-orm");
+  const viaCase = await dbc.query.orderCases.findFirst({ where: eqq(sch.orderCases.engagementId, e.id), columns: { id: true, number: true } });
   const mocoHints = a.manage ? await listHints(actor, { subjectType: "ENGAGEMENT", subjectId: e.id, status: "OFFEN" }) : [];
   const renewalCard = (await listRenewalCards(actor)).find((c) => c.engagementId === e.id) ?? null;
   // e49c: maßgeblich ist die jüngste nicht abgelöste Periode (nicht mehr „die letzte bestätigte“ – die kann abgelöst sein)
@@ -100,6 +104,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         <p className="text-sm muted">{titleWithoutPerson(e.title, personName)}{e.mocoProjectId ? ` · Moco-Projekt ${e.mocoProjectId}` : ""}</p>
         <div className="flex flex-wrap gap-x-4 gap-y-1 items-baseline mt-1 text-sm">
           <span className="status">{engagementStatusLabel[e.status] ?? e.status}</span>
+          {viaCase ? <Link href={`/auftragseingang/${viaCase.id}`} className="muted text-xs">Vorgang {viaCase.number}</Link> : <span className="muted text-xs" title="Vor dem Auftragseingang angelegt. Die nächste Bestellung oder Verlängerung per Upload unter „Angebot & Bestellung“ holt den Einsatz ins Verfahren.">Altbestand</span>}
           <span>{e.freelancerId ? <>Freelancer: <Link href={`/besetzung/freelancer/${e.freelancerId}`}>{e.freelancerName}</Link></> : <>Besetzt mit: {e.freelancerName}</>}</span>
           <span>Betreuung: {e.careNames.length ? e.careNames.join(", ") : <span style={{ color: RED }}>offen</span>}</span>
           {e.mocoProjectId && <span className="muted text-xs">aus Moco (Projekt {e.mocoProjectId}{e.externalRef ? <> · <a href={e.externalRef} target="_blank" rel="noreferrer">in Moco öffnen</a></> : null}) – Laufzeit und Zuweisung führt Moco</span>}
@@ -108,6 +113,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           {!final && (a.manage || a.care) && (
             <details className="inline-block">
               <summary className="text-xs" style={{ cursor: "pointer", color: e.orderReference ? undefined : "#b7791f" }}>{e.orderReference ? "ändern" : "Bestellnummer nachtragen"}</summary>
+              {!e.orderReference && <p className="muted text-xs mt-1">Liegt die Bestellung als Datei vor? <Link href="/auftragseingang">Unter „Angebot &amp; Bestellung“ hochladen</Link> – dann stehen Nummer, Periode, Moco und Ablage auf einmal.</p>}
               <form action={setOrderReferenceAction} className="inline-flex flex-wrap gap-1 items-center mt-1">
                 <input type="hidden" name="engagementId" value={e.id} /><input type="hidden" name="back" value={back} />
                 <input name="orderReference" className="input" required minLength={2} maxLength={200} defaultValue={e.orderReference ?? ""} placeholder="z. B. 4500123456" style={{ width: 160 }} />
@@ -326,6 +332,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         )}
         {!final && (a.manage || a.care) && (
           <>
+            <p className="text-sm mt-3 muted">Neue Bestellung oder Verlängerungsangebot? <Link href="/auftragseingang">Unter „Angebot &amp; Bestellung“ hochladen</Link> – das legt Periode, Moco und Ablage mit an. Die Wege darunter sind für sonstige Unterlagen und Korrekturen.</p>
             {spFiles && (
               <details className="mt-3" open={spFiles.groups.length > 0 && d.documents.length === 0}>
                 <summary>Aus SharePoint übernehmen</summary>
@@ -412,7 +419,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         {a.manage && !final && (
           <>
           <details className="mt-3" open={false} id="konditionen-aendern" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .75rem" }}>
-            <summary className="text-sm cursor-pointer font-semibold">Konditionen ändern (neuer Satz ab …)</summary>
+            <summary className="text-sm cursor-pointer font-semibold">Konditionen ändern (neuer Satz ab …) <span className="muted font-normal">– Korrektur; neue Bestellungen über „Angebot &amp; Bestellung“</span></summary>
             <form action={changeConditionsAction} className="flex flex-wrap items-end gap-2 mt-2 text-sm">
               <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="back" value={`${back}#konditionen`} />
               <div><label className="label" htmlFor="ccFrom">Gilt ab</label><input id="ccFrom" type="date" name="validFrom" className="input" required defaultValue={lastPeriod && lastPeriod.validFrom > new Date().toISOString().slice(0, 10) ? lastPeriod.validFrom : undefined} /></div>
@@ -426,7 +433,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
             </form>
           </details>
           <details className="mt-2">
-            <summary className="muted text-sm">Erweitert: Periode von Hand anlegen</summary>
+            <summary className="muted text-sm">Erweitert: Periode von Hand anlegen (Korrektur)</summary>
             <form action={addPeriodAction} className="grid sm:grid-cols-4 gap-2 mt-2">
               <input type="hidden" name="engagementId" value={id} /><input type="hidden" name="back" value={`${back}#konditionen`} />
               <div><label className="label">Art</label><select name="kind" className="input" defaultValue="BESTAETIGT"><option value="PLAN">Plan</option><option value="BESTAETIGT">bestätigt</option></select></div>

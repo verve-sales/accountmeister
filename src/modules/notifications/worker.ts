@@ -65,6 +65,11 @@ export function startNotificationWorker(): void {
           const { remindOpenHandovers } = await import("@/modules/conversion/handover");
           return { erinnert: await remindOpenHandovers() };
         });
+        // e74: täglicher Abgleich Auftragseingang ↔ Moco und SharePoint (einmal am Tag ab 6 Uhr; schreibt nie zurück)
+        await runJob("auftragseingang-abgleich", async () => {
+          const { dailyCheckAll } = await import("@/modules/o2o/sync");
+          return dailyCheckAll();
+        });
         // Moco-Abgleich (Etappe 31): stündlich als Rückfallebene zu den Webhooks; nur wenn eingeschaltet
         const { mocoEnabled } = await import("@/modules/moco/client");
         if (mocoEnabled()) {

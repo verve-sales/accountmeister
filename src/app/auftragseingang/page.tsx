@@ -6,7 +6,9 @@ import { Feedback } from "@/components/Feedback";
 import { Icon } from "@/components/Icon";
 import { canUseOrderIntake, caseChoices, caseStatusLabel, channelLabel, listCases, reconcile } from "@/modules/o2o/service";
 import { isoDe } from "@/lib/labels";
-import { offerWithoutDocumentAction, uploadOrderCaseAction } from "../actions";
+import { hideOrderSyncItemAction, offerWithoutDocumentAction, runOrderSyncAction, uploadOrderCaseAction } from "../actions";
+import { canRunSync, lastSync, syncKindLabel } from "@/modules/o2o/sync";
+import { fmtDateTime } from "@/lib/labels";
 import { SystemDots } from "./SystemDots";
 
 /**
@@ -23,6 +25,8 @@ export default async function AuftragseingangPage({ searchParams }: { searchPara
   const { mocoWriteOn } = await import("@/modules/o2o/moco");
   const mocoOn = mocoWriteOn();
   const brokers = choices.accounts.filter((a) => a.broker);
+  const sync = await lastSync(actor.workspaceId);
+  const mayRun = canRunSync(actor);
   return (
     <div className="space-y-6">
       <div>
@@ -101,9 +105,33 @@ export default async function AuftragseingangPage({ searchParams }: { searchPara
           </table></div>
         )}
       </section>
-      {(rec.followUp.length > 0 || rec.withoutCase.length > 0 || (mocoOn && rec.notInMoco.length > 0)) && (
+      {(rec.followUp.length > 0 || rec.withoutCase.length > 0 || (mocoOn && rec.notInMoco.length > 0) || mayRun || (sync && sync.items.length > 0)) && (
         <section className="card" id="abgleich">
-          <h2 className="font-semibold mb-2">Abgleich</h2>
+          <div className="flex flex-wrap items-baseline gap-3 mb-2">
+            <h2 className="font-semibold">Abgleich</h2>
+            <span className="muted text-xs">{sync ? (sync.moco || sync.sharepoint ? `${[sync.moco && "Moco", sync.sharepoint && "SharePoint"].filter(Boolean).join(" und ")} zuletzt geprüft ${fmtDateTime(new Date(sync.at))} · täglich ab 6 Uhr` : "Moco und SharePoint sind nicht eingeschaltet – es gibt nichts abzugleichen.") : "Moco und SharePoint werden täglich ab 6 Uhr geprüft."}</span>
+            {mayRun && <form action={runOrderSyncAction} className="ml-auto"><button className="btn btn-secondary btn-small" type="submit">Jetzt abgleichen</button></form>}
+          </div>
+          {sync?.error && <p className="text-sm mb-2" style={{ color: "#8a5a00" }}>Nicht erreichbar: {sync.error}</p>}
+          {sync && sync.items.length > 0 && (
+            <div className="mb-4">
+              <div className="font-medium text-sm mb-1">Nicht synchron ({sync.items.length}) <span className="muted font-normal">– der Accountmeister überschreibt Moco und SharePoint nie; bitte prüfen, wo es stimmt</span></div>
+              <div className="table-wrap"><table className="list text-sm">
+                <thead><tr><th>Was</th><th>Vorgang</th><th>Abweichung</th><th data-nosort></th></tr></thead>
+                <tbody>
+                  {sync.items.map((i) => (
+                    <tr key={i.key}>
+                      <td style={{ whiteSpace: "nowrap" }}>{syncKindLabel[i.kind]}</td>
+                      <td>{i.caseId ? <Link href={i.href}>{i.number}</Link> : <span>{i.number ?? "–"}</span>}<div className="muted text-xs">{i.label}</div></td>
+                      <td>{i.detail}{i.external && <> · <a href={i.external} target="_blank" rel="noreferrer">öffnen</a></>}</td>
+                      <td>{mayRun && <form action={hideOrderSyncItemAction}><input type="hidden" name="key" value={i.key} /><button className="btn btn-secondary btn-small" type="submit" title="Hinweis dauerhaft ausblenden">ausblenden</button></form>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table></div>
+            </div>
+          )}
+          {sync && (sync.moco || sync.sharepoint) && sync.items.length === 0 && !sync.error && <p className="muted text-sm mb-3">{[sync.moco && "Moco", sync.sharepoint && "SharePoint"].filter(Boolean).join(" und ")} {sync.moco && sync.sharepoint ? "stimmen" : "stimmt"} mit den Vorgängen überein.</p>}
           <div className="grid md:grid-cols-3 gap-4 text-sm">
             {rec.followUp.length > 0 && (
               <div>
@@ -119,7 +147,7 @@ export default async function AuftragseingangPage({ searchParams }: { searchPara
             )}
             {rec.withoutCase.length > 0 && (
               <details>
-                <summary className="font-medium">Laufende Einsätze ohne Vorgang ({rec.withoutCase.length})</summary>
+                <summary className="font-medium">Altbestand: laufende Einsätze ohne Vorgang ({rec.withoutCase.length})</summary>
                 <p className="muted text-xs mt-1">Altbestand oder von Hand erfasst. Die nächste Bestellung oder Verlängerung per Upload holt sie in das Verfahren.</p>
                 <ul className="space-y-1 mt-1">{rec.withoutCase.slice(0, 30).map((e) => <li key={e.id}><Link href={`/einsaetze/${e.id}`}>{e.title}</Link> <span className="muted">· {e.accountName}</span></li>)}</ul>
               </details>

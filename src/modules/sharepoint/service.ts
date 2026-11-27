@@ -53,6 +53,9 @@ export const COLUMNS: SpColumn[] = [
   // e48: für die Buchhaltung – im Kundenordner der Verkaufssatz, im Freelancer-Ordner der Einkaufssatz
   { name: "Satz", displayName: "Tagessatz", kind: "text" },
   { name: "Zahlungsziel", displayName: "Zahlungsziel", kind: "text" },
+  // e74: Auftragseingang – Endkunde beim Vermittlergeschäft und die Vorgangsnummer
+  { name: "Endkunde", displayName: "Endkunde", kind: "text" },
+  { name: "Vorgang", displayName: "Vorgang", kind: "text" },
 ];
 
 const RUNNING = ["VORBEREITUNG", "GEPLANT", "AKTIV", "PAUSIERT", "ENDET"];

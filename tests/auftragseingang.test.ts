@@ -191,13 +191,14 @@ describe("e67 Auftragseingang: Ablauf", () => {
 });
 
 describe("e67 Auftragseingang: dieselbe Datei", () => {
-  it("öffnet den eigenen Entwurf wieder und weist eine schon bestätigte Datei ab (B8)", async () => {
+  it("liest den eigenen Entwurf neu und weist eine schon bestätigte Datei ab (B8)", async () => {
     const s = await ensureSeed();
     const ops = await makeSalesOps();
     const text = `Angebot Nr. DUP-${uniq()}\nRolle: Tester`;
+    const a0 = await uploadForCase(ops, file("dup.txt", text));
     const a = await uploadForCase(ops, file("dup.txt", text));
-    const b = await uploadForCase(ops, file("dup.txt", text));
-    expect(b.id).toBe(a.id);
+    expect(a.id).not.toBe(a0.id);
+    expect(await db.query.orderCases.findFirst({ where: eq(schema.orderCases.id, a0.id) })).toBeUndefined();
     await confirmCase(ops, a.id, { kind: "ANGEBOT", channel: "DIREKT", partnerAccountId: s.accountId, role: "Tester", personNewName: "Gina Gleich (fiktiv)" });
     await expect(uploadForCase(ops, file("dup.txt", text))).rejects.toBeInstanceOf(ConflictError);
   });
@@ -450,5 +451,85 @@ describe("e72 Zeitleiste zeigt versendete Angebote", () => {
     expect(offers[0]!.phase).toBe("ANGEBOT");
     expect(offers[0]!.personId).toBe(offers[1]!.personId);
     expect(offers[0]!.href).toContain("/auftragseingang/");
+  });
+});
+
+
+describe("e74 Sammelbestellung", () => {
+  it("erkennt drei Positionen, ordnet sie über Satz, Zeitraum und Tage den Angeboten zu und bestätigt je Position", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const po = `49${Date.now().toString().slice(-8)}`;
+    const offers: string[] = [];
+    for (const [rate, days, name] of [[960, 130, "Anna Alpha"], [1180, 100, "Bert Beta"], [940, 100, "Cora Gamma"]] as const) {
+      const d = await uploadForCase(ops, file(`ang-${uniq()}.txt`, `Angebot Nr. SAM-${uniq()}\nRolle: Beratung\nBerater: ${name} (fiktiv)\nZeitraum: 01.01.2027 bis 30.06.2027`));
+      const c = await confirmCase(ops, d.id, { kind: "ANGEBOT", channel: "DIREKT", partnerAccountId: s.accountId, role: `Beratung ${name}`, personNewName: `${name} (fiktiv)`, startDate: "2027-01-01", endDate: "2027-06-30", dailyRate: String(rate), days: String(days), offerNumber: `SAM-${uniq()}` });
+      offers.push(c.id);
+    }
+    const text = `BESTELLUNG\nBESTELLNUMMER ${po}\nArtikel Beschreibung Service Start - End Date Menge Einheit Preis Gesamt\n1 DL Beratung 2027-01-01 - 2027-\n06-30\n130 "Day Rate 960,00 124.800,00\n2 DL Beratung 2027-01-01 - 2027-\n06-30\n100 "Day Rate 1.180,00 118.000,00\n3 DL Beratung 2027-01-01 - 2027-\n06-30\n100 "Day Rate 940,00 94.000,00\n336.800,00 EUR`;
+    const d = await uploadForCase(ops, file(`po-${po}.txt`, text));
+    await db.update(schema.orderCases).set({ partnerAccountId: s.accountId, orderNumber: po }).where(eq(schema.orderCases.id, d.id));
+    const { matchPositions, confirmCollection } = await import("@/modules/o2o/service");
+    const sug = d.parsed as { positions?: { no: number; rate: number; days: number; matchCaseId: string | null }[] };
+    expect(sug.positions?.map((p) => [p.days, p.rate])).toEqual([[130, 960], [100, 1180], [100, 940]]);
+    const m = await matchPositions(ops, s.accountId, sug.positions!.map((p) => ({ no: p.no, days: p.days, rate: p.rate, start: "2027-01-01", end: "2027-06-30", total: null, evidence: "" })));
+    expect(m.map((x) => x.matchCaseId)).toEqual(offers);
+    const rows = await confirmCollection(ops, d.id, { orderNumber: po, pos_1: offers[0], pos_2: offers[1], pos_3: offers[2] });
+    expect(rows.map((r) => [r.status, r.orderNumber, r.orderPosition])).toEqual([["BEAUFTRAGT", po, 1], ["BEAUFTRAGT", po, 2], ["BEAUFTRAGT", po, 3]]);
+    expect(rows.map((r) => r.id)).toEqual(offers);
+    expect(new Set(rows.map((r) => r.engagementId)).size).toBe(3);
+    // dieselbe Position ein zweites Mal: verständliche Ablehnung statt „unerwarteter Fehler“
+    const again = await uploadForCase(ops, file(`po2-${po}.txt`, `Bestellung Nr. ${po}\nRolle: Beratung\nZeitraum: 01.01.2027 bis 30.06.2027`));
+    await expect(confirmCase(ops, again.id, { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, role: "Beratung", personNewName: "Dora Delta (fiktiv)", orderNumber: po, orderPosition: "2" })).rejects.toBeInstanceOf(ConflictError);
+  });
+});
+
+describe("e74 Angebotsnotiz, SharePoint-Ablage und täglicher Abgleich", () => {
+  it("Angebot ohne Dokument bekommt eine Angebotsnotiz als PDF", async () => {
+    const ops = await makeSalesOps();
+    const bd = await actorFor("david");
+    const c = await createOfferWithoutDocument(ops, { bdUserId: bd.userId, partnerNewName: `Vermittla Notiz ${uniq()} (fiktiv)`, personKind: "FREELANCER", personNewName: "Nils Notiz (fiktiv)", role: "Testmanager", dailyRate: "900", startDate: "2027-02-01", endDate: "2027-07-31", brokerRef: `REF-${uniq()}` });
+    const docs = await db.query.orderCaseDocuments.findMany({ where: eq(schema.orderCaseDocuments.caseId, c.id) });
+    expect(docs).toHaveLength(1);
+    const cd = await db.query.contractDocuments.findFirst({ where: eq(schema.contractDocuments.id, docs[0]!.documentId) });
+    const f = await db.query.documents.findFirst({ where: eq(schema.documents.sourceId, cd!.sourceId!) });
+    expect(f?.fileName).toMatch(/^Angebotsnotiz_VG-\d{4}-\d{4}_Notiz\.pdf$/);
+  });
+
+  it("Dateiname nach Konzept", async () => {
+    const { caseFileName } = await import("@/modules/o2o/files");
+    expect(caseFileName({ kind: "BESTELLUNG", number: "4711", caseNumber: "VG-2026-0001", personName: "Pia Probe (fiktiv)", originalName: "x.PDF", date: "2026-11-27" })).toBe("2026-11-27_Bestellung_4711_Probe.pdf");
+    expect(caseFileName({ kind: "ANGEBOT", number: null, caseNumber: "VG-2026-0002", personName: "Müller, Jörg", originalName: "a.docx", date: "2026-11-27" })).toBe("2026-11-27_Angebot_VG-2026-0002_Muller.docx");
+  });
+
+  it("Abgleich meldet Abweichungen in Moco, schreibt nie zurück und legt fehlgeschlagene Ablagen erneut ab", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const { FixtureMocoClient } = await import("@/modules/moco/client");
+    const { FixtureSpClient, resetFixture } = await import("@/modules/sharepoint/client");
+    const { dailyCheck } = await import("@/modules/o2o/sync");
+    FixtureMocoClient.resetWrites();
+    resetFixture();
+    const moco = new FixtureMocoClient("./tests/fixtures/moco");
+    const d = await uploadForCase(ops, file(`ab-${uniq()}.txt`, `Bestellung Nr. AB-${uniq()}\nRolle: Beratung\nZeitraum: 01.03.2027 bis 31.08.2027\nTagessatz: 1000 €`));
+    const c = await confirmCase(ops, d.id, { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, role: "Beratung", personNewName: "Abel Abgleich (fiktiv)", startDate: "2027-03-01", endDate: "2027-08-31", dailyRate: "1000", orderNumber: `AB-${uniq()}` });
+    const p = await moco.createProject({ name: "Beratung", currency: "EUR", start_date: "2027-03-01", finish_date: "2027-08-31", fixed_price: false, retainer: false, leader_id: 1, customer_id: 4242, billing_variant: "task", custom_properties: { Bestellnummer: c.orderNumber! } } as never);
+    await db.update(schema.orderCases).set({ systems: { ...(c.systems as object), moco: { mode: "GESCHRIEBEN", ids: { projectId: p.id, customerCompanyId: 4242 } }, sharepoint: { state: "FEHLER", note: "Test", link: null } } }).where(eq(schema.orderCases.id, c.id));
+    const sp = new FixtureSpClient();
+    const { setupSite } = await import("@/modules/sharepoint/service");
+    await setupSite(await actorFor("clemens"), { client: sp });
+    let r = await dailyCheck(s.workspaceId, { moco, sp });
+    expect(r.items.filter((i) => i.caseId === c.id)).toHaveLength(0);
+    expect(r.retried).toBeGreaterThanOrEqual(1);
+    const after = await db.query.orderCases.findFirst({ where: eq(schema.orderCases.id, c.id) });
+    expect((after!.systems as { sharepoint: { state: string } }).sharepoint.state).toBe("ABGELEGT");
+    // Backoffice ändert in Moco das Ende von Hand → Hinweis, kein Rückschreiben
+    FixtureMocoClient.patchProject(p.id, { finish_date: "2027-09-30" });
+    const writes = FixtureMocoClient.written.length;
+    r = await dailyCheck(s.workspaceId, { moco, sp });
+    const mine = r.items.filter((i) => i.caseId === c.id);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.detail).toContain("Ende in Moco 30.09.2027, hier 31.08.2027");
+    expect(FixtureMocoClient.written.length).toBe(writes);
   });
 });

@@ -8,8 +8,9 @@ import { recordAudit } from "@/modules/audit/audit";
 import { hasRole, type Actor } from "@/modules/identity/actor";
 import { canViewAccount } from "@/modules/identity/authz";
 import { todayIso } from "@/modules/work/calendar";
+import type { OrderPosition } from "./parse";
 import { canonicalMime, extensionOf, extractDocumentText } from "@/modules/documents/extract";
-import { readStoredFile, relativePathFor, storeFile } from "@/modules/documents/storage";
+import { relativePathFor, storeFile } from "@/modules/documents/storage";
 import type { ParsedDoc } from "./parse";
 import { openPoints, plan, type CaseFacts, type PlanStep } from "./plan";
 
@@ -170,7 +171,47 @@ export type Suggestion = {
   parallelNote?: string;
   readMode?: "KI" | "REGELN";
   readNote?: string;
+  /** e74: Sammelbestellung – je Position der vorgeschlagene offene Angebots-Vorgang (über Zeitraum, Tagessatz, Tage) */
+  positions?: PositionMatch[];
 };
+
+export type PositionMatch = OrderPosition & { matchCaseId: string | null; matchReason: string | null };
+
+/**
+ * e74: Positionen einer Sammelbestellung den offenen Angeboten zuordnen. Beim Kunden steht oft keine Angebotsnummer
+ * und keine Person in der Bestellung – dann bleiben Tagessatz (muss passen), Zeitraum und Tage. Jedes Angebot wird
+ * höchstens einer Position zugeordnet; Gleichstand bleibt offen statt geraten.
+ */
+export async function matchPositions(actor: Actor, partnerAccountId: string | null, positions: OrderPosition[]): Promise<PositionMatch[]> {
+  const open = (await db.query.orderCases.findMany({ where: and(eq(schema.orderCases.workspaceId, actor.workspaceId), eq(schema.orderCases.status, "ANGEBOT_VERSENDET")) }))
+    .filter((c) => !partnerAccountId || c.partnerAccountId === partnerAccountId || c.endCustomerAccountId === partnerAccountId);
+  const pairs: { pi: number; c: CaseRow; score: number; why: string[] }[] = [];
+  positions.forEach((p, pi) => {
+    for (const c of open) {
+      if (c.dailyRate == null || Math.abs(Number(c.dailyRate) - p.rate) > 0.5) continue;
+      const why = [`Tagessatz ${p.rate} €`];
+      let score = 4;
+      if (p.start && p.end && c.startDate === p.start && c.endDate === p.end) { score += 2; why.push("gleicher Zeitraum"); }
+      else if (p.start && p.end && c.startDate && c.endDate && c.startDate <= p.end && p.start <= c.endDate) { score += 1; why.push("Zeitraum überschneidet sich"); }
+      if (c.days != null && Number(c.days) === p.days) { score += 1; why.push(`${p.days} Tage`); }
+      pairs.push({ pi, c, score, why });
+    }
+  });
+  pairs.sort((a, b) => b.score - a.score);
+  const out: PositionMatch[] = positions.map((p) => ({ ...p, matchCaseId: null, matchReason: null }));
+  const usedCase = new Set<string>();
+  const donePos = new Set<number>();
+  for (const pr of pairs) {
+    if (usedCase.has(pr.c.id) || donePos.has(pr.pi)) continue;
+    // eindeutig? gleich gute Alternative für dieselbe Position oder dasselbe Angebot → offen lassen
+    const rival = pairs.find((x) => x !== pr && x.score === pr.score && !usedCase.has(x.c.id) && !donePos.has(x.pi) && (x.pi === pr.pi || x.c.id === pr.c.id));
+    if (rival) continue;
+    out[pr.pi] = { ...out[pr.pi]!, matchCaseId: pr.c.id, matchReason: pr.why.join(", ") };
+    usedCase.add(pr.c.id);
+    donePos.add(pr.pi);
+  }
+  return out;
+}
 
 /** Hochladen: Datei ablegen, vorlesen, Kunde, Person und passenden Vorgang vorschlagen; der Vorgang steht dann „zu bestätigen“. */
 export async function uploadForCase(actor: Actor, file: UploadedFile, opts: { forCaseId?: string } = {}): Promise<CaseRow> {
@@ -184,8 +225,10 @@ export async function uploadForCase(actor: Actor, file: UploadedFile, opts: { fo
       const srcIds = new Set(same.map((d) => d.sourceId));
       const cases = await db.query.orderCases.findMany({ where: and(eq(schema.orderCases.workspaceId, actor.workspaceId), inArray(schema.orderCases.status, ["ENTWURF", "ANGEBOT_VERSENDET", "BEAUFTRAGT"])) });
       const hit = cases.find((c) => srcIds.has(String((c.parsed as { sourceId?: string } | null)?.sourceId ?? "")));
-      if (hit?.status === "ENTWURF" && hit.createdBy === actor.userId) return hit;
-      if (hit) throw new ConflictError(`Diese Datei ist bereits als ${hit.number} erfasst.`);
+      // e74: eigener offener Entwurf derselben Datei → neu lesen (z. B. nach einem Update der Erkennung), alten Entwurf verwerfen
+      if (hit?.status === "ENTWURF" && hit.createdBy === actor.userId) await db.delete(schema.orderCases).where(eq(schema.orderCases.id, hit.id));
+      else if (hit?.status === "ENTWURF") return hit;
+      else if (hit) throw new ConflictError(`Diese Datei ist bereits als ${hit.number} erfasst.`);
     }
   }
   const up = await storeUpload(actor, file);
@@ -268,6 +311,29 @@ export async function uploadForCase(actor: Actor, file: UploadedFile, opts: { fo
       else if (running.length) sug.parallelNote = `${parsed.person?.value ?? "Die Person"} hat bei diesem Kunden bereits ${running.length === 1 ? "einen laufenden Einsatz" : `${running.length} laufende Einsätze`} im selben Zeitraum. Standard ist ein weiterer, eigener Einsatz; soll stattdessen ein laufender verlängert werden, unten „Als Verlängerung übernehmen“ wählen.`;
     }
   }
+  // e74: Sammelbestellung – mehrere Positionen: je Position das passende Angebot vorschlagen; Einzelwerte bleiben leer,
+  // damit nicht ein Satz aus einer Position für die ganze Bestellung gilt. Eine Position füllt fehlende Werte auf.
+  const pos = parsed.positions ?? [];
+  if (pos.length >= 2) {
+    if (!parsed.kind) parsed.kind = { value: "BESTELLUNG", evidence: "mehrere Bestellpositionen", by: "REGEL" };
+    sug.positions = await matchPositions(actor, partnerAccountId, pos);
+    sug.matchCaseId = null;
+    sug.matchReason = null;
+    sug.renewalEngagementId = null;
+    parsed.dailyRate = null;
+    parsed.days = null;
+    const s0 = pos[0]!;
+    if (pos.every((p) => p.start === s0.start && p.end === s0.end) && s0.start && s0.end) {
+      parsed.start = { value: s0.start, evidence: s0.evidence, by: "REGEL" };
+      parsed.end = { value: s0.end, evidence: s0.evidence, by: "REGEL" };
+    }
+  } else if (pos.length === 1) {
+    const p0 = pos[0]!;
+    if (!parsed.dailyRate) parsed.dailyRate = { value: p0.rate, evidence: p0.evidence, by: "REGEL" };
+    if (!parsed.days) parsed.days = { value: p0.days, evidence: p0.evidence, by: "REGEL" };
+    if (!parsed.start && p0.start) parsed.start = { value: p0.start, evidence: p0.evidence, by: "REGEL" };
+    if (!parsed.end && p0.end) parsed.end = { value: p0.end, evidence: p0.evidence, by: "REGEL" };
+  }
   // Vermittler: als solcher geführt, laut KI ein Vermittler, oder das Dokument nennt einen Endkunden neben dem Vertragspartner
   const channel = partner?.accountKind === "VERMITTLER" || parsed.intermediary?.value === true || (!base && parsed.endCustomer && parsed.endCustomer.value !== parsed.sender?.value) ? "VERMITTLER" : base?.channel ?? "DIREKT";
   const c = await insertCase(actor, {
@@ -340,6 +406,8 @@ export const confirmInput = z.object({
   offerNumber: opt(100),
   brokerRef: opt(100),
   orderNumber: opt(100),
+  /** e74: Position in einer Sammelbestellung */
+  orderPosition: z.string().trim().regex(/^\d{0,3}$/).optional().default(""),
   /** Bestellung gehört zu diesem Vorgang (Angebot) */
   matchCaseId: opt(100),
   /** Bestellung verlängert diesen laufenden Einsatz */
@@ -421,18 +489,9 @@ async function attachFile(actor: Actor, c: CaseRow, kind: "ANGEBOT" | "BESTELLUN
     .returning();
   await db.insert(schema.orderCaseDocuments).values({ caseId: c.id, documentId: d!.id, kind }).onConflictDoNothing();
   if (engagementId) await db.insert(schema.engagementDocuments).values({ engagementId, documentId: d!.id }).onConflictDoNothing();
-  let sharepoint: { state: string; note: string | null; link: string | null } = { state: "AUS", note: "SharePoint ist nicht eingerichtet.", link: null };
-  try {
-    const file = await db.query.documents.findFirst({ where: eq(schema.documents.sourceId, sug.sourceId) });
-    if (file?.storagePath) {
-      const bytes = await readStoredFile(file.storagePath);
-      const { fileDocument } = await import("@/modules/sharepoint/documents");
-      const sp = await fileDocument(d!.id, file.fileName, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
-      if (sp) sharepoint = { state: "ABGELEGT", note: null, link: sp.webUrl };
-    }
-  } catch (err) {
-    sharepoint = { state: "FEHLER", note: (err as Error).message.slice(0, 200), link: null };
-  }
+  // e74: Ablage nach Konzept (Dateiname, Wartebereich beim Vermittler, Spalten Endkunde/Vorgang) – gemeinsam mit Wiederholung und Abgleich
+  const { fileCaseDocuments } = await import("./files");
+  const sharepoint = await fileCaseDocuments(c.id).catch((err: Error) => ({ state: "FEHLER" as const, note: err.message.slice(0, 200), link: null }));
   return { documentId: d!.id, sharepoint };
 }
 
@@ -528,13 +587,84 @@ export async function confirmCase(actor: Actor, caseId: string, raw: unknown): P
     offerNumber: i.offerNumber || null,
     brokerRef: i.brokerRef || null,
     orderNumber: i.orderNumber || null,
+    orderPosition: i.orderPosition ? Number(i.orderPosition) : 0,
     statusReason: i.note || null,
   };
-  if (i.kind === "ANGEBOT") return confirmOffer(actor, draft, common, i);
-  return confirmOrder(actor, draft, common, i);
+  try {
+    if (i.kind === "ANGEBOT") return await confirmOffer(actor, draft, common, i);
+    return await confirmOrder(actor, draft, common, i);
+  } catch (err) {
+    // R7: gleichzeitiger zweiter Upload derselben Bestellung (eindeutiger Schlüssel) – verständlich statt „unerwarteter Fehler“
+    if ((err as { code?: string }).code === "23505" || /order_cases_order_uq/.test(String((err as Error).message))) {
+      throw new ConflictError(`Die Bestellung ${common.orderNumber ?? ""}${common.orderPosition ? ` (Position ${common.orderPosition})` : ""} ist bei diesem Vertragspartner bereits erfasst. Bei einer Sammelbestellung je Position bestätigen.`);
+    }
+    throw err;
+  }
 }
 
 type Common = Omit<Partial<typeof schema.orderCases.$inferInsert>, "id">;
+
+/**
+ * e74: Sammelbestellung bestätigen – je Position ein eigener Vorgang (dieselbe Bestellnummer, Position 1…n), jeweils mit
+ * dem gewählten Angebot zusammengeführt. Erst wird alles geprüft (Zuordnung eindeutig, Abweichungen, schon erfasst),
+ * dann angelegt; so entsteht kein halber Zustand durch eine vorhersehbare Ablehnung.
+ * Eingabe: pos_<n> = Vorgang des Angebots oder leer (Position nicht übernehmen), deviationsOk.
+ */
+export async function confirmCollection(actor: Actor, caseId: string, raw: Record<string, string | undefined>): Promise<CaseRow[]> {
+  await requireIntake(actor);
+  const draft = await requireCase(actor, caseId);
+  if (draft.status !== "ENTWURF") throw new TransitionError("Dieser Vorgang ist bereits bestätigt.");
+  const sug = (draft.parsed ?? {}) as Partial<Suggestion>;
+  const positions = sug.positions ?? [];
+  if (positions.length < 2) throw new ValidationError("Diese Bestellung hat keine einzelnen Positionen – bitte normal bestätigen.");
+  const orderNumber = (raw.orderNumber ?? draft.orderNumber ?? "").trim();
+  if (!orderNumber) throw new ValidationError("Bitte die Bestellnummer angeben.");
+  const lines = positions.map((p) => ({ p, offerId: (raw[`pos_${p.no}`] ?? "").trim() })).filter((l) => l.offerId);
+  if (!lines.length) throw new ValidationError("Bitte mindestens einer Position ein Angebot zuordnen.");
+  const ids = lines.map((l) => l.offerId);
+  if (new Set(ids).size !== ids.length) throw new ValidationError("Ein Angebot ist mehreren Positionen zugeordnet – je Angebot nur eine Position.");
+  const offers = await Promise.all(lines.map((l) => requireCase(actor, l.offerId)));
+  const problems: string[] = [];
+  const okDev = raw.deviationsOk === "on" || raw.deviationsOk === "true";
+  for (const [k, l] of lines.entries()) {
+    const o = offers[k]!;
+    if (o.status !== "ANGEBOT_VERSENDET") problems.push(`Position ${l.p.no}: ${o.number} hat kein offenes Angebot`);
+    const dup = await db.query.orderCases.findFirst({ where: and(eq(schema.orderCases.workspaceId, actor.workspaceId), eq(schema.orderCases.partnerAccountId, o.partnerAccountId!), eq(schema.orderCases.orderNumber, orderNumber), eq(schema.orderCases.orderPosition, l.p.no), inArray(schema.orderCases.status, ["BEAUFTRAGT"])) });
+    if (dup) problems.push(`Position ${l.p.no} ist bereits als ${dup.number} erfasst`);
+    if (!okDev) {
+      const dev = deviations(o, { dailyRate: String(l.p.rate), startDate: l.p.start, endDate: l.p.end, days: l.p.days, freelancerId: null, internalUserId: null, personName: null });
+      if (dev.length) problems.push(`Position ${l.p.no} ↔ ${o.number}: ${dev.join("; ")}`);
+    }
+  }
+  if (problems.length) throw new ValidationError(`${problems.join(" · ")}.${problems.some((x) => x.includes("↔")) && !okDev ? " Abweichungen prüfen und „Abweichungen bestätigt“ anhaken." : ""}`);
+  const out: CaseRow[] = [];
+  for (const [k, l] of lines.entries()) {
+    const o = offers[k]!;
+    const d = k === 0 ? draft : await insertCase(actor, { channel: draft.channel, status: "ENTWURF", partnerAccountId: draft.partnerAccountId, orderNumber, parsed: draft.parsed as Record<string, unknown> });
+    if (k === 0) await db.update(schema.orderCases).set({ orderNumber }).where(eq(schema.orderCases.id, d.id));
+    out.push(await confirmCase(actor, d.id, {
+      kind: "BESTELLUNG",
+      channel: o.channel,
+      partnerAccountId: o.partnerAccountId ?? "",
+      endCustomerAccountId: o.endCustomerAccountId ?? "",
+      endCustomerHint: o.endCustomerHint ?? "",
+      startDate: l.p.start ?? "",
+      endDate: l.p.end ?? "",
+      dailyRate: String(l.p.rate),
+      days: Number.isInteger(l.p.days) ? String(l.p.days) : "",
+      offerNumber: o.offerNumber ?? "",
+      brokerRef: o.brokerRef ?? "",
+      orderNumber,
+      orderPosition: String(l.p.no),
+      matchCaseId: o.id,
+      deviationsOk: "on",
+      note: `Sammelbestellung ${orderNumber}, Position ${l.p.no} von ${positions.length}`,
+    }));
+  }
+  // nicht übernommene Positionen: der erste Entwurf ist bestätigt; nichts bleibt halb liegen
+  await recordAudit(db, actor, "order_case.collection_confirmed", "ORDER_CASE", out[0]!.id, { bestellnummer: orderNumber, positionen: lines.map((l) => l.p.no) });
+  return out;
+}
 
 async function confirmOffer(actor: Actor, draft: CaseRow, common: Common, i: ConfirmInput): Promise<CaseRow> {
   if (!common.role) throw new ValidationError("Bitte die Rolle angeben (wird Titel der Chance).");
@@ -581,8 +711,8 @@ async function confirmOrder(actor: Actor, draft: CaseRow, common: Common, i: Con
   if (base && base.status !== "ANGEBOT_VERSENDET") throw new TransitionError("Der gewählte Vorgang hat kein offenes Angebot.");
   // R7 / B8: dieselbe Bestellnummer desselben Vertragspartners gibt es nur einmal
   if (common.orderNumber) {
-    const dup = await db.query.orderCases.findFirst({ where: and(eq(schema.orderCases.workspaceId, actor.workspaceId), eq(schema.orderCases.partnerAccountId, common.partnerAccountId!), eq(schema.orderCases.orderNumber, common.orderNumber), inArray(schema.orderCases.status, ["BEAUFTRAGT", "ANGEBOT_VERSENDET"])) });
-    if (dup && dup.id !== base?.id) throw new ConflictError(`Die Bestellung ${common.orderNumber} ist bereits als ${dup.number} erfasst.`);
+    const dup = await db.query.orderCases.findFirst({ where: and(eq(schema.orderCases.workspaceId, actor.workspaceId), eq(schema.orderCases.partnerAccountId, common.partnerAccountId!), eq(schema.orderCases.orderNumber, common.orderNumber), eq(schema.orderCases.orderPosition, common.orderPosition ?? 0), inArray(schema.orderCases.status, ["BEAUFTRAGT", "ANGEBOT_VERSENDET"])) });
+    if (dup && dup.id !== base?.id) throw new ConflictError(`Die Bestellung ${common.orderNumber}${common.orderPosition ? ` (Position ${common.orderPosition})` : ""} ist bereits als ${dup.number} erfasst.`);
   }
   if (base && i.deviationsOk !== "on" && i.deviationsOk !== "true") {
     const dev = deviations(base, { dailyRate: common.dailyRate ?? null, startDate: common.startDate ?? null, endDate: common.endDate ?? null, days: common.days ?? null, freelancerId: common.freelancerId ?? null, internalUserId: common.internalUserId ?? null, personName: common.personName ?? null });
@@ -674,7 +804,35 @@ export async function createOfferWithoutDocument(actor: Actor, raw: unknown): Pr
   await requireIntake(actor);
   const draft = await insertCase(actor, { channel: "VERMITTLER", status: "ENTWURF", parsed: { manual: true } });
   try {
-    return await confirmCase(actor, draft.id, { ...(raw as Record<string, unknown>), kind: "ANGEBOT" });
+    // e74: Angebotsnotiz als PDF – damit auch das mündliche Angebot mit einem Dokument beginnt (Ablage wie jedes Angebot)
+    const r = (raw ?? {}) as Record<string, string | undefined>;
+    const [partner, fl, bd] = await Promise.all([
+      r.partnerAccountId ? db.query.accounts.findFirst({ where: eq(schema.accounts.id, r.partnerAccountId), columns: { name: true } }) : null,
+      r.freelancerId ? db.query.freelancers.findFirst({ where: eq(schema.freelancers.id, r.freelancerId), columns: { displayName: true } }) : null,
+      r.bdUserId ? db.query.users.findFirst({ where: eq(schema.users.id, r.bdUserId), columns: { displayName: true } }) : null,
+    ]);
+    const person = fl?.displayName ?? r.personNewName ?? null;
+    const de = (x?: string) => (x ? x.split("-").reverse().join(".") : null);
+    const { offerNotePdf } = await import("./note");
+    const pdf = await offerNotePdf({
+      caseNumber: draft.number,
+      date: todayIso(),
+      author: actor.displayName,
+      rows: [
+        ["Vermittler", partner?.name ?? r.partnerNewName],
+        ["Referenz des Vermittlers", r.brokerRef],
+        ["Endkunde", r.endCustomerHint],
+        ["Person", person],
+        ["Rolle", r.role],
+        ["Zeitraum", r.startDate || r.endDate ? `${de(r.startDate) ?? "offen"} bis ${de(r.endDate) ?? "offen"}` : null],
+        ["Tagessatz", r.dailyRate ? `${r.dailyRate} €` : null],
+        ["Verantwortlicher BD", bd?.displayName],
+      ],
+    });
+    const fileName = `Angebotsnotiz_${draft.number}${person ? `_${person.replace(/\(.*?\)/g, "").trim().split(/\s+/).at(-1)}` : ""}.pdf`;
+    const stored = await storeUpload(actor, new File([Buffer.from(pdf)], fileName, { type: "application/pdf" }));
+    await db.update(schema.orderCases).set({ parsed: { manual: true, sourceId: stored.sourceId } }).where(eq(schema.orderCases.id, draft.id));
+    return await confirmCase(actor, draft.id, { channel: "VERMITTLER", ...(raw as Record<string, unknown>), kind: "ANGEBOT" });
   } catch (err) {
     await db.delete(schema.orderCases).where(and(eq(schema.orderCases.id, draft.id), eq(schema.orderCases.status, "ENTWURF")));
     throw err;
@@ -707,7 +865,21 @@ export async function setEndCustomer(actor: Actor, caseId: string, raw: unknown)
     await tx.update(schema.orderCases).set({ endCustomerAccountId: acc.id, version: c.version + 1, updatedAt: new Date() }).where(eq(schema.orderCases.id, c.id));
     await recordAudit(tx, actor, "order_case.end_customer", "ORDER_CASE", c.id, { endkunde: acc.name });
   });
-  return refreshSystems((await db.query.orderCases.findFirst({ where: eq(schema.orderCases.id, c.id) }))!);
+  // e74: Dateien ziehen aus dem Wartebereich beim Vermittler zum Endkunden; Lead-Name in Moco um den Endkunden ergänzen
+  let sharepoint: Systems["sharepoint"] | undefined;
+  try {
+    const { moveCaseDocumentsToEndCustomer } = await import("./files");
+    await moveCaseDocumentsToEndCustomer(c.id);
+  } catch (err) {
+    sharepoint = { state: "FEHLER", note: `Umzug zum Endkunden: ${(err as Error).message.slice(0, 160)}`, link: null };
+  }
+  try {
+    const { renameLeadForEndCustomer } = await import("./moco");
+    await renameLeadForEndCustomer(c.id, acc.name);
+  } catch {
+    /* Lead-Name ist Komfort – der Abgleich zeigt Abweichungen */
+  }
+  return refreshSystems((await db.query.orderCases.findFirst({ where: eq(schema.orderCases.id, c.id) }))!, sharepoint);
 }
 
 /** Absage oder Rückzug (A12): Vorgang „abgesagt“ mit Grund, Chance zurückgestellt, Angebot abgelehnt, Datei bleibt. */

@@ -361,3 +361,18 @@ async function writeOfferCase(actor: Actor, c: Awaited<ReturnType<typeof require
   await recordAudit(db, actor, "order_case.moco_lead", "ORDER_CASE", c.id, { fertig: r.done, dealId: r.ids.dealId ?? null });
   return r;
 }
+
+/**
+ * e74: Endkunde wird vor der Bestellung bekannt – Lead-Name in Moco um den Endkunden ergänzen (Konzept „Endkunde wird
+ * bekannt“). Nur das eigene Feld Name, nur solange das Angebot offen ist; nach der Bestellung zieht der Lead ohnehin um.
+ */
+export async function renameLeadForEndCustomer(caseId: string, endCustomerName: string, client?: MocoFullClient): Promise<boolean> {
+  if (!client && !mocoWriteOn()) return false;
+  const c = await db.query.orderCases.findFirst({ where: eq(schema.orderCases.id, caseId) });
+  const dealId = ((c?.systems ?? {}) as { moco?: MocoState }).moco?.ids?.dealId;
+  if (!c || c.status !== "ANGEBOT_VERSENDET" || !dealId) return false;
+  const partner = c.partnerAccountId ? await db.query.accounts.findFirst({ where: eq(schema.accounts.id, c.partnerAccountId), columns: { name: true } }) : null;
+  const name = [partner?.name, c.role, c.personName].filter(Boolean).join(" – ") + ` (Endkunde ${endCustomerName})`;
+  await (client ?? getMocoClient()).updateDeal(dealId, { name });
+  return true;
+}

@@ -9,7 +9,7 @@ import { canUseOrderIntake, caseChoices, caseStatusLabel, channelLabel, deviatio
 import type { PlanStep } from "@/modules/o2o/plan";
 import { NotFoundError } from "@/lib/errors";
 import { isoDe } from "@/lib/labels";
-import { cancelOrderCaseAction, confirmOrderCaseAction, writeCaseToMocoAction, setEndCustomerAction, uploadOrderCaseAction } from "../../actions";
+import { confirmCollectionAction, refileCaseAction, cancelOrderCaseAction, confirmOrderCaseAction, writeCaseToMocoAction, setEndCustomerAction, uploadOrderCaseAction } from "../../actions";
 import { systemStates } from "../SystemDots";
 
 const Ev = ({ f }: { f: { evidence: string; by?: string } | null | undefined }) => (f ? <span className="field-ev" title={f.evidence}>{f.by === "KI" ? <span className="ev-by">KI</span> : null}„{f.evidence.length > 90 ? `${f.evidence.slice(0, 90)} …` : f.evidence}“</span> : <span className="field-ev field-ev-missing">nicht im Dokument gefunden</span>);
@@ -41,6 +41,13 @@ export default async function CasePage({ params, searchParams }: { params: Promi
   const mayWriteMoco = canWriteMoco(actor);
   const mocoState = (sys as { moco?: { mode?: string; results?: { key: string; title: string; state: string; detail: string }[]; projectUrl?: string | null } }).moco;
   const kind = p?.kind?.value ?? (c.orderNumber ? "BESTELLUNG" : "ANGEBOT");
+  // e74: Sammelbestellung – offene Angebote zur Auswahl je Position
+  const positions = draft ? sug.positions ?? [] : [];
+  const openOffers = positions.length >= 2 ? (await db.query.orderCases.findMany({ where: eq(schema.orderCases.status, "ANGEBOT_VERSENDET") })).filter((o) => o.workspaceId === actor.workspaceId) : [];
+  const offerLabel = (o: (typeof openOffers)[number]) => `${o.number} · ${[o.role, o.personName].filter(Boolean).join(" – ")}${o.dailyRate ? ` · ${Number(o.dailyRate)} €` : ""}${o.startDate ? ` · ${isoDe(o.startDate)}–${o.endDate ? isoDe(o.endDate) : "?"}` : ""}${o.days ? ` · ${o.days} T.` : ""}${o.offerNumber ? ` · ${o.offerNumber}` : ""}`;
+  // e74: Hinweise aus dem täglichen Abgleich zu diesem Vorgang
+  const { lastSync, syncKindLabel } = await import("@/modules/o2o/sync");
+  const syncItems = (await lastSync(actor.workspaceId))?.items.filter((i) => i.caseId === c.id) ?? [];
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -51,6 +58,54 @@ export default async function CasePage({ params, searchParams }: { params: Promi
         <span className="muted text-sm">{c.number} · {channelLabel[c.channel]}{c.isRenewal ? " · Verlängerung" : ""} · angelegt von {c.creatorName}</span>
       </div>
       <Feedback params={sp} />
+      {syncItems.length > 0 && (
+        <div className="callout" data-tone="warn" role="note">
+          <div><strong>Nicht synchron:</strong>{syncItems.map((i) => <div key={i.key} className="text-sm">{syncKindLabel[i.kind]}: {i.detail}{i.external && <> · <a href={i.external} target="_blank" rel="noreferrer">öffnen</a></>}</div>)}</div>
+        </div>
+      )}
+      {sys.sharepoint?.state === "FEHLER" && !draft && (
+        <form action={refileCaseAction} className="callout" data-tone="warn">
+          <div className="grow"><strong>SharePoint-Ablage fehlgeschlagen:</strong> {sys.sharepoint.note ?? "unbekannter Fehler"}. Der tägliche Abgleich versucht es erneut.</div>
+          <input type="hidden" name="caseId" value={c.id} />
+          <button className="btn btn-secondary btn-small" type="submit">Jetzt erneut ablegen</button>
+        </form>
+      )}
+
+      {positions.length >= 2 && (
+        <section className="card" id="sammelbestellung">
+          <h2 className="font-semibold">Sammelbestellung: {positions.length} Positionen</h2>
+          <p className="muted text-sm mb-3">Die Bestellung {c.orderNumber ? <strong>{c.orderNumber}</strong> : null} beauftragt mehrere Angebote auf einmal. Je Position wird ein eigener Vorgang mit derselben Bestellnummer bestätigt. Vorgeschlagen ist das offene Angebot mit gleichem Tagessatz, Zeitraum und gleichen Tagen – bitte prüfen.</p>
+          <form action={confirmCollectionAction} className="space-y-3">
+            <input type="hidden" name="caseId" value={c.id} />
+            <div className="flex flex-wrap gap-3 items-end">
+              <div><label className="label" htmlFor="col-po">Bestellnummer</label><input id="col-po" name="orderNumber" className="input" required defaultValue={c.orderNumber ?? ""} style={{ width: 220 }} /></div>
+            </div>
+            <div className="table-wrap"><table className="list text-sm">
+              <thead><tr><th>Pos.</th><th>Zeitraum</th><th style={{ textAlign: "right" }}>Tage</th><th style={{ textAlign: "right" }}>Tagessatz</th><th data-nosort>Angebot</th></tr></thead>
+              <tbody>
+                {positions.map((pp) => (
+                  <tr key={pp.no}>
+                    <td>{pp.no}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{pp.start ? isoDe(pp.start) : "?"} – {pp.end ? isoDe(pp.end) : "?"}</td>
+                    <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{pp.days}</td>
+                    <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{pp.rate.toLocaleString("de-DE", { minimumFractionDigits: 2 })} €</td>
+                    <td>
+                      <select name={`pos_${pp.no}`} className="input" defaultValue={pp.matchCaseId ?? ""} aria-label={`Angebot für Position ${pp.no}`} style={{ minWidth: 320 }}>
+                        <option value="">– nicht übernehmen –</option>
+                        {openOffers.map((o) => <option key={o.id} value={o.id}>{offerLabel(o)}</option>)}
+                      </select>
+                      <div className="muted text-xs mt-1">{pp.matchReason ? `vorgeschlagen: ${pp.matchReason}` : "kein eindeutiges Angebot gefunden – bitte wählen"}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+            <label className="flex gap-2 items-center text-sm"><input type="checkbox" name="deviationsOk" /> Abweichungen zwischen Position und Angebot bestätigt</label>
+            <button className="btn" type="submit">Alle zugeordneten Positionen bestätigen</button>
+          </form>
+          <p className="muted text-xs mt-2">Position ohne Angebot? Erst unter „Angebot &amp; Bestellung“ das Angebot (auch ohne Dokument) erfassen, dann hier zuordnen. Unten lässt sich die Bestellung weiterhin als eine einzige bestätigen.</p>
+        </section>
+      )}
 
       {draft ? (
         <section className="card">

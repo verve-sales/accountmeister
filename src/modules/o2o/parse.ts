@@ -26,7 +26,11 @@ export type ParsedDoc = {
   endCustomer: Field;
   /** Vertragspartner laut Dokument (die Partei, die nicht wir sind) */
   sender: Field;
+  /** e74: Positionen einer (Sammel-)Bestellung – je Zeile Zeitraum, Menge in Tagen und Tagessatz */
+  positions?: OrderPosition[];
 };
+
+export type OrderPosition = { no: number; start: string | null; end: string | null; days: number; rate: number; total: number | null; evidence: string };
 
 export type ParseContext = { knownPersons?: string[]; ownNames?: string[] };
 
@@ -172,6 +176,9 @@ export function detectOfferNumber(text: string, fileName = ""): Field {
 export function detectOrderNumber(text: string): Field {
   const t = hit(text, /(?:projekteinzelvertrag|einzelvertrag|einzelauftrag|abruf(?:auftrag)?|auftrag|bestellung|vertrag|leistungsschein|purchase order|PO)\s*(?:-|–)?\s*(?:nr\.?|nummer|no\.?|#)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/]{4,30})/i, (m) => (/\d/.test(m[1]!) ? m[1]! : null));
   if (t) return t;
+  // e74: Bestellformulare von Einkaufssystemen: „BESTELLNUMMER 4900145423“, „Bestell-Nr.: …“, „PO Number …“
+  const t2 = hit(text, /(?:bestell-?nummer|bestell-?nr\.?|po[ -]?(?:number|nummer)|order number)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/]{4,30})/i, (m) => (/\d/.test(m[1]!) ? m[1]! : null));
+  if (t2) return t2;
   const n = extractOrderNumber(text);
   return n ? { value: n, evidence: clip(text, Math.max(0, text.indexOf(n)), n.length), by: "REGEL" } : null;
 }
@@ -278,5 +285,39 @@ export function parseDocument(text: string, fileName: string, ctx: ParseContext 
     person: detectPerson(text, c.knownPersons ?? []),
     endCustomer: detectEndCustomer(text),
     sender: detectSender(text, c.ownNames ?? []),
+    positions: detectPositions(text),
   };
+}
+
+const posNum = (s: string) => {
+  const t = s.trim();
+  // 1.234,56 / 1234,56 / 1234.56 / 1,234.56
+  if (/,\d{1,2}$/.test(t)) return Number(t.replace(/\./g, "").replace(",", "."));
+  return Number(t.replace(/,/g, ""));
+};
+const dateTok = String.raw`(\d{4}-\d{2}-\d{2}|\d{1,2}\.\d{1,2}\.\d{4})`;
+const posIso = (d: string) => (/^\d{4}-/.test(d) ? d : (() => { const [dd, mm, yy] = d.split("."); return `${yy}-${mm!.padStart(2, "0")}-${dd!.padStart(2, "0")}`; })());
+
+/**
+ * e74: Positionen einer Bestellung aus der Positionstabelle (Sammelbestellung: mehrere Personen bzw. Angebote unter
+ * einer Bestellnummer). Erkannt wird je Zeile: Zeitraum, Menge mit Einheit Tag/Day/PT, Einzelpreis und – wenn vorhanden –
+ * Gesamtpreis; passt Menge × Preis nicht zum Gesamtpreis, wird die Zeile verworfen. Zeilenumbrüche mitten im Datum
+ * (PDF-Tabellen) werden vorher zusammengefügt.
+ */
+export function detectPositions(text: string): OrderPosition[] {
+  const flat = text.replace(/(\d{4})-\s+(\d{2})-\s*(\d{2})/g, "$1-$2-$3").replace(/(\d{4}-\d{2})-\s+(\d{2})/g, "$1-$2").replace(/(\d{4})-\s+(\d{2}-\d{2})/g, "$1-$2").replace(/[ \t]*\n[ \t]*/g, " ").replace(/\s+/g, " ");
+  const unit = String.raw`["„“']?\s*(?:day\s*rate|days?|tage?s?(?:satz)?|pt|personentage?|manntage?|md)\b`;
+  const money = String.raw`(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2}|\d{3,5})`;
+  const re = new RegExp(String.raw`${dateTok}\s*(?:-|–|bis)\s*${dateTok}\s+(\d{1,4}(?:[.,]\d{1,2})?)\s*${unit}[^\d]{0,20}?${money}(?:\s*(?:€|eur)?\s+${money})?`, "gi");
+  const out: OrderPosition[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(flat))) {
+    const days = posNum(m[3]!);
+    const rate = posNum(m[4]!);
+    const total = m[5] ? posNum(m[5]) : null;
+    if (!(days > 0 && days <= 2000 && rate >= 50 && rate <= 5000)) continue;
+    if (total != null && Math.abs(days * rate - total) > Math.max(1, total * 0.005)) continue;
+    out.push({ no: out.length + 1, start: posIso(m[1]!), end: posIso(m[2]!), days, rate, total, evidence: m[0].slice(0, 160) });
+  }
+  return out;
 }

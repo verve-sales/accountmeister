@@ -400,6 +400,13 @@
       "when": 1795798338768,
       "tag": "0056_fristen",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1795802329888,
+      "tag": "0057_sammelbestellung",
+      "breakpoints": true
     }
   ]
 }

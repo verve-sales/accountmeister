@@ -11,7 +11,7 @@ import { docTypeOf, folderName, freelancerFolder, FREELANCER_SUB, KUNDE_SUB, LIB
  */
 
 type Deps = { client?: SpClient };
-const NEW_FIELDS = ["Satz", "Zahlungsziel"];
+const NEW_FIELDS = ["Satz", "Zahlungsziel", "Endkunde", "Vorgang"];
 
 async function clientOf(deps: Deps): Promise<SpClient | null> {
   if (deps.client) return deps.client;
@@ -47,7 +47,8 @@ export function folderFor(d: { side: string; docType: string }, accountName: str
 const datePrefix = (name: string) => (/^\d{4}-\d{2}-\d{2}_/.test(name) ? name : `${todayIso()}_${name}`);
 
 /** Eine hochgeladene Unterlage in den passenden Ordner legen und am Dokument verknüpfen. */
-export async function fileDocument(documentId: string, fileName: string, bytes: ArrayBuffer, deps: Deps = {}): Promise<{ webUrl: string } | null> {
+/** e74: `opts.name` setzt den Dateinamen fertig (Auftragseingang), `opts.fields` ergänzt Spalten (Endkunde, Vorgang). */
+export async function fileDocument(documentId: string, fileName: string, bytes: ArrayBuffer, deps: Deps = {}, opts: { name?: string; fields?: Record<string, string | null> } = {}): Promise<{ webUrl: string; itemId: string; driveId: string } | null> {
   const client = await clientOf(deps);
   if (!client) return null;
   const d = await db.query.contractDocuments.findFirst({ where: eq(schema.contractDocuments.id, documentId) });
@@ -60,7 +61,7 @@ export async function fileDocument(documentId: string, fileName: string, bytes: 
   const eng = link ? await db.query.engagements.findFirst({ where: eq(schema.engagements.id, link.engagementId), columns: { mocoProjectId: true, orderReference: true } }) : null;
   const target = folderFor(d, acc?.name ?? "Ohne Kunde", fl?.displayName ?? null);
   const drive = await driveFor(client, target.lib);
-  const name = datePrefix(fileName);
+  const name = opts.name ?? datePrefix(fileName);
   const item = await client.upload(drive, yearFolder(target.path, name), name, bytes);
   await setFieldsSafe(client, drive, item.id, {
     Dokumentart: docTypeOf[d.docType] ?? "Sonstiges",
@@ -71,9 +72,10 @@ export async function fileDocument(documentId: string, fileName: string, bytes: 
     GueltigVon: d.validFrom,
     GueltigBis: d.validTo,
     DokStatus: statusOf[d.signedStatus] ?? "Entwurf",
+    ...(opts.fields ?? {}),
   });
   await db.update(schema.contractDocuments).set({ link: item.webUrl, spDriveId: drive, spItemId: item.id, updatedAt: new Date() }).where(eq(schema.contractDocuments.id, d.id));
-  return { webUrl: item.webUrl };
+  return { webUrl: item.webUrl, itemId: item.id, driveId: drive };
 }
 
 /** Alte Fassung in SharePoint als „ersetzt“ markieren (z. B. Entwurf, wenn die unterschriebene Fassung da ist). */

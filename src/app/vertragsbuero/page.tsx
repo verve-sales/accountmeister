@@ -106,6 +106,10 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
 
       <section className="card space-y-3" id="erfassen">
         <h2 className="font-semibold">Neuen Einsatz erfassen</h2>
+        {/* e74: Normalfall ist der Upload; dieser Weg bleibt als Ausnahme ohne Dokument */}
+        <div className="callout" data-tone="info" role="note">
+          <div><strong>Normalfall: Angebot oder Bestellung hochladen.</strong> <Link href="/auftragseingang">Zu „Angebot &amp; Bestellung“</Link> – die App liest vor und legt Chance, Einsatz, Moco und Ablage an. Das Formular hier ist die Ausnahme, wenn es kein Dokument gibt; so erfasste Einsätze gelten als Altbestand.</div>
+        </div>
         <p className="muted text-sm">Legt Chance (beauftragt), Auftrag/Bestellung und Einsatzakte in einem Schritt an. Danach öffnet sich der Einsatz, um Vertrag oder Bestellung hochzuladen. Kommerzielle Entscheidungen bleiben beim BD.</p>
         <form method="get" action="/vertragsbuero#erfassen" className="flex flex-wrap gap-2 items-end text-sm">
           <label className="space-y-1"><span className="block muted text-xs">1. Kunde › Projekt</span>

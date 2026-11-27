@@ -919,6 +919,43 @@ export async function setUserStatusAction(fd: FormData) {
   }, "Zugangsstatus geändert.");
 }
 
+export async function confirmCollectionAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/auftragseingang/${data.caseId ?? ""}#sammelbestellung`, async (actor) => {
+    const { confirmCollection } = await import("@/modules/o2o/service");
+    await confirmCollection(actor, data.caseId ?? "", data);
+    return "/auftragseingang?ansicht=alle";
+  }, "Sammelbestellung bestätigt – je Position ein Vorgang mit derselben Bestellnummer.");
+}
+
+export async function runOrderSyncAction() {
+  return run("/auftragseingang#abgleich", async (actor) => {
+    const { runSyncNow } = await import("@/modules/o2o/sync");
+    const r = await runSyncNow(actor);
+    throw new PendingInfo(`Abgleich fertig: ${r.items.length ? `${r.items.length} Hinweis${r.items.length === 1 ? "" : "e"}` : "alles synchron"}${r.retried ? `, ${r.retried} Ablage(n) nachgeholt` : ""}${r.error ? ` – ${r.error}` : ""}.`);
+  }, "Abgleich fertig.");
+}
+
+export async function hideOrderSyncItemAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/auftragseingang#abgleich", async (actor) => {
+    const { hideSyncItem } = await import("@/modules/o2o/sync");
+    await hideSyncItem(actor, data.key ?? "");
+  }, "Hinweis ausgeblendet.");
+}
+
+export async function refileCaseAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run(`/auftragseingang/${data.caseId ?? ""}`, async (actor) => {
+    const { requireCase } = await import("@/modules/o2o/service");
+    await requireCase(actor, data.caseId ?? "");
+    const { fileCaseDocuments } = await import("@/modules/o2o/files");
+    const r = await fileCaseDocuments(data.caseId ?? "");
+    if (r.state === "FEHLER") throw new (await import("@/lib/errors")).ValidationError(`SharePoint: ${r.note ?? "Ablage fehlgeschlagen"}`);
+    if (r.state !== "ABGELEGT") throw new PendingInfo("Nichts abzulegen – SharePoint ist aus oder es gibt keine Datei.");
+  }, "In SharePoint abgelegt.");
+}
+
 export async function saveDeadlinesAction(fd: FormData) {
   const data = formToObject(fd);
   return run("/verwaltung#fristen", async (actor) => {
