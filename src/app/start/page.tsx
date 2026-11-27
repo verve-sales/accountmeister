@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Segmented } from "@/components/ViewSwitch";
 import { Hint } from "@/components/Hint";
 import { KpiRow, KpiTile } from "@/components/Kpi";
 import { pl } from "@/lib/labels";
@@ -181,10 +182,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const scope: TimelineScope = teamAllowed && (params as { zl?: string }).zl === "team" ? "team" : "mine";
   const shownTasks = scope === "team" ? await teamTimeline(actor, hat) : timelineTasks;
   const scopeSwitch = teamAllowed ? (
-    <p className="text-sm mb-2 flex gap-3">
-      <Link href="/start#zeitleiste" style={scope === "mine" ? { fontWeight: 700, textDecoration: "underline" } : undefined}>Meine</Link>
-      <Link href="/start?zl=team#zeitleiste" style={scope === "team" ? { fontWeight: 700, textDecoration: "underline" } : undefined}>{hat === "CEO" ? "Ganzes Team" : "Team meiner Kunden"}</Link>
-    </p>
+    <Segmented label="Wessen Aufgaben" className="mb-2" items={[{ href: "/start#zeitleiste", label: "Meine", active: scope === "mine" }, { href: "/start?zl=team#zeitleiste", label: hat === "CEO" ? "Ganzes Team" : "Team meiner Kunden", active: scope === "team" }]} />
   ) : null;
   const timeline = !readOnly && hasAnyContentRole(actor) && <TaskTimeline tasks={shownTasks} today={today} title={scope === "team" ? (hat === "CEO" ? "Aufgaben im Team" : "Aufgaben an meinen Kunden") : undefined}>{scopeSwitch}{scope === "mine" ? taskEntry : null}</TaskTimeline>;
 
@@ -342,7 +340,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             <Link href="/meine-principals" className="text-sm ml-auto">Kundenverantwortliche</Link>
           </div>
           {principalsQ.rows.length === 0 ? <p className="empty">Noch keine Principals zugeordnet.</p> : (
-            <table className="list text-sm mt-1">
+            <div className="table-wrap"><table className="list text-sm mt-1">
               <tbody>
                 {principalsQ.rows.map((r) => (
                   <tr key={r.principal.userId}>
@@ -354,7 +352,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
           {d.goals.length > 0 && <p className="muted text-xs mt-2">Weitere Ziele: <Link href="/ziele">{d.goals.length} unter Ziele & Portfolio</Link></p>}
         </section>
@@ -426,7 +424,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       {renewals.length > 0 && (
         <details className="card">
           <summary className="font-semibold" id="uebersicht-auslaufend">Auslaufende Einsätze – nächste 8 Wochen ({renewals.length}){renewals.some((r) => r.escalate) ? <span style={{ color: "var(--danger)" }}> · {renewals.filter((r) => r.escalate).length} eskaliert</span> : null}</summary>
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Person · Kunde</th><th>Einsatz</th><th>Ende</th><th>Verlängerung</th></tr></thead>
             <tbody>
               {renewals.map((r) => (
@@ -441,7 +439,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
           <Hint>Stand aus der Einsatzakte. Eskalation: weniger als 4 Wochen bis zum Ende und noch nichts angestoßen.</Hint>
         </details>
       )}
@@ -529,7 +527,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
           {d.accounts.length > FOCUS && (
             <details className="card">
               <summary>Weitere Kunden ({d.accounts.length - FOCUS}) – weniger Aufmerksamkeit nötig</summary>
-              <table className="list mt-2 text-sm">
+              <div className="table-wrap"><table className="list mt-2 text-sm">
                 <thead><tr><th>Kunde</th><th>Health-Check</th><th>Blockiert</th><th>Fehlt</th><th>Züge</th><th>Letzte Änderung</th></tr></thead>
                 <tbody>
                   {d.accounts.slice(FOCUS).map((c) => (
@@ -543,7 +541,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </details>
           )}
         </details>
@@ -587,7 +585,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               title="Aktivitätskoeffizient je Kunde"
               bars={d.activity.map((a) => ({ label: a.accountName, value: a.coefficient, detail: "Aktivitätskoeffizient" }))}
             />
-            <table className="list text-sm">
+            <div className="table-wrap"><table className="list text-sm">
               <thead>
                 <tr>
                   <th>Kunde</th>
@@ -612,7 +610,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
             </>
           )}
           <Hint>Aktivität der letzten 7 Tage, gezählt aus dokumentierten Objekten (Weeklys, Beobachtungen, Aktionen, Vorschläge, Kontakte). Aktivitätskoeffizient: Menge × Anzahl beteiligter Rollen (Principal, BD, Kontaktpate) ÷ 3.</Hint>
@@ -661,7 +659,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             </div>
           </div>
           {d.bdPerformance.accounts.length > 0 && (
-            <table className="list text-sm mt-3">
+            <div className="table-wrap"><table className="list text-sm mt-3">
               <thead><tr><th>Kunde</th><th>Eigene Aktivität</th><th>Aktive Chancen</th><th>Konvertiert</th></tr></thead>
               <tbody>
                 {d.bdPerformance.accounts.map((a) => (
@@ -673,7 +671,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
           <Hint>{d.bdPerformance.note} Personenbezogen (nicht rollengebündelt): nur eigene dokumentierte Ereignisse und eigene Chancen (Verantwortlich = ich).</Hint>
         </details>
@@ -683,7 +681,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         <details className="card" key={t.teamId}>
           <summary className="font-semibold">Mein Team: {t.teamName}</summary>
           <Hint>Aktivitätsindex der letzten {t.days} Tage je Mitglied – Zählungen dokumentierter Ereignisse (Beobachtungen, Aktionen, Vorschläge, Weeklys, Kontakte, Check-ins). Nur Zahlen, keine Inhalte; die Sichtbarkeit von Kunden und Projekte bleibt unverändert.</Hint>
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Mitglied</th><th>Index</th><th>Vorperiode</th><th>Beobachtungen</th><th>Aktionen</th><th>Kontakte</th><th>Check-ins</th><th>Zuletzt aktiv</th></tr></thead>
             <tbody>
               {t.members.map((m) => (
@@ -699,7 +697,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </details>
       ))}
 

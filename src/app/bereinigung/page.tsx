@@ -47,7 +47,7 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
         <p className="muted text-sm">Das Enddatum liegt zurück, der Einsatz steht aber noch auf aktiv oder endet. Abschließen setzt ihn zum Enddatum auf beendet und abgeschlossen. Ist eine Verlängerung noch offen, bleibt er auf „endet“, bis sie entschieden ist. Wurde tatsächlich verlängert: im Einsatz das neue Ende eintragen statt abzuschließen.</p>
         {r.overdue.length > 0 && (
           <form action={cleanupCloseOverdueAction} className="space-y-2">
-            <table className="list text-sm">
+            <div className="table-wrap"><table className="list text-sm">
               <thead><tr><th><span className="sr-only">Auswahl</span></th><th>Person · Kunde</th><th>Einsatz</th><th>Ende</th><th>Status</th></tr></thead>
               <tbody>
                 {r.overdue.map((e) => (
@@ -60,7 +60,7 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
             <PendingButton busy="Schließe ab …">Ausgewählte abschließen</PendingButton>
           </form>
         )}

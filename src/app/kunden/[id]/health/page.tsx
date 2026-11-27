@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DetailTabsBar, TabPanel } from "@/components/DetailTabs";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -47,16 +48,19 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
   const ankers = setupIds.length ? await db.query.setupMemberships.findMany({ where: inArray(schema.setupMemberships.setupId, setupIds) }) : [];
   const isAnker = (setupId: string, userId: string | null) => !!userId && ankers.some((m) => m.setupId === setupId && m.userId === userId && m.contribution.startsWith("ANKER"));
 
+  // Interview ist der Standard, solange Fragen offen sind; sonst die Einsätze (Score steht immer darüber)
+  const rq = (sp as { reiter?: string }).reiter ?? "";
+  const initialTab = ["interview", "einsaetze", "verlauf"].includes(rq) ? rq : (sp as { f?: string }).f != null || h.questions.length > 0 ? "interview" : "einsaetze";
   return (
     <div className="space-y-6">
       <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><Link href={`/kunden/${id}`}>{account.name}</Link><span>Health-Check</span></nav>
       <h1 className="text-2xl font-semibold">Health-Check: Wie sicher sitzen wir bei {account.name} im Sattel?</h1>
       <Feedback params={sp} />
-
+      {/* e73: Score, Interview und Einsätze als Reiter statt einer langen Seite – Inhalte unverändert */}
       <section className="card">
         <HealthBadge score={h.score} level={h.level} coverage={h.coverage} size="large" />
         <p className="muted text-xs mt-2">Transparente Regeln statt KI-Schätzung: Jede Dimension hat feste Punkte mit Begründung. Unbekanntes zählt nicht in den Score, sondern senkt die Datenlage – unter 50 % Datenlage gibt es bewusst keinen Score. Bewertet wird der Kunde, nie eine Person.</p>
-        <table className="list mt-3">
+        <div className="table-wrap"><table className="list mt-3">
           <thead><tr><th>Dimension</th><th style={{ textAlign: "right" }}>Punkte</th><th>Begründung</th></tr></thead>
           <tbody>
             {h.dimensions.map((d) => (
@@ -67,9 +71,11 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </section>
 
+      <DetailTabsBar initial={initialTab} label="Health-Check-Bereiche" tabs={[{ key: "interview", label: "Interview", count: h.questions.length || null }, { key: "einsaetze", label: "Einsätze", count: h.engagements.length }, { key: "verlauf", label: "Verlauf", count: snapshots.length || null }]} />
+      <TabPanel tab="interview" initial={initialTab}>
       <section className="card" id="interview">
         <div className="flex flex-wrap items-baseline gap-3 mb-2">
           <h2 className="font-semibold">Interview</h2>
@@ -119,7 +125,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
       {may && (
         <section className="card" id="antworten">
           <h2 className="font-semibold mb-1">Antworten ändern</h2>
-          <p className="muted text-sm mb-2">Kundenfeedback, Listung und Risiken lassen sich jederzeit korrigieren oder aktualisieren. Einsatzdaten (Ende, Frist, Berater) änderst du unten bei „Einsätze“, Personen im jeweiligen Projekt.</p>
+          <p className="muted text-sm mb-2">Kundenfeedback, Listung und Risiken lassen sich jederzeit korrigieren oder aktualisieren. Einsatzdaten (Ende, Frist, Berater) änderst du im Reiter „Einsätze“, Personen im jeweiligen Projekt.</p>
           {([
             ["FEEDBACK", "Kundenfeedback", h.answers.feedback ? `${feedbackToneLabel[h.answers.feedback.tone as keyof typeof feedbackToneLabel] ?? h.answers.feedback.tone}${h.answers.feedback.date ? ` · ${fmtDate(h.answers.feedback.date)}` : ""}${h.answers.feedback.note ? ` · ${h.answers.feedback.note}` : ""}` : null],
             ["LISTING", "Listung", h.answers.listing ? `${listingLabel[h.answers.listing.status as keyof typeof listingLabel] ?? h.answers.listing.status}${h.answers.listing.validUntil ? ` · gültig bis ${fmtDate(h.answers.listing.validUntil)}` : ""}${h.answers.listing.note ? ` · ${h.answers.listing.note}` : ""}` : null],
@@ -139,10 +145,12 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
         </section>
       )}
 
-      <section className="card">
+      </TabPanel>
+      <TabPanel tab="einsaetze" initial={initialTab}>
+      <section className="card" id="einsaetze">
         <h2 className="font-semibold mb-2">Einsätze ({h.engagements.length})</h2>
         {h.engagements.length === 0 ? <p className="empty">Keine laufenden oder beauftragten Einsätze erfasst.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Einsatz</th><th>Berater</th><th>Vertrag / Bestellung</th><th>Status</th><th>Start</th><th>Ende · Verlängerungsfrist</th><th>Verlängerung startet</th></tr></thead>
             <tbody>
               {h.engagements.map((e) => (
@@ -229,7 +237,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
                 )
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         <details className="mt-3">
         <summary className="text-sm font-semibold">Fahrpläne Verlängerung ({[...roadmaps.keys()].filter((oid) => { const e = h.engagements.find((x) => x.orderId === oid); return e && e.daysToEnd !== null && e.daysToEnd >= 0 && e.daysToEnd <= 180; }).length})</summary>
@@ -257,7 +265,9 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
         {canDecide && may && q?.key !== "ENGAGEMENT_MISSING" && <p className="text-sm mt-2"><a href="#antworten">Weiteren laufenden Einsatz nachtragen</a></p>}
       </section>
 
-      <section className="card">
+      </TabPanel>
+      <TabPanel tab="verlauf" initial={initialTab}>
+      <section className="card" id="verlauf">
         <h2 className="font-semibold mb-2">Verlauf</h2>
         {snapshots.length > 1 && <div className="mb-3"><TrendChart title="Health-Score im Verlauf" min={0} points={[...snapshots].reverse().map((s) => ({ label: `${s.createdAt.getDate()}.${s.createdAt.getMonth() + 1}.`, value: s.score }))} /></div>}
         {snapshots.length === 0 ? <p className="empty">Noch kein Stand gespeichert.</p> : (
@@ -265,6 +275,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
         )}
         <p className="muted text-xs mt-2">Sinkt der Score um mehr als 10 Punkte, bekommt der zuständige BD eine Aufgabe vorgeschlagen.</p>
       </section>
+      </TabPanel>
     </div>
   );
 }

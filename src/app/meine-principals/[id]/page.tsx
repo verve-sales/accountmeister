@@ -52,7 +52,7 @@ export default async function PrincipalTalkPage({ params, searchParams }: { para
       <section className="card space-y-2" id="lage">
         {step(1, "Lage", `${t.lage.length} Kunden · ${t.bdCount} BDs`)}
         {t.lage.length === 0 ? <p className="empty">Keine Kunden zugeordnet.</p> : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Kunde</th><th>BD</th><th>Köpfe heute</th><th>Nächstes Ende</th><th>Köpfe {ref === q.end ? "Stichtag" : "Ist"} / Ziel {q.label}</th></tr></thead>
             <tbody>
               {t.lage.map((a) => (
@@ -75,7 +75,7 @@ export default async function PrincipalTalkPage({ params, searchParams }: { para
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
 

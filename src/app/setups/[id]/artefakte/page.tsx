@@ -36,7 +36,7 @@ export default async function SetupArtefaktePage({ params, searchParams }: { par
       <section className="card">
         <h2 className="font-semibold mb-2">Textentwürfe ({artifacts.length})</h2>
         {artifacts.length === 0 ? <p className="empty">Noch keine Textentwürfe. Lebende Artefakte (Projekt, Personen & Zugang, Beobachtungen, Übergaben, Kontaktwege, Weeklys, Accountplan) sind direkt als Ansichten vorhanden.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Artefakt</th><th>Vorlage</th><th>Variante</th><th>Version</th><th>Status</th><th>Empfängerkreis</th><th>Zuletzt</th></tr></thead>
             <tbody>
               {artifacts.map((a) => (
@@ -51,7 +51,7 @@ export default async function SetupArtefaktePage({ params, searchParams }: { par
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
       {canEdit && (

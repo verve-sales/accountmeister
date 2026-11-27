@@ -62,10 +62,10 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
       <section className="card">
         <h2 className="font-semibold mb-2">Projekte mit offener BD-Zuordnung ({open.length})</h2>
         {open.length === 0 ? <p className="empty">Keine offenen Zuordnungen in deinem Berechtigungsbereich.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Projekt</th><th>Kunde</th><th>Angelegt</th></tr></thead>
             <tbody>{open.map(({ setup, account }) => <tr key={setup.id}><td><Link href={`/setups/${setup.id}`}>{setup.name}</Link></td><td><Link href={`/kunden/${account.id}`}>{account.name}</Link></td><td>{fmtDate(setup.createdAt)}</td></tr>)}</tbody>
-          </table>
+          </table></div>
         )}
       </section>
 
@@ -164,7 +164,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
             )}
             {kind === "CHAT" && <p className="muted text-sm mb-2">Übernommen wird der Verlauf (letzte bis zu 50 Nachrichten) des gewählten Chats. Kommen später neue Nachrichten dazu, wertet „Übernehmen“ den Chat erneut aus – Erledigtes und Doppeltes erkennt die KI.</p>}
             {selectableError ? <p className="error">{selectableError}</p> : selectable.length === 0 ? <p className="empty">Keine passenden Objekte.</p> : (
-              <table className="list">
+              <div className="table-wrap"><table className="list">
                 <thead><tr><th>{kind === "CHAT" ? "Chat" : "Betreff"}</th><th>{kind === "CHAT" ? "Zuletzt von" : "Von"}</th><th>Zeitpunkt</th><th>Vorschau</th><th>Import</th></tr></thead>
                 <tbody>
                   {selectable.map((it) => {
@@ -202,7 +202,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             )}
           </>
         )}

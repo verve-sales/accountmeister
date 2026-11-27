@@ -21,7 +21,7 @@ export default async function AsgCheckinsPage({ searchParams }: { searchParams: 
         <section className="card" key={title}>
           <h2 className="font-semibold">{title} ({list.length})</h2>
           {list.length === 0 ? <p className="empty">Nichts offen.</p> : (
-            <table className="list text-sm mt-1">
+            <div className="table-wrap"><table className="list text-sm mt-1">
               <thead><tr><th>Person</th><th>Kunde</th><th>Fällig</th><th>Zuständig</th><th>Zuletzt</th><th>Erledigen</th></tr></thead>
               <tbody>
                 {list.map((c) => (
@@ -43,7 +43,7 @@ export default async function AsgCheckinsPage({ searchParams }: { searchParams: 
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </section>
       ))}

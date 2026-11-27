@@ -1,5 +1,6 @@
 import { titleWithoutPerson } from "@/lib/labels";
 import Link from "next/link";
+import { Pills } from "@/components/ViewSwitch";
 import { pl } from "@/lib/labels";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -63,13 +64,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
         <button className="btn btn-small" type="submit">Suchen</button>
         {q && <Link href={`/einsaetze?f=${filter}`} className="muted text-xs">zurücksetzen</Link>}
       </form>
-      <nav aria-label="Filter" className="flex flex-wrap gap-2 text-sm">
-        {FILTERS.map((f) => (
-          <Link key={f.key} href={`/einsaetze?f=${f.key}${qs}`} className="chip" aria-current={filter === f.key ? "page" : undefined}>
-            {f.label} ({counts[f.key]})
-          </Link>
-        ))}
-      </nav>
+      <Pills label="Filter" items={FILTERS.map((f) => ({ href: `/einsaetze?f=${f.key}${qs}`, label: f.label, active: filter === f.key, count: counts[f.key] }))} />
       {(counts.ende_ueberschritten > 0 || dups.length > 0) && (
         <p className="text-sm" style={{ color: "#8a5a00" }}>
           {counts.ende_ueberschritten > 0 && <><Link href={`/einsaetze?f=ende_ueberschritten${qs}`}>{pl(counts.ende_ueberschritten, "Einsatz", "Einsätze")} mit überschrittenem Ende</Link> stehen nicht mehr unter „laufend“. </>}

@@ -56,7 +56,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
           <div className="mt-3">
             <h3 className="text-sm font-semibold mb-1">Portfolio – Zählungen aus den Accountplänen</h3>
             {p.portfolio.entries.length === 0 ? <p className="empty">Keine sichtbaren Kunden.</p> : (
-              <table className="list text-sm">
+              <div className="table-wrap"><table className="list text-sm">
                 <thead><tr><th>Kunde</th><th>BD</th><th>Projekte</th><th>Änderungen</th><th>Fragen</th><th>Zugangslücken</th><th>Blockiert</th><th>Unterstützung</th><th>Letztes Weekly</th></tr></thead>
                 <tbody>
                   {p.portfolio.entries.map((e) => (
@@ -73,7 +73,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             )}
             <p className="muted text-xs mt-1">{p.portfolio.note}</p>
           </div>
@@ -108,7 +108,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
         <div className="mt-3">
           <h3 className="text-sm font-semibold mb-1">Ziele ({p.goals.length})</h3>
           {p.goals.length === 0 ? <p className="empty">Keine Ziele sichtbar.{isZielgespraech && isLeader && <> Ziele werden unter <Link href="/ziele">Ziele & Portfolio</Link> angelegt und hier besprochen.</>}</p> : (
-            <table className="list text-sm">
+            <div className="table-wrap"><table className="list text-sm">
               <thead><tr><th>Ziel</th><th>Verantwortlich</th><th>Status</th><th>Vereinbart von</th><th>Beiträge</th></tr></thead>
               <tbody>
                 {p.goals.map((g) => (
@@ -121,7 +121,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       </section>

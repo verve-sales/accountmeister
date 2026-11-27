@@ -93,7 +93,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
             <div className="self-end"><button className="btn" type="submit">Zuweisen</button></div>
           </form>
         </details>
-        <table className="list text-sm">
+        <div className="table-wrap"><table className="list text-sm">
           <thead><tr><th>Person</th><th>Status</th><th>Rollen</th><th></th></tr></thead>
           <tbody>
             {users.filter((u) => u.status === "ACTIVE").map((u) => (
@@ -128,7 +128,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
         {users.some((u) => u.status !== "ACTIVE") && (
           <details className="mt-3">
             <summary>Deaktivierte Zugänge ({users.filter((u) => u.status !== "ACTIVE").length}) – keine Rollen, keine Anmeldung</summary>
@@ -150,14 +150,14 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
           <div className="mt-2">
         <p className="muted text-sm mb-2">Stündlich ab 6 Uhr: Überfällig-Hinweise und Einsatzregeln (Catch-ups, Check-in-Hinweise, Verlängerungen); minütlich Sofort-Mails; täglich Digest. Letzter erfolgreicher Lauf je Regel: {[...lastOk].map(([n, d]) => `${n} ${fmtDateTime(d)}`).join(" · ") || "noch keiner (startet 15 s nach dem Hochfahren, erster Lauf zur vollen Stunde)"}.</p>
         {jobRuns.length > 0 && (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Lauf</th><th>Start</th><th>Ergebnis</th></tr></thead>
             <tbody>
               {jobRuns.map((r) => (
                 <tr key={r.id}><td>{r.name}</td><td>{fmtDateTime(r.startedAt)}</td><td>{r.ok === null ? "läuft" : r.ok ? JSON.stringify(r.counts) : <span style={{ color: "var(--danger)" }}>Fehler: {r.error}</span>}</td></tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
           </div>
         </details>
@@ -167,14 +167,14 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
         <details>
           <summary className="font-semibold">Konfiguration und Schutzmaßnahmen</summary>
           <div className="mt-2">
-        <table className="list text-sm">
+        <div className="table-wrap"><table className="list text-sm">
           <tbody>
             <tr><td>Umgebung</td><td>{cfg.NODE_ENV} · Anmeldung: {cfg.AUTH_MODE} · KI-Anbieter: {cfg.AI_PROVIDER}</td></tr>
             <tr><td>Sitzung</td><td>Höchstdauer {Math.round(SESSION_MAX_AGE_SECONDS / 3600)} h, Inaktivitätsgrenze {Math.round(SESSION_IDLE_SECONDS / 3600)} h (SESSION_MAX_AGE_SECONDS, SESSION_IDLE_SECONDS)</td></tr>
             <tr><td>Nutzungsgrenzen</td><td>Anmeldeversuche {LIMITS.login.limit} / 15 min je Herkunft · schreibende Aktionen {LIMITS.write.limit} / min je Person · KI-Aufträge {cfg.AI_DAILY_JOB_LIMIT} / Tag</td></tr>
             <tr><td>Startschutz</td><td>Produktion verweigert AUTH_MODE=development, AI_PROVIDER=test und den Beispiel-SESSION_SECRET (S09).</td></tr>
           </tbody>
-        </table>
+        </table></div>
           </div>
         </details>
       </section>
@@ -183,7 +183,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
         <details>
           <summary className="font-semibold">Bestand je Datenklasse (Zählungen)</summary>
           <div className="mt-2">
-        <table className="list text-sm">
+        <div className="table-wrap"><table className="list text-sm">
           <thead><tr><th>Schutzbereich (16.1)</th><th>Objekte</th></tr></thead>
           <tbody>
             <tr><td>Kundenkontakte und externe Personen</td><td>{inventory.kundenkontakte.persons} Personen · {inventory.kundenkontakte.relationships} Beziehungen · {inventory.kundenkontakte.decisionParticipations} Buyingcenter-Rollen</td></tr>
@@ -193,7 +193,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
             <tr><td>KI</td><td>{inventory.ki.aiJobs} Aufträge (nur Hash/Länge, kein Text) · {inventory.ki.suggestions} Vorschläge</td></tr>
             <tr><td>Protokoll</td><td>{inventory.audit} Ereignisse</td></tr>
           </tbody>
-        </table>
+        </table></div>
         <p className="muted text-xs mt-1">Aufbewahrungsfristen je Datenklasse laut Löschkonzept <TechRef>docs/pilotfreigabe-vorschlag.md, Abschnitt 6</TechRef>. Was davon automatisch ermittelt werden kann, zeigt <Link href="/verwaltung/fristen">Verwaltung → Fristenprüfung</Link>.</p>
           </div>
         </details>
@@ -204,10 +204,10 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
           <summary className="font-semibold">Protokoll (letzte {audit.length} Ereignisse)</summary>
           <div className="mt-2">
         <p className="muted text-sm mb-2">Wer hat wann was an welchem Objekt getan. Inhalte werden nicht protokolliert; Änderungsdetails erscheinen nur als Feldnamen.</p>
-        <table className="list text-sm">
+        <div className="table-wrap"><table className="list text-sm">
           <thead><tr><th>Zeitpunkt</th><th>Akteur</th><th>Aktion</th><th>Objekt</th><th>Felder</th></tr></thead>
           <tbody>{audit.map((a) => <tr key={a.id}><td>{fmtDateTime(a.at)}</td><td>{a.actor}</td><td>{a.action}</td><td className="muted">{a.objectType} {a.objectId.slice(0, 8)}…</td><td className="muted">{a.changeKeys.join(", ") || "–"}</td></tr>)}</tbody>
-        </table>
+        </table></div>
           </div>
         </details>
       </section>

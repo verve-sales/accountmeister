@@ -44,7 +44,7 @@ export function GfExpiring({ o }: { o: GfOverview }) {
         <Link href="/einsaetze?f=enden_8w" className="text-sm ml-auto">alle Einsätze</Link>
       </div>
       {o.expiring.length === 0 ? <p className="empty">Kein Einsatz endet in den nächsten {EXPIRY_WINDOW_LABEL}.</p> : (
-        <table className="list text-sm mt-1">
+        <div className="table-wrap"><table className="list text-sm mt-1">
           <thead><tr><th>Person</th><th>Kunde</th><th>Ende</th><th>Verlängerung</th><th>BD</th><th>Stimmung</th></tr></thead>
           <tbody>
             {o.expiring.map((e) => (
@@ -58,7 +58,7 @@ export function GfExpiring({ o }: { o: GfOverview }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </section>
   );
@@ -72,7 +72,7 @@ export function GfCustomers({ o }: { o: GfOverview }) {
         <Link href="/kundenrunde" className="text-sm ml-auto">Zur Kundenrunde</Link><Link href="/kunden" className="text-sm">alle Kunden</Link>
       </div>
       {o.customers.length === 0 ? <p className="empty">Keine Bestandskunden.</p> : (
-        <table className="list text-sm mt-1">
+        <div className="table-wrap"><table className="list text-sm mt-1">
           <thead><tr><th title="Handlungsbedarf laut Kundenrunde">Bedarf</th><th>Kunde</th><th>Health · Datenlage</th><th style={{ textAlign: "right" }}>Köpfe</th><th>Nächstes Ende</th><th>Verantwortlich</th><th>Warum</th></tr></thead>
           <tbody>
             {o.customers.map((c) => (
@@ -87,7 +87,7 @@ export function GfCustomers({ o }: { o: GfOverview }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       {o.atRiskOther.length > 0 && (
         <p className="text-sm mt-3">
@@ -123,7 +123,7 @@ export function GfPipeline({ o }: { o: GfOverview }) {
         </div>
       )}
       {o.pipeline.length === 0 ? <p className="empty">Keine offenen Chancen.</p> : (
-        <table className="list text-sm mt-1">
+        <div className="table-wrap"><table className="list text-sm mt-1">
           <thead><tr><th>Chance</th><th>Kunde</th><th>Stufe</th><th style={{ textAlign: "right" }}>seit</th><th>Verantwortlich</th><th style={{ textAlign: "right" }}>Köpfe</th><th style={{ textAlign: "right" }}>VK/Tag</th><th>Nächster Schritt</th></tr></thead>
           <tbody>
             {o.pipeline.map((p) => (
@@ -139,7 +139,7 @@ export function GfPipeline({ o }: { o: GfOverview }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </section>
   );
@@ -150,7 +150,7 @@ export function GfTeam({ o }: { o: GfOverview }) {
     <section className="card" id="team">
       <h2 className="font-semibold">Team – wo etwas liegt</h2>
       {o.team.length === 0 ? <p className="empty">Niemand hat offene Aufgaben.</p> : (
-        <table className="list text-sm mt-1">
+        <div className="table-wrap"><table className="list text-sm mt-1">
           <thead><tr><th>Person</th><th style={{ textAlign: "right" }}>offen</th><th style={{ textAlign: "right" }}>überfällig</th><th>älteste überfällig</th><th>zuletzt aktiv</th></tr></thead>
           <tbody>
             {o.team.map((t) => (
@@ -163,7 +163,7 @@ export function GfTeam({ o }: { o: GfOverview }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       <Hint>Gezählt: angenommene Aufgaben, Arbeitsaufträge und angefragte Übergaben je Person.</Hint>
     </section>

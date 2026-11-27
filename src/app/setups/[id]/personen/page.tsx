@@ -82,7 +82,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
           </div>
         )}
         {people.length === 0 ? <p className="empty">Noch keine Personen erfasst.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Person</th><th>Funktion / Bereich</th><th>Bekannte Zuständigkeit</th><th>Beziehungen in diesem Projekt</th><th>Zugriff</th>{canEdit && <th></th>}</tr></thead>
             <tbody>
               {people.map(({ person, currentFunction, relationships }) => (
@@ -120,7 +120,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {canEdit && (
           <div className="mt-4 grid lg:grid-cols-2 gap-6">
@@ -226,7 +226,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                   <div><dt className="muted">Alternative</dt><dd>{p.alternative ?? "–"}</dd></div>
                   <div><dt className="muted">Nächster Schritt</dt><dd>{p.nextStep ?? "–"}</dd></div>
                 </dl>
-                <table className="list mt-3">
+                <div className="table-wrap"><table className="list mt-3">
                   <thead><tr><th>#</th><th>Von</th><th>Zu</th><th>Verbindung</th><th>Vermittlungsbereitschaft</th><th>Beleg / Notiz</th></tr></thead>
                   <tbody>
                     {p.steps.length === 0 && <tr><td colSpan={6} className="muted text-sm">Noch keine Schritte.</td></tr>}
@@ -244,7 +244,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
                 {canEdit && p.status !== "BEENDET" && (
                   <div className="mt-3 flex flex-wrap gap-6">
                     <details>
@@ -336,7 +336,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
           </div>
         )}
         {bc.rows.length === 0 ? <p className="empty">Noch keine Personen.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Person</th><th>Entscheidungsrolle</th><th>Haltung</th><th>Einfluss</th><th>Status</th><th>Beziehung</th>{bc.canEdit && <th></th>}</tr></thead>
             <tbody>
               {bc.rows.map((r) => (
@@ -382,7 +382,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
       <p className="muted text-sm">Die grafische Beziehungskarte folgt; die Tabelle ist die gleichwertige Darstellung <TechRef>Briefing 8.4</TechRef>. {personName.size} Personen bekannt.</p>

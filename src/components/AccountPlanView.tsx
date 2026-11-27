@@ -65,7 +65,7 @@ export function AccountPlanView({ plan, live, children }: { plan: Plan; live: bo
       <section>
         <h3 className="font-medium mb-1">Priorisierte Entwicklungsvorhaben ({plan.priorities.length})</h3>
         {plan.priorities.length === 0 ? <p className="empty">Noch keine Prioritäten gesetzt. Prioritäten sind eine gemeinsame Entscheidung von BD und Principal.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Rang</th><th>Vorhaben</th><th>Art</th><th>Status</th><th>Begründung / Voraussetzungen</th><th>Zielbezug</th></tr></thead>
             <tbody>
               {plan.priorities.map((p) => (
@@ -79,7 +79,7 @@ export function AccountPlanView({ plan, live, children }: { plan: Plan; live: bo
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
 

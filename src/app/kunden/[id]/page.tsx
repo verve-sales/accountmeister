@@ -172,7 +172,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             <h2 className="font-semibold">Im Einsatz ({deployed.length})</h2>
             <Link href={`/einsaetze?q=${encodeURIComponent(account.name)}`} className="muted text-sm ml-auto">alle Einsätze dieses Kunden</Link>
           </div>
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <tbody>
               {deployed.map((e) => {
                 const soon = e.daysToEnd !== null && e.daysToEnd <= EXPIRY_WINDOW_DAYS;
@@ -186,7 +186,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </section>
       )}
       {(engDups.length > 0 || setupDups.length > 0) && (
@@ -401,7 +401,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       <section className="card">
         <h2 className="font-semibold mb-2">Personen & Zugang ({people.length})</h2>
         {people.length === 0 ? <p className="empty">Noch keine Personen erfasst. Personen werden im jeweiligen Projekt gepflegt.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Person</th><th>Funktion</th><th>Beziehungen (Halter · Stand)</th></tr></thead>
             <tbody>
               {people.map(({ person, currentFunction, relationships }) => (
@@ -412,7 +412,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {setups.length > 0 && <p className="muted text-sm mt-2">Pflege je Projekt: {setups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/personen`}>{s.name}</Link></span>)}</p>}
       </section>
@@ -453,7 +453,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         <h2 className="font-semibold mb-2">Projekte ({setups.length})</h2>
         {setups.length === 0 ? (<p className="empty">Noch kein Projekt. Ein Projekt braucht nur Kunde, Namen und einen Kontextsatz – oder bleibt bewusst Entwurf.</p>
         ) : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Projekt</th><th>Status</th><th>Chancen</th><th>Sichtbarkeit</th><th>BD</th><th>Geändert</th></tr></thead>
             <tbody>
               {setups.map((s) => (
@@ -473,7 +473,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
 

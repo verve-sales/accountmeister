@@ -17,10 +17,11 @@ export function TabPanel({ tab, initial, children }: { tab: string; initial: str
   );
 }
 
-export function DetailTabsBar({ tabs, initial, label = "Bereiche" }: { tabs: TabDef[]; initial: string; label?: string }) {
+export function DetailTabsBar({ tabs, initial, label = "Bereiche", links = [] }: { tabs: TabDef[]; initial: string; label?: string; links?: { href: string; label: string }[] }) {
   const [active, setActive] = useState(initial);
   const show = (key: string, push = true) => {
     setActive(key);
+    try { sessionStorage.setItem(`reiter:${location.pathname}`, key); } catch {}
     for (const p of Array.from(document.querySelectorAll<HTMLElement>("main.page [data-tab]"))) p.hidden = p.dataset.tab !== key;
     if (push) {
       const u = new URL(location.href);
@@ -40,6 +41,19 @@ export function DetailTabsBar({ tabs, initial, label = "Bereiche" }: { tabs: Tab
         requestAnimationFrame(() => el?.scrollIntoView({ block: "start" }));
       }
     };
+    // e73: nach dem Speichern (Rückmeldung ?ok=/?fehler=) im zuletzt gewählten Reiter bleiben
+    const restore = () => {
+    const u = new URL(location.href);
+    if (!u.hash && !u.searchParams.get("reiter") && (u.searchParams.has("ok") || u.searchParams.has("fehler"))) {
+      let saved: string | null = null;
+      try { saved = sessionStorage.getItem(`reiter:${location.pathname}`); } catch {}
+      if (saved && saved !== initial && document.querySelector(`main.page [data-tab="${CSS.escape(saved)}"]`)) {
+        setActive(saved);
+        for (const p of Array.from(document.querySelectorAll<HTMLElement>("main.page [data-tab]"))) p.hidden = p.dataset.tab !== saved;
+      }
+    }
+    };
+    restore();
     fromHash();
     window.addEventListener("hashchange", fromHash);
     // Klicks auf Sprungmarken innerhalb der Seite (z. B. „Nächster Schritt“) ebenfalls auflösen
@@ -52,7 +66,7 @@ export function DetailTabsBar({ tabs, initial, label = "Bereiche" }: { tabs: Tab
       window.removeEventListener("hashchange", fromHash);
       document.removeEventListener("click", onClick);
     };
-  }, []);
+  }, [initial]);
   return (
     <nav className="tabs detail-tabs" aria-label={label} role="tablist">
       {tabs.map((t) => (
@@ -61,6 +75,8 @@ export function DetailTabsBar({ tabs, initial, label = "Bereiche" }: { tabs: Tab
           {t.count != null && <span className="tab-count">{t.count}</span>}
         </button>
       ))}
+      {/* e73: weitere Unterseiten desselben Objekts als Reiter in derselben Leiste (eigene Adresse) */}
+      {links.map((l) => <a key={l.href} href={l.href} className="tab">{l.label}</a>)}
     </nav>
   );
 }

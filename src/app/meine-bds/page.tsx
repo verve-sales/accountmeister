@@ -26,7 +26,7 @@ export default async function MeineBdsPage({ searchParams }: { searchParams: Sea
       {byBd.map((g) => (
         <section key={g.bdName} className="card">
           <h2 className="font-semibold mb-2">{g.bdName} <span className="muted text-sm font-normal">· {g.rows.length} Kunden · {g.rows.reduce((n, r) => n + r.runningEngagements, 0)} laufende Einsätze · {g.rows.reduce((n, r) => n + r.chancesInWork + r.chancesAnticipated, 0)} offene Chancen{g.rows.some((r) => r.chancesAnticipated) ? ` (davon ${g.rows.reduce((n, r) => n + r.chancesAnticipated, 0)} antizipiert)` : ""}</span></h2>
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Kunde</th><th>Team</th><th>Einsätze</th><th>Nächstes Ende</th><th>Chancen</th><th>Letzter Kontakt</th><th>Offen</th><th>Ampel</th></tr></thead>
             <tbody>
               {g.rows.map((r) => (
@@ -42,7 +42,7 @@ export default async function MeineBdsPage({ searchParams }: { searchParams: Sea
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </section>
       ))}
       <p className="muted text-xs">Letzter Kontakt = jüngstes dokumentiertes Ereignis (Weekly, Beobachtung, Aktion, Kontakt, Check-in). Zählungen, keine Bewertungen von Personen.</p>

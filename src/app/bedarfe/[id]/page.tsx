@@ -165,7 +165,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   const staffingFreelancers = staffingManage ? await freelancerOptions(actor).catch(() => []) : [];
   return (
     <div className="space-y-6">
-      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><Link href={`/kunden/${ctx.account.id}`}>{ctx.account.name}</Link><Link href={`/setups/${ctx.setup.id}`}>{ctx.setup.name}</Link><span>Chance</span></nav>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/chancen">Pipeline</Link><Link href="/chancen">Chancen</Link><Link href={`/kunden/${ctx.account.id}`}>{ctx.account.name}</Link><Link href={`/setups/${ctx.setup.id}`}>{ctx.setup.name}</Link></nav>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">{opp.title}</h1>
         <Status label={opportunityStatusLabel[opp.status] ?? opp.status} />
@@ -330,7 +330,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       <section className="card" id="chance">
         <h2 className="font-semibold mb-2">Chance</h2>
         <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <div className="sm:col-span-2">
+          <div>
             <dt className="muted">Projekt</dt>
             <dd>
               <Link href={`/setups/${opp.setupId}`}>{projectsOfAccount.find((x) => x.id === opp.setupId)?.name ?? "Projekt"}</Link>
@@ -347,7 +347,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
               )}
             </dd>
           </div>
-          <div className="sm:col-span-2"><dt className="muted">Wofür</dt><dd><strong>{chanceKindLabel[opp.kind]}</strong>{opp.roleId ? ` · ${d.roles.find((r) => r.id === opp.roleId)?.name ?? "Rolle"}` : " · Standardrolle noch offen"}{opp.headcount ? ` · ${opp.headcount}×` : ""}{opp.horizon ? ` · ${opp.horizon}` : ""}{opp.status === "ANTIZIPIERT" && <span className="muted"> · antizipiert – vom Kunden noch nicht ausgesprochen</span>}</dd></div>
+          <div><dt className="muted">Wofür</dt><dd><strong>{chanceKindLabel[opp.kind]}</strong>{opp.roleId ? ` · ${d.roles.find((r) => r.id === opp.roleId)?.name ?? "Rolle"}` : " · Standardrolle noch offen"}{opp.headcount ? ` · ${opp.headcount}×` : ""}{opp.horizon ? ` · ${opp.horizon}` : ""}{opp.status === "ANTIZIPIERT" && <span className="muted"> · antizipiert – vom Kunden noch nicht ausgesprochen</span>}</dd></div>
           {(opp.status === "BEAUFTRAGT" || staffedByText) && (
             <div className="sm:col-span-2" id="besetzt-mit">
               <dt className="muted">Besetzt mit</dt>
@@ -366,7 +366,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
           )}
           <div className="sm:col-span-2"><dt className="muted">Beschreibung in Kundensprache</dt><dd className="whitespace-pre-wrap">{opp.needDescription}</dd></div>
           <div><dt className="muted">Konkreter Anlass</dt><dd>{opp.trigger ?? "–"}</dd></div>
-          <div className="sm:col-span-2">
+          <div>
             <dt className="muted">Zahlt ein auf (Kundenagenda)</dt>
             <dd>
               {linkedInitiative ? <>{initiativeKindLabel[linkedInitiative.kind as InitiativeKind] ?? linkedInitiative.kind}: <strong>{linkedInitiative.title}</strong></> : <span className="muted">keine Initiative zugeordnet</span>}
@@ -384,7 +384,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
             </dd>
           </div>
           <div><dt className="muted">Herkunft</dt><dd>{d.signal ? <>Beobachtung: „{d.signal.observation}“</> : "direkt erfasst"}</dd></div>
-          <div className="sm:col-span-2">
+          <div>
             <dt className="muted">Bestätigung</dt>
             <dd>
               {opp.confirmedAt ? (
@@ -510,7 +510,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
             ) : null}
           </div>
           {convs.length > 0 && (
-            <table className="list text-sm mt-2">
+            <div className="table-wrap"><table className="list text-sm mt-2">
               <tbody>
                 {convs.map((x) => {
                   const st = x.steps.find((y) => y.state === "AKTUELL");
@@ -527,7 +527,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           )}
         </section>
       )}
@@ -738,7 +738,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       <section className="card">
         <h2 className="font-semibold mb-2">Buyingcenter für diese Chance ({d.participations.length})</h2>
         {d.participations.length === 0 ? <p className="empty">Noch keine Rollen erfasst.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Rolle</th><th>Person</th><th>Erkenntnisstatus</th><th>Anmerkung</th>{canEdit && <th></th>}</tr></thead>
             <tbody>
               {d.participations.map((p) => (
@@ -755,7 +755,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {canEdit && !closed && (
           <details className="mt-3">
@@ -793,7 +793,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       <section className="card">
         <h2 className="font-semibold mb-2">Buying-Center-Berater</h2>
         {bcProposalError && <p className="error text-sm" role="alert">{bcProposalError}</p>}
-        <table className="list text-sm">
+        <div className="table-wrap"><table className="list text-sm">
           <thead><tr><th>Rolle</th><th>Status</th><th>Personen</th><th></th></tr></thead>
           <tbody>
             {bc.roleStatus.map((r) => (
@@ -805,7 +805,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
 
         {bc.latest && (
           <div className="mt-4 border rounded-md p-3" style={{ borderColor: "var(--border)" }}>

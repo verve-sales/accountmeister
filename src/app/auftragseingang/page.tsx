@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Segmented } from "@/components/ViewSwitch";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { Feedback } from "@/components/Feedback";
@@ -76,15 +77,12 @@ export default async function AuftragseingangPage({ searchParams }: { searchPara
       <section className="card">
         <div className="flex flex-wrap items-baseline gap-3 mb-2">
           <h2 className="font-semibold">Vorgänge ({cases.length})</h2>
-          <nav className="flex gap-2 ml-auto" aria-label="Ansicht">
-            <Link href="/auftragseingang" className="chip" aria-current={filter === "offen" ? "page" : undefined}>offen</Link>
-            <Link href="/auftragseingang?ansicht=alle" className="chip" aria-current={filter === "alle" ? "page" : undefined}>alle</Link>
-          </nav>
+          <Segmented label="Ansicht" className="ml-auto" items={[{ href: "/auftragseingang", label: "offen", active: filter === "offen" }, { href: "/auftragseingang?ansicht=alle", label: "alle", active: filter === "alle" }]} />
         </div>
         {cases.length === 0 ? (
           <p className="empty">{filter === "offen" ? "Nichts offen – jedes Angebot und jede Bestellung ist vollständig verarbeitet." : "Noch keine Vorgänge. Lade oben das erste Angebot oder die erste Bestellung hoch."}</p>
         ) : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Vorgang</th><th>Stand</th><th>Vertragspartner · Endkunde</th><th>Person · Rolle</th><th>Zeitraum</th><th>Nummern</th><th>Fehlt</th><th>Systeme</th></tr></thead>
             <tbody>
               {cases.map((c) => (
@@ -100,7 +98,7 @@ export default async function AuftragseingangPage({ searchParams }: { searchPara
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
       {(rec.followUp.length > 0 || rec.withoutCase.length > 0 || (mocoOn && rec.notInMoco.length > 0)) && (

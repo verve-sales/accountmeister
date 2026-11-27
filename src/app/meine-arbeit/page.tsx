@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { DetailTabsBar, TabPanel } from "@/components/DetailTabs";
+import { Pills, Segmented } from "@/components/ViewSwitch";
 import { Hint } from "@/components/Hint";
 import { TechRef } from "@/components/TechDetails";
 import { Term } from "@/components/Term";
@@ -69,6 +71,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
   const openIncoming = handovers.filter((h) => h.receiverUserId === actor.userId && h.status === "ANGEFRAGT");
   const outgoing = handovers.filter((h) => h.senderUserId === actor.userId && (h.status === "ANGEFRAGT" || h.status === "ANGENOMMEN"));
   const back = "/meine-arbeit";
+  const initialTab = params.v ? "vorgaenge" : "zutun";
   const renewalCards = getConfig().FEATURE_BESETZUNG === "true" ? await listRenewalCards(actor).catch(() => []) : [];
 
   // e69 (E2): eine Liste für alles, was an mich geht – Aktionen, Vorgänge, Übernahmen, Unterstützungsaufträge
@@ -85,6 +88,13 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Meine Arbeit</h1>
       <Feedback params={params} />
+      {/* e73: drei Reiter statt einer langen Seite – Zu tun (alles, was an mich geht), Vorgänge, Mein Bestand */}
+      <DetailTabsBar initial={initialTab} label="Bereiche von Meine Arbeit" tabs={[
+        { key: "zutun", label: "Zu tun", count: actions.length + others.length + renewalCards.filter((c) => c.forMe).length || null },
+        { key: "vorgaenge", label: "Vorgänge", count: work.counts.requested + outgoing.length || null },
+        { key: "bestand", label: "Mein Bestand", count: null },
+      ]} />
+      <TabPanel tab="zutun" initial={initialTab}>
       {/* e67: hier nur, was an mich geht – Verlängerungen des Teams stehen eingeklappt darunter (wie auf Start „im Blick“) */}
       <RenewalCards cards={renewalCards.filter((c) => c.forMe)} back="/meine-arbeit#entscheidungen" />
       {renewalCards.some((c) => !c.forMe) && (
@@ -115,7 +125,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
               )}
             </div>
           ))}
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Aufgabe</th><th>Projekt · Kunde</th><th>Status</th><th>Fällig</th><th>Nächster Schritt</th></tr></thead>
             <tbody>
               {others.map((o) => (
@@ -154,11 +164,13 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
           </>
         )}
       </section>
 
+      </TabPanel>
+      <TabPanel tab="vorgaenge" initial={initialTab}>
       <section className="card" id="vorgaenge">
         <div className="flex flex-wrap items-baseline gap-2 mb-2">
           <h2 className="font-semibold">Vorgänge</h2>
@@ -169,20 +181,10 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
             </Link>
           ))}
         </div>
-        <nav aria-label="Ansicht" className="flex flex-wrap gap-2 text-sm mb-2">
-          {TABS.filter((t) => t.key !== "team" || work.myTeams.length).map((t) => (
-            <Link key={t.key} href={`/meine-arbeit?v=${t.key}&f=${filter}#vorgaenge`} className="chip" aria-current={tab === t.key ? "page" : undefined}>
-              {t.label} ({tabCount[t.key]})
-            </Link>
-          ))}
-        </nav>
-        <nav aria-label="Filter" className="flex flex-wrap gap-3 text-xs mb-3">
-          {FILTERS.map((f) => (
-            <Link key={f.key} href={`/meine-arbeit?v=${tab}&f=${f.key}#vorgaenge`} style={filter === f.key ? { fontWeight: 700 } : undefined}>
-              {f.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <Segmented label="Ansicht" items={TABS.filter((t) => t.key !== "team" || work.myTeams.length).map((t) => ({ href: `/meine-arbeit?v=${t.key}&f=${filter}#vorgaenge`, label: t.label, active: tab === t.key, count: tabCount[t.key] }))} />
+          <Pills label="Filter" items={FILTERS.map((f) => ({ href: `/meine-arbeit?v=${tab}&f=${f.key}#vorgaenge`, label: f.label, active: filter === f.key }))} />
+        </div>
         <WorkList items={tabItems} empty={filter === "alle" ? "Nichts offen." : "Nichts in diesem Filter."} perspective={tab === "mir" ? "assignee" : tab === "beauftragt" ? "requester" : "queue"} />
         <details className="mt-3">
           <summary>Neuer Vorgang<Term k="VORGANG" /></summary>
@@ -190,6 +192,8 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         </details>
       </section>
 
+      </TabPanel>
+      <TabPanel tab="zutun" initial={initialTab}>
       {checkins.length > 0 && (() => {
         const today = new Date().toISOString().slice(0, 10);
         const soon = checkins.filter((c) => c.overdue || c.dueDate <= plusDaysIso(today, 7));
@@ -275,13 +279,15 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
       )}
 
 
+      </TabPanel>
+      <TabPanel tab="bestand" initial={initialTab}>
       {myOpportunities.filter((o) => o.status !== "BEAUFTRAGT").length > 0 && (
         <section className="card">
           <h2 className="font-semibold mb-2">Meine Chancen in Arbeit ({myOpportunities.filter((o) => o.status !== "BEAUFTRAGT").length}){myOpportunities.some((o) => o.status === "BEAUFTRAGT") ? <span className="muted text-sm font-normal"> · {myOpportunities.filter((o) => o.status === "BEAUFTRAGT").length} beauftragt – siehe <Link href="/einsaetze">Einsätze</Link></span> : null}</h2>
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Chance</th><th>Kunde</th><th>Status</th><th>Geändert</th></tr></thead>
             <tbody>{myOpportunities.filter((o) => o.status !== "BEAUFTRAGT").map((o) => <tr key={o.id}><td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link>{o.fastTrack && <span className="muted text-sm"> · direkte Anfrage</span>}</td><td>{o.accountName}</td><td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td><td>{fmtDate(o.updatedAt)}</td></tr>)}</tbody>
-          </table>
+          </table></div>
         </section>
       )}
 
@@ -305,7 +311,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
             Noch keine Projekte. <Link href="/kunden">Zu den Kunden</Link>, um ein Projekt anzulegen.
           </p>
         ) : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Projekt</th><th>Kunde</th><th>Status</th><th>BD</th><th>Zuletzt geändert</th></tr></thead>
             <tbody>
               {setups.map((s) => (
@@ -318,11 +324,13 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         </details>
       </section>
 
+      </TabPanel>
+      <TabPanel tab="vorgaenge" initial={initialTab}>
       {outgoing.length > 0 && (
         <section className="card">
           <h2 className="font-semibold mb-2">Von mir angefragte Übergaben</h2>
@@ -336,7 +344,8 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
           </ul>
         </section>
       )}
-
+      </TabPanel>
+      <TabPanel tab="bestand" initial={initialTab}>
       <section className="card">
         <details open={mySuggestions.length > 0 && mySuggestions.length <= 3}>
         <summary className="font-semibold mb-1">Vorschläge ({mySuggestions.length})</summary>
@@ -348,6 +357,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         )}
         </details>
       </section>
+      </TabPanel>
     </div>
   );
 }

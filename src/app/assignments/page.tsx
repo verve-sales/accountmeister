@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Pills, Segmented } from "@/components/ViewSwitch";
 import { KpiRow, KpiTile } from "@/components/Kpi";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -65,7 +66,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
             <h2 className="font-semibold">Vermittler-Anfragen ({requests.length})</h2>
             <span className="muted text-xs">je vorgeschlagener Person eine Chance · ab „CV verschickt“ Lead in Moco · ohne CV nach 14 Tagen automatisch beendet</span>
           </div>
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Anfrage</th><th>Vermittler</th><th>Endkunde</th><th>Person</th><th>Phase</th><th>Satz</th><th>Start</th><th></th></tr></thead>
             <tbody>
               {requests.map((r) => (
@@ -84,17 +85,15 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </section>
       )}
 
       <section className="card" id="zeitleiste">
         <div className="flex flex-wrap items-baseline gap-3 mb-2">
           <h2 className="font-semibold">Wer ist wo bis wann</h2>
-          <span className="text-sm flex gap-3">
-            {[["alle", "alle"], ["freelancer", "Freelancer"], ["intern", "Interne"]].map(([v, l]) => <Link key={v} href={q(v!, withOpps)} style={wer === v ? { fontWeight: 700, textDecoration: "underline" } : undefined}>{l}</Link>)}
-          </span>
-          <Link href={q(wer, !withOpps)} className="text-sm" style={withOpps ? { fontWeight: 700 } : undefined}>{withOpps ? "☑" : "☐"} Chancen einblenden</Link>
+          <Segmented label="Wer" items={[["alle", "alle"], ["freelancer", "Freelancer"], ["intern", "Interne"]].map(([v, l]) => ({ href: q(v!, withOpps), label: l!, active: wer === v }))} />
+          <Pills label="Einblenden" toggle items={[{ href: q(wer, !withOpps), label: "Chancen", active: withOpps, title: "Chancen mit Kandidatur einblenden" }]} />
           <Link href="/assignments/konditionen" className="text-sm ml-auto">als Tabelle mit Konditionen</Link>
         </div>
         {(noEnd > 0 || canPull) && (
@@ -117,7 +116,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
       <section className="card" id="aufgaben">
         <h2 className="font-semibold">Aufgaben ({o.tasks.length})</h2>
         {o.tasks.length === 0 ? <p className="empty">Nichts offen.</p> : (
-          <table className="list text-sm mt-1">
+          <div className="table-wrap"><table className="list text-sm mt-1">
             <thead><tr><th>Was</th><th>Person</th><th>Kunde</th><th>Aufgabe</th><th>Fällig</th></tr></thead>
             <tbody>
               {o.tasks.map((t) => (
@@ -130,7 +129,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         <p className="muted text-xs mt-2">Die Liste entsteht aus dem Stand der Einsätze: Verlängerungen, fehlende Bestellnummern und Verträge, offene Übergaben, überfällige Freelancer-Check-ins. Erledigt ist eine Zeile, sobald der Stand stimmt.</p>
       </section>

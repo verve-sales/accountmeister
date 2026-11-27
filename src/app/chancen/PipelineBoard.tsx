@@ -32,12 +32,13 @@ export function PipelineBoard({ cards, stages }: { cards: BoardCard[]; stages: r
   return (
     <div>
       <p className="muted text-xs mb-2" aria-live="polite">{pending ? "Speichere …" : msg ? <span style={{ color: msg.ok ? "var(--ok, #1f6b3a)" : "var(--danger)" }}>{msg.text}</span> : "Karte in eine andere Spalte ziehen, um die Stufe zu ändern. „Vorgestellt“ und „beauftragt“ entstehen über Angebot und Bestellung."}</p>
-      <div className="board" role="list">
+      {/* e73: alle Stufen nebeneinander – leere Spalten schmal, damit bei normaler Breite nichts waagerecht scrollt */}
+      <div className="board" role="list" style={{ ["--board-cols" as string]: stages.map((st) => (local.some((c) => c.status === st) ? "minmax(150px, 1fr)" : "minmax(92px, .42fr)")).join(" ") }}>
         {stages.map((s) => {
           const col = local.filter((c) => c.status === s);
           const sum = col.reduce((n, c) => n + (c.vkPerDay ?? 0) * c.heads, 0);
           return (
-            <section key={s} className="board-col" data-over={over === s ? "true" : undefined} aria-label={LABEL[s]} onDragOver={(e) => { e.preventDefault(); setOver(s); }} onDragLeave={() => setOver((o) => (o === s ? null : o))} onDrop={(e) => { e.preventDefault(); drop(s, e.dataTransfer.getData("text/plain")); }}>
+            <section key={s} className="board-col" data-empty={col.length === 0 ? "" : undefined} data-over={over === s ? "true" : undefined} aria-label={LABEL[s]} onDragOver={(e) => { e.preventDefault(); setOver(s); }} onDragLeave={() => setOver((o) => (o === s ? null : o))} onDrop={(e) => { e.preventDefault(); drop(s, e.dataTransfer.getData("text/plain")); }}>
               <header className="board-head">
                 <span className="font-semibold text-sm">{LABEL[s]}</span>
                 <span className="muted text-xs">{col.length}{sum ? ` · ${eur(sum * 20)}/Monat` : ""}</span>

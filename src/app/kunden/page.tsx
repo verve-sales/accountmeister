@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Pills } from "@/components/ViewSwitch";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { listVisibleAccounts, getUsersByIds } from "@/modules/accounts/service";
@@ -55,11 +56,11 @@ export default async function KundenPage({ searchParams }: { searchParams: Promi
         ) : (
           <>
           {bdChoices.length > 1 && (
-            <nav className="flex flex-wrap gap-2 mb-3" aria-label="Nach BD filtern">
-              <Link href="/kunden" className="chip" aria-current={!params.bd ? "page" : undefined}>alle BDs</Link>
-              {bdChoices.map(([id, name]) => <Link key={id} href={`/kunden?bd=${id}`} className="chip" aria-current={params.bd === id ? "page" : undefined}>{name}</Link>)}
-              {active.some((a) => !a.responsibleBdUserId) && <Link href="/kunden?bd=offen" className="chip" aria-current={params.bd === "offen" ? "page" : undefined}>ohne BD</Link>}
-            </nav>
+            <Pills label="Nach BD filtern" className="mb-3" items={[
+              { href: "/kunden", label: "alle BDs", active: !params.bd, count: active.length },
+              ...bdChoices.map(([id, name]) => ({ href: `/kunden?bd=${id}`, label: name, active: params.bd === id, count: active.filter((a) => a.responsibleBdUserId === id).length })),
+              ...(active.some((a) => !a.responsibleBdUserId) ? [{ href: "/kunden?bd=offen", label: "ohne BD", active: params.bd === "offen", count: active.filter((a) => !a.responsibleBdUserId).length }] : []),
+            ]} />
           )}
           <div className="table-wrap">
           <table className="list">
@@ -108,7 +109,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Promi
       {archived.length > 0 && (
         <details className="card">
           <summary>Archivierte Kunden ({archived.length})</summary>
-          <table className="list mt-2">
+          <div className="table-wrap"><table className="list mt-2">
             <tbody>
               {archived.map((a) => (
                 <tr key={a.id}>
@@ -118,7 +119,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Promi
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </details>
       )}
       {canCreateAccount(actor) && (

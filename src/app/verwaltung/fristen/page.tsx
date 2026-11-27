@@ -42,7 +42,7 @@ export default async function FristenpruefungPage({ searchParams }: { searchPara
         <p className="muted text-sm mb-2">3 Jahre nach der letzten dokumentierten Interaktion, ohne aktiven Beziehungsstand. Löschung pseudonymisiert die Stammdaten (Name, E-Mail, Telefon) – Metadaten und Protokoll bleiben.</p>
         {review.contacts.items.length === 0 ? (<p className="empty">Keine fällig.</p>
         ) : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Ansprechpartner</th><th>Letzte Interaktion</th><th></th></tr></thead>
             <tbody>
               {review.contacts.items.map((c) => (
@@ -59,7 +59,7 @@ export default async function FristenpruefungPage({ searchParams }: { searchPara
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {review.contacts.total > review.contacts.items.length && <p className="muted text-xs mt-1">Weitere {review.contacts.total - review.contacts.items.length} nicht angezeigt (erste 50).</p>}
       </section>
@@ -69,7 +69,7 @@ export default async function FristenpruefungPage({ searchParams }: { searchPara
         <p className="muted text-sm mb-2">3 Jahre nach der Quellenzeit, noch nicht gesperrt/entfernt. Vorsicht: Bei laufendem Auftrag gilt die Frist erst 3 Jahre nach Auftragsende – das prüft diese Liste nicht automatisch. Löschung erfolgt wie gewohnt auf der Quellenseite (Sperren → Inhalt entfernen).</p>
         {review.sources.items.length === 0 ? (<p className="empty">Keine fällig.</p>
         ) : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Quelle</th><th>Zeitpunkt</th><th></th></tr></thead>
             <tbody>
               {review.sources.items.map((s) => (
@@ -80,19 +80,19 @@ export default async function FristenpruefungPage({ searchParams }: { searchPara
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {review.sources.total > review.sources.items.length && <p className="muted text-xs mt-1">Weitere {review.sources.total - review.sources.items.length} nicht angezeigt (erste 50).</p>}
       </section>
 
       <section className="card">
         <h2 className="font-semibold mb-2">Protokoll- und KI-Auftragseinträge</h2>
-        <table className="list text-sm">
+        <div className="table-wrap"><table className="list text-sm">
           <tbody>
             <tr><td>Audit-Protokoll älter als {fmtDate(review.standardCutoff)} (3 Jahre)</td><td>{review.auditEvents.total} Einträge</td></tr>
             <tr><td>KI-Auftragsprotokolle älter als {fmtDate(review.aiJobsCutoff)} (1 Jahr)</td><td>{review.aiJobs.total} Einträge</td></tr>
           </tbody>
-        </table>
+        </table></div>
         <p className="muted text-sm mt-2">Diese Protokolle enthalten keine Rohinhalte (nur Feldnamen bzw. Hash/Länge) – die Löschung dient allein der Frist, nicht dem Schutz vor Inhaltszugriff. Was ein Protokolleintrag erzeugt hat (z. B. ein Vorschlag oder eine Berater-Fassung), bleibt erhalten; nur der Verweis auf den Auftrag entfällt.</p>
         {(review.auditEvents.total > 0 || review.aiJobs.total > 0) && (
           <form action={purgeExpiredLogsAction} className="mt-2">
@@ -104,12 +104,12 @@ export default async function FristenpruefungPage({ searchParams }: { searchPara
       <section className="card">
         <h2 className="font-semibold mb-2">Bedarfe/Angebote/Aufträge mit Belegcharakter, älter als {fmtDate(review.belegeCutoff)} (10 Jahre)</h2>
         <p className="muted text-sm mb-2">Ab dieser Marke ist die längste vertretbare Aufbewahrung (handels-/steuerrechtlich) in jeder Lesart abgelaufen. Löschung ist hier nicht automatisiert – bitte fachlich prüfen und über die jeweilige Chance/den jeweiligen Auftrag entscheiden.</p>
-        <table className="list text-sm">
+        <div className="table-wrap"><table className="list text-sm">
           <tbody>
             <tr><td>Angebote</td><td>{review.belege.offers}</td></tr>
             <tr><td>Aufträge</td><td>{review.belege.orders}</td></tr>
           </tbody>
-        </table>
+        </table></div>
       </section>
 
       <section className="card">

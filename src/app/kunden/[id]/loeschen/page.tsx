@@ -32,7 +32,7 @@ export default async function KundeLoeschenPage({ params, searchParams }: { para
       <section className="card">
         <h2 className="font-semibold mb-2">Was betroffen ist</h2>
         <p className="text-sm mb-2">Mit dem Kunden werden endgültig entfernt:</p>
-        <table className="list text-sm">
+        <div className="table-wrap"><table className="list text-sm">
           <tbody>
             <tr><td>Projekte</td><td>{p.setups.length}{p.setups.length > 0 && <span className="muted"> – {p.setups.map((s) => s.name).join(", ")}</span>}</td></tr>
             <tr><td>Ansprechpartner (mit Beziehungen und Einschätzungen)</td><td>{p.persons}</td></tr>
@@ -43,7 +43,7 @@ export default async function KundeLoeschenPage({ params, searchParams }: { para
             <tr><td>Vorschläge</td><td>{p.suggestions}</td></tr>
             <tr><td>Reviews</td><td>{p.reviews}</td></tr>
           </tbody>
-        </table>
+        </table></div>
         <p className="muted text-sm mt-3">Erhalten bleiben: das Prüfprotokoll (mit Name des Kunden, Begründung und Umfang der Löschung), Ziele und KI-Verbrauchsprotokolle – dort wird nur der Kundenbezug gelöst. Anlagevorschläge aus Dokumenten verlieren ihren Verweis auf den Kunden.</p>
       </section>
 

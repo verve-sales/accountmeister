@@ -119,7 +119,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
             {leads && leads.candidates.length > 0 && (
               <form action={mocoPushLeadsAction} className="space-y-2 text-sm">
                 <input type="hidden" name="back" value="/moco#leads" />
-                <table className="list text-sm">
+                <div className="table-wrap"><table className="list text-sm">
                   <thead><tr><th></th><th>Chance</th><th>Kunde → Moco-Firma</th><th>Status</th><th>Lead-Phase in Moco</th><th>Hinweis</th></tr></thead>
                   <tbody>
                     {leads.candidates.map((c) => (
@@ -139,7 +139,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
                 <button className="btn btn-small" type="submit">Ausgewählte Chancen nach Moco übertragen</button>
               </form>
             )}

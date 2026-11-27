@@ -88,7 +88,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
       <section className="card">
         <h2 className="font-semibold mb-2">Mein Postfach (Microsoft 365 / Outlook)</h2>
         <p className="muted text-sm mb-2">Lesender Zugriff mit minimalen Berechtigungen. Es wird nie ein ganzes Postfach eingelesen: du wählst im <Link href="/eingang">Eingang</Link> einzelne Mails oder Termine aus – oder du schaltest unten den Ordner „Accountmeister“ ein. Kein Senden, keine Terminbuchung.</p>
-        <table className="list">
+        <div className="table-wrap"><table className="list">
           <tbody>
             <tr><td>Status</td><td>{conn.connection ? <Status label={integrationStatusLabel[conn.connection.status] ?? conn.connection.status} /> : <Status label="Nicht verbunden" />}{conn.state.accountLabel && <span className="muted text-sm ml-2">{conn.state.accountLabel}</span>}</td></tr>
             <tr><td>Benötigte Berechtigungen</td><td className="text-sm">{conn.requestedScopes.join(", ")}</td></tr>
@@ -96,7 +96,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
             <tr><td>Letzter erfolgreicher Abruf</td><td className="text-sm">{conn.connection?.lastSuccessfulFetchAt ? fmtDateTime(conn.connection.lastSuccessfulFetchAt) : "–"}</td></tr>
             {conn.connection?.lastError && <tr><td>Letzter Fehler</td><td className="text-sm error">{conn.connection.lastError}</td></tr>}
           </tbody>
-        </table>
+        </table></div>
         <div className="mt-3 flex flex-wrap gap-3 items-end">
           {!conn.state.connected ? (
             <>
@@ -122,14 +122,14 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
       </section>
       <section className="card">
         <h2 className="font-semibold mb-2">Status der Anbindungen</h2>
-        <table className="list">
+        <div className="table-wrap"><table className="list">
           <tbody>
             <tr><td>KI-Anbieter</td><td>{ai.id} · {ai.model} · {ai.enabled ? "aktiv" : "deaktiviert"}<div className="muted text-sm">{ai.description}</div></td></tr>
             <tr><td>Nutzungsgrenze</td><td>{ai.dailyLimit} KI-Aufträge je Arbeitsraum und Tag</td></tr>
             <tr><td>Anmeldung</td><td>{cfg.AUTH_MODE === "development" ? "Entwicklungsanmeldung (nur lokal)" : "Unternehmensanmeldung (OIDC)"}</td></tr>
             <tr><td>Mail-/Kalenderanbieter</td><td>Microsoft 365 / Outlook über Microsoft Graph <TechRef>Entscheidung E-018</TechRef>. Echter Abruf möglich, sobald die Berechtigungen in Entra ID gesetzt sind <TechRef>docs/installation-ionos.md, Schritt 4b</TechRef> – jede Person verbindet ihr eigenes Postfach selbst, oben.</td></tr>
           </tbody>
-        </table>
+        </table></div>
         <p className="muted text-sm mt-2">Änderungen nimmt die Betriebsverwaltung in der Serverkonfiguration vor, nicht auf dieser Seite. <TechRef>.env</TechRef></p>
         <TechDetails><div>Prompt-/Schemaversion: {ai.promptVersion}</div></TechDetails>
       </section>
@@ -138,9 +138,9 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
           <h2 className="font-semibold mb-2">Freigegebene Profilreferenzen ({profileRefs.length})</h2>
           <p className="muted text-sm mb-2">Nur Verweise auf freigegebene Profile (Bezeichnung, Ablageort, Verfügbarkeit) – kein Profilinhalt, kein Kandidatenmanagement. Sichtbar für BD, Principal und CEO.</p>
           {profileRefs.length === 0 ? <p className="empty">Noch keine Profilreferenz.</p> : (
-            <table className="list"><thead><tr><th>Bezeichnung</th><th>Ablage/Referenz</th><th>Verfügbarkeit</th><th>Freigegeben</th></tr></thead>
+            <div className="table-wrap"><table className="list"><thead><tr><th>Bezeichnung</th><th>Ablage/Referenz</th><th>Verfügbarkeit</th><th>Freigegeben</th></tr></thead>
               <tbody>{profileRefs.map((r) => <tr key={r.id}><td>{r.label}</td><td className="text-sm">{r.sourceRef ?? "–"}</td><td className="text-sm">{r.availabilityNote ?? "–"}</td><td className="text-sm">{r.approvedAt ? fmtDateTime(r.approvedAt) : "–"}</td></tr>)}</tbody>
-            </table>
+            </table></div>
           )}
           <details className="mt-3">
             <summary>Profilreferenz anlegen</summary>

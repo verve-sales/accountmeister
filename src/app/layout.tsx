@@ -73,7 +73,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const only = (xs: Array<NavItem | null>) => xs.filter((x): x is NavItem => !!x);
   const sections: NavSection[] = actor
     ? [
-        { label: "Heute", icon: "home", items: only([{ href: "/start", label: "Überblick", icon: "home" }, { href: "/meine-arbeit", label: "Meine Arbeit", icon: "check" }, { href: "/eingang", label: "Eingang", icon: "file" }]) },
+        { label: "Heute", icon: "home", items: only([{ href: "/start", label: "Start", icon: "home" }, { href: "/meine-arbeit", label: "Meine Arbeit", icon: "check" }, { href: "/eingang", label: "Eingang", icon: "file" }]) },
         { label: "Kunden", icon: "building", items: only([allowed.has("runde") ? { href: "/kunden", label: "Kundenliste", icon: "building" } : L("kunden", "building"), L("runde", "refresh"), L("bds", "users")]) },
         { label: "Pipeline", icon: "target", items: only([{ href: "/chancen", label: "Chancen", icon: "target" }, L("besetzung", "userplus")]) },
         { label: "Einsätze", icon: "briefcase", items: only([asgAllowed ? { href: "/assignments", label: "Zeitleiste", icon: "calendar" } : null, allowed.has("einsaetze") ? { href: "/einsaetze", label: "Einsatzliste", icon: "briefcase" } : null, ...(intakeAllowed ? [{ href: "/auftragseingang", label: "Angebot & Bestellung", icon: "file", badge: intake.drafts }] : []), ...(asgAllowed ? [{ href: "/assignments/konditionen", label: "Laufzeiten & Konditionen", icon: "calendar" }, { href: "/assignments/checkins", label: "Check-ins", icon: "heart" }, { href: "/uebergaben", label: "Übergaben", icon: "swap" }] : [])]) },

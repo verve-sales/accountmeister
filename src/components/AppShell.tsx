@@ -12,7 +12,7 @@ export type NavSection = { label: string | null; icon?: string; items: NavItem[]
 
 /** e66: Detailseiten ohne eigenen Menüpunkt dem passenden Bereich zuordnen (nur für die Markierung in der Seitenleiste). */
 const AREA_PREFIX: Record<string, string[]> = {
-  Heute: ["/vorgaenge", "/suche", "/eingang", "/benachrichtigungen", "/einstellungen"],
+  Heute: ["/vorgaenge", "/suche", "/eingang", "/team"],
   Kunden: ["/kunden", "/setups", "/health", "/quellen", "/interviews", "/meine-bds"],
   Pipeline: ["/bedarfe", "/chancen", "/besetzung"],
   Einsätze: ["/einsaetze", "/assignments", "/auftragseingang"],
@@ -20,6 +20,20 @@ const AREA_PREFIX: Record<string, string[]> = {
   Operations: ["/vertragsbuero", "/sales-ops", "/bereinigung", "/moco", "/verwaltung"],
   "Wissen & Werkzeuge": ["/vorgehen", "/artefakte", "/provision", "/hilfe"],
 };
+
+/** e73: Detailseiten markieren den Menüpunkt, unter dem sie fachlich liegen (Seitenleiste und Brotkrume). */
+const ITEM_PREFIX: [string, string][] = [
+  ["/bedarfe", "/chancen"],
+  ["/setups", "/kunden"],
+  ["/health", "/kunden"],
+  ["/quellen", "/kunden"],
+  ["/interviews", "/kunden"],
+  ["/vorgaenge", "/meine-arbeit"],
+  ["/team", "/meine-arbeit"],
+  ["/meine-principals", "/kundenverantwortliche"],
+  ["/vertragsbuero", "/sales-ops"],
+  ["/fuehrung", "/ziele"],
+];
 
 /**
  * e64: Eine Oberfläche für Accountmeister und Assignmentmanager – feste Seitenleiste mit Bereichen statt zwei
@@ -34,12 +48,23 @@ export function AppShell({ sections, brand, topbar, children }: { sections: NavS
     setLastPath(path);
     setOpen(false);
   }
+  // aktiver Eintrag: längster passender Pfad (Kontaktpate und Abfrage ignoriert)
+  const all = sections.flatMap((s) => s.items.map((i) => i.href.split(/[?#]/)[0]!));
+  const direct = all.filter((h) => path === h || (h !== "/" && path.startsWith(`${h}/`))).sort((a, b) => b.length - a.length)[0];
+  const mapped = ITEM_PREFIX.find(([p]) => path === p || path.startsWith(`${p}/`))?.[1];
+  const active = direct ?? (mapped && all.includes(mapped) ? mapped : undefined);
+  // Bereich: über die Menüpunkte, sonst über bekannte Pfadanfänge (Detailseiten)
+  let activeArea = active ? sections.findIndex((s) => s.items.some((it) => it.href.split(/[?#]/)[0] === active)) : -1;
+  if (activeArea < 0) activeArea = sections.findIndex((s) => (AREA_PREFIX[s.label ?? ""] ?? []).some((p) => path === p || path.startsWith(`${p}/`)));
+  const area = activeArea >= 0 ? sections[activeArea] : undefined;
+  const activeItem = area?.items.find((it) => it.href.split(/[?#]/)[0] === active);
+  const areaLabel = area?.label ?? null;
   // e64: Seitentitel aus der Überschrift (Tabs, Verlauf, Lesezeichen) und Spaltennamen für die Kartenansicht auf dem Handy
   useEffect(() => {
     const apply = () => {
       const h1 = document.querySelector("main.page h1");
       const t = h1?.textContent?.replace(/\s+/g, " ").trim();
-      if (t) document.title = `${t} · Accountmeister`;
+      if (t) document.title = [t, areaLabel && areaLabel !== t ? areaLabel : null, "Accountmeister"].filter(Boolean).join(" · ");
       for (const table of Array.from(document.querySelectorAll<HTMLTableElement>("main.page table.list"))) {
         const heads = Array.from(table.querySelectorAll("thead th")).map((th) => th.textContent?.trim() ?? "");
         if (!heads.length) continue;
@@ -54,18 +79,12 @@ export function AppShell({ sections, brand, topbar, children }: { sections: NavS
     const main = document.querySelector("main.page");
     if (main) mo.observe(main, { childList: true, subtree: true });
     return () => mo.disconnect();
-  }, [path]);
+  }, [path, areaLabel]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
-  // aktiver Eintrag: längster passender Pfad (Kontaktpate und Abfrage ignoriert)
-  const all = sections.flatMap((s) => s.items.map((i) => i.href.split(/[?#]/)[0]!));
-  const active = all.filter((h) => path === h || (h !== "/" && path.startsWith(`${h}/`))).sort((a, b) => b.length - a.length)[0];
-  // Bereich: über die Menüpunkte, sonst über bekannte Pfadanfänge (Detailseiten)
-  let activeArea = active ? sections.findIndex((s) => s.items.some((it) => it.href.split(/[?#]/)[0] === active)) : -1;
-  if (activeArea < 0) activeArea = sections.findIndex((s) => (AREA_PREFIX[s.label ?? ""] ?? []).some((p) => path === p || path.startsWith(`${p}/`)));
   return (
     <div className="shell" data-nav={open ? "open" : "closed"}>
       <aside className="sidebar" aria-label="Navigation">
@@ -106,6 +125,12 @@ export function AppShell({ sections, brand, topbar, children }: { sections: NavS
           {topbar}
         </header>
         <main className="page">
+          {area && (
+            <nav className="crumbs auto-crumbs" aria-label="Pfad">
+              <Link href={area.items[0]!.href}>{area.label}</Link>
+              {activeItem && (path === activeItem.href.split(/[?#]/)[0] ? <span>{activeItem.label}</span> : <Link href={activeItem.href}>{activeItem.label}</Link>)}
+            </nav>
+          )}
           {children}
         </main>
         <TableTools />

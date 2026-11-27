@@ -75,7 +75,7 @@ type ReviewRow = Awaited<ReturnType<typeof listReviews>>["upcoming"][number];
 
 function ReviewTable({ rows }: { rows: ReviewRow[] }) {
   return (
-    <table className="list">
+    <div className="table-wrap"><table className="list">
       <thead><tr><th>Weekly</th><th>Projekt</th><th>Kunde</th><th>Termin</th><th>Status</th></tr></thead>
       <tbody>
         {rows.map((r) => (
@@ -88,6 +88,6 @@ function ReviewTable({ rows }: { rows: ReviewRow[] }) {
           </tr>
         ))}
       </tbody>
-    </table>
+    </table></div>
   );
 }

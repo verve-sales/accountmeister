@@ -38,7 +38,7 @@ export default async function MeinePrincipalsPage({ searchParams }: { searchPara
         </section>
       ) : (
         <section className="card">
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Kundenverantwortlich</th><th>Kunden</th><th>Köpfe</th><th>Neukunden</th><th>Verlängerungsquote</th><th>Vereinbarungen</th><th>Verlängerungen offen</th><th></th></tr></thead>
             <tbody>
               {rows.map((r) => (
@@ -54,7 +54,7 @@ export default async function MeinePrincipalsPage({ searchParams }: { searchPara
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </section>
       )}
       <Hint>Köpfe: verschiedene Personen mit laufendem Einsatz am Stichtag, summiert über die Kunden des Principals (Ziel = Summe der Kundenziele). Neukunden: erster Einsatz beim Kunden beginnt im Quartal. Verlängerungsquote: im Quartal entschiedene Verlängerungen, bestätigt ÷ (bestätigt + nicht verlängert). Kein Umsatz.</Hint>

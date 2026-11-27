@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Pills } from "@/components/ViewSwitch";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { getConfig } from "@/lib/config";
@@ -32,13 +33,7 @@ export default async function BesetzungenPage({ searchParams }: { searchParams: 
         {canBrowseFreelancerPool(actor) && <Link href="/besetzung/freelancer" className="text-sm ml-auto">Freelancer-Pool</Link>}
       </div>
       <Feedback params={sp} />
-      <nav aria-label="Filter" className="flex flex-wrap gap-2 text-sm">
-        {FILTERS.map((f) => (
-          <Link key={f.key} href={`/besetzung?f=${f.key}`} className="chip" aria-current={filter === f.key ? "page" : undefined}>
-            {f.label} ({counts[f.key]})
-          </Link>
-        ))}
-      </nav>
+      <Pills label="Filter" items={FILTERS.map((f) => ({ href: `/besetzung?f=${f.key}`, label: f.label, active: filter === f.key, count: counts[f.key] }))} />
       <section className="card">
         <PositionList items={items} empty={filter === "alle" ? "Keine Positionen im Sichtbereich. Positionen entstehen an einer Chance (Block „Besetzung“)." : "Nichts in diesem Filter."} />
       </section>

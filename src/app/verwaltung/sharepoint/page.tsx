@@ -43,7 +43,7 @@ export default async function SharePointPage({ searchParams }: { searchParams: S
         ) : !status.ok ? (
           <p style={{ color: "var(--danger)" }}>Die Site ist nicht erreichbar: {status.error}. Meist fehlt das Recht der App auf die Site (Sites.Selected) oder die Site-ID stimmt nicht.</p>
         ) : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Bibliothek</th><th>Stand</th></tr></thead>
             <tbody>
               {status.libraries.map((l) => (
@@ -53,7 +53,7 @@ export default async function SharePointPage({ searchParams }: { searchParams: S
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {status.enabled && (
           <>
@@ -72,7 +72,7 @@ export default async function SharePointPage({ searchParams }: { searchParams: S
           <li><strong>Berechtigungen nicht mehr erben</strong> → OK.</li>
           <li><strong>Berechtigungen erteilen</strong> → Namen eintragen → <strong>Optionen anzeigen</strong> → Berechtigungsstufe wählen → Haken bei „E-Mail-Einladung senden“ entfernen → <strong>Teilen</strong>. Je Stufe einmal.</li>
         </ol>
-        <table className="list">
+        <div className="table-wrap"><table className="list">
           <thead><tr><th>Rolle</th><th>Kunden</th><th>Freelancer</th><th>Vorlagen</th><th>Personen laut Accountmeister</th></tr></thead>
           <tbody>
             {plan.map((r) => (
@@ -85,7 +85,7 @@ export default async function SharePointPage({ searchParams }: { searchParams: S
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
         <p className="muted text-xs">Wer in mehreren Rollen ist, steht nur bei der höchsten. Den Vertrieb nicht in der Bibliothek Freelancer eintragen – dort stehen die Einkaufssätze. Die Startseite der Site sehen die Personen nur, wenn sie auch unter Websiteberechtigungen eingetragen sind; der Link zur Bibliothek genügt aber.</p>
       </section>
 

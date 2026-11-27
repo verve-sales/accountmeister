@@ -45,7 +45,7 @@ export function ProvisionCalculator({ isPrincipal, config }: { isPrincipal: bool
       </section>
 
       <section className="card" style={{ overflowX: "auto" }}>
-        <table className="list" style={{ minWidth: 860 }}>
+        <div className="table-wrap"><table className="list" style={{ minWidth: 860 }}>
           <thead>
             <tr>
               <th>Deal / Person</th>
@@ -111,7 +111,7 @@ export function ProvisionCalculator({ isPrincipal, config }: { isPrincipal: bool
               );
             })}
           </tbody>
-        </table>
+        </table></div>
         <div className="flex flex-wrap items-center gap-4 mt-3">
           <button type="button" className="btn btn-secondary btn-small" onClick={() => setRows((rs) => [...rs, emptyRow()])}>Deal hinzufügen</button>
           {results.filter(Boolean).length > 1 && (

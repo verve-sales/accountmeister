@@ -60,7 +60,7 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
       <section className="card space-y-2" id="vorgaenge">
         <h2 className="font-semibold">Laufende Konvertierungsvorgänge ({o.vorgaenge.length})</h2>
         {o.vorgaenge.length === 0 ? <p className="empty">Kein laufender Vorgang. Gestartet wird er an der Chance.</p> : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Position · Chance · Kunde</th><th>Jetzt dran</th><th>Was fehlt</th></tr></thead>
             <tbody>
               {o.vorgaenge.map((x) => (
@@ -71,14 +71,14 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
 
       <section className="card space-y-2" id="enden">
         <h2 className="font-semibold">Enden in den nächsten 8 Wochen ({o.ending.length})</h2>
         {o.ending.length === 0 ? <p className="empty">Keine Einsätze mit Ende in den nächsten 8 Wochen.</p> : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Person · Kunde</th><th>Ende</th><th>Verlängerung</th><th>läuft über</th><th>Unterlagen</th></tr></thead>
             <tbody>
               {o.ending.map((e) => (
@@ -95,7 +95,7 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
 

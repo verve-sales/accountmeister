@@ -28,7 +28,7 @@ export default async function FreelancerPoolPage({ searchParams }: { searchParam
       <section className="card" style={{ overflowX: "auto" }}>
         {rows.length === 0 ? (<p className="empty">Noch keine Freelancer erfasst.</p>
         ) : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Name</th><th>Firma</th><th>Skills</th><th>Verfügbarkeit</th><th>Kandidaturen</th></tr></thead>
             <tbody>
               {rows.map((r) => (
@@ -41,7 +41,7 @@ export default async function FreelancerPoolPage({ searchParams }: { searchParam
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
     </div>

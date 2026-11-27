@@ -20,7 +20,7 @@ export default async function ArtefakteKatalogPage() {
         Alle {templates.length} Arbeitsergebnisse (Projekt, Weekly-Protokoll, Zielvereinbarung und weitere) sind registriert <TechRef>{`Briefing A1–A16 · Registerversion ${TEMPLATE_REGISTRY_VERSION}`}</TechRef>. Artefakte entstehen im jeweiligen Kontext (Projekt, Kunde, Weekly), nicht über diese Liste. Kein Vorgang muss alle Artefakte anlegen.
       </p>
       <section className="card">
-        <table className="list">
+        <div className="table-wrap"><table className="list">
           <thead><tr><th>Nr.</th><th>Arbeitsergebnis</th><th>Verantwortlich / Auslöser</th><th>Umsetzung</th><th>Qualitätskriterium</th></tr></thead>
           <tbody>
             {templates.map((t) => (
@@ -33,7 +33,7 @@ export default async function ArtefakteKatalogPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </section>
       {setups.length > 0 && (
         <section className="card">

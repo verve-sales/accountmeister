@@ -32,7 +32,7 @@ import { SuggestionCard } from "@/components/SuggestionCard";
 import { Feedback } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { SuggestButton } from "@/components/SuggestButton";
-import { SetupTabs } from "@/components/SetupTabs";
+import { DetailTabsBar, TabPanel } from "@/components/DetailTabs";
 import {
   accessClassLabel,
   actionChannelLabel,
@@ -72,7 +72,7 @@ import {
 import { offerPathLabel, offerPathValues } from "@/modules/conversion/service";
 import { approachLabel, approachValues } from "@/modules/engagements/contacts";
 
-export default async function SetupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; umbenennen?: string }> }) {
+export default async function SetupPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; umbenennen?: string; reiter?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const actor = await getCurrentActor();
@@ -106,6 +106,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const linkableSignals = openSignals.filter((s) => s.status !== "MIT_BEDARF_VERKNUEPFT");
   const openActions = d.actions.filter((a) => a.status !== "ERLEDIGT" && a.status !== "VERWORFEN");
   const doneActions = d.actions.filter((a) => a.status === "ERLEDIGT");
+  const initialTab = ["ueberblick", "arbeit", "wissen", "einstellungen"].includes(sp.reiter ?? "") ? sp.reiter! : "ueberblick";
   const openHandovers = d.handovers.filter((h) => h.status === "ANGEFRAGT" || h.status === "ANGENOMMEN");
   const recentSignals = d.signals.filter((s) => s.createdAt >= d.recentSince);
   const recentDone = doneActions.filter((a) => a.updatedAt >= d.recentSince);
@@ -130,9 +131,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
 
   return (
     <div className="space-y-6">
-      <p className="text-sm">
-        <Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${d.account.id}`}>{d.account.name}</Link> › {d.setup.name}
-      </p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><Link href={`/kunden/${d.account.id}`}>{d.account.name}</Link><span>{d.setup.name}</span></nav>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">{d.setup.name}</h1>
         <Status label={setupStatusLabel[d.setup.status] ?? d.setup.status} />
@@ -146,7 +145,24 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       {d.canEdit && /ohne bereich|^erstkontakt |– account$/i.test(d.setup.name) && (
         <p className="text-sm p-2" style={{ borderLeft: "4px solid #b7791f", background: "var(--surface-2)", borderRadius: 6 }}>Der Name stammt von der KI und sagt noch nicht, um welches Team oder Vorhaben es geht. <a href="?umbenennen=1#bearbeiten">Jetzt umbenennen</a></p>
       )}
-      <SetupTabs setupId={id} active="ueberblick" />
+      <Feedback params={sp} />
+      {/* e73: vierzehn Karten in vier Reitern – alle Inhalte bleiben, nur der Ort ändert sich */}
+      <DetailTabsBar
+        initial={initialTab}
+        label="Projekt-Bereiche"
+        tabs={[
+          { key: "ueberblick", label: "Überblick" },
+          { key: "arbeit", label: "Arbeit", count: openActions.length + openSupport.length + openHandovers.length || null },
+          { key: "wissen", label: "Wissen", count: openSignals.length || null },
+          { key: "einstellungen", label: "Einstellungen" },
+        ]}
+        links={[
+          { href: `/setups/${id}/strategie`, label: "Strategiefaden" },
+          { href: `/setups/${id}/personen`, label: "Personen & Zugang" },
+          ...(getConfig().FEATURE_ARTEFAKTE === "true" ? [{ href: `/setups/${id}/artefakte`, label: "Artefakte" }] : []),
+        ]}
+      />
+      <TabPanel tab="ueberblick" initial={initialTab}>
       {analysis && (
         <section className="card">
           <h2 className="font-semibold mb-2">Wo stehen wir? – je Chance</h2>
@@ -158,14 +174,13 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           })}
         </section>
       )}
-      <Feedback params={sp} />
 
       {/* 3. Was haben wir vereinbart? */}
       {/* Chancen (Etappe 5): je Projekt mehrere, unabhängige Zustände (F02); direkt erfassbar (F08) */}
       <section className="card">
         <h2 className="font-semibold mb-2">Chancen ({openOpportunities.length} offen)</h2>
         {opportunities.length === 0 ? <p className="empty">Noch keine Chance. Eine Chance kann direkt erfasst werden – ohne vollständiges Projekt oder Qualifizierung (Fast-Track).</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Chance</th><th>Wofür</th><th>Status</th><th>Verantwortlich</th><th>Bestätigt</th><th>Geändert</th></tr></thead>
             <tbody>
               {opportunities.map((o) => (
@@ -179,7 +194,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {d.canEdit && (
           <details className="mt-3">
@@ -343,10 +358,12 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
       </section>
 
+      </TabPanel>
+      <TabPanel tab="arbeit" initial={initialTab}>
       <section className="card" id="aktionen">
         <h2 className="font-semibold mb-2">Was haben wir als Nächstes vereinbart?</h2>
         {openActions.length === 0 ? <p className="empty">Keine offenen Aktionen.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Aktion</th><th>Verantwortlich</th><th>Status</th><th>Fällig</th>{d.canEdit && <th></th>}</tr></thead>
             <tbody>
               {openActions.map((a) => (
@@ -378,7 +395,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {doneActions.length > 0 && (
           <details className="mt-3"><summary className="text-sm">Erledigte Aktionen ({doneActions.length})</summary>
@@ -432,6 +449,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
       </section>
 
+      </TabPanel>
+      <TabPanel tab="einstellungen" initial={initialTab}>
       {(setupEngs.length > 0 || d.setup.renewalContactPersonId) && (
         <section className="card space-y-2" id="verlaengerung">
           <h2 className="font-semibold">Verlängerung läuft über <span className="muted text-sm font-normal">– Vorgabe für {setupEngs.filter((x) => !["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(x.status)).length} laufende Einsätze; am Einsatz abweichend möglich</span></h2>
@@ -483,6 +502,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         </section>
       )}
 
+      </TabPanel>
+      <TabPanel tab="arbeit" initial={initialTab}>
       {(setupRuns.length > 0 || (getConfig().FEATURE_VORGEHEN === "true" && (d.canEdit || mayReassign))) && (
         <PlaybookRuns
           startCollapsed
@@ -502,6 +523,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
 
       <WorkBlock actor={actor} subjectType="SETUP" subjectId={d.setup.id} back={back} canCreate={d.setup.status !== "ARCHIVIERT"} />
 
+      </TabPanel>
+      <TabPanel tab="wissen" initial={initialTab}>
       {/* 4. Anregungen */}
       <section className="card">
         <h2 className="font-semibold mb-1">Welche Anregungen sind jetzt hilfreich?</h2>
@@ -612,11 +635,13 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
       </section>
 
+      </TabPanel>
+      <TabPanel tab="arbeit" initial={initialTab}>
       {/* Übergaben */}
       {d.handovers.length > 0 && (
         <section className="card">
           <h2 className="font-semibold mb-2">Übergaben ({openHandovers.length} offen)</h2>
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Verantwortung</th><th>Von → An</th><th>Status</th><th>Rückmeldung</th><th></th></tr></thead>
             <tbody>
               {d.handovers.map((h) => (
@@ -641,7 +666,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </section>
       )}
 
@@ -693,10 +718,12 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
       </section>
 
+      </TabPanel>
+      <TabPanel tab="wissen" initial={initialTab}>
       <section className="card">
         <h2 className="font-semibold mb-2">Quellen</h2>
         {d.sources.length === 0 ? <p className="empty">Keine Quellen in deinem Berechtigungsbereich.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Titel</th><th>Typ</th><th>Quellenzeit</th><th>Inhaber</th><th>Zugriff</th></tr></thead>
             <tbody>
               {d.sources.map((s) => (
@@ -709,7 +736,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {d.hiddenSourceCount > 0 && <p className="muted text-sm mt-2">{d.hiddenSourceCount === 1 ? "Eine weitere Quelle ist" : `${d.hiddenSourceCount} weitere Quellen sind`} für deine Rolle nicht einsehbar.</p>}
         {d.canEdit && (
@@ -741,7 +768,11 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           </details>
         )}
       </section>
+      </TabPanel>
+      <TabPanel tab="ueberblick" initial={initialTab}>
       <Comments actor={actor} subjectType="SETUP" subjectId={d.setup.id} back={back} />
+      </TabPanel>
+      <TabPanel tab="einstellungen" initial={initialTab}>
       {canClean(actor) && siblings.length > 0 && (
         <details className="card text-sm" id="zusammenlegen">
           <summary className="font-semibold" style={{ cursor: "pointer" }}>Mit anderem Projekt zusammenlegen</summary>
@@ -761,6 +792,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       )}
       {mergeTargets.length > 0 && <SetupMergeInto setupId={d.setup.id} setupName={d.setup.name} others={mergeTargets} back={`/kunden/${d.account.id}`} />}
       {(mayReassign || actor.roles.has("ADMIN")) && <DeleteBlock kind="SETUP" id={d.setup.id} label={`${d.account.name} · ${d.setup.name}`} scope="rekursiv mit allen Chancen, Positionen, Einsätzen, Beobachtungen, Aktionen, Weeklys, Quellen, Vorgängen und Beteiligungen" back={back} />}
+      </TabPanel>
     </div>
   );
 }

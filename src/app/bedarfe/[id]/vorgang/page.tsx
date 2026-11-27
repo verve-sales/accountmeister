@@ -70,7 +70,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
   const cur = (x: ConversionView) => x.steps.find((s) => s.state === "AKTUELL");
   return (
     <div className="space-y-5">
-      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><span>{v.accountName}</span><span>{v.setupName}</span><Link href={`/bedarfe/${id}`}>{v.opportunity.title}</Link></nav>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/chancen">Pipeline</Link><Link href="/chancen">Chancen</Link><span>{v.accountName}</span><Link href={`/bedarfe/${id}`}>{v.opportunity.title}</Link></nav>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">Konvertierungsvorgang{all.length > 1 || v.position ? <span style={{ fontWeight: 400 }}> · {v.label}</span> : null}</h1>
         <span className="status">{CONV_STATUS[c.status] ?? c.status}</span>
@@ -79,7 +79,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
       {all.length > 1 && (
         <nav className="card" style={{ padding: ".5rem .9rem" }} aria-label="Vorgänge dieser Chance">
           <p className="muted text-xs mb-1">Diese Chance sucht {all.length} Personen – je Position ein eigener Vorgang:</p>
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <tbody>
               {all.map((x) => (
                 <tr key={x.conversion.id} style={x === v ? { background: "#e8f0f8" } : undefined}>
@@ -89,7 +89,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </nav>
       )}
       <Feedback params={sp} />
@@ -130,7 +130,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
       <section className="card space-y-2" id="schritt-3">
         <StepHead s={step("BESETZUNG")} />
         {v.positions.length === 0 ? <p className="text-sm">Die Position legst du an der <Link href={`/bedarfe/${id}#besetzung`}>Chance</Link> an – intern oder mit Freelancer. Steht die Person fest, genügt die Schnellbesetzung.</p> : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Position</th><th>Art</th><th>Besetzt mit</th><th>Stand</th></tr></thead>
             <tbody>
               {v.positions.map((p) => (
@@ -142,7 +142,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
 
@@ -188,7 +188,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
         <StepHead s={step("VERTRAG")} />
         {freelancerPositions.length > 0 && (
           <>
-            <table className="list text-sm">
+            <div className="table-wrap"><table className="list text-sm">
               <thead><tr><th>Freelancer</th><th>Vertrag</th><th></th></tr></thead>
               <tbody>
                 {freelancerPositions.map((p) => (
@@ -199,7 +199,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
             <p className="muted text-xs">Der Vertrag entsteht am Einsatz aus der Vorlage und steht unter dem Vorbehalt, dass der Endkunde beauftragt. Mit „versendet“ geht der Vorgang weiter; die Unterschrift wird am Einsatz nachgehalten.</p>
           </>
         )}

@@ -144,7 +144,7 @@ export default async function ZielPage({ params, searchParams }: { params: Promi
         <h2 className="font-semibold mb-2">Zielbeiträge ({goal.contributions.length})</h2>
         <p className="muted text-sm mb-2">Erwarteter und belegter Beitrag werden getrennt geführt. Ein belegter Beitrag braucht eine Quelle.</p>
         {goal.contributions.length === 0 ? <p className="empty">Noch keine Beiträge.</p> : (
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Bezug</th><th>Erwartet</th><th>Belegt</th><th>Von</th></tr></thead>
             <tbody>
               {goal.contributions.map((c) => (
@@ -156,7 +156,7 @@ export default async function ZielPage({ params, searchParams }: { params: Promi
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {!finished && (
           <details className="mt-3">

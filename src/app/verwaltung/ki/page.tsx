@@ -88,12 +88,12 @@ export default async function KiVerwaltungPage({ searchParams }: { searchParams:
       <section className="card">
         <h2 className="font-semibold mb-2">Verbrauch der letzten 30 Tage</h2>
         {o.usage.length === 0 ? <p className="empty">Keine KI-Aufträge im Zeitraum.</p> : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Aufgabe</th><th>Modell</th><th>Aufträge</th><th>davon erfolgreich</th><th>Tokens Eingabe</th><th>Tokens Ausgabe</th></tr></thead>
             <tbody>
               {o.usage.map((u, i) => <tr key={i}><td>{jobTypeLabel[u.type] ?? u.type}</td><td>{u.model}</td><td>{u.jobs}</td><td>{u.ok}</td><td>{u.tokensIn.toLocaleString("de-DE")}</td><td>{u.tokensOut.toLocaleString("de-DE")}</td></tr>)}
             </tbody>
-          </table>
+          </table></div>
         )}
         <p className="muted text-sm mt-2">Token-Zahlen stammen vom Anbieter; die Kosten je Modell stehen im Langdock-Vertrag. Auftragsprotokolle enthalten nie Rohtexte, nur Hash und Länge.</p>
       </section>
@@ -101,12 +101,12 @@ export default async function KiVerwaltungPage({ searchParams }: { searchParams:
       <section className="card">
         <h2 className="font-semibold mb-2">Letzte Aufträge</h2>
         {o.recent.length === 0 ? <p className="empty">Noch keine Aufträge.</p> : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Zeitpunkt</th><th>Aufgabe</th><th>Modell</th><th>Status</th><th>Elemente</th><th>Zurückgewiesen</th><th>Fehler</th></tr></thead>
             <tbody>
               {o.recent.map((j) => <tr key={j.id}><td>{fmtDateTime(j.startedAt)}</td><td>{jobTypeLabel[j.type] ?? j.type}</td><td>{j.model}</td><td><Status label={j.status} /></td><td>{j.itemCount ?? "–"}</td><td>{j.rejectedCount ?? "–"}</td><td className="muted">{j.error ?? ""}</td></tr>)}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
     </div>

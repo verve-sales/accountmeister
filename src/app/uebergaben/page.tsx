@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Segmented } from "@/components/ViewSwitch";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { DomainError } from "@/lib/errors";
@@ -27,13 +28,10 @@ export default async function UebergabenPage({ searchParams }: { searchParams: P
         <span className="muted text-sm">Beauftragt, verlängert, beendet: was in Moco zu tun ist. Quittiert wird mit dem Moco-Projekt.</span>
       </div>
       <Feedback params={sp} />
-      <nav className="flex gap-2 text-sm" aria-label="Filter">
-        <Link href="/uebergaben" className={`btn btn-small${filter === "offen" ? "" : " btn-secondary"}`}>offen</Link>
-        <Link href="/uebergaben?f=alle" className={`btn btn-small${filter === "alle" ? "" : " btn-secondary"}`}>alle</Link>
-      </nav>
+      <Segmented label="Ansicht" items={[{ href: "/uebergaben", label: "offen", active: filter === "offen" }, { href: "/uebergaben?f=alle", label: "alle", active: filter === "alle" }]} />
       <section className="card">
         {rows.length === 0 ? <p className="empty">{filter === "offen" ? "Keine offenen Übergaben." : "Noch keine Übergaben."}</p> : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Was zu tun ist</th><th>Person · Kunde</th><th>Bestellnummer</th><th>Vom</th><th>Stand</th></tr></thead>
             <tbody>
               {rows.map((h) => (
@@ -46,7 +44,7 @@ export default async function UebergabenPage({ searchParams }: { searchParams: P
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
       <p className="muted text-xs">Wer zum Backoffice gehört, legt die Verwaltung im Team „Backoffice“ fest. Sales Operations und Geschäftsführung sehen die Übergaben ebenfalls.</p>

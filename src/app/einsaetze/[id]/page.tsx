@@ -386,7 +386,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
       {/* Konditionen */}
       <section className="card" id="konditionen">
         <h2 className="font-semibold mb-2">Konditionen und Perioden</h2>
-        <table className="list text-sm">
+        <div className="table-wrap"><table className="list text-sm">
           <thead><tr><th>Art</th><th>Gültig</th><th>EK</th><th>VK</th><th>Umfang</th><th>Quelle</th><th>Bestätigt</th></tr></thead>
           <tbody>
             {d.periods.map((p) => (
@@ -408,7 +408,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
         {a.manage && !final && (
           <>
           <details className="mt-3" open={false} id="konditionen-aendern" style={{ border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .75rem" }}>
