@@ -16,21 +16,34 @@ const AMPEL_LABEL: Record<string, string> = { ROT: "dringend", GELB: "beobachten
 const eur = (n: number) => `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(n)} €`;
 const MOOD: Record<string, string> = { POSITIV: "positiv", MITTEL: "mittel", NEGATIV: "negativ" };
 
-function Kpi({ value, label, href, warn }: { value: ReactNode; label: string; href: string; warn?: boolean }) {
-  return <KpiTile value={value} label={label} href={href} tone={warn ? "danger" : null} />;
+function Kpi({ value, label, href, warn, trend }: { value: ReactNode; label: string; href: string; warn?: boolean; trend?: ReactNode }) {
+  return <KpiTile value={value} label={<>{label}{trend}</>} href={href} tone={warn ? "danger" : null} />;
+}
+
+/** e75: Veränderung gegenüber dem Vergleichsstand – Pfeil, Differenz, Farbe nach „gut“ oder „schlecht“. */
+function Trend({ now, base, since, goodUp, money }: { now: number | null; base: number | null | undefined; since: string; goodUp: boolean; money?: boolean }) {
+  if (now == null || base == null) return null;
+  const d = now - base;
+  const fmt = (n: number) => (money ? eur(Math.abs(n)) : String(Math.abs(n)));
+  if (d === 0) return <span className="kpi-trend" title={`unverändert seit ${since}`}>→ unverändert</span>;
+  const good = d > 0 === goodUp;
+  return <span className="kpi-trend" data-tone={good ? "ok" : "bad"} title={`am ${since}: ${money ? eur(base) : base}`}>{d > 0 ? "↑" : "↓"} {fmt(d)} seit {since}</span>;
 }
 
 /** Kopfzeile mit Kennzahlen – jede Zahl springt zu ihrem Block. */
 export function GfKpis({ o }: { o: GfOverview }) {
   const k = o.kpis;
+  const b = o.baseline?.values ?? {};
+  const since = o.baseline ? o.baseline.day.split("-").reverse().slice(0, 2).join(".") + "." : "";
+  const t = (key: keyof typeof k, goodUp: boolean, money = false, factor = 1) => (o.baseline ? <Trend now={k[key] == null ? null : (k[key] as number) * factor} base={b[key] == null ? null : b[key]! * factor} since={since} goodUp={goodUp} money={money} /> : null);
   return (
     <section className="kpi-row" aria-label="Kennzahlen">
-      <KpiTile value={k.persons} label={<>Köpfe im Einsatz<span className="muted"> · {k.heads} Einsätze</span><Sparkline values={o.headsTrend.map((p) => p.value)} futureFrom={13} /></>} href="#koepfe" />
-      <Kpi value={k.endingUndecided} label={`enden in ${EXPIRY_WINDOW_LABEL}, offen`} href="#laeuft-aus" warn={k.endingUndecided > 0} />
-      {k.revenueMonth != null && <Kpi value={eur(k.revenueMonth)} label={`Umsatz je Monat, laufend${k.expiringMonth ? ` · ${eur(k.expiringMonth)} davon ohne Entscheidung` : ""}`} href="#laeuft-aus" />}
-      <Kpi value={k.pipelinePerDay ? eur(k.pipelinePerDay * 20) : "–"} label={`Pipeline je Monat · ${k.pipelineCount} Chancen`} href="#pipeline" />
-      <Kpi value={<>{k.red} <span className="text-base font-medium">dringend</span><span className="muted text-sm font-normal"> · {k.yellow} beobachten</span></>} label="Kunden mit Handlungsbedarf" href="#kunden" warn={k.red > 0} />
-      <Kpi value={k.teamOverdue} label="überfällig im Team" href="#team" warn={k.teamOverdue > 0} />
+      <KpiTile value={k.persons} label={<>Köpfe im Einsatz<span className="muted"> · {k.heads} Einsätze</span>{t("persons", true)}<Sparkline values={o.headsTrend.map((p) => p.value)} futureFrom={13} /></>} href="#koepfe" />
+      <Kpi value={k.endingUndecided} label={`enden in ${EXPIRY_WINDOW_LABEL}, offen`} href="#laeuft-aus" warn={k.endingUndecided > 0} trend={t("endingUndecided", false)} />
+      {k.revenueMonth != null && <Kpi value={eur(k.revenueMonth)} label={`Umsatz je Monat, laufend${k.expiringMonth ? ` · ${eur(k.expiringMonth)} davon ohne Entscheidung` : ""}`} href="#laeuft-aus" trend={t("revenueMonth", true, true)} />}
+      <Kpi value={k.pipelinePerDay ? eur(k.pipelinePerDay * 20) : "–"} label={`Pipeline je Monat · ${k.pipelineCount} Chancen`} href="#pipeline" trend={t("pipelinePerDay", true, true, 20)} />
+      <Kpi value={<>{k.red} <span className="text-base font-medium">dringend</span><span className="muted text-sm font-normal"> · {k.yellow} beobachten</span></>} label="Kunden mit Handlungsbedarf" href="#kunden" warn={k.red > 0} trend={t("red", false)} />
+      <Kpi value={k.teamOverdue} label="überfällig im Team" href="#team" warn={k.teamOverdue > 0} trend={t("teamOverdue", false)} />
       {k.openSuggestions > 0 && <Kpi value={k.openSuggestions} label="offene KI-Vorschläge" href="/start#vorschlaege" />}
     </section>
   );

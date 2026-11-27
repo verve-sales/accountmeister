@@ -65,6 +65,8 @@ export function startNotificationWorker(): void {
           const { remindOpenHandovers } = await import("@/modules/conversion/handover");
           return { erinnert: await remindOpenHandovers() };
         });
+        // e75: Tagesstand der Kennzahlen für Trends
+        await runJob("kennzahlen-stand", async () => ({ staende: await (await import("@/modules/overview/trend")).snapshotAll() }));
         // e74: täglicher Abgleich Auftragseingang ↔ Moco und SharePoint (einmal am Tag ab 6 Uhr; schreibt nie zurück)
         await runJob("auftragseingang-abgleich", async () => {
           const { dailyCheckAll } = await import("@/modules/o2o/sync");

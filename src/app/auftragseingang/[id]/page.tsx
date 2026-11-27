@@ -42,7 +42,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
   const mocoState = (sys as { moco?: { mode?: string; results?: { key: string; title: string; state: string; detail: string }[]; projectUrl?: string | null } }).moco;
   const kind = p?.kind?.value ?? (c.orderNumber ? "BESTELLUNG" : "ANGEBOT");
   // e74: Sammelbestellung – offene Angebote zur Auswahl je Position
-  const positions = draft ? sug.positions ?? [] : [];
+  const positions = draft ? await (await import("@/modules/o2o/service")).ensurePositions(actor, c) : [];
   const openOffers = positions.length >= 2 ? (await db.query.orderCases.findMany({ where: eq(schema.orderCases.status, "ANGEBOT_VERSENDET") })).filter((o) => o.workspaceId === actor.workspaceId) : [];
   const offerLabel = (o: (typeof openOffers)[number]) => `${o.number} · ${[o.role, o.personName].filter(Boolean).join(" – ")}${o.dailyRate ? ` · ${Number(o.dailyRate)} €` : ""}${o.startDate ? ` · ${isoDe(o.startDate)}–${o.endDate ? isoDe(o.endDate) : "?"}` : ""}${o.days ? ` · ${o.days} T.` : ""}${o.offerNumber ? ` · ${o.offerNumber}` : ""}`;
   // e74: Hinweise aus dem täglichen Abgleich zu diesem Vorgang

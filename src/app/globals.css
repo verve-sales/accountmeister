@@ -539,3 +539,30 @@ input[type="date"].input { font-variant-numeric: tabular-nums; }
 .board-card > .chip { align-self: flex-start; }
 .board-col[data-empty] .board-head > span { white-space: normal; overflow-wrap: anywhere; }
 .board-col { min-width: 0; }
+
+/* e75: Menü „Ansicht“ an Tabellen – Spaltenwahl und gespeicherte Ansichten (src/components/TableTools.tsx) */
+.view-menu { position: relative; display: inline-block; }
+.view-menu > summary { list-style: none; cursor: pointer; }
+.view-menu > summary::-webkit-details-marker { display: none; }
+.view-pop { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; width: 17rem; max-height: 26rem; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 32px rgba(15, 23, 42, .18); padding: .5rem; font-size: .85rem; display: flex; flex-direction: column; gap: .1rem; }
+.view-head { font-size: .7rem; font-weight: 650; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: .4rem .35rem .2rem; }
+.view-col { display: flex; align-items: center; gap: .4rem; padding: .22rem .35rem; border-radius: 6px; cursor: pointer; }
+.view-col:hover, .view-use:hover { background: var(--surface-3); }
+.view-empty { padding: .2rem .35rem; color: var(--muted); font-size: .8rem; }
+.view-saved { display: flex; gap: .25rem; }
+.view-use { flex: 1; text-align: left; border: 0; background: transparent; padding: .28rem .35rem; border-radius: 6px; cursor: pointer; font: inherit; color: var(--accent-ink); }
+.view-del { border: 0; background: transparent; cursor: pointer; color: var(--muted); padding: 0 .4rem; border-radius: 6px; }
+.view-del:hover { color: var(--danger); background: var(--surface-3); }
+.view-save { display: flex; gap: .3rem; margin-top: .35rem; }
+.view-save input { flex: 1; min-width: 0; border: 1px solid var(--border-strong); border-radius: 7px; padding: .28rem .5rem; font: inherit; font-size: .82rem; }
+.view-reset { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: .78rem; text-align: left; padding: .4rem .35rem .1rem; cursor: pointer; }
+.view-reset:hover { color: var(--text); }
+.view-pop input[type="checkbox"] { flex: none; padding: 0; width: auto; }
+.table-export { margin-left: auto; }
+.table-export + .view-menu { margin-left: 0; }
+.table-filter > .view-menu:first-child, .table-filter > .table-filter-count + .view-menu { margin-left: auto; }
+
+/* e75: Trend an Kennzahlen */
+.kpi-trend { display: block; margin-top: .25rem; font-size: .74rem; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kpi-trend[data-tone="ok"] { color: #1f6b3a; }
+.kpi-trend[data-tone="bad"] { color: var(--danger); }

@@ -604,6 +604,21 @@ export async function confirmCase(actor: Actor, caseId: string, raw: unknown): P
 
 type Common = Omit<Partial<typeof schema.orderCases.$inferInsert>, "id">;
 
+/** e75: Entwürfe, die vor der Positionserkennung gelesen wurden, bekommen die Positionen beim Öffnen nachgetragen. */
+export async function ensurePositions(actor: Actor, c: CaseRow): Promise<PositionMatch[]> {
+  const sug = (c.parsed ?? {}) as Partial<Suggestion>;
+  if (c.status !== "ENTWURF") return [];
+  if (sug.positions) return sug.positions;
+  if (!sug.sourceId) return [];
+  const src = await db.query.sources.findFirst({ where: eq(schema.sources.id, sug.sourceId), columns: { body: true } });
+  const { detectPositions, detectOrderNumber } = await import("./parse");
+  const pos = src?.body ? detectPositions(src.body) : [];
+  const positions = pos.length >= 2 ? await matchPositions(actor, c.partnerAccountId, pos) : [];
+  const orderNumber = c.orderNumber ?? (pos.length >= 2 && src?.body ? detectOrderNumber(src.body)?.value ?? null : null);
+  await db.update(schema.orderCases).set({ parsed: { ...sug, positions } as unknown as Record<string, unknown>, orderNumber }).where(eq(schema.orderCases.id, c.id));
+  return positions;
+}
+
 /**
  * e74: Sammelbestellung bestätigen – je Position ein eigener Vorgang (dieselbe Bestellnummer, Position 1…n), jeweils mit
  * dem gewählten Angebot zusammengeführt. Erst wird alles geprüft (Zuordnung eindeutig, Abweichungen, schon erfasst),
@@ -780,6 +795,8 @@ async function confirmOrder(actor: Actor, draft: CaseRow, common: Common, i: Con
     .where(eq(schema.engagements.id, r.engagement.id))
     .returning();
   const caseId = base?.id ?? draft.id;
+  // e75: der Entwurf trägt dieselbe Bestellnummer wie gleich der Angebotsvorgang – vorher leeren (eindeutiger Schlüssel)
+  if (base) await db.update(schema.orderCases).set({ orderNumber: null }).where(eq(schema.orderCases.id, draft.id));
   let [row] = await db.update(schema.orderCases).set({ ...merged, opportunityId, orderId: order!.id, engagementId: e!.id, status: "BEAUFTRAGT", parsed: draft.parsed, updatedAt: new Date() }).where(eq(schema.orderCases.id, caseId)).returning();
   if (base) {
     // Unterlagen des Entwurfs gehören jetzt zum Angebotsvorgang

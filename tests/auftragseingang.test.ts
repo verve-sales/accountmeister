@@ -533,3 +533,20 @@ describe("e74 Angebotsnotiz, SharePoint-Ablage und täglicher Abgleich", () => {
     expect(FixtureMocoClient.written.length).toBe(writes);
   });
 });
+
+describe("e75 Bestellung zum Angebot mit gleicher Bestellnummer am Entwurf", () => {
+  it("Entwurf mit erkanntem Kunden und Bestellnummer lässt sich mit dem Angebot zusammenführen", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const od = await uploadForCase(ops, file(`a-${uniq()}.txt`, `Angebot Nr. ZA-${uniq()}\nRolle: Scrum Master`));
+    const offer = await confirmCase(ops, od.id, { kind: "ANGEBOT", channel: "DIREKT", partnerAccountId: s.accountId, role: "Scrum Master", personNewName: "Zora Zusammen (fiktiv)", startDate: "2027-01-01", endDate: "2027-06-30", dailyRate: "1180" });
+    const po = `ZB-${uniq()}`;
+    const d = await uploadForCase(ops, file(`b-${uniq()}.txt`, `Bestellung Nr. ${po}\nZeitraum: 01.01.2027 bis 30.06.2027\nTagessatz: 1180 €`), { forCaseId: offer.id });
+    expect(d.partnerAccountId).toBe(s.accountId);
+    expect(d.orderNumber).toBe(po);
+    const done = await confirmCase(ops, d.id, { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, startDate: "2027-01-01", endDate: "2027-06-30", dailyRate: "1180", orderNumber: po, matchCaseId: offer.id });
+    expect(done.id).toBe(offer.id);
+    expect(done.status).toBe("BEAUFTRAGT");
+    expect(done.orderNumber).toBe(po);
+  });
+});

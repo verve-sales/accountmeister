@@ -26,6 +26,8 @@ export type GfCustomer = { accountId: string; name: string; ampel: "ROT" | "GELB
 export type GfPipeline = { opportunityId: string; title: string; accountId: string; accountName: string; status: string; daysInStage: number; owner: string; heads: number; vkPerDay: number | null; next: string | null; nextDue: string | null; overdue: boolean; stageLag: boolean };
 export type GfTeam = { userId: string; name: string; open: number; overdue: number; oldestOverdue: string | null; lastActive: string | null };
 export type GfOverview = {
+  /** e75: Vergleichsstand für Trends (etwa eine Woche alt, sonst der älteste vorhandene) */
+  baseline?: { day: string; values: Record<string, number | null> } | null;
   windowDays: number;
   /** e65: Köpfe je Woche – 12 Wochen zurück (aus Start/Ende der Einsätze) und 12 Wochen voraus (geplante Enden) */
   headsTrend: { date: string; value: number; future: boolean }[];
@@ -182,7 +184,7 @@ export async function buildGfOverview(actor: Actor, today = todayIso()): Promise
     return { date, value: new Set(active.map((e) => e.freelancerId ?? e.internalUserId ?? e.id)).size, future: k > 12 };
   });
 
-  return {
+  const result: GfOverview = {
     windowDays: EXPIRY_WINDOW_DAYS,
     headsTrend,
     kpis: {
@@ -203,6 +205,13 @@ export async function buildGfOverview(actor: Actor, today = todayIso()): Promise
     pipeline,
     team,
   };
+  // e75: Tagesstand merken und mit dem Stand vor etwa einer Woche vergleichen (Trend an den Kacheln)
+  if (today === todayIso()) {
+    const { recordSnapshot, baseline } = await import("./trend");
+    await recordSnapshot(ws, today, result.kpis).catch(() => null);
+    result.baseline = await baseline(ws, today).catch(() => null);
+  }
+  return result;
 }
 
 /**

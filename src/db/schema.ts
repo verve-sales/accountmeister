@@ -2487,6 +2487,19 @@ export const mocoEvents = pgTable("moco_events", {
   error: text("error"),
 });
 
+/** e75: Tagesstände der GF-Kennzahlen für Trends (ein Stand je Tag; der letzte des Tages gilt). */
+export const kpiSnapshots = pgTable(
+  "kpi_snapshots",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    day: date("day").notNull(),
+    values: jsonb("values").$type<Record<string, number | null>>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("kpi_snapshots_day_uq").on(t.workspaceId, t.day)],
+);
+
 /** Hintergrundläufe (Heartbeat, Ergebnis, Fehler) – sichtbar in der Verwaltung. */
 export const jobRuns = pgTable(
   "job_runs",
@@ -2693,7 +2706,7 @@ export const orderCases = pgTable(
   (t) => [
     uniqueIndex("order_cases_number_uq").on(t.workspaceId, t.number),
     // R7: dieselbe Bestellung desselben Vertragspartners nur einmal
-    uniqueIndex("order_cases_order_uq").on(t.workspaceId, t.partnerAccountId, t.orderNumber, t.orderPosition).where(sql`order_number IS NOT NULL AND status <> 'STORNIERT'`),
+    uniqueIndex("order_cases_order_uq").on(t.workspaceId, t.partnerAccountId, t.orderNumber, t.orderPosition).where(sql`order_number IS NOT NULL AND status NOT IN ('STORNIERT', 'ENTWURF', 'ABGESAGT')`),
     index("order_cases_status_idx").on(t.workspaceId, t.status),
   ],
 );

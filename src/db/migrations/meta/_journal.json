@@ -407,6 +407,20 @@
       "when": 1795802329888,
       "tag": "0057_sammelbestellung",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1795803417242,
+      "tag": "0058_kpi_trend",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1795803527057,
+      "tag": "0059_bestellnummer_entwurf",
+      "breakpoints": true
     }
   ]
 }
