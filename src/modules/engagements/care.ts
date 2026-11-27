@@ -1,3 +1,4 @@
+import { deadlines } from "@/modules/settings/deadlines";
 import { isoDe } from "@/lib/labels";
 import { and, asc, desc, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { z } from "zod";
@@ -23,6 +24,7 @@ import { getMocoClient, mocoEnabled, type MocoClient } from "@/modules/moco/clie
  *   separat anlegbar, keine automatische Pflicht.
  */
 
+/** Standardabstand; der geltende Wert kommt aus den einstellbaren Fristen (e72). */
 export const CATCHUP_DAYS = 42;
 export const checkinStatusLabel: Record<string, string> = { FAELLIG: "fällig", ANGEFRAGT: "angefragt", GEPLANT: "geplant", ERLEDIGT: "erledigt", VERSCHOBEN: "verschoben", ABGESAGT: "entfallen" };
 export const renewalStatusLabel: Record<string, string> = { ZU_KLAEREN: "zu klären", MOEGLICH: "möglich (noch zu früh)", IN_ABSTIMMUNG: "in Abstimmung", ANGEBOTEN: "angeboten", BESTAETIGT: "bestätigt", ABGELEHNT: "abgelehnt", ERLEDIGT: "erledigt" };
@@ -198,7 +200,7 @@ export async function actOnCheckin(actor: Actor, checkinId: string, raw: unknown
       patch.openPoints = i.openPoints || null;
       patch.nextStep = i.nextStep || null;
       patch.salesHint = i.salesHint || null;
-      next = plusDaysIso(i.heldAt.slice(0, 10), CATCHUP_DAYS);
+      next = plusDaysIso(i.heldAt.slice(0, 10), deadlines().checkinDays);
       break;
     }
     case "VERSCHIEBEN":
@@ -256,7 +258,7 @@ export async function ensureCatchups(workspaceId?: string): Promise<number> {
       const last = await db.query.checkins.findFirst({ where: and(eq(schema.checkins.engagementId, e.id), eq(schema.checkins.side, side), eq(schema.checkins.status, "ERLEDIGT")), orderBy: desc(schema.checkins.heldAt) });
       const base = last?.heldAt ? last.heldAt.toISOString().slice(0, 10) : e.actualStart ?? e.plannedStart ?? todayIso();
       // Nie rückwirkend terminieren: liegt der rechnerische Termin in der Vergangenheit, kommt der erste Check-in in einer Woche
-      const computed = plusDaysIso(base, CATCHUP_DAYS);
+      const computed = plusDaysIso(base, deadlines().checkinDays);
       const due = computed < todayIso() ? plusDaysIso(todayIso(), 7) : computed;
       const owner = await careOwner(e.id, side, e.bdUserId);
       const ins = await db.insert(schema.checkins).values({ workspaceId: e.workspaceId, engagementId: e.id, side, ownerUserId: owner, dueDate: due, ruleKey: `catchup:${e.id}:${side === "KUNDE" ? "" : "FREELANCER:"}${due}`, createdBy: e.bdUserId }).onConflictDoNothing().returning({ id: schema.checkins.id });

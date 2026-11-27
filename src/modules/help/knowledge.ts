@@ -187,7 +187,7 @@ Er verschickt nichts und recherchiert nicht im Internet. Im Interview-Modus füh
   {
     id: "verlaengerung-stufen",
     title: "Verlängerung: möglich, in Abstimmung, angeboten",
-    where: "Einsatz → „Verlängerung“; Assignmentmanager → Zeitleiste",
+    where: "Einsatz → „Verlängerung“; Einsätze → Zeitleiste",
     keywords: ["verlaengerung", "verlaengern", "moeglich", "zu frueh", "wiedervorlage", "jetzt umsetzen", "angebot", "zeitleiste"],
     body: `Steht eine Verlängerung im Raum, ist es für ein Angebot aber noch zu früh, klickst du am Einsatz „Möglich – noch zu früh“ (Wunschende und Wiedervorlage optional). Das wird nur festgehalten: Sales Operations und Backoffice bekommen noch nichts, in der Zeitleiste erscheint die Verlängerung gepunktet hinter dem Einsatz. Zur Wiedervorlage (spätestens vier Wochen vor Ende) erinnert der Accountmeister den BD. Mit „Jetzt umsetzen“ (bzw. „Kunde will verlängern“) wird sie „in Abstimmung“ – dann übernehmen Sales Operations und Backoffice (Angebot, Bestellung, Vertrag). In der Zeitleiste: gepunktet = möglich, gestrichelt = in Abstimmung, gefüllt = Angebot verschickt. Eine Verlängerung ist nie eine Chance. Im Assistenten genügt z. B. „Telekom überlegt, Patriot zu verlängern, Bescheid bis 01.12.“.`,
   },

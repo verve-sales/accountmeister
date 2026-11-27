@@ -919,6 +919,14 @@ export async function setUserStatusAction(fd: FormData) {
   }, "Zugangsstatus geändert.");
 }
 
+export async function saveDeadlinesAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/verwaltung#fristen", async (actor) => {
+    const { saveDeadlines } = await import("@/modules/settings/deadlines");
+    await saveDeadlines(actor, data);
+  }, "Fristen gespeichert.");
+}
+
 export async function renameUserAction(fd: FormData) {
   const data = formToObject(fd);
   return run("/verwaltung", async (actor) => {
@@ -2172,7 +2180,7 @@ export async function captureAssignmentAction(fd: FormData) {
     for (const [k, v] of fd.entries()) if (typeof v === "string") raw[k] = v;
     const e = await captureAssignment(actor, raw);
     return `/einsaetze/${e.id}#vertraege`;
-  }, "Assignment erfasst – Vertrag oder Bestellung jetzt hier unter „Verträge“ hinterlegen.");
+  }, "Einsatz erfasst – Vertrag oder Bestellung jetzt hier unter „Verträge“ hinterlegen.");
 }
 
 export async function watchFolderAction(fd: FormData) {

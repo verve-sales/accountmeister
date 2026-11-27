@@ -19,6 +19,7 @@ function berlinHourAndDate(now = new Date()) {
 
 /** Lauf protokollieren (Heartbeat, Ergebnis, Fehler) – sichtbar unter Verwaltung. Fehler brechen den Takt nicht ab. */
 export async function runJob(name: string, fn: () => Promise<Record<string, number>>): Promise<void> {
+  await (await import("@/modules/settings/deadlines")).loadDeadlines(true).catch(() => null);
   const [row] = await db.insert(schema.jobRuns).values({ name }).returning({ id: schema.jobRuns.id });
   try {
     const counts = await fn();

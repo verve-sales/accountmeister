@@ -13,7 +13,8 @@ import { fmtDateTime, roleLabel } from "@/lib/labels";
 import { getConfig } from "@/lib/config";
 import { SESSION_IDLE_SECONDS, SESSION_MAX_AGE_SECONDS } from "@/modules/identity/session";
 import { LIMITS } from "@/lib/ratelimit";
-import { mocoProbeRunAction, assignRoleAction, createUserAccessAction, renameUserAction, revokeRoleAction, setUserStatusAction } from "../actions";
+import { saveDeadlinesAction, mocoProbeRunAction, assignRoleAction, createUserAccessAction, renameUserAction, revokeRoleAction, setUserStatusAction } from "../actions";
+import { DEADLINE_FIELDS, loadDeadlines } from "@/modules/settings/deadlines";
 import { RoleAssignFields } from "@/components/RoleAssignFields";
 
 export default async function VerwaltungPage({ searchParams }: { searchParams: SearchParams }) {
@@ -34,6 +35,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
   for (const r of jobRuns) if (r.ok && r.finishedAt && !lastOk.has(r.name)) lastOk.set(r.name, r.finishedAt);
   const cfg = getConfig();
 
+  const dl = await loadDeadlines(true);
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Verwaltung (Betriebsverwaltung)</h1>
@@ -47,6 +49,20 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
         </section>
       )}
 
+      <section className="card" id="fristen">
+        <h2 className="font-semibold mb-1">Fristen</h2>
+        <p className="muted text-sm mb-3">Die vier Fristen, die sich einstellen lassen. Alles andere ist bewusst fest.</p>
+        <form action={saveDeadlinesAction} className="grid sm:grid-cols-2 gap-3">
+          {DEADLINE_FIELDS.map((f) => (
+            <div key={f.key}>
+              <label className="label" htmlFor={`dl-${f.key}`}>{f.label}</label>
+              <input id={`dl-${f.key}`} name={f.key} type="number" className="input" min={f.min} max={f.max} step={1} required defaultValue={dl[f.key]} style={{ maxWidth: 120 }} />
+              <p className="muted text-xs mt-1">{f.help} Erlaubt: {f.min}–{f.max}.</p>
+            </div>
+          ))}
+          <div className="sm:col-span-2"><button className="btn" type="submit">Fristen speichern</button></div>
+        </form>
+      </section>
       <section className="card text-sm">
         <h2 className="font-semibold mb-1">Einstellungen</h2>
         <p className="flex flex-wrap gap-x-4 gap-y-1">

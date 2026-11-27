@@ -305,7 +305,9 @@ export async function matchOpenCase(actor: Actor, k: { offerNumber: string | nul
     if (m.length === 1) return { case: m[0]!, reason: `Referenz ${k.brokerRef}` };
   }
   if (k.freelancerId || k.internalUserId) {
-    const m = open.filter((c) => (k.freelancerId ? c.freelancerId === k.freelancerId : c.internalUserId === k.internalUserId) && (!k.partnerAccountId || c.partnerAccountId === k.partnerAccountId));
+    const m = open.filter((c) => (k.freelancerId ? c.freelancerId === k.freelancerId : c.internalUserId === k.internalUserId) && (!k.partnerAccountId || c.partnerAccountId === k.partnerAccountId))
+      // e72: trägt das Dokument eine andere Angebotsnummer, ist es ein weiteres Angebot – keine neue Fassung des vorhandenen
+      .filter((c) => !(k.offerNumber && c.offerNumber && c.offerNumber.toLowerCase() !== k.offerNumber.toLowerCase()));
     if (m.length === 1) return { case: m[0]!, reason: "dieselbe Person beim selben Vertragspartner" };
   }
   return null;
@@ -825,11 +827,12 @@ export async function reconcile(actor: Actor) {
   const engs = all ? await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, actor.workspaceId), inArray(schema.engagements.status, ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET"])), columns: { id: true, title: true, accountId: true, mocoProjectId: true } }) : [];
   const accs = engs.length ? await db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(engs.map((e) => e.accountId))]), columns: { id: true, name: true } }) : [];
   const an = new Map(accs.map((a) => [a.id, a.name]));
+  const dl = await (await import("@/modules/settings/deadlines")).loadDeadlines();
   const now = Date.now();
   const age = (c: CaseRow) => Math.floor((now - c.updatedAt.getTime()) / 86400000);
   return {
     withoutCase: engs.filter((e) => !withCase.has(e.id)).map((e) => ({ id: e.id, title: e.title, accountName: an.get(e.accountId) ?? "?" })),
     notInMoco: visible.filter((c) => c.status === "BEAUFTRAGT" && !c.isRenewal && ((c.systems as { moco?: { mode?: string } } | null)?.moco?.mode ?? "") !== "GESCHRIEBEN").map((c) => ({ id: c.id, number: c.number, label: `${c.role ?? ""}${c.personName ? ` – ${c.personName}` : ""}` })),
-    followUp: visible.filter((c) => c.status === "ANGEBOT_VERSENDET" && age(c) >= 10).map((c) => ({ id: c.id, number: c.number, label: `${c.role ?? ""}${c.personName ? ` – ${c.personName}` : ""}`, days: age(c), expired: age(c) >= 60 })),
+    followUp: visible.filter((c) => c.status === "ANGEBOT_VERSENDET" && age(c) >= dl.offerFollowUpDays).map((c) => ({ id: c.id, number: c.number, label: `${c.role ?? ""}${c.personName ? ` – ${c.personName}` : ""}`, days: age(c), expired: age(c) >= dl.offerExpiryDays })),
   };
 }

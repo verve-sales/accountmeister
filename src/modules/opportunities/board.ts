@@ -12,7 +12,7 @@ export type BoardStage = (typeof BOARD_STAGES)[number];
 export type BoardCard = { id: string; version: number; title: string; status: BoardStage; accountId: string; accountName: string; projectName: string; ownerName: string; heads: number; vkPerDay: number | null; daysInStage: number; stageLag: boolean };
 
 export async function boardData(actor: Actor): Promise<BoardCard[]> {
-  const accounts = (await listVisibleAccounts(actor)).filter((a) => a.status !== "ARCHIVED");
+  const accounts = (await listVisibleAccounts(actor)).filter((a) => a.status === "ACTIVE");
   if (!accounts.length) return [];
   const since = new Date(Date.now() - 60 * 86400000);
   const opps = await db.query.opportunities.findMany({

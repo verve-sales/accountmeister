@@ -7,6 +7,7 @@ import { hasRole, type Actor } from "@/modules/identity/actor";
 import { getMocoClient, mocoEnabled, mocoProjectUrl, type MocoFullClient } from "@/modules/moco/client";
 import { todayIso } from "@/modules/work/calendar";
 import { hourlyRate } from "./plan";
+import { deadlines } from "@/modules/settings/deadlines";
 import { requireCase } from "./service";
 
 /**
@@ -237,9 +238,9 @@ export async function writeOfferLeadToMoco(client: MocoFullClient, input: { comp
     const want = getConfig().MOCO_OFFER_PHASE.toLowerCase();
     const cat = cats.find((c) => c.name.toLowerCase() === want) ?? cats.find((c) => c.name.toLowerCase().includes(want.replace(/^\d+\s*%\s*-\s*/, ""))) ?? [...cats].sort((a, b) => b.probability - a.probability)[0];
     if (!cat) throw new Error("In Moco ist keine Lead-Phase eingerichtet.");
-    const d = await client.createDeal({ name: input.leadName, currency: "EUR", money: input.money, reminder_date: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10), user_id: input.leaderMocoUserId, deal_category_id: cat.id, company_id: comp.id, info: input.note, status: "pending", tags: input.tags });
+    const d = await client.createDeal({ name: input.leadName, currency: "EUR", money: input.money, reminder_date: new Date(Date.now() + deadlines().offerFollowUpDays * 86400000).toISOString().slice(0, 10), user_id: input.leaderMocoUserId, deal_category_id: cat.id, company_id: comp.id, info: input.note, status: "pending", tags: input.tags });
     ids.dealId = d.id;
-    steps.push({ key: "deal", title: "Lead", state: "ERLEDIGT", detail: `angelegt in Phase „${cat.name}“, Wiedervorlage in 10 Tagen` });
+    steps.push({ key: "deal", title: "Lead", state: "ERLEDIGT", detail: `angelegt in Phase „${cat.name}“, Wiedervorlage in ${deadlines().offerFollowUpDays} Tagen` });
     return { ids, steps, done: true };
   } catch (e) {
     steps.push({ key: "deal", title: "Lead", state: "FEHLER", detail: errText(e) });

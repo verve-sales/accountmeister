@@ -33,7 +33,7 @@ export default async function ChancenPage({ searchParams }: { searchParams: Prom
       </div>
     );
   }
-  const r = await drilldown(actor, sp);
+  const r = await drilldown(actor, sp, new Date(), { boardSet: !filtered });
   return (
     <div className="space-y-5">
       <nav className="crumbs" aria-label="Pfad"><Link href="/chancen">Pipeline</Link><span>Chancen</span></nav>
@@ -64,7 +64,7 @@ export default async function ChancenPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table>
         )}
-        <p className="muted text-xs mt-2">{r.mode === "kunden" ? `${r.accounts.length} Kunden` : `${r.chances.length} Chancen`} · dieselben Regeln wie die Zählung, nur Kunden, die du sehen darfst.</p>
+        <p className="muted text-xs mt-2">{r.mode === "kunden" ? `${r.accounts.length} Kunden` : `${r.chances.length} Chancen${!filtered ? " (offen und in den letzten 60 Tagen beauftragt – wie im Board)" : ""}`} · dieselben Regeln wie die Zählung, nur Kunden, die du sehen darfst.</p>
       </section>
     </div>
   );

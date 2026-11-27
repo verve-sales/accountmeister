@@ -253,7 +253,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
           );
         })}
         </details>
-        <p className="muted text-xs mt-2">Verlängerungsregel: 3 Monate vor Ende bekommt der BD einen Ping („Verlängerung ansprechen“). Am Auslösetag (Verlängerungsfrist − 14 Tage, sonst Einsatzende − 8 Wochen) startet automatisch „Verlängerung vor Einsatzende“ an der Chance; der erste Schritt kommt als Vorschlag zum BD. Vier Wochen vor Ende ohne Fortschritt erscheint der Einsatz bei Principal und CEO als Eskalation.</p>
+        <p className="muted text-xs mt-2">Verlängerungsregel: zur eingestellten Frist (Standard 3 Monate) vor Ende bekommt der BD einen Ping („Verlängerung ansprechen“). Am Auslösetag (Verlängerungsfrist − 14 Tage, sonst Einsatzende − 8 Wochen) startet automatisch „Verlängerung vor Einsatzende“ an der Chance; der erste Schritt kommt als Vorschlag zum BD. Vier Wochen vor Ende ohne Fortschritt erscheint der Einsatz bei Principal und CEO als Eskalation.</p>
         {canDecide && may && q?.key !== "ENGAGEMENT_MISSING" && <p className="text-sm mt-2"><a href="#antworten">Weiteren laufenden Einsatz nachtragen</a></p>}
       </section>
 

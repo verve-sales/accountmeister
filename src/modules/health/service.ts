@@ -1,4 +1,5 @@
 import { openSosByAccount } from "@/modules/sos/service";
+import { deadlines } from "@/modules/settings/deadlines";
 import { procurementLabel } from "@/modules/agenda/service";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -97,7 +98,7 @@ const isStale = (at: string | undefined) => !at || Date.now() - new Date(at).get
 /** Fahrplan Verlängerung, Schritt 1: Ping an den BD 3 Monate vor Ende (bzw. 30 Tage vor der Verlängerungsfrist). */
 export function renewalPingDate(o: { plannedEnd: string | null; renewalDeadline: string | null }): string | null {
   const cands: number[] = [];
-  if (o.plannedEnd) cands.push(new Date(o.plannedEnd).getTime() - 90 * DAY);
+  if (o.plannedEnd) cands.push(new Date(o.plannedEnd).getTime() - deadlines().renewalLeadDays * DAY);
   if (o.renewalDeadline) cands.push(new Date(o.renewalDeadline).getTime() - 30 * DAY);
   return cands.length ? new Date(Math.min(...cands)).toISOString().slice(0, 10) : null;
 }

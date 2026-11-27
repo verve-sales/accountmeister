@@ -69,7 +69,7 @@ const de = (iso: string | null) => (iso ? iso.split("-").reverse().join(".") : "
 const dayDiff = (a: string, b: string) => Math.round((new Date(a).getTime() - new Date(b).getTime()) / 86400000);
 
 export async function asgOverview(actor: Actor, opts: { includeEndedDays?: number } = {}): Promise<AsgOverview> {
-  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Den Assignmentmanager nutzen Sales Operations, Backoffice und Geschäftsführung.");
+  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Zeitleiste und Konditionen nutzen Sales Operations, Backoffice und Geschäftsführung.");
   const ws = actor.workspaceId;
   const today = todayIso();
   const endedSince = plusDaysIso(today, -(opts.includeEndedDays ?? 60));
@@ -191,7 +191,7 @@ export type AsgCheckin = { id: string; version: number; engagementId: string; si
 
 /** Alle offenen Check-ins (Freelancer-Seite zuerst) – Sales Operations führt die Freelancer-Check-ins. */
 export async function asgCheckins(actor: Actor): Promise<AsgCheckin[]> {
-  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Den Assignmentmanager nutzen Sales Operations, Backoffice und Geschäftsführung.");
+  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Zeitleiste und Konditionen nutzen Sales Operations, Backoffice und Geschäftsführung.");
   const today = todayIso();
   const rows = await db.query.checkins.findMany({ where: and(eq(schema.checkins.workspaceId, actor.workspaceId), inArray(schema.checkins.status, ["FAELLIG", "ANGEFRAGT", "GEPLANT"])), orderBy: asc(schema.checkins.dueDate) });
   if (!rows.length) return [];
@@ -228,7 +228,7 @@ const CAND_PHASE: Record<string, AsgOppPhase> = { FREIGEGEBEN: "BESTAETIGT", VOR
 const CAND_OPEN = ["IDENTIFIZIERT", "KONTAKT", "QUALIFIZIERT", "VORGESCHLAGEN", "FREIGEGEBEN", "VORGESTELLT", "INTERVIEW", "AUSGEWAEHLT"];
 
 export type AsgOpportunity = {
-  id: string; // Kandidatur
+  id: string; // Kandidatur bzw. case:<Vorgang>
   opportunityId: string;
   positionId: string;
   personId: string;
@@ -243,10 +243,13 @@ export type AsgOpportunity = {
   estimated: boolean;
   /** Überschneidung mit einem Einsatz oder einer anderen Chance derselben Person */
   conflict: string | null;
+  /** e72: Angebot aus „Angebot & Bestellung“ – eigener Link und Hinweis (z. B. parallel zum laufenden Einsatz) */
+  href?: string;
+  note?: string | null;
 };
 
 export async function asgOpportunities(actor: Actor, engagements: AsgEngagement[]): Promise<{ items: AsgOpportunity[]; withoutPerson: number }> {
-  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Den Assignmentmanager nutzen Sales Operations, Backoffice und Geschäftsführung.");
+  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Zeitleiste und Konditionen nutzen Sales Operations, Backoffice und Geschäftsführung.");
   const ws = actor.workspaceId;
   const today = todayIso();
   const opps = await db.query.opportunities.findMany({ where: and(eq(schema.opportunities.workspaceId, ws), inArray(schema.opportunities.status, Object.keys(OPP_PHASE) as never[])), columns: { id: true, title: true, status: true, accountId: true } });
@@ -304,6 +307,57 @@ export async function asgOpportunities(actor: Actor, engagements: AsgEngagement[
   return { items: items.sort((x, y) => x.start.localeCompare(y.start)), withoutPerson };
 }
 
+/**
+ * e72: Versendete Angebote aus „Angebot & Bestellung“ auf der Zeitleiste – je Vorgang ein Balken in der Phase „Angebot“,
+ * auch ohne Position und Kandidatur. Mehrere Angebote derselben Person stehen untereinander. Verlängerungsangebote
+ * erscheinen am laufenden Einsatz und werden hier nicht doppelt gezeigt.
+ */
+export async function asgOffers(actor: Actor, engagements: AsgEngagement[]): Promise<AsgOpportunity[]> {
+  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Zeitleiste und Konditionen nutzen Sales Operations, Backoffice und Geschäftsführung.");
+  const today = todayIso();
+  const cases = await db.query.orderCases.findMany({ where: and(eq(schema.orderCases.workspaceId, actor.workspaceId), eq(schema.orderCases.status, "ANGEBOT_VERSENDET"), eq(schema.orderCases.isRenewal, false)) });
+  const open = cases.filter((c) => c.opportunityId && (c.freelancerId || c.internalUserId || c.personName));
+  if (!open.length) return [];
+  const accIds = [...new Set(open.flatMap((c) => [c.endCustomerAccountId, c.partnerAccountId]).filter((x): x is string => !!x))];
+  const [accounts, fls, users] = await Promise.all([
+    accIds.length ? db.query.accounts.findMany({ where: inArray(schema.accounts.id, accIds), columns: { id: true, name: true } }) : [],
+    db.query.freelancers.findMany({ where: inArray(schema.freelancers.id, [...new Set(open.map((c) => c.freelancerId).filter((x): x is string => !!x)), "-"]), columns: { id: true, displayName: true } }),
+    db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId), columns: { id: true, displayName: true } }),
+  ]);
+  const an = new Map(accounts.map((a) => [a.id, a.name]));
+  const fn = new Map(fls.map((f) => [f.id, f.displayName]));
+  const un = new Map(users.map((u) => [u.id, u.displayName]));
+  const overlap = (s1: string, e1: string, s2: string, e2: string) => s1 <= e2 && s2 <= e1;
+  return open
+    .map((c) => {
+      const start = c.startDate ?? today;
+      const end = c.endDate && c.endDate > start ? c.endDate : plusDaysIso(start, 90);
+      const personId = c.freelancerId ? `fl:${c.freelancerId}` : c.internalUserId ? `u:${c.internalUserId}` : `n:${c.personName}`;
+      const accountName = an.get(c.endCustomerAccountId ?? "") ?? c.endCustomerHint ?? an.get(c.partnerAccountId ?? "") ?? "?";
+      const eng = engagements.find((e) => e.personId === personId && e.state !== "BEENDET" && overlap(start, end, e.start ?? "0000-01-01", e.renewalTo && e.renewalTo > (e.end ?? "") ? e.renewalTo : e.end ?? "9999-12-31"));
+      return {
+        id: `case:${c.id}`,
+        opportunityId: c.opportunityId!,
+        positionId: "",
+        personId,
+        person: (c.freelancerId ? fn.get(c.freelancerId) : c.internalUserId ? un.get(c.internalUserId) : null) ?? c.personName ?? "?",
+        kind: c.internalUserId ? ("INTERN" as const) : ("FREELANCER" as const),
+        accountName,
+        title: `${c.role ?? "Angebot"} · Angebot ${c.offerNumber ?? c.number}`,
+        phase: "ANGEBOT" as const,
+        start,
+        end,
+        estimated: !c.startDate || !c.endDate,
+        // parallel zum laufenden Einsatz ist bei Angeboten üblich (zweites Kontingent) – Hinweis, kein Alarm
+        conflict: null,
+        note: eng ? `parallel zum Einsatz bei ${eng.accountName}` : null,
+        href: `/auftragseingang/${c.id}`,
+      };
+    })
+    .filter((x) => x.end >= today)
+    .sort((x, y) => x.start.localeCompare(y.start));
+}
+
 // ---------------------------------------------------------------------------
 // e57: Vermittler-Anfragen (Hays, Gulp …) – bearbeiten Sales Operations und Geschäftsführung
 // ---------------------------------------------------------------------------
@@ -314,7 +368,7 @@ const REQ_OPEN = ["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT", "PROFIL_ANGEBOT_VO
 export type IntermediaryRequest = { opportunityId: string; title: string; intermediary: string; endCustomer: string | null; person: string | null; phase: AsgOppPhase; rate: string | null; start: string | null; ageDays: number; expiresInDays: number | null };
 
 export async function asgIntermediaryRequests(actor: Actor): Promise<IntermediaryRequest[]> {
-  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Den Assignmentmanager nutzen Sales Operations, Backoffice und Geschäftsführung.");
+  if (!(await canUseAssignments(actor))) throw new ForbiddenError("Zeitleiste und Konditionen nutzen Sales Operations, Backoffice und Geschäftsführung.");
   const ws = actor.workspaceId;
   const accounts = await db.query.accounts.findMany({ where: and(eq(schema.accounts.workspaceId, ws), eq(schema.accounts.accountKind, "VERMITTLER")), columns: { id: true, name: true } });
   if (!accounts.length) return [];

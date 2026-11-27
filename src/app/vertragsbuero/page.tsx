@@ -39,7 +39,7 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">Sales-Ops-Sicht</h1>
-        <span className="muted text-sm">Verlängerungen anstoßen, Ansprechpartner und Unterlagen pflegen, neue Assignments erfassen.</span>
+        <span className="muted text-sm">Verlängerungen anstoßen, Ansprechpartner und Unterlagen pflegen, neue Einsätze erfassen.</span>
         {canManageSharePoint(actor) && <Link href="/verwaltung/sharepoint" className="text-sm ml-auto">SharePoint-Ablage</Link>}
         <a href="#erfassen" className={`btn btn-small${canManageSharePoint(actor) ? "" : " ml-auto"}`}>Neuen Einsatz erfassen</a>
       </div>
@@ -137,7 +137,7 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
             <label className="space-y-1"><span className="block muted text-xs">Bestellung/Vertrag über</span><select name="orderContactPersonId" className="input" defaultValue=""><option value="">– Vorgabe des Projekts –</option>{persons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select></label>
             <label className="space-y-1"><span className="block muted text-xs">wer spricht an</span><select name="renewalApproach" className="input" defaultValue=""><option value="">– Vorgabe des Projekts –</option>{approachValues.map((v) => <option key={v} value={v}>{approachLabel[v]}</option>)}</select></label>
             <label className="space-y-1" style={{ gridColumn: "1 / -1" }}><span className="block muted text-xs">Notiz (optional)</span><input name="note" className="input" maxLength={2000} /></label>
-            <div style={{ gridColumn: "1 / -1" }}><PendingButton busy="Lege an …">Assignment anlegen</PendingButton></div>
+            <div style={{ gridColumn: "1 / -1" }}><PendingButton busy="Lege an …">Einsatz anlegen</PendingButton></div>
           </form>
         )}
       </section>

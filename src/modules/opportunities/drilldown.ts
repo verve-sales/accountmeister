@@ -18,7 +18,7 @@ export type DrillParams = { art?: string; bd?: string; stufe?: string; neu?: str
 const DAY = 86400000;
 const CLOSED = ["BEENDET", "ZURUECKGESTELLT"];
 
-export async function drilldown(actor: Actor, p: DrillParams, now = new Date()) {
+export async function drilldown(actor: Actor, p: DrillParams, now = new Date(), opts: { boardSet?: boolean } = {}) {
   let accounts = (await listVisibleAccounts(actor)).filter((a) => a.status === "ACTIVE" || (p.sicht && a.status === "DORMANT"));
   if (p.sicht) {
     const { buildDashboard } = await import("@/modules/dashboard/service");
@@ -56,6 +56,8 @@ export async function drilldown(actor: Actor, p: DrillParams, now = new Date()) 
 
   // Chancenlisten
   let list = opps.filter((o) => !art || o.kind === art);
+  // e72: ungefilterte Liste zeigt dieselbe Menge wie das Board – offene Chancen und in den letzten 60 Tagen beauftragte
+  if (opts.boardSet && !p.stufe) { const since = new Date(now.getTime() - 60 * DAY); list = list.filter((o) => !CLOSED.includes(o.status) || (o.status === "BEAUFTRAGT" && o.updatedAt >= since)); }
   if (p.stufe === "offen") { list = list.filter((o) => !CLOSED.includes(o.status)); parts.push("offen"); }
   else if (p.stufe) { list = list.filter((o) => o.status === p.stufe); parts.push(opportunityStatusLabel[p.stufe] ?? p.stufe); }
   if (p.neu) { const since = new Date(now.getTime() - Number(p.neu) * DAY); list = list.filter((o) => o.createdAt >= since); parts.push(`neu in ${p.neu} Tagen`); }

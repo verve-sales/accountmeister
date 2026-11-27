@@ -430,3 +430,25 @@ describe("e71 Auftragseingang: mehrere Bestellungen derselben Person", () => {
     expect(JSON.stringify(dups)).not.toContain(first.engagementId!);
   });
 });
+
+describe("e72 Zeitleiste zeigt versendete Angebote", () => {
+  it("zwei Angebote derselben Person erscheinen als zwei Balken, auch ohne Position und Kandidatur", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const name = `Olga Offerte ${uniq().replace(/\d/g, "x")}`;
+    const ids: string[] = [];
+    for (const nr of [`AN-${uniq()}`, `AN-${uniq()}`]) {
+      const d = await uploadForCase(ops, file(`angebot-${nr}.txt`, `Angebot Nr. ${nr}\nBeraterin: ${name}\nZeitraum: 01.03.2027 bis 30.09.2027\nTagessatz: 950 €`));
+      // ein zweites Angebot mit anderer Nummer wird nicht als neue Fassung des ersten vorgeschlagen
+      expect((d.parsed as { matchCaseId?: string | null }).matchCaseId ?? null).toBeNull();
+      const c = await confirmCase(ops, d.id, { kind: "ANGEBOT", channel: "DIREKT", partnerAccountId: s.accountId, personKind: "FREELANCER", ...(d.freelancerId ? { freelancerId: d.freelancerId } : { personNewName: name }), role: "Beraterin", startDate: "2027-03-01", endDate: "2027-09-30", dailyRate: "950", offerNumber: nr, matchCaseId: "" });
+      ids.push(c.id);
+    }
+    const { asgOffers } = await import("@/modules/assignments/service");
+    const offers = (await asgOffers(ops, [])).filter((o) => ids.includes(o.id.replace("case:", "")));
+    expect(offers).toHaveLength(2);
+    expect(offers[0]!.phase).toBe("ANGEBOT");
+    expect(offers[0]!.personId).toBe(offers[1]!.personId);
+    expect(offers[0]!.href).toContain("/auftragseingang/");
+  });
+});

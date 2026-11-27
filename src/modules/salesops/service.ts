@@ -99,7 +99,7 @@ export const captureInput = z.object({
  * Startet der Einsatz heute oder früher, steht er direkt auf aktiv. BD ist der Projekt-BD (sonst der zuständige BD).
  */
 export async function captureAssignment(actor: Actor, raw: unknown) {
-  if (!canUseSalesOps(actor)) throw new ForbiddenError("Assignments erfassen hier Sales Operations und Geschäftsführung.");
+  if (!canUseSalesOps(actor)) throw new ForbiddenError("Einsätze erfassen hier Sales Operations und Geschäftsführung.");
   const p = captureInput.safeParse(raw);
   if (!p.success) throw new ValidationError(p.error.issues.map((i) => i.message).join("; "));
   const i = p.data;
@@ -121,7 +121,7 @@ export async function captureAssignment(actor: Actor, raw: unknown) {
   const started = !!i.start && i.start <= t;
   const [opp] = await db
     .insert(schema.opportunities)
-    .values({ workspaceId: actor.workspaceId, accountId: account.id, setupId: setup.id, title: i.title, needDescription: `Assignment von Sales Operations erfasst.${i.note ? ` ${i.note}` : ""}`.slice(0, 4000), status: "BEAUFTRAGT", kind: i.person === "FREELANCER" ? "FREELANCER_EXPERTE" : "VERVE_EXPERTE", headcount: 1, ownerUserId: owner, confirmedAt: new Date(), createdBy: actor.userId })
+    .values({ workspaceId: actor.workspaceId, accountId: account.id, setupId: setup.id, title: i.title, needDescription: `Einsatz von Sales Operations erfasst.${i.note ? ` ${i.note}` : ""}`.slice(0, 4000), status: "BEAUFTRAGT", kind: i.person === "FREELANCER" ? "FREELANCER_EXPERTE" : "VERVE_EXPERTE", headcount: 1, ownerUserId: owner, confirmedAt: new Date(), createdBy: actor.userId })
     .returning();
   const [order] = await db
     .insert(schema.orders)

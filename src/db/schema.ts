@@ -113,6 +113,8 @@ export const workspaces = pgTable("workspaces", {
   id: id(),
   name: text("name").notNull(),
   policyVersion: text("policy_version").notNull().default("pilot-0"),
+  /** e72: wenige einstellbare Fristen (Verwaltung) – leer = Standardwerte */
+  settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

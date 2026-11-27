@@ -1,3 +1,4 @@
+import { deadlines } from "@/modules/settings/deadlines";
 import { findSameFreelancer } from "@/modules/staffing/dedupe";
 import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -329,7 +330,6 @@ export async function discardImport(actor: Actor, id: string) {
 
 export type ApplyResult = { ok: string[]; skipped: string[]; errors: { key: string; message: string }[]; created: { nutzer: number; freelancer: number; teams: number; kunden: number; setups: number; einsaetze: number; verknuepft: number } };
 
-const CATCHUP_DAYS = 42;
 
 export async function applyImport(actor: Actor, id: string, decisionsOverride?: ImportDecisions): Promise<ApplyResult> {
   const imp = await getImport(actor, id);
@@ -572,7 +572,7 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
         res.created.einsaetze++;
         // Check-ins nur für Freelancer: Kunde + Freelancer alle 6 Wochen, erste Termine gestaffelt
         if (it.personKind === "FREELANCER" && !alreadyEnded) {
-          const due = plusDaysIso(todayIso(), 7 + (stagger++ % (CATCHUP_DAYS - 7)));
+          const due = plusDaysIso(todayIso(), 7 + (stagger++ % (deadlines().checkinDays - 7)));
           for (const side of ["KUNDE", "FREELANCER"] as const) {
             await db.insert(schema.checkins).values({ workspaceId: ws, engagementId, side, ownerUserId: owner, dueDate: due, ruleKey: `catchup:${engagementId}:${side}:${due}`, note: "Startimport aus Moco – erster Check-in", createdBy: actor.userId }).onConflictDoNothing();
           }
@@ -654,7 +654,7 @@ export async function repairFreelancers(actor: Actor, userIds: string[], client:
       await db.update(schema.opportunities).set({ kind: "FREELANCER_EXPERTE", updatedAt: new Date() }).where(eq(schema.opportunities.id, e.opportunityId));
       if (e.orderId) await db.update(schema.orders).set({ consultantUserId: null, consultantName: fl.displayName, updatedAt: new Date() }).where(eq(schema.orders.id, e.orderId));
       if (e.status === "AKTIV") {
-        const due = plusDaysIso(todayIso(), 7 + (stagger++ % (CATCHUP_DAYS - 7)));
+        const due = plusDaysIso(todayIso(), 7 + (stagger++ % (deadlines().checkinDays - 7)));
         for (const side of ["KUNDE", "FREELANCER"] as const) {
           await db.insert(schema.checkins).values({ workspaceId: actor.workspaceId, engagementId: e.id, side, ownerUserId: e.bdUserId, dueDate: due, ruleKey: `catchup:${e.id}:${side}:${due}`, note: "Korrektur intern → Freelancer – erster Check-in", createdBy: actor.userId }).onConflictDoNothing();
         }

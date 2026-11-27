@@ -198,7 +198,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
           <section className="card" id="checkins">
             <details open={soon.length > 0}>
               <summary className="font-semibold">Meine Check-ins ({checkins.length}){soon.length ? ` – ${soon.length} fällig bis ${fmtDate(plusDaysIso(today, 7))}` : " – nichts in den nächsten 7 Tagen"}</summary>
-              <Hint>Ein Klick auf die Stimmung erledigt den Check-in mit heutigem Datum; der nächste wird automatisch in 6 Wochen fällig. Details (Termin, Ergebnis, Sales-Hinweis) über „mehr“.</Hint>
+              <Hint>Ein Klick auf die Stimmung erledigt den Check-in mit heutigem Datum; der nächste wird automatisch nach dem eingestellten Abstand (Standard 6 Wochen) fällig. Details (Termin, Ergebnis, Sales-Hinweis) über „mehr“.</Hint>
               <ul className="space-y-2 text-sm">{soon.map((c) => <CheckinRow key={c.id} c={c} back="/meine-arbeit#checkins" />)}</ul>
               {later.length > 0 && (
                 <details className="mt-2">

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { KpiRow, KpiTile } from "@/components/Kpi";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
-import { asgIntermediaryRequests, asgOppPhaseLabel, asgOpportunities, asgOverview, asgTaskLabel, canUseAssignments } from "@/modules/assignments/service";
+import { asgIntermediaryRequests, asgOppPhaseLabel, asgOffers, asgOpportunities, asgOverview, asgTaskLabel, canUseAssignments } from "@/modules/assignments/service";
 import { AsgTimeline } from "@/components/AsgTimeline";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDate } from "@/lib/labels";
@@ -27,7 +27,10 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
   // e55: Chancen einblenden (Umschalter über der Zeitleiste)
   const withOpps = params.chancen === "1";
   const oppData = withOpps ? await asgOpportunities(actor, o.engagements) : { items: [], withoutPerson: 0 };
-  const shownOpps = oppData.items.filter((x) => wer === "alle" || (wer === "freelancer" ? x.kind === "FREELANCER" : x.kind === "INTERN"));
+  // e72: versendete Angebote aus „Angebot & Bestellung“ stehen immer auf der Zeitleiste; übrige Chancen über den Umschalter
+  const offers = await asgOffers(actor, o.engagements);
+  const offerOpps = new Set(offers.map((x) => x.opportunityId));
+  const shownOpps = [...offers, ...oppData.items.filter((x) => !offerOpps.has(x.opportunityId))].filter((x) => wer === "alle" || (wer === "freelancer" ? x.kind === "FREELANCER" : x.kind === "INTERN"));
   const q = (w: string, c: boolean) => { const sp = new URLSearchParams(); if (w !== "alle") sp.set("wer", w); if (c) sp.set("chancen", "1"); const t = sp.toString(); return `/assignments${t ? `?${t}` : ""}#zeitleiste`; };
   const noEnd = shown.filter((e) => !e.end).length;
   const canPull = mocoEnabled() && canRunMocoImport(actor);
@@ -107,6 +110,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
           </div>
         )}
         {withOpps && <p className="muted text-xs mb-2">Chancen erscheinen über die Kandidatur einer Person an einer Position – Phase von „vermutet“ (hell) bis „ausgewählt“ (kräftig), rot umrandet bei Überschneidung.{oppData.withoutPerson > 0 ? ` ${oppData.withoutPerson} offene Position${oppData.withoutPerson === 1 ? "" : "en"} noch ohne Person.` : ""}{shownOpps.length === 0 ? " Derzeit keine Chance mit benannter Person." : ""}</p>}
+        {offers.length > 0 && <p className="muted text-xs mb-2">{offers.length} versendete{offers.length === 1 ? "s Angebot" : " Angebote"} aus <Link href="/auftragseingang">Angebot &amp; Bestellung</Link> – gestrichelt unter den Einsätzen der Person.</p>}
         <AsgTimeline engagements={shown} opportunities={shownOpps} today={o.today} />
       </section>
 

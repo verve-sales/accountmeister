@@ -68,7 +68,7 @@ export function AsgTimeline({ engagements, opportunities = [], today, monthsBack
         <div className="tl-months">{months.map((m) => <span key={m.left} style={{ left: `${m.left}%` }}>{m.label}</span>)}</div>
       </div>
       {persons.map((p) => (
-        <div className="tl-row" key={p.id} role="row" style={{ minHeight: `${0.7 + laneCount(p.rows) * LANE + (p.opps.length ? 1.45 : 0)}rem` }}>
+        <div className="tl-row" key={p.id} role="row" style={{ minHeight: `${0.7 + laneCount(p.rows) * LANE + p.opps.length * 1.45}rem` }}>
           <div className="tl-name" role="rowheader" title={p.name}><strong>{p.name}</strong>{p.kind === "INTERN" ? <span className="muted"> · intern</span> : null}</div>
           <div className="tl-track">
             {months.map((m) => <span key={m.left} className="tl-grid" style={{ left: `${m.left}%` }} />)}
@@ -90,12 +90,12 @@ export function AsgTimeline({ engagements, opportunities = [], today, monthsBack
                 </span>
               );
             })}
-            {p.opps.map((o) => {
+            {p.opps.map((o, oi) => {
               const l = pos(o.start);
               const r = pos(o.end);
               const st = OPP_STYLE[o.phase];
-              const tip = `Chance: ${o.person} bei ${o.accountName} – ${o.title} · ${asgOppPhaseLabel[o.phase]} · ${fmtDate(o.start)} – ${fmtDate(o.end)}${o.estimated ? " (Zeitraum geschätzt)" : ""}${o.conflict ? ` · Achtung: ${o.conflict}` : ""}`;
-              return <Link key={o.id} href={`/bedarfe/${o.opportunityId}`} className="tl-bar tl-opp" title={tip} style={{ top: `${0.35 + laneCount(p.rows) * LANE}rem`, left: `${l}%`, width: `${Math.max(r - l, 0.8)}%`, ...st, outline: o.conflict ? "2px solid #c0392b" : undefined, outlineOffset: 1 }}>{o.accountName} · {asgOppPhaseLabel[o.phase]}</Link>;
+              const tip = `${o.href ? "Angebot" : "Chance"}: ${o.person} bei ${o.accountName} – ${o.title} · ${asgOppPhaseLabel[o.phase]} · ${fmtDate(o.start)} – ${fmtDate(o.end)}${o.estimated ? " (Zeitraum geschätzt)" : ""}${o.conflict ? ` · Achtung: ${o.conflict}` : ""}${o.note ? ` · ${o.note}` : ""}`;
+              return <Link key={o.id} href={o.href ?? `/bedarfe/${o.opportunityId}`} className="tl-bar tl-opp" title={tip} style={{ top: `${0.35 + laneCount(p.rows) * LANE + oi * 1.45}rem`, left: `${l}%`, width: `${Math.max(r - l, 0.8)}%`, ...st, outline: o.conflict ? "2px solid #c0392b" : undefined, outlineOffset: 1 }}>{o.accountName} · {o.href ? "Angebot" : asgOppPhaseLabel[o.phase]}</Link>;
             })}
           </div>
         </div>

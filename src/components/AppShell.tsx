@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "./Icon";
 import { TableTools } from "./TableTools";
+import { FormControls } from "./FormControls";
 
 export type NavItem = { href: string; label: string; icon: string; badge?: number };
 export type NavSection = { label: string | null; icon?: string; items: NavItem[] };
@@ -108,6 +109,7 @@ export function AppShell({ sections, brand, topbar, children }: { sections: NavS
           {children}
         </main>
         <TableTools />
+        <FormControls />
       </div>
     </div>
   );

@@ -46,6 +46,7 @@ export const dynamic = "force-dynamic";
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const cfg = getConfig();
   const actor = await getCurrentActor();
+  if (actor) await (await import("@/modules/settings/deadlines")).loadDeadlines().catch(() => null);
   const roles = actor ? [...actor.roles].filter((r) => r !== "ADMIN").map((r) => roleLabel[r] ?? r) : [];
   if (actor && actor.accountRoles.size > 0) roles.push("kundenbezogene Rollen");
   const { hat, available } = actor ? await loadHat(actor, (await cookies()).get("am_sicht")?.value ?? null).catch(() => ({ hat: null, available: [] })) : { hat: null, available: [] };
@@ -72,12 +73,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const only = (xs: Array<NavItem | null>) => xs.filter((x): x is NavItem => !!x);
   const sections: NavSection[] = actor
     ? [
-        { label: "Heute", icon: "home", items: only([{ href: "/start", label: "Überblick", icon: "home" }, { href: "/meine-arbeit", label: "Meine Arbeit", icon: "check" }]) },
-        { label: "Kunden", icon: "building", items: only([allowed.has("runde") ? { href: "/kunden", label: "Kundenliste", icon: "building" } : L("kunden", "building"), L("runde", "refresh")]) },
+        { label: "Heute", icon: "home", items: only([{ href: "/start", label: "Überblick", icon: "home" }, { href: "/meine-arbeit", label: "Meine Arbeit", icon: "check" }, { href: "/eingang", label: "Eingang", icon: "file" }]) },
+        { label: "Kunden", icon: "building", items: only([allowed.has("runde") ? { href: "/kunden", label: "Kundenliste", icon: "building" } : L("kunden", "building"), L("runde", "refresh"), L("bds", "users")]) },
         { label: "Pipeline", icon: "target", items: only([{ href: "/chancen", label: "Chancen", icon: "target" }, L("besetzung", "userplus")]) },
-        { label: "Einsätze", icon: "briefcase", items: only([allowed.has("einsaetze") ? { href: "/einsaetze", label: "Einsatzliste", icon: "briefcase" } : null, ...(intakeAllowed ? [{ href: "/auftragseingang", label: "Angebot & Bestellung", icon: "file", badge: intake.drafts }] : []), ...(asgAllowed ? [{ href: "/assignments/konditionen", label: "Laufzeiten & Konditionen", icon: "calendar" }, { href: "/assignments/checkins", label: "Check-ins", icon: "heart" }, { href: "/uebergaben", label: "Übergaben", icon: "swap" }] : [])]) },
+        { label: "Einsätze", icon: "briefcase", items: only([asgAllowed ? { href: "/assignments", label: "Zeitleiste", icon: "calendar" } : null, allowed.has("einsaetze") ? { href: "/einsaetze", label: "Einsatzliste", icon: "briefcase" } : null, ...(intakeAllowed ? [{ href: "/auftragseingang", label: "Angebot & Bestellung", icon: "file", badge: intake.drafts }] : []), ...(asgAllowed ? [{ href: "/assignments/konditionen", label: "Laufzeiten & Konditionen", icon: "calendar" }, { href: "/assignments/checkins", label: "Check-ins", icon: "heart" }, { href: "/uebergaben", label: "Übergaben", icon: "swap" }] : [])]) },
         { label: "Steuerung", icon: "chart", items: only([L("ziele", "chart"), L("principals", "users"), ...(cfg.FEATURE_WEEKLYS === "true" ? [{ href: "/weeklys", label: "Weeklys", icon: "calendar" }] : [])]) },
-        { label: "Operations", icon: "clipboard", items: only([L("bereinigung", "broom"), ...(mocoLink ? [{ href: "/moco", label: "Moco", icon: "link" }] : []), ...(asgAllowed && (actor.roles.has("CEO") || actor.roles.has("ADMIN")) ? [{ href: "/verwaltung/sharepoint", label: "SharePoint-Ablage", icon: "file" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung", icon: "settings" }] : [])]) },
+        { label: "Operations", icon: "clipboard", items: only([L("salesops", "clipboard"), L("bereinigung", "broom"), ...(mocoLink ? [{ href: "/moco", label: "Moco", icon: "link" }] : []), ...(asgAllowed && (actor.roles.has("CEO") || actor.roles.has("ADMIN")) ? [{ href: "/verwaltung/sharepoint", label: "SharePoint-Ablage", icon: "file" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung", icon: "settings" }] : [])]) },
         { label: "Wissen & Werkzeuge", icon: "book", items: [...(cfg.FEATURE_VORGEHEN === "true" ? [{ href: "/vorgehen", label: "Vorgehensmuster", icon: "route" }] : []), ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte", icon: "book" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner", icon: "calculator" }] : []), { href: "/hilfe", label: "Hilfe", icon: "help" }] },
       ].filter((s) => s.items.length > 0)
     : [];

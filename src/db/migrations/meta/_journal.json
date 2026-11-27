@@ -393,6 +393,13 @@
       "when": 1795788332082,
       "tag": "0055_auftragseingang",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1795798338768,
+      "tag": "0056_fristen",
+      "breakpoints": true
     }
   ]
 }
