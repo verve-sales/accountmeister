@@ -15,7 +15,10 @@ export default async function BenachrichtigungenPage({ searchParams }: { searchP
   await ensureOverdueNotificationsSafe(actor);
   const list = await listNotifications(actor, 150);
   const unread = list.filter((n) => !n.readAt);
-  const todo = unread.filter((n) => needsAction(n.kind));
+  // e67: Verlängerungen, die zu klären oder zu entscheiden sind, gehören zu „braucht dich“ – dringende zuerst
+  const urgentRenewal = (t: string) => /^Verlängerung (klären|zu klären|bestätigen|entscheiden|anstoßen)/.test(t) || /^Freigabe: Verlängerung/.test(t);
+  const rank = (n: { kind: string; title: string }) => (n.kind === "SOS" ? 0 : n.kind === "UEBERFAELLIG" ? 1 : urgentRenewal(n.title) ? 2 : 3);
+  const todo = unread.filter((n) => needsAction(n.kind) || urgentRenewal(n.title)).sort((a, b) => rank(a) - rank(b));
   const rest = list.filter((n) => !todo.includes(n));
   const mailOn = getConfig().MAIL_TRANSPORT !== "off";
 

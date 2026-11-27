@@ -113,7 +113,8 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const asgUser = await canUseAssignments(actor);
   const myRenewals = renewalCards.filter((c) => c.forMe && (asgUser || c.mode === "ANSTOSSEN"));
   const teamRenewals = renewalCards.filter((c) => !c.forMe);
-  const nDecide = myRenewals.filter((c) => c.mode === "ENTSCHEIDEN").length + openIncoming.length + support.filter((x) => x.isAddressee && x.status === "ANGEFRAGT").length + reviewItems.length;
+  // e67: dieselbe Zählung wie „Meine Arbeit“ – jede Verlängerungsentscheidung, die an mich geht
+  const nDecide = renewalCards.filter((c) => c.forMe && c.mode === "ENTSCHEIDEN").length + openIncoming.length + support.filter((x) => x.isAddressee && x.status === "ANGEFRAGT").length + reviewItems.length;
   const nTasks = work.assigned.length + checkins.length + actions.length + myRenewals.filter((c) => c.mode === "ANSTOSSEN").length + support.filter((x) => x.isAddressee && x.status === "ANGENOMMEN").length;
   const nSuggest = suggestions.length + hints.length + eingangJobs.running.length + (eingangJobs.lastError ? 1 : 0);
   const eingangStatus = (eingangJobs.running.length > 0 || eingangJobs.lastError) && (

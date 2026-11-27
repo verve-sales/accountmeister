@@ -816,7 +816,7 @@ export const quickFillInput = z.object({
  * Freelancer. Legt bei Bedarf die Position an, erzeugt die Kandidatur direkt als „ausgewählt“, setzt die Position
  * „besetzt“, schließt offene Suchaufträge und legt die Einsatzakte an. Intern: keine Einkaufskonditionen; VK optional.
  */
-export async function quickFill(actor: Actor, opportunityId: string, raw: unknown, opts: { trusted?: boolean } = {}) {
+export async function quickFill(actor: Actor, opportunityId: string, raw: unknown, opts: { trusted?: boolean; /** e67: Bestellung aus dem Auftragseingang – EK kommt erst mit dem Projekteinzelvertrag */ allowMissingEk?: boolean } = {}) {
   const p = quickFillInput.safeParse(raw);
   if (!p.success) throw new ValidationError(issues(p.error));
   const i = p.data;
@@ -842,7 +842,7 @@ export async function quickFill(actor: Actor, opportunityId: string, raw: unknow
       );
     }
     const intern = position.resourceKind === "INTERN";
-    if (!intern && !i.ekRate) throw new ValidationError("Für einen Freelancer bitte den Einkaufssatz (EK) angeben.");
+    if (!intern && !i.ekRate && !opts.allowMissingEk) throw new ValidationError("Für einen Freelancer bitte den Einkaufssatz (EK) angeben.");
     const person = await resolvePerson(tx, actor, position, i);
     const [c] = await tx
       .insert(schema.candidacies)

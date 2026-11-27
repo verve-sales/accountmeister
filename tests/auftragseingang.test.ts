@@ -1,0 +1,204 @@
+import { describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db/client";
+import { ConflictError, ForbiddenError, ValidationError } from "@/lib/errors";
+import { loadActor, type Actor } from "@/modules/identity/actor";
+import { assignRole } from "@/modules/governance/service";
+import { detectKind, detectPeriod, detectRate, parseDocument } from "@/modules/o2o/parse";
+import { hourlyRate, openPoints, plan, type CaseFacts } from "@/modules/o2o/plan";
+import { cancelCase, confirmCase, createOfferWithoutDocument, getCase, listCases, setEndCustomer, uploadForCase } from "@/modules/o2o/service";
+import { actorFor, ensureSeed } from "./helpers";
+
+/** e67: Auftragseingang – Angebot und Bestellung hochladen (Konzept Offer-to-Order v2). Alle Daten fiktiv. */
+
+const file = (name: string, text: string) => {
+  const buf = Buffer.from(text, "utf8");
+  return { name, type: "text/plain", size: buf.length, arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer };
+};
+const uniq = () => Date.now().toString(36) + Math.floor(Math.random() * 1000);
+
+async function makeSalesOps(): Promise<Actor> {
+  const s = await ensureSeed();
+  const [u] = await db.insert(schema.users).values({ workspaceId: s.workspaceId, email: `ops-o2o-${uniq()}@verve.example`, displayName: "Olga Ops (Sales Operations, fiktiv)" }).returning();
+  await assignRole(await actorFor("admin"), { userId: u!.id, role: "SALES_OPS" });
+  return (await loadActor(u!.id))!;
+}
+
+const facts = (over: Partial<CaseFacts> = {}): CaseFacts => ({ channel: "VERMITTLER", status: "ANGEBOT_VERSENDET", partnerName: "Hays (fiktiv)", endCustomerName: null, personName: "Pia Probe (fiktiv)", role: "Testmanagerin", startDate: "2027-01-01", endDate: "2027-06-30", dailyRate: 985, days: 100, offerNumber: null, brokerRef: "HAY-4711", orderNumber: null, isRenewal: false, bdName: "David Demo (BD)", ...over });
+
+describe("e67 Auftragseingang: Vorlesen", () => {
+  it("erkennt Bestellung, Nummer, Zeitraum, Tagessatz, Tage und bekannte Person", () => {
+    const t = "Bestellung Nr. 4500123987\nWir bestellen hiermit Beratungsleistungen.\nBerater: Pia Probe\nZeitraum: 01.01.2027 bis 30.06.2027\nTagessatz: 960,00 €\n100 PT\nTel. +49 221 4500998877";
+    const p = parseDocument(t, "PO_4500123987.pdf", ["Pia Probe (fiktiv)"]);
+    expect(p.kind?.value).toBe("BESTELLUNG");
+    expect(p.orderNumber?.value).toBe("4500123987");
+    expect(p.start?.value).toBe("2027-01-01");
+    expect(p.end?.value).toBe("2027-06-30");
+    expect(p.dailyRate?.value).toBe(960);
+    expect(p.days?.value).toBe(100);
+    expect(p.person?.value).toBe("Pia Probe (fiktiv)");
+    expect(p.person?.evidence).toContain("Pia Probe");
+  });
+  it("ein Angebot, das „bei Bestellung“ erwähnt, bleibt ein Angebot; Moco-Nummer aus dem Dateinamen", () => {
+    expect(detectKind("Unser Angebot für Sie. Gültig bis 31.12.2026. Bei Bestellung bitte Nummer angeben.", "Angebot_VCA-M26-11_0003.pdf")?.value).toBe("ANGEBOT");
+    const p = parseDocument("Unser Angebot\nRolle: Scrum Master\n120 € / Stunde", "Angebot_VCA-M26-11_0003.pdf");
+    expect(p.offerNumber?.value).toBe("VCA-M26-11_0003");
+    expect(p.dailyRate?.value).toBe(960);
+    expect(p.role?.value).toBe("Scrum Master");
+    expect(p.orderNumber).toBeNull();
+  });
+  it("Zeitraum mit Gedankenstrich, Ende vor Start wird verworfen; unplausible Sätze werden ignoriert", () => {
+    expect(detectPeriod("Laufzeit 1.2.2027 – 31.3.2027").end?.value).toBe("2027-03-31");
+    expect(detectPeriod("Beginn: 01.05.2027 Ende: 01.04.2027").end).toBeNull();
+    expect(detectRate("Tagessatz 5 €")).toBeNull();
+  });
+  it("Moco-Plan: Stundensatz = Tagessatz ÷ 8 auf Cent; ohne Endkunde wartet das Projekt", () => {
+    expect(hourlyRate(985)).toBe(123.13);
+    const steps = plan(facts({ status: "BEAUFTRAGT", orderNumber: "PO-1" }));
+    expect(steps.find((s) => s.title === "Projekt anlegen")?.state).toBe("WARTET");
+    expect(openPoints(facts({ status: "BEAUFTRAGT" }))).toEqual(expect.arrayContaining(["Endkunde fehlt", "Bestellnummer fehlt"]));
+    const ok = plan(facts({ status: "BEAUFTRAGT", orderNumber: "PO-1", endCustomerName: "Nordwerk AG (fiktiv)" }));
+    expect(ok.find((s) => s.title === "Projekt anlegen")?.detail).toContain("123,13 €");
+    expect(ok.find((s) => s.title === "Lead umziehen")).toBeTruthy();
+    expect(ok.find((s) => s.system === "SHAREPOINT")?.detail).toContain("Kunden › Nordwerk AG (fiktiv)");
+  });
+});
+
+describe("e67 Auftragseingang: Ablauf", () => {
+  it("direkt: Angebot hochladen → Chance „Angebot“, dann Bestellung mit Angebotsnummer → Einsatz, Auftrag, Unterlagen", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const no = `VCA-M27-01_${String(Math.floor(Math.random() * 9000) + 1000)}`;
+    const draft = await uploadForCase(ops, file(`Angebot_${no}.txt`, `Angebot für Beispielkonzern AG\nRolle: Testmanagerin\nBeraterin: Frau Probe\nZeitraum: 01.02.2027 bis 30.06.2027\nTagessatz: 950 €`));
+    expect(draft.status).toBe("ENTWURF");
+    expect(draft.offerNumber).toBe(no);
+    const offer = await confirmCase(ops, draft.id, { kind: "ANGEBOT", channel: "DIREKT", partnerAccountId: s.accountId, personKind: "FREELANCER", personNewName: "Pia Probe (fiktiv)", role: "Testmanagerin", startDate: "2027-02-01", endDate: "2027-06-30", dailyRate: "950", offerNumber: no });
+    expect(offer.status).toBe("ANGEBOT_VERSENDET");
+    const opp = await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, offer.opportunityId!) });
+    expect(opp!.status).toBe("PROFIL_ANGEBOT_VORGESTELLT");
+    expect(opp!.accountId).toBe(s.accountId);
+    const v = await getCase(ops, offer.id);
+    expect(v.documents.map((d) => d.kind)).toEqual(["ANGEBOT"]);
+    expect(v.open).toEqual([]);
+
+    const po = `45${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`;
+    const d2 = await uploadForCase(ops, file("Bestellung.txt", `Bestellung ${po}\nBezug: Angebot ${no}\nZeitraum: 01.02.2027 bis 30.06.2027\nTagessatz: 950 €`));
+    expect(d2.orderNumber).toBe(po);
+    expect((d2.parsed as { matchCaseId: string }).matchCaseId).toBe(offer.id);
+    const done = await confirmCase(ops, d2.id, { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, personKind: "FREELANCER", personNewName: "Pia Probe (fiktiv)", role: "Testmanagerin", startDate: "2027-02-01", endDate: "2027-06-30", dailyRate: "950", orderNumber: po, offerNumber: no, matchCaseId: offer.id });
+    expect(done.id).toBe(offer.id);
+    expect(done.status).toBe("BEAUFTRAGT");
+    expect(await db.query.orderCases.findFirst({ where: eq(schema.orderCases.id, d2.id) })).toBeUndefined();
+    const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, done.engagementId!) });
+    expect(e!.orderReference).toBe(po);
+    expect(e!.status).toBe("GEPLANT");
+    expect((await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, done.opportunityId!) }))!.status).toBe("BEAUFTRAGT");
+    expect((await db.query.offers.findFirst({ where: eq(schema.offers.id, done.offerId!) }))!.status).toBe("AKZEPTIERT");
+    const docs = await db.query.engagementDocuments.findMany({ where: eq(schema.engagementDocuments.engagementId, e!.id) });
+    expect(docs.length).toBe(2);
+    // EK kommt nicht aus dem Kundendokument
+    const period = await db.query.engagementPeriods.findFirst({ where: eq(schema.engagementPeriods.engagementId, e!.id) });
+    expect(period?.ek ?? null).toBeNull();
+    // R7: dieselbe Bestellung desselben Kunden nur einmal
+    const d3 = await uploadForCase(ops, file("Bestellung-kopie.txt", `Bestellung ${po}`));
+    await expect(confirmCase(ops, d3.id, { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, personNewName: "Pia Probe (fiktiv)", role: "Testmanagerin", orderNumber: po })).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it("Abweichung zum Angebot muss bestätigt werden (B7)", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const offer = await createOfferWithoutDocument(ops, { channel: "DIREKT", partnerAccountId: s.accountId, personNewName: "Ben Beispiel (fiktiv)", role: "Business Analyst", dailyRate: "900", startDate: "2027-03-01", endDate: "2027-05-31", offerNumber: `T-${uniq()}` });
+    const draft = await uploadForCase(ops, file("PO.txt", "Bestellung PO-77881\nTagessatz 990 €"), { forCaseId: offer.id });
+    const raw = { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, personNewName: "Ben Beispiel (fiktiv)", role: "Business Analyst", dailyRate: "990", startDate: "2027-03-01", endDate: "2027-05-31", orderNumber: `PO-${uniq()}`, matchCaseId: offer.id };
+    await expect(confirmCase(ops, draft.id, raw)).rejects.toThrow(/weicht vom Angebot ab: Satz 900 € → 990 €/);
+    const ok = await confirmCase(ops, draft.id, { ...raw, deviationsOk: "on" });
+    expect(ok.status).toBe("BEAUFTRAGT");
+    expect(ok.dailyRate).toBe("990.00");
+  });
+
+  it("Vermittler ohne Endkunde: Bestellung ohne Angebot (B5) läuft, Moco wartet; Endkunde nachtragen zieht alles um", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const broker = `Hays ${uniq()} (fiktiv)`;
+    const draft = await uploadForCase(ops, file("Abruf.txt", `Bestellung über ${broker}\nProjektnummer: HAY-${uniq()}\nZeitraum: 01.01.2027 bis 31.03.2027\nTagessatz: 880 €`));
+    const raw = { kind: "BESTELLUNG", channel: "VERMITTLER", partnerNewName: broker, personNewName: "Carla Clever (fiktiv)", role: "Scrum Master", startDate: "2027-01-01", endDate: "2027-03-31", dailyRate: "880", orderNumber: `ORD-${uniq()}` };
+    // neuer Vermittler ohne BD: Sales Operations muss einen BD wählen (übernimmt selbst keine Verantwortung)
+    await expect(confirmCase(ops, draft.id, raw)).rejects.toThrow(/kein BD hinterlegt/);
+    const c = await confirmCase(ops, draft.id, { ...raw, bdUserId: s.users.david });
+    expect(c.status).toBe("BEAUFTRAGT");
+    const partner = await db.query.accounts.findFirst({ where: eq(schema.accounts.id, c.partnerAccountId!) });
+    expect(partner!.accountKind).toBe("VERMITTLER");
+    const v = await getCase(ops, c.id);
+    expect(v.open).toContain("Endkunde fehlt");
+    expect(((c.systems as { moco: { steps: { title: string; state: string }[] } }).moco.steps.find((x) => x.title === "Projekt anlegen"))!.state).toBe("WARTET");
+    const e0 = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, c.engagementId!) });
+    expect(e0!.accountId).toBe(partner!.id);
+    const moved = await setEndCustomer(ops, c.id, { endCustomerAccountId: s.accountId });
+    expect(moved.endCustomerAccountId).toBe(s.accountId);
+    const e1 = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, c.engagementId!) });
+    expect(e1!.accountId).toBe(s.accountId);
+    expect((await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, c.opportunityId!) }))!.accountId).toBe(s.accountId);
+    const docs = await db.query.orderCaseDocuments.findMany({ where: eq(schema.orderCaseDocuments.caseId, c.id) });
+    const cd = await db.query.contractDocuments.findFirst({ where: eq(schema.contractDocuments.id, docs[0]!.documentId) });
+    expect(cd!.accountId).toBe(s.accountId);
+    expect((await getCase(ops, c.id)).open).not.toContain("Endkunde fehlt");
+    expect(((moved.systems as { moco: { steps: { title: string; state: string }[] } }).moco.steps.find((x) => x.title === "Projekt anlegen"))!.state).toBe("GEPLANT");
+    await expect(setEndCustomer(ops, c.id, { endCustomerAccountId: partner!.id })).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("Bestellung zur laufenden Person wird als Verlängerung übernommen", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const first = await createOfferWithoutDocument(ops, { channel: "DIREKT", partnerAccountId: s.accountId, personNewName: `Dora Dauer ${uniq()} (fiktiv)`, role: "Entwicklerin", dailyRate: "800", startDate: "2026-10-01", endDate: "2026-12-31", offerNumber: `R-${uniq()}` });
+    const d = await uploadForCase(ops, file("po.txt", "Bestellung"), { forCaseId: first.id });
+    const ordered = await confirmCase(ops, d.id, { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, personKind: "FREELANCER", personNewName: first.personName!, role: "Entwicklerin", dailyRate: "800", startDate: "2026-10-01", endDate: "2026-12-31", orderNumber: `A-${uniq()}`, matchCaseId: first.id });
+    const ext = await uploadForCase(ops, file("verl.txt", "Bestellung Verlängerung bis 31.03.2027"));
+    const nextPo = `V-${uniq()}`;
+    const r = await confirmCase(ops, ext.id, { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, role: "Entwicklerin", endDate: "2027-03-31", orderNumber: nextPo, renewalEngagementId: ordered.engagementId! });
+    expect(r.isRenewal).toBe(true);
+    const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, ordered.engagementId!) });
+    expect(e!.plannedEnd).toBe("2027-03-31");
+    expect(e!.orderReference).toBe(nextPo);
+  });
+
+  it("Absage setzt Angebot abgelehnt und Chance zurückgestellt; Entwurf verwerfen löscht ihn", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const c = await createOfferWithoutDocument(ops, { channel: "DIREKT", partnerAccountId: s.accountId, personNewName: "Emil Ende (fiktiv)", role: "Architekt", offerNumber: `X-${uniq()}` });
+    const done = await cancelCase(ops, c.id, "Kunde hat intern besetzt");
+    expect(done.status).toBe("ABGESAGT");
+    expect((await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, c.opportunityId!) }))!.status).toBe("ZURUECKGESTELLT");
+    expect((await db.query.offers.findFirst({ where: eq(schema.offers.id, c.offerId!) }))!.status).toBe("ABGELEHNT");
+    const draft = await uploadForCase(ops, file("x.txt", "Angebot"));
+    await cancelCase(ops, draft.id, "");
+    expect(await db.query.orderCases.findFirst({ where: eq(schema.orderCases.id, draft.id) })).toBeUndefined();
+  });
+
+  it("Rechte: Anker darf nicht hochladen; BD sieht nur Vorgänge seiner Kunden; Plausibilität greift", async () => {
+    const s = await ensureSeed();
+    const nina = await actorFor("nina");
+    await expect(uploadForCase(nina, file("a.txt", "Angebot"))).rejects.toBeInstanceOf(ForbiddenError);
+    const lars = await actorFor("lars");
+    const ops = await makeSalesOps();
+    const c = await createOfferWithoutDocument(ops, { channel: "DIREKT", partnerAccountId: s.accountId, personNewName: "Fritz Fern (fiktiv)", role: "Tester", offerNumber: `L-${uniq()}` });
+    expect((await listCases(lars, "alle")).some((x) => x.id === c.id)).toBe(false);
+    const david = await actorFor("david");
+    expect((await listCases(david, "alle")).some((x) => x.id === c.id)).toBe(true);
+    const d = await uploadForCase(ops, file("b.txt", "Angebot"));
+    await expect(confirmCase(ops, d.id, { kind: "ANGEBOT", channel: "DIREKT", partnerAccountId: s.accountId, role: "Tester", startDate: "2027-05-01", endDate: "2027-04-01" })).rejects.toThrow(/Ende liegt vor dem Start/);
+    await expect(confirmCase(ops, d.id, { kind: "ANGEBOT", channel: "DIREKT", partnerAccountId: s.accountId, role: "Tester", startDate: "2027-01-01", endDate: "2030-01-01" })).rejects.toThrow(/24 Monate/);
+  });
+});
+
+describe("e67 Auftragseingang: dieselbe Datei", () => {
+  it("öffnet den eigenen Entwurf wieder und weist eine schon bestätigte Datei ab (B8)", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const text = `Angebot Nr. DUP-${uniq()}\nRolle: Tester`;
+    const a = await uploadForCase(ops, file("dup.txt", text));
+    const b = await uploadForCase(ops, file("dup.txt", text));
+    expect(b.id).toBe(a.id);
+    await confirmCase(ops, a.id, { kind: "ANGEBOT", channel: "DIREKT", partnerAccountId: s.accountId, role: "Tester", personNewName: "Gina Gleich (fiktiv)" });
+    await expect(uploadForCase(ops, file("dup.txt", text))).rejects.toBeInstanceOf(ConflictError);
+  });
+});

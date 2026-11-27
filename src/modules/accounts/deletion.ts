@@ -43,6 +43,13 @@ const DETACH: ReadonlySet<string> = new Set([
   "intake_proposals.target_setup_id",
   "assistant_threads.source_id",
   "source_versions.import_job_id",
+  // e67: Auftragseingang – ein Vorgang verliert nur den Verweis, wenn Chance, Einsatz oder Endkunde gelöscht werden
+  "order_cases.opportunity_id",
+  "order_cases.offer_id",
+  "order_cases.order_id",
+  "order_cases.engagement_id",
+  "order_cases.end_customer_account_id",
+  "order_cases.freelancer_id",
 ]);
 
 /** Tabellen, deren Zeilen nie über die Kaskade gelöscht werden dürfen. */

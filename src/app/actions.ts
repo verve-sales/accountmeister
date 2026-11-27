@@ -2366,3 +2366,56 @@ export async function requestCloseAction(opportunityId: string) {
     throw new PendingInfo("Anfrage beendet.");
   }, "");
 }
+
+// --- Auftragseingang (e67): Angebot und Bestellung hochladen --------------------------------------------------
+
+function formFields(fd: FormData): Record<string, string> {
+  const raw: Record<string, string> = {};
+  for (const [k, v] of fd.entries()) if (typeof v === "string") raw[k] = v;
+  return raw;
+}
+
+export async function uploadOrderCaseAction(fd: FormData) {
+  const forCaseId = String(fd.get("forCaseId") ?? "");
+  return run(forCaseId ? `/auftragseingang/${forCaseId}` : "/auftragseingang", async (actor) => {
+    const file = fd.get("file");
+    if (!(file instanceof File) || file.size === 0) throw new ValidationError("Bitte eine Datei auswählen.");
+    const { uploadForCase } = await import("@/modules/o2o/service");
+    const c = await uploadForCase(actor, file, { forCaseId: forCaseId || undefined });
+    return `/auftragseingang/${c.id}`;
+  }, "Gelesen – bitte die Felder prüfen und bestätigen.");
+}
+
+export async function confirmOrderCaseAction(fd: FormData) {
+  const id = String(fd.get("caseId") ?? "");
+  return run(`/auftragseingang/${id}`, async (actor) => {
+    const { confirmCase } = await import("@/modules/o2o/service");
+    const c = await confirmCase(actor, id, formFields(fd));
+    return `/auftragseingang/${c.id}`;
+  }, "Bestätigt – Accountmeister ist fortgeschrieben, Moco steht als Plan bereit.");
+}
+
+export async function offerWithoutDocumentAction(fd: FormData) {
+  return run("/auftragseingang#ohne-dokument", async (actor) => {
+    const { createOfferWithoutDocument } = await import("@/modules/o2o/service");
+    const c = await createOfferWithoutDocument(actor, formFields(fd));
+    return `/auftragseingang/${c.id}`;
+  }, "Angebot erfasst.");
+}
+
+export async function setEndCustomerAction(fd: FormData) {
+  const id = String(fd.get("caseId") ?? "");
+  return run(`/auftragseingang/${id}`, async (actor) => {
+    const { setEndCustomer } = await import("@/modules/o2o/service");
+    await setEndCustomer(actor, id, formFields(fd));
+  }, "Endkunde eingetragen – Chance, Einsatz und Unterlagen sind umgezogen.");
+}
+
+export async function cancelOrderCaseAction(fd: FormData) {
+  const id = String(fd.get("caseId") ?? "");
+  return run(`/auftragseingang/${id}`, async (actor) => {
+    const { cancelCase } = await import("@/modules/o2o/service");
+    const c = await cancelCase(actor, id, String(fd.get("reason") ?? ""));
+    return c.status === "VERWORFEN" ? "/auftragseingang" : `/auftragseingang/${id}`;
+  }, "Erledigt.");
+}

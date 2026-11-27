@@ -2639,3 +2639,69 @@ export const backofficeHandovers = pgTable(
   },
   (t) => [index("backoffice_handovers_status_idx").on(t.workspaceId, t.status), index("backoffice_handovers_eng_idx").on(t.engagementId)],
 );
+
+/**
+ * Auftragseingang (e67, Konzept Offer-to-Order v2): ein Vorgang „Angebot → Bestellung“ je Person. Entsteht nur durch einen
+ * Upload (oder ein Angebot ohne Dokument) im Assignmentmanager; daraus schreibt die App Chance, Angebot, Auftrag und Einsatz
+ * fort. Moco und SharePoint werden als Soll-Zustand je System geführt (zunächst Probelauf: geplant, nicht geschrieben).
+ */
+export const orderCases = pgTable(
+  "order_cases",
+  {
+    id: id(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    /** Vorgangsnummer, z. B. VG-2026-0007 */
+    number: text("number").notNull(),
+    channel: text("channel").notNull().default("DIREKT"), // DIREKT | VERMITTLER
+    status: text("status").notNull().default("ENTWURF"), // ENTWURF | ANGEBOT_VERSENDET | BEAUFTRAGT | ABGESAGT | STORNIERT
+    /** Vertragspartner: Direktkunde bzw. Vermittler */
+    partnerAccountId: text("partner_account_id").references(() => accounts.id),
+    /** Endkunde (beim Vermittler oft erst später bekannt) */
+    endCustomerAccountId: text("end_customer_account_id").references(() => accounts.id),
+    endCustomerHint: text("end_customer_hint"),
+    personName: text("person_name"),
+    freelancerId: text("freelancer_id").references(() => freelancers.id),
+    internalUserId: text("internal_user_id").references(() => users.id),
+    role: text("role"),
+    startDate: date("start_date"),
+    endDate: date("end_date"),
+    dailyRate: numeric("daily_rate", { precision: 10, scale: 2 }),
+    days: integer("days"),
+    offerNumber: text("offer_number"),
+    brokerRef: text("broker_ref"),
+    orderNumber: text("order_number"),
+    /** Bestellung verlängert einen laufenden Einsatz statt einen neuen anzulegen */
+    isRenewal: boolean("is_renewal").notNull().default(false),
+    opportunityId: text("opportunity_id").references(() => opportunities.id),
+    offerId: text("offer_id").references(() => offers.id),
+    orderId: text("order_id").references(() => orders.id),
+    engagementId: text("engagement_id").references(() => engagements.id),
+    /** Leseergebnis der letzten Datei (Feld → { value, evidence }) */
+    parsed: jsonb("parsed").$type<Record<string, unknown>>(),
+    /** Soll-Zustand je System: { moco: { state, steps[] }, sharepoint: { state, note } } */
+    systems: jsonb("systems").$type<Record<string, unknown>>(),
+    statusReason: text("status_reason"),
+    createdBy: text("created_by").notNull().references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    version: version(),
+  },
+  (t) => [
+    uniqueIndex("order_cases_number_uq").on(t.workspaceId, t.number),
+    // R7: dieselbe Bestellung desselben Vertragspartners nur einmal
+    uniqueIndex("order_cases_order_uq").on(t.workspaceId, t.partnerAccountId, t.orderNumber).where(sql`order_number IS NOT NULL AND status <> 'STORNIERT'`),
+    index("order_cases_status_idx").on(t.workspaceId, t.status),
+  ],
+);
+
+/** Dateien eines Vorgangs (Angebot, Bestellung, Mail als Beleg); die Unterlage selbst ist eine contract_document. */
+export const orderCaseDocuments = pgTable(
+  "order_case_documents",
+  {
+    caseId: text("case_id").notNull().references(() => orderCases.id),
+    documentId: text("document_id").notNull().references(() => contractDocuments.id),
+    kind: text("kind").notNull(), // ANGEBOT | BESTELLUNG | SONSTIGES
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.caseId, t.documentId] })],
+);

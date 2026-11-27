@@ -87,7 +87,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const offerFrom = lastRenewal?.proposedFrom ?? new Date(Date.parse(`${endBase}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
   const offerUntil = lastRenewal?.proposedTo ?? addMonthsIso(endBase, 6);
   const offerRate = lastPeriod?.vk ? (Number(lastPeriod.vk) * (lastPeriod.rateUnit === "STUNDE" ? 8 : 1)).toFixed(2).replace(".", ",") : "";
-  const dueRaw: Array<[string | null, string]> = [[e.nextCheckin, "Check-in"], [openRenewal ? e.pingDate : null, "Verlängerung anstoßen"], [e.status === "PAUSIERT" ? e.reviewDate : null, "Wiedervorlage Pause"]];
+  const dueRaw: Array<[string | null, string]> = [[e.nextCheckin, "Check-in"], [openRenewal?.status === "MOEGLICH" ? openRenewal.followUpDate ?? null : openRenewal && !["IN_ABSTIMMUNG", "ANGEBOTEN"].includes(openRenewal.status) ? e.pingDate : null, openRenewal?.status === "MOEGLICH" ? "Wiedervorlage Verlängerung" : "Verlängerung anstoßen"], [e.status === "PAUSIERT" ? e.reviewDate : null, "Wiedervorlage Pause"]];
   const dueList = dueRaw.flatMap(([d, k]) => (d ? [[d, k] as [string, string]] : [])).sort((a, b) => a[0].localeCompare(b[0]));
   const nextDue = dueList[0]?.[0] ?? null;
   const nextDueKind = dueList[0]?.[1] ?? "";

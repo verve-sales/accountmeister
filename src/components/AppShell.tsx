@@ -14,7 +14,7 @@ const AREA_PREFIX: Record<string, string[]> = {
   Heute: ["/vorgaenge", "/suche"],
   Kunden: ["/kunden", "/setups", "/health", "/quellen", "/interviews"],
   Pipeline: ["/bedarfe", "/chancen", "/besetzung"],
-  Einsätze: ["/einsaetze", "/assignments"],
+  Einsätze: ["/einsaetze", "/assignments", "/auftragseingang"],
   Steuerung: ["/weeklys", "/meine-bds", "/meine-principals", "/kundenverantwortliche", "/ziele", "/fuehrung", "/team", "/ceo"],
   Operations: ["/vertragsbuero", "/sales-ops", "/bereinigung", "/moco", "/verwaltung"],
   "Wissen & Werkzeuge": ["/vorgehen", "/artefakte", "/provision", "/hilfe"],

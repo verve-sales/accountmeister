@@ -18,6 +18,16 @@ export type HelpSection = {
 
 export const HELP_SECTIONS: HelpSection[] = [
   {
+    id: "auftragseingang",
+    title: "Angebot & Bestellung hochladen – daraus entsteht alles Weitere",
+    where: "Einsätze → Angebot & Bestellung",
+    keywords: ["angebot", "bestellung", "hochladen", "upload", "auftragseingang", "vorgang", "vermittler", "endkunde", "bestellnummer", "moco", "sharepoint", "verlaengerung", "offer", "order", "po"],
+    body: `Angebot oder Bestellung als Datei hochladen (PDF, Word, Excel, Text, Mail). Die App liest Dokumentart, Nummern (Moco-Angebotsnummer, Referenz des Vermittlers, Bestellnummer), Zeitraum, Tagessatz, Tage, Rolle, Person und Endkunde vor – jedes Feld mit der Textstelle. Du prüfst und bestätigst; erst dann wird etwas angelegt.
+Angebot: Chance „Profil/Angebot vorgestellt“ beim Endkunden (beim Vermittler ohne bekannten Endkunden beim Vermittler), Angebot und Unterlage. Bestellung: Chance „beauftragt“, Auftrag mit Bestellnummer, Einsatz „geplant“ (bzw. „aktiv“, wenn er schon begonnen hat) und Unterlage am Einsatz. Gehört die Bestellung zu einem offenen Angebot (gleiche Angebotsnummer, Referenz oder Person), wird es vorgeschlagen; Abweichungen bei Satz, Zeitraum, Tagen oder Person müssen bestätigt werden. Läuft dieselbe Person schon beim Kunden, ist „als Verlängerung übernehmen“ vorausgewählt.
+Beim Vermittler darf der Endkunde offen bleiben; „Endkunde nachtragen“ zieht Chance, Einsatz und Unterlagen um. Ohne Dokument: „Angebot ohne Dokument erfassen“. Dieselbe Bestellnummer desselben Vertragspartners und dieselbe Datei gibt es nur einmal. Einkaufssätze stehen in keinem Kundendokument und kommen mit dem Projekteinzelvertrag.
+Moco wird im Probelauf nur geplant (Schritte am Vorgang: Lead, Firma, Kontakt „Buchhaltung“, Projekt mit Stundensatz = Tagessatz ÷ 8, Bestellnummer); SharePoint wird beschrieben, sobald die Anbindung eingerichtet ist.`,
+  },
+  {
     id: "eingang-ki",
     title: "Was gibt es Neues? – Mails und Notizen von der KI auswerten lassen",
     where: "Start → „Was gibt es Neues?“ · Eingang (Postfach) · Quelle → „Mit KI (neu) auswerten“",

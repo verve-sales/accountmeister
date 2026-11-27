@@ -185,12 +185,12 @@ export function RenewalStartCard({ c, back, signalOnly = false }: { c: Card; bac
 }
 
 /** Block für Start und Meine Arbeit: zuerst Entscheidungen, dann Anstöße; leer → nichts. */
-export function RenewalCards({ cards, back }: { cards: Card[]; back: string }) {
+export function RenewalCards({ cards, back, id = "entscheidungen" }: { cards: Card[]; back: string; id?: string }) {
   const decide = cards.filter((c) => c.mode === "ENTSCHEIDEN");
   const start = cards.filter((c) => c.mode === "ANSTOSSEN");
   if (!cards.length) return null;
   return (
-    <section id="entscheidungen" className="space-y-3">
+    <section id={id} className="space-y-3">
       {decide.length > 0 && (
         <div>
           <h2 className="font-semibold mb-1">Entscheidungen: Verlängerungen ({decide.length})</h2>

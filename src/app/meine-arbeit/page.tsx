@@ -77,7 +77,14 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Meine Arbeit</h1>
       <Feedback params={params} />
-      <RenewalCards cards={renewalCards} back="/meine-arbeit#entscheidungen" />
+      {/* e67: hier nur, was an mich geht – Verlängerungen des Teams stehen eingeklappt darunter (wie auf Start „im Blick“) */}
+      <RenewalCards cards={renewalCards.filter((c) => c.forMe)} back="/meine-arbeit#entscheidungen" />
+      {renewalCards.some((c) => !c.forMe) && (
+        <details className="card">
+          <summary className="font-semibold">Verlängerungen im Team ({renewalCards.filter((c) => !c.forMe).length}) <span className="muted text-sm font-normal">– zur Kenntnis, entscheiden die Zuständigen</span></summary>
+          <div className="mt-2"><RenewalCards id="entscheidungen-team" cards={renewalCards.filter((c) => !c.forMe)} back="/meine-arbeit#entscheidungen" /></div>
+        </details>
+      )}
 
       <section className="card" id="vorgaenge">
         <div className="flex flex-wrap items-baseline gap-2 mb-2">
