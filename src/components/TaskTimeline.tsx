@@ -26,7 +26,7 @@ const weekNo = (d: Date) => {
   return Math.ceil(((t.getTime() - Date.UTC(t.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7);
 };
 
-export function TaskTimeline({ tasks, today, title, children }: { tasks: TimelineTask[]; today: string; title?: string; children?: React.ReactNode }) {
+export function TaskTimeline({ tasks, today, title, children, progress }: { tasks: TimelineTask[]; today: string; title?: string; children?: React.ReactNode; progress?: { done: number; total: number } | null }) {
   const t = new Date(`${today}T00:00:00Z`);
   const monday = new Date(t);
   monday.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7));
@@ -51,6 +51,12 @@ export function TaskTimeline({ tasks, today, title, children }: { tasks: Timelin
       <div className="flex flex-wrap items-baseline gap-3 mb-2">
         <h2 className="font-semibold">{title ?? "Wochenplan"} ({tasks.length})</h2>
         {overdue > 0 && <span className="text-sm" style={{ color: "var(--danger)", fontWeight: 600 }}>{overdue} überfällig</span>}
+        {progress && progress.total > 0 && (
+          <span className="progress" data-done={progress.done >= progress.total ? "" : undefined} title="Aufgaben mit Fälligkeit in dieser Woche: erledigt von insgesamt">
+            <span className="progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done} aria-label="Diese Woche erledigt"><span style={{ width: `${Math.round((progress.done / progress.total) * 100)}%` }} /></span>
+            {progress.done >= progress.total ? `Woche geschafft: ${progress.done} von ${progress.total}` : `diese Woche ${progress.done} von ${progress.total} erledigt`}
+          </span>
+        )}
         <span className="muted text-xs flex flex-wrap gap-3 ml-auto" hidden={tasks.length === 0}>{Object.values(KIND).map((k) => <span key={k.label}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: k.color, marginRight: 4 }} />{k.label}</span>)}</span>
       </div>
       {children}

@@ -572,3 +572,34 @@ main.page > *, main.page > * > * { min-width: 0; max-width: 100%; }
 main.page h1 { overflow-wrap: anywhere; }
 @media (max-width: 640px) { main.page { overflow-x: clip; } }
 .board-col[data-empty] { background: var(--surface-2); border-style: solid; opacity: .75; }
+
+/* e78: Kurzansicht als Seitenblatt (src/components/Peek.tsx) */
+.peek-scrim { position: fixed; inset: 0; background: rgba(15, 23, 42, .18); z-index: 80; }
+.peek { position: fixed; top: 0; right: 0; bottom: 0; width: min(26rem, 92vw); background: var(--surface); border-left: 1px solid var(--border); box-shadow: -12px 0 32px rgba(15, 23, 42, .14); z-index: 81; display: flex; flex-direction: column; animation: peek-in .16s ease-out; }
+@keyframes peek-in { from { transform: translateX(1.5rem); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .peek { animation: none; } }
+.peek-head { display: flex; align-items: center; justify-content: space-between; padding: .7rem 1rem; border-bottom: 1px solid var(--border); }
+.peek-kind { font-size: .72rem; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.peek-body { padding: 1.1rem 1.1rem 1.5rem; overflow-y: auto; }
+.peek-title { font-size: 1.2rem; font-weight: 650; line-height: 1.3; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.peek-next { margin-top: 1rem; padding: .7rem .85rem; border-radius: 10px; background: var(--accent-soft); font-size: .9rem; }
+.peek-label { display: block; font-size: .7rem; font-weight: 650; text-transform: uppercase; letter-spacing: .05em; color: var(--accent-ink); margin-bottom: .15rem; }
+.peek-facts { margin-top: 1rem; display: flex; flex-direction: column; font-size: .9rem; }
+.peek-facts > div { display: grid; grid-template-columns: 9.5rem minmax(0, 1fr); gap: .75rem; padding: .5rem 0; border-bottom: 1px solid var(--border); }
+.peek-facts dt { color: var(--muted); }
+.peek-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: 1.25rem; }
+.peek-skel { height: .9rem; border-radius: 6px; background: var(--surface-3); margin-bottom: .6rem; }
+.status[data-tone="bad"] { background: #fdecea; border-color: #f3c4bf; color: #8f1d14; }
+
+/* e78: Board – Alter in der Stufe und Fortschritt */
+.board-card[data-age="warn"] { border-left: 3px solid #c98a1b; }
+.board-card[data-age="bad"] { border-left: 3px solid var(--danger); }
+.board-age[data-age="warn"] { color: #8a5a00; font-weight: 600; }
+.board-age[data-age="bad"] { color: var(--danger); font-weight: 600; }
+.progress { display: flex; align-items: center; gap: .6rem; font-size: .82rem; color: var(--text-2); }
+.progress-bar { flex: 1; min-width: 6rem; max-width: 16rem; height: .5rem; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.progress-bar > span { display: block; height: 100%; border-radius: 999px; background: #2f8a4a; transition: width .3s ease; }
+.progress[data-done] { color: #1f6b3a; font-weight: 600; }
+.board-meta { flex-wrap: wrap; gap: .05rem .6rem; }
+.board-meta > span { white-space: nowrap; }
+.board-card > .chip { white-space: normal; max-width: 100%; text-align: left; line-height: 1.25; }

@@ -184,7 +184,18 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const scopeSwitch = teamAllowed ? (
     <Segmented label="Wessen Aufgaben" className="mb-2" items={[{ href: "/start#zeitleiste", label: "Meine", active: scope === "mine" }, { href: "/start?zl=team#zeitleiste", label: hat === "CEO" ? "Ganzes Team" : "Team meiner Kunden", active: scope === "team" }]} />
   ) : null;
-  const timeline = !readOnly && hasAnyContentRole(actor) && <TaskTimeline tasks={shownTasks} today={today} title={scope === "team" ? (hat === "CEO" ? "Aufgaben im Team" : "Aufgaben an meinen Kunden") : undefined}>{scopeSwitch}{scope === "mine" ? taskEntry : null}</TaskTimeline>;
+  // e78: Fortschritt der Woche – eigene Aufgaben, die diese Woche erledigt wurden, gegen die noch offenen bis Sonntag
+  const weekProgress = scope === "mine" ? await (async () => {
+    const dd = new Date(`${today}T00:00:00Z`);
+    const monday = new Date(dd.getTime() - ((dd.getUTCDay() + 6) % 7) * 86400000);
+    const sunday = new Date(monday.getTime() + 6 * 86400000).toISOString().slice(0, 10);
+    const { db: dbp, schema: sp2 } = await import("@/db/client");
+    const { and: andp, eq: eqp, gte: gtep } = await import("drizzle-orm");
+    const done = (await dbp.query.actions.findMany({ where: andp(eqp(sp2.actions.ownerUserId, actor.userId), eqp(sp2.actions.status, "ERLEDIGT"), gtep(sp2.actions.updatedAt, monday)), columns: { id: true } })).length;
+    const openThisWeek = shownTasks.filter((x) => x.due && x.due <= sunday).length;
+    return { done, total: done + openThisWeek };
+  })().catch(() => null) : null;
+  const timeline = !readOnly && hasAnyContentRole(actor) && <TaskTimeline progress={weekProgress} tasks={shownTasks} today={today} title={scope === "team" ? (hat === "CEO" ? "Aufgaben im Team" : "Aufgaben an meinen Kunden") : undefined}>{scopeSwitch}{scope === "mine" ? taskEntry : null}</TaskTimeline>;
 
   if (!d) {
     return (

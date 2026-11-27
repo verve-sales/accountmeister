@@ -50,7 +50,7 @@ export default async function KundenrundePage({ searchParams }: { searchParams: 
         <span><strong className="text-xl">{r.stats.accounts}</strong> Bestandskunden</span>
         <span style={{ color: COLOR.ROT }}><strong className="text-xl">{r.stats.red}</strong> rot</span>
         <span style={{ color: COLOR.GELB }}><strong className="text-xl">{r.stats.yellow}</strong> gelb</span>
-        <span><strong className="text-xl">{r.stats.prepared}</strong> von {r.stats.accounts} vorbereitet</span>
+        <span className="progress" data-done={r.stats.accounts > 0 && r.stats.prepared >= r.stats.accounts ? "" : undefined}><span><strong className="text-xl">{r.stats.prepared}</strong> von {r.stats.accounts} vorbereitet</span><span className="progress-bar" role="progressbar" aria-valuemin={0} aria-valuemax={r.stats.accounts} aria-valuenow={r.stats.prepared} aria-label="Vorbereitet"><span style={{ width: `${r.stats.accounts ? Math.round((r.stats.prepared / r.stats.accounts) * 100) : 0}%` }} /></span></span>
         {r.isGf && (
           <details className="ml-auto">
             <summary className="btn btn-secondary btn-small" style={{ listStyle: "none" }}>Runde abschließen</summary>

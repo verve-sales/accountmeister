@@ -188,12 +188,14 @@ export async function actOnCheckin(actor: Actor, checkinId: string, raw: unknown
       break;
     case "ERLEDIGEN": {
       // Schnellerfassung (Meine Arbeit): Stimmung genügt, Termin ist dann „jetzt“
-      if (i.mood && !i.heldAt) i.heldAt = new Date(Date.now() + 2 * 3600000).toISOString().slice(0, 16);
+      // Schnellerfassung: „jetzt“ in Berliner Zeit (auch im Winter und kurz vor Mitternacht der richtige Tag)
+      const quickNow = i.mood && !i.heldAt ? new Date() : null;
+      if (quickNow) i.heldAt = `${todayIso(quickNow)}T${new Intl.DateTimeFormat("de-DE", { timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", hour12: false }).format(quickNow)}`;
       if (i.mood && (!i.note || i.note.length < 5)) i.note = `Stimmung: ${moodLabel[i.mood]}${i.note ? ` – ${i.note}` : ""}`;
       if (!i.heldAt) throw new ValidationError("Bitte den tatsächlichen Gesprächstermin angeben.");
       if (!i.note || i.note.length < 5) throw new ValidationError("Bitte ein kurzes Ergebnis festhalten oder die Stimmung wählen.");
       patch.status = "ERLEDIGT";
-      patch.heldAt = new Date(`${i.heldAt}:00+02:00`);
+      patch.heldAt = quickNow ?? new Date(`${i.heldAt}:00+02:00`);
       patch.participants = i.participants || c.participants;
       patch.note = i.mood && !i.note.startsWith("Stimmung:") ? `Stimmung: ${moodLabel[i.mood]} – ${i.note}` : i.note;
       patch.risks = i.risks || null;
