@@ -13,7 +13,7 @@ import { workStatusLabel } from "@/modules/work/service";
 import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 import { portfolioDecisionAction } from "../../actions";
 
-const RED = "#c0392b";
+const RED = "var(--danger)";
 
 export default async function MeineBdsKundePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: SearchParams }) {
   const { id } = await params;
@@ -57,7 +57,7 @@ export default async function MeineBdsKundePage({ params, searchParams }: { para
       <div className="grid lg:grid-cols-2 gap-4">
         <section className="card">
           <h2 className="font-semibold mb-2">Laufendes Geschäft ({p.engagements.length})</h2>
-          {p.engagements.length === 0 ? <p className="muted text-sm">Kein laufender Einsatz.</p> : (
+          {p.engagements.length === 0 ? <p className="empty">Kein laufender Einsatz.</p> : (
             <ul className="text-sm space-y-1">
               {p.engagements.map((e) => (
                 <li key={e.id} className="flex flex-wrap gap-x-2 items-baseline">
@@ -71,7 +71,7 @@ export default async function MeineBdsKundePage({ params, searchParams }: { para
         </section>
         <section className="card">
           <h2 className="font-semibold mb-2">Neues Geschäft ({p.chances.length})</h2>
-          {p.chances.length === 0 ? <p className="muted text-sm">Keine Chance in Arbeit.</p> : (
+          {p.chances.length === 0 ? <p className="empty">Keine Chance in Arbeit.</p> : (
             <ul className="text-sm space-y-1">
               {p.chances.map((c) => (
                 <li key={c.id} className="flex flex-wrap gap-x-2 items-baseline"><Link href={`/bedarfe/${c.id}`}>{c.title}</Link><Status label={opportunityStatusLabel[c.status] ?? c.status} /><span className="muted text-xs ml-auto">{c.ownerName} · {fmtDate(c.updatedAt)}</span></li>

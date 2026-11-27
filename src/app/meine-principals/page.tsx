@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icon } from "@/components/Icon";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildPrincipalOverview, canSetTargets, levelLabel, shiftQuarter } from "@/modules/principals/service";
@@ -18,7 +19,7 @@ export default async function MeinePrincipalsPage({ searchParams }: { searchPara
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">Kundenverantwortliche</h1>
-        <span className="muted text-sm">{q.label} · {ref ? (ref === q.end ? `Stichtag ${fmtDate(q.end)}` : `Stand heute, Stichtag ${fmtDate(q.end)}`) : "Quartal hat noch nicht begonnen"}</span>
+        <span className="muted text-sm">{q.label} · {(() => { const t = new Date().toISOString().slice(0, 10); return t < q.start ? "Quartal hat noch nicht begonnen" : t > q.end || ref === q.end ? `Stichtag ${fmtDate(q.end)}` : `Stand heute, Stichtag ${fmtDate(q.end)}`; })()}</span>
         <span className="ml-auto text-sm flex gap-3">
           <Link href={`/meine-principals?q=${shiftQuarter(q, -1).key}`}>← {shiftQuarter(q, -1).label}</Link>
           <Link href={`/meine-principals?q=${shiftQuarter(q, 1).key}`}>{shiftQuarter(q, 1).label} →</Link>
@@ -26,7 +27,14 @@ export default async function MeinePrincipalsPage({ searchParams }: { searchPara
       </div>
       <Feedback params={sp} />
       {rows.length === 0 ? (
-        <p className="card muted text-sm">Noch keine Kundenverantwortung vergeben (Verwaltung → Rolle zuweisen → Principal, Stufe und Kunde).</p>
+        <section className="card empty-state">
+          <Icon name="users" size={28} />
+          <div>
+            <h2 className="font-semibold">Noch keine Kundenverantwortung vergeben</h2>
+            <p className="muted text-sm">Sobald Principals Kunden zugeordnet sind, stehen hier je Person Ziel und Stand des Quartals: Köpfe, Neukunden und Verlängerungsquote.</p>
+            {actor.roles.has("ADMIN") ? <Link href="/verwaltung/rollen" className="btn btn-small mt-2">Rolle zuweisen</Link> : <p className="muted text-xs mt-1">Vergeben wird sie in der Verwaltung unter „Rolle zuweisen“ (Principal, Stufe und Kunde).</p>}
+          </div>
+        </section>
       ) : (
         <section className="card">
           <table className="list text-sm">
@@ -39,7 +47,7 @@ export default async function MeinePrincipalsPage({ searchParams }: { searchPara
                   <td><TargetProgress actual={r.actuals.ref ? r.actuals.headsTotal : null} target={r.targets.headsTotal} /></td>
                   <td><TargetProgress actual={r.actuals.ref ? r.actuals.newCustomers.length : null} target={r.targets.newCustomers} /></td>
                   <td><TargetProgress actual={r.actuals.renewals.quote} target={r.targets.renewalQuote} unit=" %" hint={`${r.actuals.renewals.confirmed} bestätigt, ${r.actuals.renewals.rejected} nicht verlängert`} /></td>
-                  <td className="text-xs">{r.openAgreements ? <>{r.openAgreements} offen{r.overdueAgreements ? <span style={{ color: "#c0392b", fontWeight: 600 }}> · {r.overdueAgreements} überfällig</span> : null}</> : <span className="muted">–</span>}</td>
+                  <td className="text-xs">{r.openAgreements ? <>{r.openAgreements} offen{r.overdueAgreements ? <span style={{ color: "var(--danger)", fontWeight: 600 }}> · {r.overdueAgreements} überfällig</span> : null}</> : <span className="muted">–</span>}</td>
                   <td className="text-xs">{r.openRenewals ? <span style={{ color: "#b7791f", fontWeight: 600 }}>{r.openRenewals}</span> : <span className="muted">–</span>}</td>
                   <td><Link href={`/meine-principals/${r.principal.userId}?q=${q.key}`} className="btn btn-small">Gespräch</Link></td>
                 </tr>

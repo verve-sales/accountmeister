@@ -57,7 +57,7 @@ export default async function StrategiePage({ params, searchParams }: { params: 
 
   return (
     <div className="space-y-6">
-      <p className="text-sm"><Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${a.accountId}`}>{a.accountName}</Link> › <Link href={`/setups/${id}`}>{a.setupName}</Link> › Strategiefaden</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><Link href={`/kunden/${a.accountId}`}>{a.accountName}</Link><Link href={`/setups/${id}`}>{a.setupName}</Link><span>Strategiefaden</span></nav>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">Strategiefaden „{a.setupName}“</h1>
         <Status label={a.stageLabel} />

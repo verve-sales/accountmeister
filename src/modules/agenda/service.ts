@@ -1,3 +1,4 @@
+import { isoDe } from "@/lib/labels";
 import { and, asc, eq, inArray, isNotNull, lte, gte } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "@/db/client";
@@ -214,7 +215,7 @@ export async function ensureInitiativeReminders(actor: Actor, now = new Date()):
         .values({
           workspaceId: actor.workspaceId,
           setupId: setup.id,
-          title: `Kundeninitiative „${d.title.slice(0, 90)}“ steht am ${d.dueDate} an – Chance prüfen`,
+          title: `Kundeninitiative „${d.title.slice(0, 90)}“ steht am ${isoDe(d.dueDate)} an – Chance prüfen`,
           agreement: "Erinnerung aus der Kundenagenda: Was braucht der Kunde bis dahin? Wo können wir mit Verve-Experten oder Freelancern unterstützen? Ergebnis als Chance erfassen oder bewusst verwerfen.",
           ownerUserId: actor.userId,
           status: "VORGESCHLAGEN",

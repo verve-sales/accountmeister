@@ -1,3 +1,4 @@
+import { titleWithoutPerson } from "@/lib/labels";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -32,8 +33,8 @@ export default async function KonditionenPage({ searchParams }: { searchParams: 
         </form>
       </div>
       <section className="card" style={{ overflowX: "auto" }}>
-        {rows.length === 0 ? <p className="muted text-sm">Keine Einsätze.</p> : (
-          <table className="list text-sm">
+        {rows.length === 0 ? <p className="empty">Keine Einsätze.</p> : (
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Person</th><th>Kunde · Rolle</th><th>Laufzeit</th><th>Stand</th><th style={{ textAlign: "right" }}>VK</th><th style={{ textAlign: "right" }}>EK</th><th style={{ textAlign: "right" }}>Spanne</th><th>Umfang</th><th>Bestellung</th><th>Angebot</th><th>Vertrag</th><th>Moco</th></tr></thead>
             <tbody>
               {rows.map((e) => {
@@ -41,7 +42,7 @@ export default async function KonditionenPage({ searchParams }: { searchParams: 
                 return (
                   <tr key={e.id}>
                     <td><Link href={`/einsaetze/${e.id}`}><strong>{e.person}</strong></Link>{e.kind === "INTERN" ? <span className="muted text-xs"> intern</span> : null}</td>
-                    <td>{e.accountName}<div className="muted text-xs">{e.title}</div></td>
+                    <td>{e.accountName}<div className="muted text-xs">{titleWithoutPerson(e.title, e.person)}</div></td>
                     <td style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{e.start ? fmtDate(e.start) : "?"} – {e.end ? fmtDate(e.end) : "offen"}{e.daysToEnd !== null ? <div className="muted text-xs">{e.daysToEnd < 0 ? `seit ${-e.daysToEnd} Tagen vorbei` : `noch ${e.daysToEnd} Tage`}</div> : null}</td>
                     <td style={{ whiteSpace: "nowrap" }}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: ASG_COLOR[e.state], marginRight: 5 }} />{asgStateLabel[e.state]}{e.renewalTo ? <div className="muted text-xs">bis {fmtDate(e.renewalTo)}</div> : null}</td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{eur(e.vk, e.rateUnit)}</td>
@@ -50,13 +51,13 @@ export default async function KonditionenPage({ searchParams }: { searchParams: 
                     <td className="muted">{e.scope ?? "–"}</td>
                     <td>{e.orderReference ?? <span style={{ color: "#b7791f" }}>fehlt</span>}</td>
                     <td className="muted">{e.offerNumber ?? "–"}</td>
-                    <td>{e.kind === "INTERN" ? <span className="muted">entfällt</span> : e.contract ? <span style={{ color: e.contract === "UNTERSCHRIEBEN" ? "#2f7d32" : "#b7791f" }}>{contractLabel[e.contract] ?? e.contract}</span> : <span style={{ color: "#c0392b" }}>fehlt</span>}</td>
+                    <td>{e.kind === "INTERN" ? <span className="muted">entfällt</span> : e.contract ? <span style={{ color: e.contract === "UNTERSCHRIEBEN" ? "#2f7d32" : "#b7791f" }}>{contractLabel[e.contract] ?? e.contract}</span> : <span style={{ color: "var(--danger)" }}>fehlt</span>}</td>
                     <td className="muted">{e.mocoProjectId ?? "–"}</td>
                   </tr>
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
       <p className="muted text-xs">Einkaufssätze und Spanne sehen nur Sales Operations, Backoffice und Geschäftsführung. Geändert wird am Einsatz (Klick auf den Namen).</p>

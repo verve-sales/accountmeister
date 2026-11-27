@@ -16,7 +16,7 @@ export default async function KundeAusDokumentPage({ searchParams }: { searchPar
   const maxMb = getConfig().MAX_UPLOAD_MB;
   return (
     <div className="space-y-6 max-w-3xl">
-      <p className="text-sm"><Link href="/kunden">← Kunden</Link></p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link></nav>
       <h1 className="text-2xl font-semibold">Kunde aus Dokument anlegen</h1>
       <Feedback params={sp} />
       <section className="card">

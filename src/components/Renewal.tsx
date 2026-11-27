@@ -3,9 +3,9 @@ import { fmtDate } from "@/lib/labels";
 import { plusDaysIso } from "@/modules/work/calendar";
 import type { RenewalCard as Card } from "@/modules/engagements/care";
 import { approachLabel } from "@/modules/engagements/contacts";
-import { decideRenewalAction, signalRenewalAction, startRenewalAction } from "@/app/actions";
+import { decideRenewalAction, signalRenewalAction, signalRenewalPossibleAction, startRenewalAction } from "@/app/actions";
 
-const RED = "#c0392b";
+const RED = "var(--danger)";
 const AMBER = "#b7791f";
 
 
@@ -82,10 +82,10 @@ export function RenewalStartForm({ engagementId, currentEnd, back, compact = fal
         <input id={`${idp}-fu`} type="date" name="followUp" className="input" />
       </div>
       <div className="flex flex-wrap gap-2">
-        {canDecide && <button className="btn btn-small" type="submit" name="direct" value="1" style={{ background: "#2f7d32" }}>Verlängern</button>}
+        {canDecide && <button className="btn btn-small" type="submit" name="direct" value="1">Verlängern</button>}
         <button className={canDecide ? "btn btn-secondary btn-small" : "btn btn-small"} type="submit">{canDecide ? "Angebot raus – Bestellung abwarten" : "Verlängerung anstoßen"}</button>
         {/* e60: Verlängerung im Raum, für ein Angebot aber noch zu früh – „Neues Ende“ gilt als Wunschende */}
-        <button className="btn btn-secondary btn-small" type="submit" formAction={signalRenewalAction} formNoValidate name="signal" value="MOEGLICH" title="Nur festhalten: erscheint in der Zeitleiste, noch kein Angebot und keine Aufgabe für Sales Ops">Möglich – noch zu früh</button>
+        <button className="btn btn-secondary btn-small" type="submit" formAction={signalRenewalPossibleAction} formNoValidate title="Nur festhalten: erscheint in der Zeitleiste, noch kein Angebot und keine Aufgabe für Sales Ops">Möglich – noch zu früh</button>
       </div>
     </form>
   );
@@ -117,8 +117,8 @@ export function RenewalDecisionCard({ c, back }: { c: Card; back: string }) {
           </div>
           <div><label className="label" htmlFor={`rd-${c.decisionId}-po`}>Neue Bestellnummer</label><input id={`rd-${c.decisionId}-po`} name="orderReference" className="input" defaultValue={c.orderReference ?? ""} placeholder="falls schon da" maxLength={200} style={{ width: 150 }} /></div>
           <div><label className="label" htmlFor={`rd-${c.decisionId}-n`}>Notiz (optional)</label><input id={`rd-${c.decisionId}-n`} name="note" className="input" style={{ minWidth: 200 }} /></div>
-          <button className="btn btn-small" type="submit" name="decision" value="BESTAETIGEN" style={{ background: "#2f7d32" }}>Bestätigen</button>
-          <button className="btn btn-small" type="submit" name="decision" value="ABLEHNEN" style={{ background: RED }}>Ablehnen</button>
+          <button className="btn btn-small" type="submit" name="decision" value="BESTAETIGEN">Bestätigen</button>
+          <button className="btn btn-secondary btn-small" type="submit" name="decision" value="ABLEHNEN">Ablehnen</button>
         </form>
         {c.delegates.length > 0 && (
           <form action={decideRenewalAction} className="flex items-end gap-1">
@@ -160,7 +160,7 @@ export function RenewalSignalForm({ engagementId, currentEnd, back, possible }: 
         <input id={`${idp}-note`} name="note" className="input" placeholder="z. B. Herr Soldatow will verlängern, Budget steht" />
       </div>
       <button className="btn btn-secondary btn-small" type="submit" name="signal" value="MOEGLICH" title="Verlängerung im Raum, für ein Angebot aber noch zu früh – nur festhalten, noch kein Prozess">{possible ? "Möglich – aktualisieren" : "Möglich – noch zu früh"}</button>
-      <button className="btn btn-small" type="submit" name="signal" value="VERLAENGERN" style={{ background: "#2f7d32", borderColor: "#2f7d32" }}>{possible ? "Jetzt umsetzen" : "Kunde will verlängern"}</button>
+      <button className="btn btn-small" type="submit" name="signal" value="VERLAENGERN">{possible ? "Jetzt umsetzen" : "Kunde will verlängern"}</button>
       <button className="btn btn-secondary btn-small" type="submit" name="signal" value="ENDET">Endet</button>
     </form>
   );

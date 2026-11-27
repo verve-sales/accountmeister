@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { KpiRow, KpiTile } from "@/components/Kpi";
 import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { asgIntermediaryRequests, asgOppPhaseLabel, asgOpportunities, asgOverview, asgTaskLabel, canUseAssignments } from "@/modules/assignments/service";
@@ -11,7 +12,7 @@ import { canRunMocoImport } from "@/modules/moco/import";
 import { PendingButton } from "@/components/PendingButton";
 import { canClean, findEngagementDuplicates, findFreelancerDuplicates } from "@/modules/cleanup/service";
 
-const RED = "#c0392b";
+const RED = "var(--danger)";
 
 export default async function AssignmentsPage({ searchParams }: { searchParams: SearchParams & Promise<{ wer?: string; chancen?: string }> }) {
   const params = (await searchParams) as { wer?: string; chancen?: string } & Awaited<SearchParams>;
@@ -43,7 +44,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
   ];
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Übersicht</h1>
+      <h1 className="text-2xl font-semibold">Einsätze im Überblick</h1>
       <Feedback params={params} />
       {(flDup.length > 0 || engDup.length > 0) && (
         <p className="card text-sm" style={{ borderLeft: `3px solid ${RED}` }}>
@@ -51,14 +52,9 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
           <Link href={flDup.length ? "/bereinigung#freelancer" : "/bereinigung#einsaetze"}>in der Bereinigung zusammenführen →</Link>
         </p>
       )}
-      <section className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3" aria-label="Kennzahlen">
-        {tiles.map((t) => (
-          <Link key={t.l} href={t.href} className="no-underline p-3" style={{ background: "var(--surface-2)", borderRadius: 8, display: "block", color: "var(--text)" }}>
-            <div className="text-2xl font-semibold" style={{ fontVariantNumeric: "tabular-nums", color: t.warn ? RED : undefined }}>{t.v}</div>
-            <div className="muted text-xs">{t.l}</div>
-          </Link>
-        ))}
-      </section>
+      <KpiRow>
+        {tiles.map((t) => <KpiTile key={t.l} value={t.v} label={t.l} href={t.href} tone={t.warn ? "danger" : null} />)}
+      </KpiRow>
 
       {requests.length > 0 && (
         <section className="card" id="vermittler">
@@ -116,7 +112,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
 
       <section className="card" id="aufgaben">
         <h2 className="font-semibold">Aufgaben ({o.tasks.length})</h2>
-        {o.tasks.length === 0 ? <p className="muted text-sm mt-1">Nichts offen.</p> : (
+        {o.tasks.length === 0 ? <p className="empty">Nichts offen.</p> : (
           <table className="list text-sm mt-1">
             <thead><tr><th>Was</th><th>Person</th><th>Kunde</th><th>Aufgabe</th><th>Fällig</th></tr></thead>
             <tbody>

@@ -1,3 +1,4 @@
+import { isoDe } from "@/lib/labels";
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import type { Actor } from "@/modules/identity/actor";
@@ -164,7 +165,7 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
   // Aktionen
   const overdue = actions.filter((a) => a.dueDate && a.dueDate < today && a.status !== "BLOCKIERT");
   const blocked = actions.filter((a) => a.status === "BLOCKIERT");
-  for (const a of overdue.slice(0, 3)) blockers.push(`Überfällig seit ${a.dueDate}: „${a.title}“.`);
+  for (const a of overdue.slice(0, 3)) blockers.push(`Überfällig seit ${isoDe(a.dueDate)}: „${a.title}“.`);
   for (const a of blocked.slice(0, 2)) blockers.push(`Blockiert: „${a.title}“.`);
   if (actions.length === 0 && ctx.setup.status !== "ARCHIVIERT") missing.push("Kein nächster Schritt geplant – keine offene Aktion.");
 

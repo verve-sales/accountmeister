@@ -21,13 +21,12 @@ export default async function FreelancerPoolPage({ searchParams }: { searchParam
   }
   return (
     <div className="space-y-5">
-      <p className="text-sm"><Link href="/besetzung">Besetzungen</Link></p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/besetzung">Besetzung</Link></nav>
       <h1 className="text-2xl font-semibold">Freelancer-Pool</h1>
       <p className="muted text-sm">Nur Stammdaten: Name, erlaubte Kontaktdaten, Firma, Skills, zuletzt bestätigte Verfügbarkeit, externe CV-/Tool-Referenzen. Keine Bank-, Ausweis- oder Steuerdaten. Kandidaturen entstehen an der Position.</p>
       <Feedback params={sp} />
       <section className="card" style={{ overflowX: "auto" }}>
-        {rows.length === 0 ? (
-          <p className="muted text-sm">Noch keine Freelancer erfasst.</p>
+        {rows.length === 0 ? (<p className="empty">Noch keine Freelancer erfasst.</p>
         ) : (
           <table className="list text-sm">
             <thead><tr><th>Name</th><th>Firma</th><th>Skills</th><th>Verfügbarkeit</th><th>Kandidaturen</th></tr></thead>

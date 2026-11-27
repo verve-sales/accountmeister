@@ -29,13 +29,13 @@ export default async function SetupArtefaktePage({ params, searchParams }: { par
   const templates = templatesForSetupDrafts();
   return (
     <div className="space-y-6">
-      <p className="text-sm"><Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${ctx.account.id}`}>{ctx.account.name}</Link> › <Link href={`/setups/${id}`}>{ctx.setup.name}</Link> › Artefakte</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><Link href={`/kunden/${ctx.account.id}`}>{ctx.account.name}</Link><Link href={`/setups/${id}`}>{ctx.setup.name}</Link><span>Artefakte</span></nav>
       <h1 className="text-2xl font-semibold">Artefakte – {ctx.setup.name}</h1>
       <SetupTabs setupId={id} active="artefakte" />
       <Feedback params={sp} />
       <section className="card">
         <h2 className="font-semibold mb-2">Textentwürfe ({artifacts.length})</h2>
-        {artifacts.length === 0 ? <p className="muted text-sm">Noch keine Textentwürfe. Lebende Artefakte (Setup, Personen & Zugang, Beobachtungen, Übergaben, Kontaktwege, Weeklys, Accountplan) sind direkt als Ansichten vorhanden.</p> : (
+        {artifacts.length === 0 ? <p className="empty">Noch keine Textentwürfe. Lebende Artefakte (Setup, Personen & Zugang, Beobachtungen, Übergaben, Kontaktwege, Weeklys, Accountplan) sind direkt als Ansichten vorhanden.</p> : (
           <table className="list">
             <thead><tr><th>Artefakt</th><th>Vorlage</th><th>Variante</th><th>Version</th><th>Status</th><th>Empfängerkreis</th><th>Zuletzt</th></tr></thead>
             <tbody>

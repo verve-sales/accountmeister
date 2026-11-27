@@ -12,17 +12,17 @@ export default async function ChancenPage({ searchParams }: { searchParams: Prom
   const r = await drilldown(actor, sp);
   return (
     <div className="space-y-5">
-      <p className="text-sm"><Link href="/start">Start</Link> › Drill-down</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/start">Start</Link><span>Drill-down</span></nav>
       <h1 className="text-2xl font-semibold">{r.title}</h1>
       <section className="card">
         {r.mode === "kunden" ? (
-          r.accounts.length === 0 ? <p className="muted text-sm">Keine Kunden.</p> : (
+          r.accounts.length === 0 ? <p className="empty">Keine Kunden.</p> : (
             <table className="list text-sm">
               <thead><tr><th>Kunde</th><th>BD</th><th style={{ textAlign: "right" }}>offene Chancen</th></tr></thead>
               <tbody>{r.accounts.map((a) => <tr key={a.id}><td><Link href={`/kunden/${a.id}?b=strategie`}>{a.name}</Link></td><td>{a.bdName}</td><td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{a.openChances}</td></tr>)}</tbody>
             </table>
           )
-        ) : r.chances.length === 0 ? <p className="muted text-sm">Keine Chancen.</p> : (
+        ) : r.chances.length === 0 ? <p className="empty">Keine Chancen.</p> : (
           <table className="list text-sm">
             <thead><tr><th>Chance</th><th>Kunde · Setup</th><th>Art</th><th>Stand</th><th>BD</th><th>angelegt</th>{sp.vorgestellt ? <th style={{ textAlign: "right" }}>vorgestellt</th> : null}</tr></thead>
             <tbody>

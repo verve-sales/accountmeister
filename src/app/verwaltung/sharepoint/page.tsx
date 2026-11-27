@@ -28,7 +28,7 @@ export default async function SharePointPage({ searchParams }: { searchParams: S
 
   return (
     <div className="space-y-5">
-      <p className="text-sm"><Link href="/verwaltung">← Verwaltung</Link></p>
+      <nav className="crumbs" aria-label="Pfad">{actor.roles.has("ADMIN") ? <Link href="/verwaltung">Verwaltung</Link> : <span>Verwaltung</span>}<span>SharePoint-Ablage</span></nav>
       <h1 className="text-2xl font-semibold">SharePoint-Ablage</h1>
       <Feedback params={sp} />
 
@@ -41,7 +41,7 @@ export default async function SharePointPage({ searchParams }: { searchParams: S
             <pre className="text-xs" style={{ background: "var(--surface-2)", padding: ".6rem", borderRadius: 6, overflowX: "auto" }}>SHAREPOINT_MODE=graph{"\n"}SHAREPOINT_SITE_ID=&lt;Site-ID aus dem Graph Explorer&gt;</pre></TechDetails>
           </>
         ) : !status.ok ? (
-          <p style={{ color: "#c0392b" }}>Die Site ist nicht erreichbar: {status.error}. Meist fehlt das Recht der App auf die Site (Sites.Selected) oder die Site-ID stimmt nicht.</p>
+          <p style={{ color: "var(--danger)" }}>Die Site ist nicht erreichbar: {status.error}. Meist fehlt das Recht der App auf die Site (Sites.Selected) oder die Site-ID stimmt nicht.</p>
         ) : (
           <table className="list">
             <thead><tr><th>Bibliothek</th><th>Stand</th></tr></thead>

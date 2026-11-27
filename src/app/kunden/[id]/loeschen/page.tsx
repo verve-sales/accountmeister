@@ -25,7 +25,7 @@ export default async function KundeLoeschenPage({ params, searchParams }: { para
   const { account } = p;
   return (
     <div className="space-y-6 max-w-3xl">
-      <p className="text-sm"><Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${account.id}`}>{account.name}</Link> › Löschen</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><Link href={`/kunden/${account.id}`}>{account.name}</Link><span>Löschen</span></nav>
       <h1 className="text-2xl font-semibold">Kunde „{account.name}“ löschen</h1>
       <Feedback params={sp} />
 
@@ -66,7 +66,7 @@ export default async function KundeLoeschenPage({ params, searchParams }: { para
               <button className="btn btn-secondary" type="submit">Wiederherstellen</button>
             </form>
           </section>
-          <section className="card" style={{ borderColor: "#c0392b" }}>
+          <section className="card" style={{ borderColor: "var(--danger)" }}>
             <h2 className="font-semibold mb-2">Schritt 2: Endgültig löschen</h2>
             <p className="text-sm mb-3">Dieser Schritt lässt sich nicht rückgängig machen. Zur Bestätigung den Kundennamen eintippen und eine Begründung angeben – sie bleibt im Prüfprotokoll.</p>
             <form action={deleteAccountAction} className="grid gap-3">
@@ -79,7 +79,7 @@ export default async function KundeLoeschenPage({ params, searchParams }: { para
                 <label className="label" htmlFor="reason">Begründung (mindestens 10 Zeichen)</label>
                 <textarea id="reason" name="reason" className="textarea" required minLength={10} maxLength={1000} placeholder="z. B. Fehlanlage / Testdaten / Löschverlangen des Kunden vom …" />
               </div>
-              <div><button className="btn" type="submit" style={{ background: "#c0392b" }}>Kunde mit allen Daten endgültig löschen</button></div>
+              <div><button className="btn btn-danger" type="submit">Kunde mit allen Daten endgültig löschen</button></div>
             </form>
           </section>
         </>

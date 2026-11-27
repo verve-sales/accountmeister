@@ -55,7 +55,7 @@ export default async function VorgehenPage({ searchParams }: { searchParams: Sea
       <section className="card">
         <h2 className="font-semibold mb-2">Reaktivierung prüfen – ruhende Kunden ({dormant.length})</h2>
         <p className="muted text-sm mb-2">Kunden, die als „ruhend“ markiert sind oder seit mehr als {DORMANT_AFTER_DAYS} Tagen keine Aktivität hatten (Setups, Aktionen, Beobachtungen, Chancen). Längste Inaktivität zuerst.</p>
-        {dormant.length === 0 ? <p className="muted text-sm">Keine ruhenden Kunden in deinem Berechtigungsbereich.</p> : (
+        {dormant.length === 0 ? <p className="empty">Keine ruhenden Kunden in deinem Berechtigungsbereich.</p> : (
           <table className="list">
             <thead><tr><th>Kunde</th><th>Status</th><th>Letzte Aktivität</th><th>Vorgehen</th></tr></thead>
             <tbody>

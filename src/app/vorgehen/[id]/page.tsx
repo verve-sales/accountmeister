@@ -39,7 +39,7 @@ export default async function VorgehenBearbeitenPage({ params, searchParams }: {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm"><Link href="/vorgehen">Vorgehensmuster</Link> › {p.name}</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/vorgehen">Vorgehensmuster</Link><span>{p.name}</span></nav>
       <h1 className="text-2xl font-semibold">{p.name} bearbeiten</h1>
       <p className="muted text-sm">Wird angewendet auf: {playbookScopeLabel[p.scope]}. Änderungen gelten für neu gestartete Vorgehen; laufende Vorgehen behalten ihre Schritte.</p>
       <Feedback params={sp} />

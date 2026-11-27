@@ -32,7 +32,7 @@ export default async function UebergabenPage({ searchParams }: { searchParams: P
         <Link href="/uebergaben?f=alle" className={`btn btn-small${filter === "alle" ? "" : " btn-secondary"}`}>alle</Link>
       </nav>
       <section className="card">
-        {rows.length === 0 ? <p className="muted text-sm">{filter === "offen" ? "Keine offenen Übergaben." : "Noch keine Übergaben."}</p> : (
+        {rows.length === 0 ? <p className="empty">{filter === "offen" ? "Keine offenen Übergaben." : "Noch keine Übergaben."}</p> : (
           <table className="list text-sm">
             <thead><tr><th>Was zu tun ist</th><th>Person · Kunde</th><th>Bestellnummer</th><th>Vom</th><th>Stand</th></tr></thead>
             <tbody>

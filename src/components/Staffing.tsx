@@ -6,7 +6,7 @@ import { createPositionAction, createStaffingIntakeAction } from "@/app/actions"
 import { QuickFillForm } from "./QuickFillForm";
 import { fmtDate } from "@/lib/labels";
 
-const RED = "#c0392b";
+const RED = "var(--danger)";
 
 type Row = Pick<PositionView, "id" | "title" | "status" | "progress" | "bdName" | "nextDue" | "overdue" | "accountName" | "opportunityTitle"> & Partial<Pick<PositionView, "searcherName" | "candidacyCount" | "presentedCount" | "searchStatus" | "filledBy">>;
 

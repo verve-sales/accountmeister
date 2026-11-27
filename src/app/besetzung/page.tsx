@@ -34,7 +34,7 @@ export default async function BesetzungenPage({ searchParams }: { searchParams: 
       <Feedback params={sp} />
       <nav aria-label="Filter" className="flex flex-wrap gap-2 text-sm">
         {FILTERS.map((f) => (
-          <Link key={f.key} href={`/besetzung?f=${f.key}`} className={`btn btn-small${filter === f.key ? "" : " btn-secondary"}`} aria-current={filter === f.key ? "page" : undefined}>
+          <Link key={f.key} href={`/besetzung?f=${f.key}`} className="chip" aria-current={filter === f.key ? "page" : undefined}>
             {f.label} ({counts[f.key]})
           </Link>
         ))}

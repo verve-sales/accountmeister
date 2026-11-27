@@ -3,7 +3,7 @@ import type { AsgEngagement, AsgOpportunity, AsgOppPhase, AsgState } from "@/mod
 import { asgOppPhaseLabel, asgStateLabel } from "@/modules/assignments/service";
 import { fmtDate } from "@/lib/labels";
 
-export const ASG_COLOR: Record<AsgState, string> = { LAEUFT: "#2e7d6b", GEPLANT: "#8fa6a0", ENDET_BALD: "#b7791f", DRINGEND: "#c0392b", UEBERSCHRITTEN: "#7b1e13", VERLAENGERUNG: "#6a4fa3", BEENDET: "#b5b5ad" };
+export const ASG_COLOR: Record<AsgState, string> = { LAEUFT: "#2e7d6b", GEPLANT: "#8fa6a0", ENDET_BALD: "#b7791f", DRINGEND: "var(--danger)", UEBERSCHRITTEN: "#7b1e13", VERLAENGERUNG: "#6a4fa3", BEENDET: "#b5b5ad" };
 /** e55: Chancen in einer Farbe, von hell (vermutet) nach kräftig (ausgewählt) – die Phase ist zusätzlich beschriftet. */
 export const OPP_STYLE: Record<AsgOppPhase, { background: string; color: string; border: string }> = {
   VERMUTET: { background: "transparent", color: "#2f5f9e", border: "1.5px dotted #2f5f9e" },
@@ -86,7 +86,7 @@ export function AsgTimeline({ engagements, opportunities = [], today, monthsBack
                     const ph = REN_STYLE[e.renewalStatus ?? ""] ?? REN_STYLE.IN_ABSTIMMUNG!;
                     return <span className="tl-ext" title={`Verlängerung bis ${fmtDate(e.renewalTo)} · ${ph.label}`} style={{ top, left: `${r}%`, width: `${Math.max(pos(e.renewalTo) - r, 0)}%`, borderColor: ASG_COLOR.VERLAENGERUNG, borderStyle: ph.border, background: ph.background, color: "#4b3778", fontSize: ".7rem", lineHeight: "1.1rem", paddingLeft: ".3rem", overflow: "hidden", whiteSpace: "nowrap" }}>{ph.short}</span>;
                   })()}
-                  {[...new Set(e.checkinDots)].filter((d) => d >= fromIso && d <= toIso).map((d) => <span key={`${e.id}-${d}`} className="tl-dot" title={`Check-in fällig ${fmtDate(d)}`} style={{ top: `calc(${top} + 1.45rem)`, left: `${pos(d)}%`, background: d < today ? "#c0392b" : "#5f5f5a" }} />)}
+                  {[...new Set(e.checkinDots)].filter((d) => d >= fromIso && d <= toIso).map((d) => <span key={`${e.id}-${d}`} className="tl-dot" title={`Check-in fällig ${fmtDate(d)}`} style={{ top: `calc(${top} + 1.45rem)`, left: `${pos(d)}%`, background: d < today ? "var(--danger)" : "#5f5f5a" }} />)}
                 </span>
               );
             })}

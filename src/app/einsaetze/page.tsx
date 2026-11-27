@@ -1,3 +1,4 @@
+import { titleWithoutPerson } from "@/lib/labels";
 import Link from "next/link";
 import { pl } from "@/lib/labels";
 import { notFound, redirect } from "next/navigation";
@@ -22,7 +23,7 @@ const FILTERS: { key: EngagementFilter; label: string }[] = [
   { key: "abgeschlossen", label: "abgeschlossen" },
   { key: "alle", label: "alle" },
 ];
-const RED = "#c0392b";
+const RED = "var(--danger)";
 const MOOD: Record<MoodMark["mood"], { label: string; color: string }> = { POSITIV: { label: "positiv", color: "#2f7d32" }, MITTEL: { label: "mittel", color: "#b7791f" }, NEGATIV: { label: "negativ", color: RED } };
 
 function Mood({ m, side }: { m: MoodMark | null; side: string }) {
@@ -48,7 +49,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">Einsätze</h1>
         <span className="muted text-sm">Wer ist wo bis wann – mit Stimmung aus den Check-ins und Stand der Verlängerung. Stundenzettel bleiben in Moco.</span>
-        <Link href="/besetzung" className="text-sm ml-auto">Besetzungen</Link>
+        <Link href="/besetzung" className="text-sm ml-auto">Besetzung</Link>
       </div>
       <Feedback params={sp} />
       <form method="get" action="/einsaetze" className="flex flex-wrap gap-2 items-center text-sm">
@@ -59,7 +60,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
       </form>
       <nav aria-label="Filter" className="flex flex-wrap gap-2 text-sm">
         {FILTERS.map((f) => (
-          <Link key={f.key} href={`/einsaetze?f=${f.key}${qs}`} className={`btn btn-small${filter === f.key ? "" : " btn-secondary"}`} aria-current={filter === f.key ? "page" : undefined}>
+          <Link key={f.key} href={`/einsaetze?f=${f.key}${qs}`} className="chip" aria-current={filter === f.key ? "page" : undefined}>
             {f.label} ({counts[f.key]})
           </Link>
         ))}
@@ -72,10 +73,9 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
         </p>
       )}
       <section className="card">
-        {items.length === 0 ? (
-          <p className="muted text-sm">{q ? `Nichts gefunden für „${q}“.` : "Keine Einsätze in diesem Filter. Einsätze entstehen mit der bestätigten Auswahl an einer Position oder aus Moco."}</p>
+        {items.length === 0 ? (<p className="empty">{q ? `Nichts gefunden für „${q}“.` : "Keine Einsätze in diesem Filter. Einsätze entstehen mit der bestätigten Auswahl an einer Position oder aus Moco."}</p>
         ) : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead>
               <tr><th>Person · Kunde</th><th>Einsatz</th><th>Ende</th><th>Stimmung</th><th>Verlängerung · über</th><th>Betreuung</th></tr>
             </thead>
@@ -90,7 +90,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
                       <div className="muted text-xs">{e.accountName} · BD {e.bdName}</div>
                     </td>
                     <td>
-                      <div>{e.title}</div>
+                      <div>{titleWithoutPerson(e.title, e.personName)}</div>
                       <div className="muted text-xs"><span className="status">{engagementStatusLabel[e.status] ?? e.status}</span>{e.mocoProjectId ? ` · Moco ${e.mocoProjectId}` : ""}{e.procurement.complete === false && !e.procurementException ? <span style={{ color: "#b7791f" }}> · Unterlagen {e.procurement.required.filter((r) => r.ok).length}/{e.procurement.required.length}</span> : null}</div>
                     </td>
                     <td style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
@@ -111,7 +111,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
     </div>

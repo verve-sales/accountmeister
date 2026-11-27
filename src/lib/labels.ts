@@ -138,3 +138,18 @@ export function agoLabel(days: number): string {
 export function pl(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
+
+/** e64: Einsatztitel ohne den angehängten Personennamen („Testmanagement – Jana Jung (fiktiv)“ → „Testmanagement“), wenn die Person ohnehin daneben steht. */
+export function titleWithoutPerson(title: string, person: string | null | undefined): string {
+  if (!person) return title;
+  const p = person.replace(/\s*\(intern\)$/, "").trim();
+  const t = title.replace(new RegExp(`\\s*[–-]\\s*${p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`), "").trim();
+  return t || title;
+}
+
+/** e64: ISO-Datum (JJJJ-MM-TT) für Texte in deutscher Form (16.12.2026); alles andere unverändert. */
+export function isoDe(d: string | null | undefined): string {
+  if (!d) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  return m ? `${Number(m[3])}.${Number(m[2])}.${m[1]}` : d;
+}

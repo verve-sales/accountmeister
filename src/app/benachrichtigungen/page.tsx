@@ -54,19 +54,26 @@ export default async function BenachrichtigungenPage({ searchParams }: { searchP
 
 function Rows({ list }: { list: Awaited<ReturnType<typeof listNotifications>> }) {
   return (
-    <ul className="space-y-2">
+    <ul className="notif-list">
       {list.map((n) => (
-        <li key={n.id} className="text-sm flex flex-wrap items-baseline gap-2" style={{ fontWeight: n.readAt ? 400 : 600 }}>
-          <span className="muted text-xs" style={{ minWidth: "9.5rem" }}>{fmtDateTime(n.createdAt)}</span>
-          <span className="status">{notificationKindLabel[n.kind as NotificationKind] ?? n.kind}</span>
-          <form action={openNotificationAction} className="grow" style={{ minWidth: 0, flexBasis: "20rem" }}>
+        <li key={n.id} className="notif" data-unread={n.readAt ? undefined : "true"}>
+          <form action={openNotificationAction} className="notif-form">
             <input type="hidden" name="notificationId" value={n.id} />
-            <button type="submit" className="link-button" style={{ background: "none", border: 0, padding: 0, color: "var(--link, #1d4ed8)", textDecoration: "underline", cursor: "pointer", textAlign: "left", fontWeight: "inherit" }}>
-              {n.title}
+            <button type="submit" className="notif-open">
+              <span className="notif-dot" aria-hidden="true" />
+              <span className="notif-body">
+                <span className="notif-title">{deDates(n.title)}</span>
+                <span className="notif-meta"><span className="status">{notificationKindLabel[n.kind as NotificationKind] ?? n.kind}</span> {fmtDateTime(n.createdAt)}</span>
+              </span>
             </button>
           </form>
         </li>
       ))}
     </ul>
   );
+}
+
+/** e64: Datumsangaben in Hinweistexten einheitlich deutsch (2026-12-16 → 16.12.2026) */
+function deDates(t: string): string {
+  return t.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => `${Number(d)}.${Number(m)}.${y}`);
 }

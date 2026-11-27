@@ -7,7 +7,7 @@ import { HealthBadge } from "@/components/HealthBadge";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { fmtDate, agoLabel } from "@/lib/labels";
 
-const RED = "#c0392b";
+const RED = "var(--danger)";
 
 export default async function MeineBdsPage({ searchParams }: { searchParams: SearchParams }) {
   const sp = await searchParams;

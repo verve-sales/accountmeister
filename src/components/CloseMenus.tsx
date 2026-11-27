@@ -23,5 +23,17 @@ export function CloseMenus() {
   useEffect(() => {
     for (const d of Array.from(document.querySelectorAll<HTMLDetailsElement>("details.nav-more[open]"))) d.open = false;
   }, [path]);
+  // e64: Sprungziel in einem eingeklappten Abschnitt (z. B. Hilfe-Kapitel) aufklappen
+  useEffect(() => {
+    const openTarget = () => {
+      const id = decodeURIComponent(location.hash.slice(1));
+      const el = id ? document.getElementById(id) : null;
+      const det = el?.closest("details");
+      if (det && !det.open) det.open = true;
+    };
+    openTarget();
+    window.addEventListener("hashchange", openTarget);
+    return () => window.removeEventListener("hashchange", openTarget);
+  }, [path]);
   return null;
 }

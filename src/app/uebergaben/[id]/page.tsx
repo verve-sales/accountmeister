@@ -37,7 +37,7 @@ export default async function UebergabePage({ params, searchParams }: { params: 
   const needsProject = ["BEAUFTRAGT", "VORLAEUFIG"].includes(h.kind);
   return (
     <div className="space-y-5">
-      <p className="text-sm"><Link href="/uebergaben">Übergaben</Link></p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/uebergaben">Übergaben</Link></nav>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">{handoverTask[h.kind] ?? h.kind}</h1>
         <span className="status">{handoverKindLabel[h.kind] ?? h.kind}</span>

@@ -9,7 +9,7 @@ import { addCommentAction, deleteCommentAction, editCommentAction } from "@/app/
 import { fmtDate } from "@/lib/labels";
 import { WorkCreateForm } from "./WorkCreateForm";
 
-const RED = "#c0392b";
+const RED = "var(--danger)";
 const AMBER = "#b7791f";
 
 export function SlaBadge({ state }: { state: "OK" | "KNAPP" | "VERLETZT" | null }) {

@@ -40,22 +40,21 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
       <section className="card">
         <h2 className="font-semibold mb-1">Wohin läuft es – Chancen im Portfolio</h2>
         <p className="muted text-sm mb-3">{chancen.byKind.map((k) => `${k.label}: ${pl(k.positions, "Position", "Positionen")} in ${pl(k.chances, "Chance", "Chancen")}`).join(" · ")}</p>
-        {chancen.matrix.length === 0 ? (
-          <p className="muted text-sm">Noch keine aktiven Chancen. Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten – jede mit Art (Verve-Experte, Freelancer-Experte, Ausschreibung) und Standardrolle.</p>
+        {chancen.matrix.length === 0 ? (<p className="empty">Noch keine aktiven Chancen. Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten – jede mit Art (Verve-Experte, Freelancer-Experte, Ausschreibung) und Standardrolle.</p>
         ) : (
-          <table className="list text-sm">
+          <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Rollenfamilie</th>{MATURITY.map((m) => <th key={m}>{maturityLabel[m]}</th>)}<th>Summe</th></tr></thead>
             <tbody>
               {chancen.matrix.map((r) => (
                 <tr key={r.family}><td>{r.label}</td>{MATURITY.map((m) => <td key={m}>{r.cells[m] || <span className="muted">–</span>}</td>)}<td><strong>{r.total}</strong></td></tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {chancen.rows.length > 0 && (
           <details className="mt-3 text-sm">
             <summary className="muted">Alle Chancen ({chancen.rows.length})</summary>
-            <table className="list mt-2">
+            <div className="table-wrap"><table className="list mt-2">
               <thead><tr><th>Kunde</th><th>Chance</th><th>Wofür</th><th>Reifegrad</th><th>Horizont</th></tr></thead>
               <tbody>
                 {chancen.rows.map((r) => (
@@ -68,7 +67,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </details>
         )}
         <p className="muted text-xs mt-2">{chancen.note}</p>
@@ -78,7 +77,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
         <section className="card">
           <h2 className="font-semibold mb-2">Portfolio ({portfolio.entries.length} Kunden)</h2>
           <p className="muted text-sm mb-2">{portfolio.note}</p>
-          <table className="list">
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Kunde</th><th>BD</th><th>Setups</th><th>Offene Beobachtungen</th><th>Offene Fragen</th><th>Zugangslücken</th><th>Prioritäten (vereinbart / vorgeschlagen)</th><th>Aktionen (offen / blockiert)</th><th>Unterstützung offen</th><th>Letztes bestätigtes Weekly</th></tr></thead>
             <tbody>
               {portfolio.entries.map((e) => (
@@ -96,13 +95,13 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </section>
       )}
 
       <section className="card">
         <h2 className="font-semibold mb-2">Unterstützungsaufträge ({openSupport.length} offen)</h2>
-        {openSupport.length === 0 ? <p className="muted text-sm">Keine offenen Unterstützungsaufträge.</p> : (
+        {openSupport.length === 0 ? <p className="empty">Keine offenen Unterstützungsaufträge.</p> : (
           <ul className="space-y-2">
             {openSupport.map((s) => (
               <li key={s.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
@@ -127,8 +126,8 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
 
       <section className="card">
         <h2 className="font-semibold mb-2">Ziele ({goals.length})</h2>
-        {goals.length === 0 ? <p className="muted text-sm">Noch keine Ziele. Ziele vereinbaren CEO und Principal im Zielgespräch.</p> : (
-          <table className="list">
+        {goals.length === 0 ? <p className="empty">Noch keine Ziele. Ziele vereinbaren CEO und Principal im Zielgespräch.</p> : (
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Ziel</th><th>Kunde</th><th>Verantwortlich</th><th>Zeitraum</th><th>Status</th><th>Zielwert</th><th>Beiträge</th></tr></thead>
             <tbody>
               {goals.map((g) => {
@@ -146,7 +145,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         )}
         {isLeader && (
           <details className="mt-3">
@@ -178,11 +177,11 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
 
       <section className="card">
         <h2 className="font-semibold mb-2">Führungs-Reviews ({reviews.length})</h2>
-        {reviews.length === 0 ? <p className="muted text-sm">Keine Principal-/BD-Weeklys oder Zielgespräche, an denen du teilnimmst.</p> : (
-          <table className="list">
+        {reviews.length === 0 ? <p className="empty">Keine Principal-/BD-Weeklys oder Zielgespräche, an denen du teilnimmst.</p> : (
+          <div className="table-wrap"><table className="list">
             <thead><tr><th>Review</th><th>Art</th><th>Termin</th><th>Status</th></tr></thead>
             <tbody>{reviews.map((r) => <tr key={r.id}><td><Link href={`/fuehrung/${r.id}`}>{r.title}</Link></td><td className="text-sm">{reviewTypeLabel[r.type]}</td><td>{fmtDate(r.scheduledFor)}</td><td><Status label={reviewStatusLabel[r.status] ?? r.status} /></td></tr>)}</tbody>
-          </table>
+          </table></div>
         )}
         {(isLeader || hasRole(actor, "BD")) && (
           <details className="mt-3">

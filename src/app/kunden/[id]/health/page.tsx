@@ -48,7 +48,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
 
   return (
     <div className="space-y-6">
-      <p className="text-sm"><Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${id}`}>{account.name}</Link> › Health-Check</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><Link href={`/kunden/${id}`}>{account.name}</Link><span>Health-Check</span></nav>
       <h1 className="text-2xl font-semibold">Health-Check: Wie sicher sitzen wir bei {account.name} im Sattel?</h1>
       <Feedback params={sp} />
 
@@ -140,7 +140,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
 
       <section className="card">
         <h2 className="font-semibold mb-2">Einsätze ({h.engagements.length})</h2>
-        {h.engagements.length === 0 ? <p className="muted text-sm">Keine laufenden oder beauftragten Einsätze erfasst.</p> : (
+        {h.engagements.length === 0 ? <p className="empty">Keine laufenden oder beauftragten Einsätze erfasst.</p> : (
           <table className="list">
             <thead><tr><th>Einsatz</th><th>Berater</th><th>Vertrag / Bestellung</th><th>Status</th><th>Start</th><th>Ende · Verlängerungsfrist</th><th>Verlängerung startet</th></tr></thead>
             <tbody>
@@ -150,7 +150,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
                     <td><Link href={`/einsaetze/${e.engagementId}`}>{e.title}</Link><div className="muted text-xs">{e.setupName}</div></td>
                     <td className="text-sm">{e.consultantName ?? <span className="muted">–</span>}</td>
                     <td className="text-sm">{e.orderReference ? <div className="muted text-xs">Ref. {e.orderReference}</div> : <span className="muted text-xs">Unterlagen am Einsatz</span>}</td>
-                    <td className="text-sm">{e.daysToEnd !== null && e.daysToEnd < 0 ? <span style={{ color: "#c0392b", fontWeight: 600 }}>Ende überschritten ({-e.daysToEnd} Tage)</span> : <>{e.status === "GESTARTET" ? "läuft" : "geplant"}{e.daysToEnd !== null && e.daysToEnd >= 0 ? ` · noch ${e.daysToEnd} Tage` : ""}</>}</td>
+                    <td className="text-sm">{e.daysToEnd !== null && e.daysToEnd < 0 ? <span style={{ color: "var(--danger)", fontWeight: 600 }}>Ende überschritten ({-e.daysToEnd} Tage)</span> : <>{e.status === "GESTARTET" ? "läuft" : "geplant"}{e.daysToEnd !== null && e.daysToEnd >= 0 ? ` · noch ${e.daysToEnd} Tage` : ""}</>}</td>
                     <td className="text-sm">{fmtDate(e.plannedStart)}</td>
                     <td className="text-sm">{e.plannedEnd ? fmtDate(e.plannedEnd) : <Link href={`/einsaetze/${e.engagementId}`}>Ende am Einsatz eintragen</Link>}</td>
                     <td className="text-sm">{e.triggerDate ? fmtDate(e.triggerDate) : <span className="muted">Ende fehlt</span>}</td>
@@ -202,7 +202,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
                     )}
                   </td>
                   <td className="text-sm">
-                    {e.daysToEnd !== null && e.daysToEnd < 0 ? <span style={{ color: "#c0392b", fontWeight: 600 }}>Ende überschritten ({-e.daysToEnd} Tage)</span> : <>{e.status === "GESTARTET" ? "läuft" : "beauftragt"}{e.daysToEnd !== null && e.daysToEnd >= 0 ? ` · noch ${e.daysToEnd} Tage` : ""}</>}
+                    {e.daysToEnd !== null && e.daysToEnd < 0 ? <span style={{ color: "var(--danger)", fontWeight: 600 }}>Ende überschritten ({-e.daysToEnd} Tage)</span> : <>{e.status === "GESTARTET" ? "läuft" : "beauftragt"}{e.daysToEnd !== null && e.daysToEnd >= 0 ? ` · noch ${e.daysToEnd} Tage` : ""}</>}
                     {may && (
                       <form action={endOrderAction} className="mt-1 flex flex-wrap gap-1 items-center">
                         <input type="hidden" name="orderId" value={e.orderId} /><input type="hidden" name="version" value={e.version} /><input type="hidden" name="back" value={back} /><input type="hidden" name="endDate" value={e.plannedEnd ?? ""} />
@@ -234,7 +234,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
         <summary className="text-sm font-semibold">Fahrpläne Verlängerung ({[...roadmaps.keys()].filter((oid) => { const e = h.engagements.find((x) => x.orderId === oid); return e && e.daysToEnd !== null && e.daysToEnd >= 0 && e.daysToEnd <= 180; }).length})</summary>
         {[...roadmaps.entries()].filter(([oid]) => { const e = h.engagements.find((x) => x.orderId === oid); return e && e.daysToEnd !== null && e.daysToEnd >= 0 && e.daysToEnd <= 180; }).map(([oid, ms]) => {
           const e = h.engagements.find((x) => x.orderId === oid)!;
-          const color: Record<string, string> = { ERLEDIGT: "#2f7d32", UEBERFAELLIG: "#c0392b", BALD: "#8a6d1f", SPAETER: "var(--muted)" };
+          const color: Record<string, string> = { ERLEDIGT: "#2f7d32", UEBERFAELLIG: "var(--danger)", BALD: "#8a6d1f", SPAETER: "var(--muted)" };
           const label: Record<string, string> = { ERLEDIGT: "erledigt", UEBERFAELLIG: "überfällig", BALD: "steht an", SPAETER: "später" };
           return (
             <div key={oid} className="mt-4">
@@ -258,7 +258,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
 
       <section className="card">
         <h2 className="font-semibold mb-2">Verlauf</h2>
-        {snapshots.length === 0 ? <p className="muted text-sm">Noch kein Stand gespeichert.</p> : (
+        {snapshots.length === 0 ? <p className="empty">Noch kein Stand gespeichert.</p> : (
           <ul className="text-sm space-y-1">{snapshots.map((s) => <li key={s.id}>{fmtDateTime(s.createdAt)}: <strong>{s.score ?? "–"}</strong> <span className="muted">· Datenlage {s.coverage} %</span></li>)}</ul>
         )}
         <p className="muted text-xs mt-2">Sinkt der Score um mehr als 10 Punkte, bekommt der zuständige BD eine Aufgabe vorgeschlagen.</p>

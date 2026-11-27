@@ -88,7 +88,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         </div>
         <nav aria-label="Ansicht" className="flex flex-wrap gap-2 text-sm mb-2">
           {TABS.filter((t) => t.key !== "team" || work.myTeams.length).map((t) => (
-            <Link key={t.key} href={`/meine-arbeit?v=${t.key}&f=${filter}#vorgaenge`} className={`btn btn-small${tab === t.key ? "" : " btn-secondary"}`} aria-current={tab === t.key ? "page" : undefined}>
+            <Link key={t.key} href={`/meine-arbeit?v=${t.key}&f=${filter}#vorgaenge`} className="chip" aria-current={tab === t.key ? "page" : undefined}>
               {t.label} ({tabCount[t.key]})
             </Link>
           ))}
@@ -130,8 +130,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
 
       <section className="card">
         <h2 className="font-semibold mb-2">Offene Übernahmen an mich ({openIncoming.length})</h2>
-        {openIncoming.length === 0 ? (
-          <p className="muted text-sm">Keine offenen Übergaben.</p>
+        {openIncoming.length === 0 ? (<p className="empty">Keine offenen Übergaben.</p>
         ) : (
           <ul className="space-y-3">
             {openIncoming.map((h) => (
@@ -192,8 +191,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
 
       <section className="card">
         <h2 className="font-semibold mb-2">Meine offenen Aktionen ({actions.length})</h2>
-        {actions.length === 0 ? (
-          <p className="muted text-sm">Keine offenen Aktionen.</p>
+        {actions.length === 0 ? (<p className="empty">Keine offenen Aktionen.</p>
         ) : (
           <table className="list">
             <thead><tr><th>Aktion</th><th>Setup</th><th>Status</th><th>Fällig</th><th>Nächster Schritt</th></tr></thead>
@@ -236,7 +234,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
 
       <section className="card">
         <h2 className="font-semibold mb-2">Nächste Weeklys ({nextReviews.length})</h2>
-        {nextReviews.length === 0 ? <p className="muted text-sm">Keine anstehenden Weeklys. <Link href="/weeklys">Weekly anlegen</Link>.</p> : (
+        {nextReviews.length === 0 ? <p className="empty">Keine anstehenden Weeklys. <Link href="/weeklys">Weekly anlegen</Link>.</p> : (
           <ul className="text-sm space-y-1">
             {nextReviews.map((r) => <li key={r.id}><Link href={`/weeklys/${r.id}`}>{r.title}</Link> · {fmtDate(r.scheduledFor)} · <Status label={reviewStatusLabel[r.status] ?? r.status} /></li>)}
           </ul>
@@ -246,8 +244,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
       <section className="card">
         <details>
         <summary className="font-semibold mb-2">Meine Setups ({setups.length})</summary>
-        {setups.length === 0 ? (
-          <p className="muted text-sm">
+        {setups.length === 0 ? (<p className="empty">
             Noch keine Setups. <Link href="/kunden">Zu den Kunden</Link>, um ein Setup anzulegen.
           </p>
         ) : (
@@ -288,8 +285,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         <summary className="font-semibold mb-1">Vorschläge ({mySuggestions.length})</summary>
         {!ai.enabled ? (
           <p className="muted text-sm">KI-Anbieter ist deaktiviert. Es werden keine automatischen Vorschläge erzeugt; manuelle Dokumentation funktioniert vollständig <TechRef>Briefing 17.5</TechRef>.</p>
-        ) : mySuggestions.length === 0 ? (
-          <p className="muted text-sm">Keine offenen Vorschläge in deinen Setups. Anbieter: {ai.description}</p>
+        ) : mySuggestions.length === 0 ? (<p className="empty">Keine offenen Vorschläge in deinen Setups. Anbieter: {ai.description}</p>
         ) : (
           <ul className="space-y-3">{mySuggestions.map((x) => <SuggestionCard key={x.id} s={x} ownerName={x.proposedOwnerUserId ? userNames.get(x.proposedOwnerUserId) ?? null : null} canDecide back={back} users={allUsers} />)}</ul>
         )}

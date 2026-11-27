@@ -19,7 +19,7 @@ export default async function StandPage({ params }: { params: Promise<{ id: stri
   }
   return (
     <div className="space-y-4">
-      <p className="text-sm"><Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${id}`}>{snap.content.account.name}</Link> › Gespeicherter Stand</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><Link href={`/kunden/${id}`}>{snap.content.account.name}</Link><span>Gespeicherter Stand</span></nav>
       <h1 className="text-2xl font-semibold">{snap.title}</h1>
       <p className="muted text-sm">Gespeichert von {snap.confirmedByName} am {fmtDateTime(snap.confirmedAt)}.{snap.note && ` Notiz: ${snap.note}`} Dieser Stand bleibt unverändert, auch wenn sich die Live-Übersicht ändert.</p>
       <section className="card"><AccountPlanView plan={snap.content} live={false} /></section>

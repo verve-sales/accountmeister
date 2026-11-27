@@ -71,7 +71,7 @@ export async function proposeStrategy(actor: Actor, setupId: string, deps: { pro
 export function ruleBasedProposal(a: SetupAnalysis): StrategyProposal {
   const q = (t: string) => t;
   return {
-    summary: `Belegt: Stufe „${a.stageLabel}“ mit ${a.counts.opportunities} aktivem/aktiven Bedarf(en), ${a.counts.persons} bekannten Personen und ${a.counts.openActions} offenen Aktionen. ${a.blockers.length ? `${a.blockers.length} dokumentierte Blocker.` : "Keine dokumentierten Blocker."} ${a.missing.length ? `${a.missing.length} Grundlagen fehlen.` : "Grundlagen vollständig."}`,
+    summary: `Belegt: Stufe „${a.stageLabel}“ mit ${a.counts.opportunities === 1 ? "1 aktiven Chance" : `${a.counts.opportunities} aktiven Chancen`}, ${a.counts.persons === 1 ? "1 bekannten Person" : `${a.counts.persons} bekannten Personen`} und ${a.counts.openActions === 1 ? "1 offenen Aktion" : `${a.counts.openActions} offenen Aktionen`}. ${a.blockers.length ? `${a.blockers.length === 1 ? "1 dokumentierter Blocker" : `${a.blockers.length} dokumentierte Blocker`}.` : "Keine dokumentierten Blocker."} ${a.missing.length ? `${a.missing.length === 1 ? "1 Grundlage fehlt" : `${a.missing.length} Grundlagen fehlen`}.` : "Grundlagen vollständig."}`,
     nextStep: a.nextStep,
     moves: [
       ...a.moves.slice(0, 2).map((m) => ({ title: m.text.replace(/\.$/, ""), why: "Im Tool bereits vorbereitet.", ownerRole: "BD" as const, evidenceQuote: q(m.text) })),

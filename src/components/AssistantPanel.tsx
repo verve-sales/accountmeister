@@ -184,6 +184,19 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
   const [manual, setManual] = useState<{ key: string; open: boolean } | null>(null);
   const open = manual && manual.key === urlKey ? manual.open : wanted ? true : (manual?.open ?? false);
   const setOpen = (fn: (o: boolean) => boolean) => setManual({ key: urlKey, open: fn(open) });
+  // e64: Der Knopf sitzt in der Kopfzeile (AssistantButton); er schaltet über ein Fensterereignis
+  const toggleRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    toggleRef.current = () => setOpen((o) => !o);
+  });
+  useEffect(() => {
+    const t = () => toggleRef.current();
+    window.addEventListener("assistant:toggle", t);
+    return () => window.removeEventListener("assistant:toggle", t);
+  }, []);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("assistant:state", { detail: open }));
+  }, [open]);
   const wantInterview = useRef<string | null>(null);
   if (wanted === "interview" && wantInterview.current !== urlKey) wantInterview.current = urlKey;
 
@@ -357,11 +370,8 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
 
   return (
     <>
-      <button type="button" className="btn" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls="assistent-panel" style={{ position: "fixed", right: "1rem", bottom: "1rem", zIndex: 40, boxShadow: "0 2px 8px rgba(0,0,0,.15)" }}>
-        {open ? "Assistent schließen" : "Assistent"}
-      </button>
       {open && (
-        <aside id="assistent-panel" aria-label="Assistent" className="card" style={{ position: "fixed", right: "1rem", bottom: "4rem", top: "4.5rem", width: "min(440px, calc(100vw - 2rem))", zIndex: 40, display: "flex", flexDirection: "column", padding: 0, boxShadow: "0 4px 24px rgba(0,0,0,.18)" }}>
+        <aside id="assistent-panel" aria-label="Assistent" className="card assistant-panel">
           <div className="px-4 py-2 border-b flex items-center gap-2" style={{ borderColor: "var(--border)" }}>
             <strong className="text-sm">Assistent</strong>
             <span className="muted text-xs truncate">{view?.context.label ?? "…"}</span>
@@ -438,7 +448,7 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
                           </div>
                         )}
                         {c.status === "NEU" && view && !view.context.canWrite && !OWN_RIGHTS.has(c.item.type) && <div className="muted text-xs mt-1">{view.context.label === "Allgemein" ? "Hier fehlt noch der Kunde – übernimm zuerst die Einsortierung oder öffne den Assistenten beim Kunden bzw. im Setup." : "Zum Übernehmen fehlt dir das Bearbeitungsrecht an diesem Kunden bzw. Setup."}</div>}
-                        {c.status === "NEU" && c.error && <div className="text-xs mt-1" style={{ color: "#c0392b" }}>Konnte nicht direkt erledigt werden: {c.error}</div>}
+                        {c.status === "NEU" && c.error && <div className="text-xs mt-1" style={{ color: "var(--danger)" }}>Konnte nicht direkt erledigt werden: {c.error}</div>}
                         {c.status !== "NEU" && <div className="text-xs mt-1">{c.status === "UEBERNOMMEN" ? <>{c.auto ? "Erledigt." : "Übernommen."} <NoteText text={c.note ?? ""} />{c.resultType && c.resultId && RESULT_HREF[c.resultType] && !/\/(einsaetze|besetzung|bedarfe|vorgaenge)\//.test(c.note ?? "") ? <> <a href={`${RESULT_HREF[c.resultType]}${c.resultId}`}>öffnen</a></> : null}</> : "Verworfen."}</div>}
                       </li>
                     ))}
@@ -480,5 +490,21 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
         </aside>
       )}
     </>
+  );
+}
+
+/** e64: Assistent-Knopf für die Kopfzeile (öffnet/schließt das Panel). */
+export function AssistantButton() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const on = (e: Event) => setOpen(Boolean((e as CustomEvent).detail));
+    window.addEventListener("assistant:state", on);
+    return () => window.removeEventListener("assistant:state", on);
+  }, []);
+  return (
+    <button type="button" className="assistant-trigger" onClick={() => window.dispatchEvent(new Event("assistant:toggle"))} aria-expanded={open} aria-controls="assistent-panel" title="Assistent: fragen, Notizen und Mails erfassen">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" /><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></svg>
+      <span className="assistant-trigger-label">{open ? "Assistent schließen" : "Assistent"}</span>
+    </button>
   );
 }

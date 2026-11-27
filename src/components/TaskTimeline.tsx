@@ -13,7 +13,7 @@ const KIND: Record<TimelineTask["kind"], { label: string; color: string }> = {
   VERLAENGERUNG: { label: "Verlängerung", color: "#b7791f" },
 };
 const PRIO: { key: TimelineTask["priority"]; label: string; color: string }[] = [
-  { key: "HOCH", label: "Hoch", color: "#c0392b" },
+  { key: "HOCH", label: "Hoch", color: "var(--danger)" },
   { key: "NORMAL", label: "Normal", color: "#5f5f5a" },
   { key: "NIEDRIG", label: "Niedrig", color: "#9a9a92" },
 ];
@@ -49,17 +49,17 @@ export function TaskTimeline({ tasks, today, title, children }: { tasks: Timelin
   return (
     <section className="card" id="zeitleiste" aria-label="Zeitleiste meiner Aufgaben">
       <div className="flex flex-wrap items-baseline gap-3 mb-2">
-        <h2 className="font-semibold">{title ?? "Meine Aufgaben"} ({tasks.length})</h2>
-        {overdue > 0 && <span className="text-sm" style={{ color: "#c0392b", fontWeight: 600 }}>{overdue} überfällig</span>}
+        <h2 className="font-semibold">{title ?? "Wochenplan"} ({tasks.length})</h2>
+        {overdue > 0 && <span className="text-sm" style={{ color: "var(--danger)", fontWeight: 600 }}>{overdue} überfällig</span>}
         <span className="muted text-xs flex flex-wrap gap-3 ml-auto">{Object.values(KIND).map((k) => <span key={k.label}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: k.color, marginRight: 4 }} />{k.label}</span>)}</span>
       </div>
       {children}
-      {tasks.length === 0 ? <p className="muted text-sm">Nichts geplant – neue Aufgaben oben eintragen.</p> : (
+      {tasks.length === 0 ? <p className="empty">Nichts geplant – neue Aufgaben oben eintragen.</p> : (
         <div style={{ overflowX: "auto" }}>
           <div style={{ display: "grid", gridTemplateColumns: `5.5rem repeat(${cols.length}, minmax(8.5rem, 1fr))`, gap: 4, minWidth: `${5.5 + cols.length * 8.8}rem` }}>
             <div />
             {cols.map((c) => (
-              <div key={c.key} className="text-xs" style={{ padding: "4px 6px", borderRadius: 6, background: c.current ? "var(--accent-soft)" : "var(--surface-2)", color: c.key === "over" ? "#c0392b" : undefined }}>
+              <div key={c.key} className="text-xs" style={{ padding: "4px 6px", borderRadius: 6, background: c.current ? "var(--accent-soft)" : "var(--surface-2)", color: c.key === "over" ? "var(--danger)" : undefined }}>
                 <strong>{c.label}</strong>
                 <div className="muted">{c.sub}</div>
               </div>
@@ -85,7 +85,7 @@ function Lane({ p, cols, items, colOf, today }: { p: (typeof PRIO)[number]; cols
             {cell.slice(0, 6).map((x) => (
               <Link key={x.key} href={x.href} title={`${KIND[x.kind].label}: ${x.title}${x.context ? ` · ${x.context}` : ""}${x.due ? ` · ${dm(x.due)}` : ""}`} className="no-underline text-xs" style={{ display: "block", padding: "3px 6px", borderRadius: 5, background: "var(--surface)", border: "1px solid var(--border)", borderLeft: `4px solid ${KIND[x.kind].color}`, color: "var(--text)", lineHeight: 1.3 }}>
                 <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{x.title}</span>
-                <span className="muted" style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: x.due && x.due < today ? "#c0392b" : undefined }}>{x.due ? dm(x.due) : "–"}{x.context ? ` · ${x.context}` : ""}</span>
+                <span className="muted" style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: x.due && x.due < today ? "var(--danger)" : undefined }}>{x.due ? dm(x.due) : "–"}{x.context ? ` · ${x.context}` : ""}</span>
               </Link>
             ))}
             {cell.length > 6 && <span className="muted text-xs" style={{ padding: "0 4px" }}>+ {cell.length - 6} weitere</span>}

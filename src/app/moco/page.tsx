@@ -73,7 +73,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
       )}
 
       {dupes.length > 0 && (
-        <section className="card" id="dubletten" style={{ borderColor: "#c0392b" }}>
+        <section className="card" id="dubletten" style={{ borderColor: "var(--danger)" }}>
           <h2 className="font-semibold mb-1">Dubletten aus Mehrfach-Import ({dupes.reduce((n, g) => n + g.remove.length, 0)})</h2>
           <p className="text-sm muted mb-2">Mehrere Einsätze zeigen auf dieselbe Moco-Zuweisung. Behalten wird je Zuweisung der Einsatz mit Unterlagen/bestätigten Perioden/erledigten Check-ins, sonst der älteste; die übrigen werden samt Position, Kandidatur, Auftrag und (wenn sonst leer) Chance entfernt.</p>
           <form action={mocoRemoveDuplicatesAction} className="space-y-2 text-sm">
@@ -114,7 +114,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
           <details>
             <summary className="font-semibold">Chancen als Leads nach Moco übertragen ({leads ? leads.candidates.filter((c) => c.ready).length : "–"} bereit{leads && leads.candidates.some((c) => !c.ready) ? `, ${leads.candidates.filter((c) => !c.ready).length} blockiert` : ""})</summary>
             <p className="text-sm muted mt-1 mb-2">Offene Chancen (antizipiert bis Auswahl/Bestellung, zurückgestellt) werden einmalig als Lead in der Moco-Akquise angelegt – mit Firma, Verantwortlicher/m als Lead-Inhaber, der vorgeschlagenen Phase und einem Verweis zurück auf die Chance. Beträge werden nicht erfunden (0 €, in Moco nachtragen). Gibt es bei der Firma schon einen Lead gleichen Namens, wird nur verknüpft. Die Chance bleibt im Accountmeister führend.</p>
-            {leadsError && <p className="text-sm" style={{ color: "#c0392b" }}>Moco nicht erreichbar: {leadsError}</p>}
+            {leadsError && <p className="text-sm" style={{ color: "var(--danger)" }}>Moco nicht erreichbar: {leadsError}</p>}
             {leads && leads.candidates.length === 0 && <p className="muted text-sm">Keine offene Chance ohne Moco-Lead.</p>}
             {leads && leads.candidates.length > 0 && (
               <form action={mocoPushLeadsAction} className="space-y-2 text-sm">
@@ -126,7 +126,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
                       <tr key={c.opportunityId}>
                         <td><input type="checkbox" name="opportunityId" value={c.opportunityId} defaultChecked={c.ready && c.status !== "ZURUECKGESTELLT"} disabled={!c.ready} aria-label={`${c.title} übertragen`} /></td>
                         <td><Link href={`/bedarfe/${c.opportunityId}`}>{c.title}</Link><div className="muted text-xs">{c.setupTitle} · {c.ownerName}</div></td>
-                        <td>{c.accountName}{c.company ? <div className="muted text-xs">→ {c.company.name}{c.company.source === "VORSCHLAG" ? " (Namensgleichheit, wird verknüpft)" : ""}</div> : <div className="text-xs" style={{ color: "#c0392b" }}>keine Moco-Firma</div>}</td>
+                        <td>{c.accountName}{c.company ? <div className="muted text-xs">→ {c.company.name}{c.company.source === "VORSCHLAG" ? " (Namensgleichheit, wird verknüpft)" : ""}</div> : <div className="text-xs" style={{ color: "var(--danger)" }}>keine Moco-Firma</div>}</td>
                         <td><Status label={opportunityStatusLabel[c.status] ?? c.status} /></td>
                         <td>
                           {c.existingDeal ? <span className="muted text-xs">vorhanden: {c.existingDeal.name} (#{c.existingDeal.id}) – nur verknüpfen</span> : (
@@ -135,7 +135,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
                             </select>
                           )}
                         </td>
-                        <td className="text-xs">{c.blocker ? <span style={{ color: "#c0392b" }}>{c.blocker}</span> : c.mocoUserId && leads!.actorMocoUserId === c.mocoUserId && c.ownerName !== actor.displayName ? <span className="muted">Inhaber in Moco: du (Verantwortliche/r ohne Moco-Nutzer)</span> : null}</td>
+                        <td className="text-xs">{c.blocker ? <span style={{ color: "var(--danger)" }}>{c.blocker}</span> : c.mocoUserId && leads!.actorMocoUserId === c.mocoUserId && c.ownerName !== actor.displayName ? <span className="muted">Inhaber in Moco: du (Verantwortliche/r ohne Moco-Nutzer)</span> : null}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -156,8 +156,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
             <button className="btn btn-small" type="submit">Alle zum geplanten Ende beenden</button>
           </form>
         )}
-        {hints.length === 0 ? (
-          <p className="muted text-sm">Keine Abweichungen. Hinweise entstehen, wenn Moco ein Projektende ändert, ein Projekt beendet, eine Zuweisung inaktiv setzt oder etwas Neues anlegt.</p>
+        {hints.length === 0 ? (<p className="empty">Keine Abweichungen. Hinweise entstehen, wenn Moco ein Projektende ändert, ein Projekt beendet, eine Zuweisung inaktiv setzt oder etwas Neues anlegt.</p>
         ) : (
           <ul className="space-y-2 text-sm">
             {hints.map((h) => (
@@ -186,7 +185,7 @@ export default async function MocoPage({ searchParams }: { searchParams: SearchP
       {importer && (
         <section className="card">
           <h2 className="font-semibold mb-2">Importläufe</h2>
-          {imports.length === 0 ? <p className="muted text-sm">Noch kein Importlauf.</p> : (
+          {imports.length === 0 ? <p className="empty">Noch kein Importlauf.</p> : (
             <ul className="space-y-1 text-sm">
               {imports.map((i) => (
                 <li key={i.id} className="flex flex-wrap items-baseline gap-2">

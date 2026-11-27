@@ -70,7 +70,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
   const cur = (x: ConversionView) => x.steps.find((s) => s.state === "AKTUELL");
   return (
     <div className="space-y-5">
-      <p className="text-sm"><Link href="/kunden">Kunden</Link> › {v.accountName} › {v.setupName} › <Link href={`/bedarfe/${id}`}>{v.opportunity.title}</Link></p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><span>{v.accountName}</span><span>{v.setupName}</span><Link href={`/bedarfe/${id}`}>{v.opportunity.title}</Link></nav>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">Konvertierungsvorgang{all.length > 1 || v.position ? <span style={{ fontWeight: 400 }}> · {v.label}</span> : null}</h1>
         <span className="status">{CONV_STATUS[c.status] ?? c.status}</span>

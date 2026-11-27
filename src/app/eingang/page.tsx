@@ -61,7 +61,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
 
       <section className="card">
         <h2 className="font-semibold mb-2">Setups mit offener BD-Zuordnung ({open.length})</h2>
-        {open.length === 0 ? <p className="muted text-sm">Keine offenen Zuordnungen in deinem Berechtigungsbereich.</p> : (
+        {open.length === 0 ? <p className="empty">Keine offenen Zuordnungen in deinem Berechtigungsbereich.</p> : (
           <table className="list">
             <thead><tr><th>Setup</th><th>Kunde</th><th>Angelegt</th></tr></thead>
             <tbody>{open.map(({ setup, account }) => <tr key={setup.id}><td><Link href={`/setups/${setup.id}`}>{setup.name}</Link></td><td><Link href={`/kunden/${account.id}`}>{account.name}</Link></td><td>{fmtDate(setup.createdAt)}</td></tr>)}</tbody>
@@ -72,7 +72,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
       {/* Zu prüfende Importe */}
       <section className="card">
         <h2 className="font-semibold mb-2">Zu prüfende Importe ({pending.length})</h2>
-        {pending.length === 0 ? <p className="muted text-sm">Keine offenen Importe.</p> : (
+        {pending.length === 0 ? <p className="empty">Keine offenen Importe.</p> : (
           <ul className="space-y-3">
             {pending.map((j) => (
               <li key={j.id} className="border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
@@ -125,7 +125,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
       {/* Protokoll importieren */}
       <section className="card">
         <h2 className="font-semibold mb-2">Gesprächsprotokoll importieren</h2>
-        {editableSetups.length === 0 ? <p className="muted text-sm">Du bearbeitest kein Setup; Import ist nicht möglich.</p> : (
+        {editableSetups.length === 0 ? <p className="empty">Du bearbeitest kein Setup; Import ist nicht möglich.</p> : (
           <form action={importProtocolAction} className="grid sm:grid-cols-2 gap-3" encType="multipart/form-data">
             <div><label className="label" htmlFor="impTitle">Titel</label><input id="impTitle" name="title" className="input" required minLength={3} placeholder="z. B. Protokoll Kundentermin 18.09." /></div>
             <div>
@@ -163,7 +163,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
               <p className="text-sm mb-2" style={{ color: "#b7791f" }}>Für Teams-Chats fehlt noch die Berechtigung „Chat.Read“: in Entra ergänzen (Administratorzustimmung), dann unter <Link href="/einstellungen">Einstellungen</Link> das Postfach einmal neu verbinden.</p>
             )}
             {kind === "CHAT" && <p className="muted text-sm mb-2">Übernommen wird der Verlauf (letzte bis zu 50 Nachrichten) des gewählten Chats. Kommen später neue Nachrichten dazu, wertet „Übernehmen“ den Chat erneut aus – Erledigtes und Doppeltes erkennt die KI.</p>}
-            {selectableError ? <p className="error">{selectableError}</p> : selectable.length === 0 ? <p className="muted text-sm">Keine passenden Objekte.</p> : (
+            {selectableError ? <p className="error">{selectableError}</p> : selectable.length === 0 ? <p className="empty">Keine passenden Objekte.</p> : (
               <table className="list">
                 <thead><tr><th>{kind === "CHAT" ? "Chat" : "Betreff"}</th><th>{kind === "CHAT" ? "Zuletzt von" : "Von"}</th><th>Zeitpunkt</th><th>Vorschau</th><th>Import</th></tr></thead>
                 <tbody>

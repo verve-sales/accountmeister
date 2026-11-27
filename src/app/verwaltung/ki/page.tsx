@@ -31,7 +31,7 @@ export default async function KiVerwaltungPage({ searchParams }: { searchParams:
 
   return (
     <div className="space-y-6">
-      <p className="text-sm"><Link href="/verwaltung">← Verwaltung</Link></p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/verwaltung">Verwaltung</Link><span>KI</span></nav>
       <h1 className="text-2xl font-semibold">KI-Konfiguration</h1>
       <Feedback params={sp} />
 
@@ -87,7 +87,7 @@ export default async function KiVerwaltungPage({ searchParams }: { searchParams:
 
       <section className="card">
         <h2 className="font-semibold mb-2">Verbrauch der letzten 30 Tage</h2>
-        {o.usage.length === 0 ? <p className="muted text-sm">Keine KI-Aufträge im Zeitraum.</p> : (
+        {o.usage.length === 0 ? <p className="empty">Keine KI-Aufträge im Zeitraum.</p> : (
           <table className="list text-sm">
             <thead><tr><th>Aufgabe</th><th>Modell</th><th>Aufträge</th><th>davon erfolgreich</th><th>Tokens Eingabe</th><th>Tokens Ausgabe</th></tr></thead>
             <tbody>
@@ -100,7 +100,7 @@ export default async function KiVerwaltungPage({ searchParams }: { searchParams:
 
       <section className="card">
         <h2 className="font-semibold mb-2">Letzte Aufträge</h2>
-        {o.recent.length === 0 ? <p className="muted text-sm">Noch keine Aufträge.</p> : (
+        {o.recent.length === 0 ? <p className="empty">Noch keine Aufträge.</p> : (
           <table className="list text-sm">
             <thead><tr><th>Zeitpunkt</th><th>Aufgabe</th><th>Modell</th><th>Status</th><th>Elemente</th><th>Zurückgewiesen</th><th>Fehler</th></tr></thead>
             <tbody>

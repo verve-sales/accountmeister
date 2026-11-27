@@ -121,7 +121,7 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
             <thead><tr><th>Lauf</th><th>Start</th><th>Ergebnis</th></tr></thead>
             <tbody>
               {jobRuns.map((r) => (
-                <tr key={r.id}><td>{r.name}</td><td>{fmtDateTime(r.startedAt)}</td><td>{r.ok === null ? "läuft" : r.ok ? JSON.stringify(r.counts) : <span style={{ color: "#c0392b" }}>Fehler: {r.error}</span>}</td></tr>
+                <tr key={r.id}><td>{r.name}</td><td>{fmtDateTime(r.startedAt)}</td><td>{r.ok === null ? "läuft" : r.ok ? JSON.stringify(r.counts) : <span style={{ color: "var(--danger)" }}>Fehler: {r.error}</span>}</td></tr>
               ))}
             </tbody>
           </table>

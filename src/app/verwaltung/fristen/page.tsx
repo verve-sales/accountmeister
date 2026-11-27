@@ -40,8 +40,7 @@ export default async function FristenpruefungPage({ searchParams }: { searchPara
       <section className="card">
         <h2 className="font-semibold mb-2">Ansprechpartner ohne aktive Beziehung, seit {fmtDate(review.standardCutoff)} ({review.contacts.total})</h2>
         <p className="muted text-sm mb-2">3 Jahre nach der letzten dokumentierten Interaktion, ohne aktiven Beziehungsstand. Löschung pseudonymisiert die Stammdaten (Name, E-Mail, Telefon) – Metadaten und Protokoll bleiben.</p>
-        {review.contacts.items.length === 0 ? (
-          <p className="muted text-sm">Keine fällig.</p>
+        {review.contacts.items.length === 0 ? (<p className="empty">Keine fällig.</p>
         ) : (
           <table className="list text-sm">
             <thead><tr><th>Ansprechpartner</th><th>Letzte Interaktion</th><th></th></tr></thead>
@@ -68,8 +67,7 @@ export default async function FristenpruefungPage({ searchParams }: { searchPara
       <section className="card">
         <h2 className="font-semibold mb-2">Quellen ohne Aktivität seit {fmtDate(review.standardCutoff)} ({review.sources.total})</h2>
         <p className="muted text-sm mb-2">3 Jahre nach der Quellenzeit, noch nicht gesperrt/entfernt. Vorsicht: Bei laufendem Auftrag gilt die Frist erst 3 Jahre nach Auftragsende – das prüft diese Liste nicht automatisch. Löschung erfolgt wie gewohnt auf der Quellenseite (Sperren → Inhalt entfernen).</p>
-        {review.sources.items.length === 0 ? (
-          <p className="muted text-sm">Keine fällig.</p>
+        {review.sources.items.length === 0 ? (<p className="empty">Keine fällig.</p>
         ) : (
           <table className="list text-sm">
             <thead><tr><th>Quelle</th><th>Zeitpunkt</th><th></th></tr></thead>

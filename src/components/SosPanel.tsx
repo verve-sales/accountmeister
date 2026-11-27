@@ -6,7 +6,7 @@ import { fmtDate } from "@/lib/labels";
 type Sos = { id: string; kind: string; title: string; situation: string; need: string | null; status: string; urgency: string; resolution: string | null; version: number; createdAt: Date; accountId: string; accountName?: string };
 
 const SOS_BG = "#fdecec";
-const SOS_BORDER = "#c0392b";
+const SOS_BORDER = "var(--danger)";
 
 function SosItem({ s, back, canEdit, showAccount }: { s: Sos; back: string; canEdit: boolean; showAccount?: boolean }) {
   return (

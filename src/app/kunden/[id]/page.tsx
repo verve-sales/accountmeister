@@ -1,3 +1,4 @@
+import { titleWithoutPerson } from "@/lib/labels";
 import { EXPIRY_WINDOW_DAYS } from "@/lib/window";
 import { pl } from "@/lib/labels";
 import Link from "next/link";
@@ -21,7 +22,7 @@ import { hasRoleForAccountWrite } from "@/modules/identity/authz";
 import { accountStatusLabel, fmtDate, setupStatusLabel, visibilityLabel, contributionLabel, opportunityStatusLabel } from "@/lib/labels";
 import { createInitiativeAction, createSetupAction, linkChanceInitiativeAction, setAccountFlagsAction, setAccountKeysAction, setAccountOrgTypeAction } from "../../actions";
 import { suggestedDomains } from "@/modules/accounts/keys";
-import { accountKindLabel, accountKinds, responsibles } from "@/modules/rounds/service";
+import { accountKindLabel, accountKinds, canSeeRound, responsibles } from "@/modules/rounds/service";
 import { levelLabel } from "@/modules/principals/service";
 import { listCardsByInitiative } from "@/modules/suggestions/service";
 import { listPeopleForAccount } from "@/modules/people/service";
@@ -122,14 +123,14 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const responsible = (await responsibles(actor.workspaceId)).get(account.id) ?? null;
   const mayFlags = !ro && (mayKeys || responsible?.userId === actor.userId);
   const tabs: { key: Bucket; label: string; hint: string }[] = [
-    { key: "grundlagen", label: "1 Grundlagen", hint: `Health-Check, Kundenagenda, laufende Vorgehen` },
-    { key: "strategie", label: "2 Strategie", hint: `${pl(keyInitiatives.length, "Schlüssel-Initiative", "Schlüssel-Initiativen")}${iniCards + otherCards.length ? ` · ${iniCards + otherCards.length} KI-Vorschläge` : ""}` },
-    { key: "operativ", label: "3 Operativ", hint: `${people.length} Personen${openSos.length ? ` · ${openSos.length} SOS offen` : ""} · Beschaffung, Setups` },
+    { key: "grundlagen", label: "Grundlagen", hint: `Health-Check, Kundenagenda, laufende Vorgehen` },
+    { key: "strategie", label: "Strategie", hint: `${pl(keyInitiatives.length, "Schlüssel-Initiative", "Schlüssel-Initiativen")}${iniCards + otherCards.length ? ` · ${iniCards + otherCards.length} KI-Vorschläge` : ""}` },
+    { key: "operativ", label: "Operativ", hint: `${people.length} Personen${openSos.length ? ` · ${openSos.length} SOS offen` : ""} · Beschaffung, Setups` },
   ];
 
   return (
     <div className="space-y-6">
-      <p className="text-sm"><Link href="/kunden">Kunden</Link> › {account.name}</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><span>{account.name}</span></nav>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">{account.name}</h1>
         {health && <Link href={`/kunden/${account.id}?b=grundlagen`} className="no-underline" title="Health-Check"><HealthBadge score={health.score} level={health.level} coverage={health.coverage} /></Link>}
@@ -137,7 +138,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         <span className="muted text-sm">{orgTypeLabel[account.orgType] ?? account.orgType}{currentBdName ? ` · BD ${currentBdName}` : ""}{responsible ? ` · ${levelLabel[responsible.level]} ${responsible.name}` : ""}</span>
         <span className="text-sm flex flex-wrap items-center gap-2">
           <Status label={account.sideBusiness ? "Nebengeschäft" : accountKindLabel[kind]} />
-          {kind === "BESTAND" && !account.sideBusiness && <Link href="/kundenrunde" className="muted text-xs">in der Kundenrunde</Link>}
+          {kind === "BESTAND" && !account.sideBusiness && (canSeeRound(actor) ? <Link href="/kundenrunde" className="muted text-xs">in der Kundenrunde</Link> : <span className="muted text-xs">in der Kundenrunde</span>)}
           {account.onRadar && kind !== "BESTAND" && !account.sideBusiness && <span className="text-xs" style={{ color: "#b7791f" }}>auf dem Radar</span>}
           {mayFlags && (
             <>
@@ -178,7 +179,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
                 return (
                   <tr key={e.id}>
                     <td><Link href={`/einsaetze/${e.id}`}><strong>{e.personName}</strong></Link>{e.internalUserId ? <span className="muted text-xs"> (intern)</span> : null}</td>
-                    <td className="muted">{e.title}</td>
+                    <td className="muted">{titleWithoutPerson(e.title, e.personName)}</td>
                     <td style={{ whiteSpace: "nowrap", color: soon ? "#b7791f" : undefined, fontWeight: soon ? 600 : undefined }}>{e.plannedEnd ? `bis ${fmtDate(e.plannedEnd)}${e.daysToEnd !== null && e.daysToEnd <= 365 ? ` · ${e.daysToEnd} Tage` : ""}` : "Ende offen"}</td>
                     <td className="text-xs">{e.renewalStatus && e.renewalStatus !== "ZU_KLAEREN" ? `Verlängerung ${renewalStatusLabel[e.renewalStatus] ?? e.renewalStatus}${e.renewalTo ? ` bis ${fmtDate(e.renewalTo)}` : ""}` : soon ? <Link href={`/einsaetze/${e.id}#verlaengerung`}>verlängern</Link> : null}</td>
                   </tr>
@@ -196,9 +197,9 @@ export default async function KundePage({ params, searchParams }: { params: Prom
           {engDups.map((g) => <EngagementMergeForm key={g.keep.id} g={g} back={`/kunden/${account.id}#aufraeumen`} showAccount={false} />)}
         </section>
       )}
-      <nav aria-label="Bereiche der Kundenansicht" className="flex flex-wrap gap-2 border-b" style={{ borderColor: "var(--border)" }}>
+      <nav aria-label="Bereiche der Kundenansicht" className="tabs">
         {tabs.map((t) => (
-          <Link key={t.key} href={`/kunden/${account.id}?b=${t.key}`} aria-current={bucket === t.key ? "page" : undefined} className="no-underline px-3 py-2 text-sm" style={{ borderBottom: bucket === t.key ? "3px solid var(--accent, #1f4e79)" : "3px solid transparent", color: "var(--text)", fontWeight: bucket === t.key ? 600 : 400 }}>
+          <Link key={t.key} href={`/kunden/${account.id}?b=${t.key}`} aria-current={bucket === t.key ? "page" : undefined} className="tab">
             {t.label}
             <span className="muted text-xs block" style={{ fontWeight: 400 }}>{t.hint}</span>
           </Link>
@@ -239,7 +240,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
           <section className="card" id="initiativen">
             <h2 className="font-semibold mb-1">Schlüssel-Initiativen des Kunden ({keyInitiatives.length})</h2>
             <p className="muted text-sm mb-3">Je Initiative: die Chancen, die darauf einzahlen, die Vorgänge dazu und die KI-Vorschläge aus dem Eingang. Ein Klick öffnet die Initiative.</p>
-            {keyInitiatives.length === 0 ? <p className="muted text-sm">Noch keine Schlüssel-Initiative erfasst. Tipp: aus einer Mail oder Account-Seite erkennt die KI sie als Karte.</p> : (
+            {keyInitiatives.length === 0 ? <p className="empty">Noch keine Schlüssel-Initiative erfasst. Tipp: aus einer Mail oder Account-Seite erkennt die KI sie als Karte.</p> : (
               <ul className="space-y-2">
                 {keyInitiatives.map((i) => (
                   <li key={i.id}>
@@ -377,7 +378,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         </AccountPlanView>
         <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--border)" }}>
           <h3 className="font-medium mb-1">Gespeicherte Stände ({snapshots.length})</h3>
-          {snapshots.length === 0 ? <p className="muted text-sm">Noch kein gespeicherter Review-Stand.</p> : (
+          {snapshots.length === 0 ? <p className="empty">Noch kein gespeicherter Review-Stand.</p> : (
             <ul className="text-sm space-y-1">{snapshots.map((s) => <li key={s.id}><Link href={`/kunden/${account.id}/staende/${s.id}`}>{s.title}</Link> · {s.confirmedByName} · {new Date(s.confirmedAt).toLocaleString("de-DE", { timeZone: "Europe/Berlin", dateStyle: "medium", timeStyle: "short" })}{s.note && <span className="muted"> – {s.note}</span>}</li>)}</ul>
           )}
           {mayEditPlan && (
@@ -397,7 +398,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         <>
       <section className="card">
         <h2 className="font-semibold mb-2">Personen & Zugang ({people.length})</h2>
-        {people.length === 0 ? <p className="muted text-sm">Noch keine Personen erfasst. Personen werden im jeweiligen Setup gepflegt.</p> : (
+        {people.length === 0 ? <p className="empty">Noch keine Personen erfasst. Personen werden im jeweiligen Setup gepflegt.</p> : (
           <table className="list">
             <thead><tr><th>Person</th><th>Funktion</th><th>Beziehungen (Halter · Stand)</th></tr></thead>
             <tbody>
@@ -448,8 +449,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
 
       <section className="card">
         <h2 className="font-semibold mb-2">Projektsetups ({setups.length})</h2>
-        {setups.length === 0 ? (
-          <p className="muted text-sm">Noch kein Setup. Ein Setup braucht nur Kunde, Namen und einen Kontextsatz – oder bleibt bewusst Entwurf.</p>
+        {setups.length === 0 ? (<p className="empty">Noch kein Setup. Ein Setup braucht nur Kunde, Namen und einen Kontextsatz – oder bleibt bewusst Entwurf.</p>
         ) : (
           <table className="list">
             <thead><tr><th>Setup</th><th>Status</th><th>Chancen</th><th>Sichtbarkeit</th><th>BD</th><th>Geändert</th></tr></thead>
@@ -544,8 +544,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
           <p className="muted text-sm">Noch keine Recherche gestartet.</p>
         ) : (
           <>
-            {(research.latest.facts as CompanyFact[]).length === 0 ? (
-              <p className="muted text-sm">{research.latest.note}</p>
+            {(research.latest.facts as CompanyFact[]).length === 0 ? (<p className="empty">{research.latest.note}</p>
             ) : (
               <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 {(research.latest.facts as CompanyFact[]).map((f, i) => (

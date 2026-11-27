@@ -31,7 +31,7 @@ type SupportItem = Awaited<ReturnType<typeof listMySupportRequests>>[number];
 type SuggestionItem = Awaited<ReturnType<typeof listMySuggestions>>[number];
 export type HintItem = { id: string; kind: string; title: string; createdAt: Date; subjectType: string; subjectId: string | null };
 
-const RED = "#c0392b";
+const RED = "var(--danger)";
 const AMBER = "#b7791f";
 const SHOW = 5;
 
@@ -63,9 +63,9 @@ export function CheckinRow({ c, back }: { c: CheckinItem; back: string }) {
       <form action={checkinAction} className="flex flex-wrap gap-1 items-center">
         <input type="hidden" name="checkinId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="back" value={back} /><input type="hidden" name="action" value="ERLEDIGEN" />
         <span className="muted text-xs">heute geführt:</span>
-        <button className="btn btn-small" type="submit" name="mood" value="POSITIV" style={{ background: "#2f7d32" }}>positiv</button>
-        <button className="btn btn-small" type="submit" name="mood" value="MITTEL" style={{ background: AMBER }}>mittel</button>
-        <button className="btn btn-small" type="submit" name="mood" value="NEGATIV" style={{ background: RED }}>negativ</button>
+        <button className="mood-btn" data-mood="positiv" type="submit" name="mood" value="POSITIV">positiv</button>
+        <button className="mood-btn" data-mood="mittel" type="submit" name="mood" value="MITTEL">mittel</button>
+        <button className="mood-btn" data-mood="negativ" type="submit" name="mood" value="NEGATIV">negativ</button>
         <details className="inline">
           <summary className="text-xs muted" style={{ cursor: "pointer" }}>mehr</summary>
           <div className="flex flex-wrap gap-1 items-center mt-1">
@@ -181,7 +181,7 @@ export function Aufgaben({ work, checkins, actions, renewals, support, back, tod
   ];
   return (
     <section id="aufgaben" className="space-y-2">
-      <h2 className="font-semibold">Aufgaben {n ? `(${n})` : ""}</h2>
+      <h2 className="font-semibold">Zu erledigen {n ? `(${n})` : ""} <span className="muted text-sm font-normal">Check-ins, Aufgaben, Vorgänge und Verlängerungen – direkt hier abschließen</span></h2>
       {n === 0 && <p className="muted text-sm">Nichts fällig.</p>}
       {(overdueWork.length > 0 || otherWork.length > 0) && (
         <details open={overdueWork.length > 0}>
@@ -230,7 +230,7 @@ export function Vorschlaege({ suggestions, hints, userNames, users, back, aiEnab
     <section id="vorschlaege" className="space-y-2">
       <h2 className="font-semibold">Vorschläge {items.length ? `(${items.length})` : ""}</h2>
       {status}
-      {items.length === 0 && status ? null : items.length === 0 ? <p className="muted text-sm">{aiEnabled ? "Keine offenen Vorschläge." : "KI-Anbieter ist aus – Vorschläge entstehen nur aus Regeln (Moco-Hinweise)."}</p> : <Fold items={items} label="Vorschläge" />}
+      {items.length === 0 && status ? null : items.length === 0 ? <p className="empty">{aiEnabled ? "Keine offenen Vorschläge." : "KI-Anbieter ist aus – Vorschläge entstehen nur aus Regeln (Moco-Hinweise)."}</p> : <Fold items={items} label="Vorschläge" />}
     </section>
   );
 }

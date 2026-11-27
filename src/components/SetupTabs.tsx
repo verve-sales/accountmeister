@@ -11,11 +11,11 @@ export function SetupTabs({ setupId, active }: { setupId: string; active: "ueber
     ...(getConfig().FEATURE_ARTEFAKTE === "true" || active === "artefakte" ? [{ key: "artefakte", href: `/setups/${setupId}/artefakte`, label: "Artefakte" }] : []),
   ];
   return (
-    <nav aria-label="Setup-Bereiche" className="flex flex-wrap gap-1 border-b text-sm" style={{ borderColor: "var(--border)" }}>
+    <nav aria-label="Setup-Bereiche" className="tabs">
       {tabs.map((t) => {
         const isActive = t.key === active;
         return (
-          <Link key={t.key} href={t.href} aria-current={isActive ? "page" : undefined} className="no-underline px-3 py-2" style={{ color: isActive ? "var(--text)" : undefined, fontWeight: isActive ? 600 : 400, borderBottom: isActive ? "2px solid var(--text)" : "2px solid transparent", marginBottom: -1 }}>
+          <Link key={t.key} href={t.href} aria-current={isActive ? "page" : undefined} className="tab">
             {t.label}
           </Link>
         );

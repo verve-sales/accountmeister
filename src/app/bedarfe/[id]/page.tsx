@@ -384,7 +384,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       {/* Buyingcenter (8.3) */}
       <section className="card">
         <h2 className="font-semibold mb-2">Buyingcenter für diese Chance ({d.participations.length})</h2>
-        {d.participations.length === 0 ? <p className="muted text-sm">Noch keine Rollen erfasst.</p> : (
+        {d.participations.length === 0 ? <p className="empty">Noch keine Rollen erfasst.</p> : (
           <table className="list">
             <thead><tr><th>Rolle</th><th>Person</th><th>Erkenntnisstatus</th><th>Anmerkung</th>{canEdit && <th></th>}</tr></thead>
             <tbody>
@@ -559,7 +559,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       {/* Angebote (F09, F10) */}
       <section className="card" id="angebote">
         <h2 className="font-semibold mb-2">Angebote / Profilvorstellungen ({d.offers.length})</h2>
-        {d.offers.length === 0 ? <p className="muted text-sm">Noch kein Angebot.</p> : (
+        {d.offers.length === 0 ? <p className="empty">Noch kein Angebot.</p> : (
           <ul className="space-y-3">
             {d.offers.map((o) => {
               const refs = d.profileRefs.filter((r) => o.profileReferenceIds.includes(r.id));
@@ -620,7 +620,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
               <div className="sm:col-span-2"><label className="label" htmlFor="ofSummary">Kurzinhalt (intern)</label><textarea id="ofSummary" name="summary" className="textarea" rows={3} /></div>
               <fieldset className="sm:col-span-2">
                 <legend className="label">Freigegebene Profilreferenzen</legend>
-                {d.profileRefs.length === 0 ? <p className="muted text-sm">Keine Profilreferenzen vorhanden – anlegen unter <Link href="/einstellungen">Einstellungen</Link> (BD/Principal/CEO).</p> : (
+                {d.profileRefs.length === 0 ? <p className="empty">Keine Profilreferenzen vorhanden – anlegen unter <Link href="/einstellungen">Einstellungen</Link> (BD/Principal/CEO).</p> : (
                   <div className="flex flex-wrap gap-3 text-sm">{d.profileRefs.map((r) => <label key={r.id} className="flex items-center gap-1"><input type="checkbox" name="profileReferenceIds" value={r.id} /> {r.label}</label>)}</div>
                 )}
               </fieldset>
@@ -633,7 +633,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       {/* Aufträge und Startvoraussetzungen (9.3) */}
       <section className="card" id="auftrag">
         <h2 className="font-semibold mb-2">Auftrag und Einsatz ({d.orders.length})</h2>
-        {d.orders.length === 0 ? <p className="muted text-sm">Noch kein Auftrag.</p> : (
+        {d.orders.length === 0 ? <p className="empty">Noch kein Auftrag.</p> : (
           <ul className="space-y-3">
             {d.orders.map((o) => {
               const cancelled = o.status === "BEENDET_STORNIERT";

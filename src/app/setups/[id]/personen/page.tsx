@@ -81,7 +81,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
             ))}
           </div>
         )}
-        {people.length === 0 ? <p className="muted text-sm">Noch keine Personen erfasst.</p> : (
+        {people.length === 0 ? <p className="empty">Noch keine Personen erfasst.</p> : (
           <table className="list">
             <thead><tr><th>Person</th><th>Funktion / Bereich</th><th>Bekannte Zuständigkeit</th><th>Beziehungen in diesem Setup</th><th>Zugriff</th>{canEdit && <th></th>}</tr></thead>
             <tbody>
@@ -112,7 +112,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
                           <input type="hidden" name="personId" value={person.id} />
                           <input type="hidden" name="back" value={back} />
                           <p className="muted text-xs mb-1" style={{ maxWidth: 220 }}>Für falsch angelegte Personen. Funktionen, Beziehungen und Einschätzungen gehen mit. Bei Dubletten besser „Zusammenführen“.</p>
-                          <button className="btn btn-small" type="submit" style={{ background: "#c0392b", borderColor: "#c0392b" }}>Endgültig entfernen</button>
+                          <button className="btn btn-small btn-danger" type="submit">Endgültig entfernen</button>
                         </form>
                       </details>
                     </td>
@@ -210,7 +210,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
       {/* Kontaktwege */}
       <section className="card">
         <h2 className="font-semibold mb-2">Kontaktwege ({openPlans.length} offen)</h2>
-        {plans.length === 0 ? <p className="muted text-sm">Noch kein Kontaktweg. Ein Kontaktweg beschreibt, über welche belegten Beziehungen ein Gespräch mit einer Zielperson legitim zustande kommen kann.</p> : (
+        {plans.length === 0 ? <p className="empty">Noch kein Kontaktweg. Ein Kontaktweg beschreibt, über welche belegten Beziehungen ein Gespräch mit einer Zielperson legitim zustande kommen kann.</p> : (
           <div className="space-y-4">
             {plans.map((p) => (
               <div key={p.id} className="border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
@@ -335,7 +335,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
             <ul className="list-disc ml-5">{bc.gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
           </div>
         )}
-        {bc.rows.length === 0 ? <p className="muted text-sm">Noch keine Personen.</p> : (
+        {bc.rows.length === 0 ? <p className="empty">Noch keine Personen.</p> : (
           <table className="list">
             <thead><tr><th>Person</th><th>Entscheidungsrolle</th><th>Haltung</th><th>Einfluss</th><th>Status</th><th>Beziehung</th>{bc.canEdit && <th></th>}</tr></thead>
             <tbody>

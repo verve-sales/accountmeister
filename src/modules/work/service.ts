@@ -1,3 +1,4 @@
+import { isoDe } from "@/lib/labels";
 import { and, asc, desc, eq, inArray, isNull, lt, notInArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema, type Db, type Tx } from "@/db/client";
@@ -685,7 +686,7 @@ export async function generateOverdueNotifications(workspaceId?: string): Promis
   let n = 0;
   for (const r of rows) {
     const to = r.assigneeUserId ? [r.assigneeUserId] : r.teamId ? await teamMemberIds((await db.query.teams.findFirst({ where: eq(schema.teams.id, r.teamId) }))!) : [];
-    n += await notify(db, { workspaceId: r.workspaceId, userIds: to, kind: "UEBERFAELLIG", title: `Überfällig seit ${r.dueDate}: ${r.title}`, link: link(r.id), dedupeKey: `ueberfaellig:${r.id}:${r.dueDate}` });
+    n += await notify(db, { workspaceId: r.workspaceId, userIds: to, kind: "UEBERFAELLIG", title: `Überfällig seit ${isoDe(r.dueDate)}: ${r.title}`, link: link(r.id), dedupeKey: `ueberfaellig:${r.id}:${r.dueDate}` });
   }
   return n;
 }

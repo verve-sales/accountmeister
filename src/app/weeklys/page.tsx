@@ -29,7 +29,7 @@ export default async function WeeklysPage({ searchParams }: { searchParams: Prom
       <Feedback params={params} />
       <section className="card">
         <h2 className="font-semibold mb-2">Anstehend ({lists.upcoming.length})</h2>
-        {lists.upcoming.length === 0 ? <p className="muted text-sm">Keine anstehenden Weeklys in deinem Berechtigungsbereich.</p> : <ReviewTable rows={lists.upcoming} />}
+        {lists.upcoming.length === 0 ? <p className="empty">Keine anstehenden Weeklys in deinem Berechtigungsbereich.</p> : <ReviewTable rows={lists.upcoming} />}
       </section>
       {lists.open.length > 0 && (
         <section className="card">
@@ -39,7 +39,7 @@ export default async function WeeklysPage({ searchParams }: { searchParams: Prom
       )}
       <section className="card">
         <h2 className="font-semibold mb-2">Bestätigt ({lists.past.length})</h2>
-        {lists.past.length === 0 ? <p className="muted text-sm">Noch kein bestätigtes Weekly.</p> : <ReviewTable rows={lists.past} />}
+        {lists.past.length === 0 ? <p className="empty">Noch kein bestätigtes Weekly.</p> : <ReviewTable rows={lists.past} />}
       </section>
       {mySetups.length > 0 && (
         <details className="card" open={!!preselected}>

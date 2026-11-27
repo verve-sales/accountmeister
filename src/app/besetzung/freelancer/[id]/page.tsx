@@ -32,7 +32,7 @@ export default async function FreelancerPage({ params, searchParams }: { params:
   const back = `/besetzung/freelancer/${id}`;
   return (
     <div className="space-y-5">
-      <p className="text-sm"><Link href="/besetzung">Besetzungen</Link></p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/besetzung">Besetzung</Link></nav>
       <h1 className="text-2xl font-semibold">{f.displayName}<TechRef>{`Interne ID ${f.id}`}</TechRef></h1>
       <Feedback params={sp} />
       <section className="card text-sm">

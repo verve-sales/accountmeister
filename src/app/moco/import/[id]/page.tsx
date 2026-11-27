@@ -69,7 +69,7 @@ export default async function MocoImportPage({ params, searchParams }: { params:
 
   return (
     <div className="space-y-5">
-      <p className="text-sm"><Link href="/moco">Moco</Link> · Importlauf</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/moco">Moco</Link><span>Importlauf</span></nav>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">Prüfliste Moco-Import</h1>
         <span className="muted text-sm">{imp.summary} · {fmtDateTime(imp.createdAt)} · {imp.status === "ENTWURF" ? "offen" : imp.status === "UEBERNOMMEN" ? `übernommen ${fmtDateTime(imp.appliedAt)}` : "verworfen"}</span>
@@ -80,7 +80,7 @@ export default async function MocoImportPage({ params, searchParams }: { params:
           <h2 className="font-semibold mb-1">Ergebnis</h2>
           <p>Angelegt: {result.created?.einsaetze ?? 0} Einsätze, {result.created?.setups ?? 0} Setups, {result.created?.kunden ?? 0} Kunden, {result.created?.nutzer ?? 0} Zugänge, {result.created?.freelancer ?? 0} Freelancer, {result.created?.teams ?? 0} Teams; {result.created?.verknuepft ?? 0} Verknüpfungen; {result.skipped?.length ?? 0} übersprungen.</p>
           {!!result.errors?.length && (
-            <ul className="mt-2" style={{ color: "#c0392b" }}>
+            <ul className="mt-2" style={{ color: "var(--danger)" }}>
               {result.errors.map((e) => <li key={e.key}>{e.key}: {e.message}</li>)}
             </ul>
           )}

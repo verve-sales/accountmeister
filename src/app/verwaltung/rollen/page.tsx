@@ -16,7 +16,7 @@ export default async function RollenPage({ searchParams }: { searchParams: Searc
   const groups = groupByFamily(roles);
   return (
     <div className="space-y-6">
-      <p className="text-sm"><Link href="/verwaltung">Verwaltung</Link> › Rollen</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/verwaltung">Verwaltung</Link><span>Rollen</span></nav>
       <h1 className="text-2xl font-semibold">Standardrollen</h1>
       <p className="muted text-sm">Auf diese Rollen zeigen Chancen (Verve-Experte, Freelancer-Experte, Ausschreibung). Deaktivierte Rollen bleiben an bestehenden Chancen erhalten, sind aber nicht mehr wählbar.</p>
       <Feedback params={params} />

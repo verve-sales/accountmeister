@@ -1,3 +1,4 @@
+import { isoDe } from "@/lib/labels";
 import { EXPIRY_WINDOW_DAYS } from "@/lib/window";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db, schema } from "@/db/client";
@@ -67,7 +68,7 @@ export async function ensureRenewalRuns(actor: Actor, now = new Date()): Promise
         const end = r.o.plannedEnd ?? r.o.renewalDeadline;
         const [a] = await tx
           .insert(schema.actions)
-          .values({ workspaceId: actor.workspaceId, setupId: r.opp.setupId, opportunityId: r.opp.id, title: `Verlängerung ansprechen: „${r.opp.title.slice(0, 80)}“ endet am ${end}`, agreement: "Fahrplan Verlängerung, Schritt 1 (3 Monate vor Ende): Beim nächsten Kontakt mit dem Kunden die Verlängerung ansprechen – Zufriedenheit, Anschlussbedarf, Bestellweg und Fristen. Acht Wochen vor Ende startet das Vorgehen „Verlängerung vor Einsatzende“.", ownerUserId: owner, status: "VORGESCHLAGEN", dueDate: new Date(now.getTime() + 7 * DAY).toISOString().slice(0, 10), createdBy: actor.userId })
+          .values({ workspaceId: actor.workspaceId, setupId: r.opp.setupId, opportunityId: r.opp.id, title: `Verlängerung ansprechen: „${r.opp.title.slice(0, 80)}“ endet am ${isoDe(end)}`, agreement: "Fahrplan Verlängerung, Schritt 1 (3 Monate vor Ende): Beim nächsten Kontakt mit dem Kunden die Verlängerung ansprechen – Zufriedenheit, Anschlussbedarf, Bestellweg und Fristen. Acht Wochen vor Ende startet das Vorgehen „Verlängerung vor Einsatzende“.", ownerUserId: owner, status: "VORGESCHLAGEN", dueDate: new Date(now.getTime() + 7 * DAY).toISOString().slice(0, 10), createdBy: actor.userId })
           .returning();
         await tx.update(schema.standardTasks).set({ actionId: a!.id }).where(eq(schema.standardTasks.id, log.id));
         await recordAudit(tx, actor, "renewal.ping", "ORDER", r.o.id, { ende: end });

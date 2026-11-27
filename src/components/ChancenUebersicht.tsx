@@ -25,7 +25,7 @@ function QuickActions({ c, back }: { c: ChanceRow; back: string }) {
         <form action={deleteOpportunityAction} className="flex gap-1 items-end">
           <input type="hidden" name="opportunityId" value={c.id} /><input type="hidden" name="confirm" value="on" /><input type="hidden" name="back" value={back} />
           <input name="reason" className="input" defaultValue="Aus der Übersicht gelöscht (Dublette oder gegenstandslos)" aria-label="Begründung" style={{ width: "16rem" }} />
-          <button className="btn btn-small" type="submit" style={{ background: "#c0392b" }}>Endgültig löschen</button>
+          <button className="btn btn-small btn-danger" type="submit">Endgültig löschen</button>
         </form>
       </div>
     </details>

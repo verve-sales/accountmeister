@@ -24,7 +24,7 @@ export default async function IntakePage({ params, searchParams }: { params: Pro
   const decided = d.intake.status !== "OFFEN";
   return (
     <div className="space-y-5">
-      <p className="text-sm"><Link href={`/bedarfe/${d.opportunity.id}#besetzung`}>{d.opportunity.title}</Link> · Texteingang</p>
+      <nav className="crumbs" aria-label="Pfad"><Link href={`/bedarfe/${d.opportunity.id}#besetzung`}>{d.opportunity.title}</Link><span>Texteingang</span></nav>
       <h1 className="text-2xl font-semibold">Vorschläge aus dem Text prüfen</h1>
       <Feedback params={sp} />
       <section className="card text-sm">

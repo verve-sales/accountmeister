@@ -38,8 +38,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
       <h1 className="text-2xl font-semibold">Kunden</h1>
       <Feedback params={params} />
       <section className="card">
-        {active.length === 0 ? (
-          <p className="muted text-sm">Keine Kunden in deinem Berechtigungsbereich.</p>
+        {active.length === 0 ? (<p className="empty">Keine Kunden in deinem Berechtigungsbereich.</p>
         ) : (
           <table className="list">
             <thead><tr><th>Kunde</th><th>Typ</th><th>Zuständiger BD</th><th>Status</th><th>Health-Check</th></tr></thead>
@@ -109,7 +108,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
           <form action={createAccountAction} className="mt-3 grid sm:grid-cols-2 gap-3">
             <div><label className="label" htmlFor="name">Name der Organisation</label><input id="name" name="name" className="input" required minLength={2} /></div>
             <div>
-              <label className="label" htmlFor="orgType">Organisationstyp <span style={{ color: "#c0392b" }}>*</span></label>
+              <label className="label" htmlFor="orgType">Organisationstyp <span style={{ color: "var(--danger)" }}>*</span></label>
               <select id="orgType" name="orgType" className="select" defaultValue="" required>
                 <option value="" disabled>Bitte wählen …</option>
                 {schema.orgTypeEnum.enumValues.map((v) => <option key={v} value={v}>{orgTypeLabel[v] ?? v}</option>)}

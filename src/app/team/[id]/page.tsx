@@ -31,7 +31,7 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-sm"><Link href="/meine-arbeit?v=team">Meine Arbeit</Link></p>
+        <nav className="crumbs" aria-label="Pfad"><Link href="/meine-arbeit?v=team">Meine Arbeit</Link></nav>
         <h1 className="text-2xl font-semibold">Team-Eingang: {t.team.name}</h1>
         {t.team.description && <p className="muted text-sm">{t.team.description}</p>}
       </div>
@@ -40,14 +40,13 @@ export default async function TeamPage({ params, searchParams }: { params: Promi
       <section className="card grid sm:grid-cols-4 gap-3 text-sm">
         <div><div className="muted">Noch nicht übernommen</div><div className="text-2xl font-semibold">{q.unassigned.length}</div></div>
         <div><div className="muted">In Bearbeitung</div><div className="text-2xl font-semibold">{q.inWork.length}</div></div>
-        <div><div className="muted">Überfällig / SLA überschritten</div><div className="text-2xl font-semibold" style={late ? { color: "#c0392b" } : undefined}>{late}</div></div>
+        <div><div className="muted">Überfällig / SLA überschritten</div><div className="text-2xl font-semibold" style={late ? { color: "var(--danger)" } : undefined}>{late}</div></div>
         <div><div className="muted">Zuletzt erledigt</div><div className="text-2xl font-semibold">{q.done.length}</div></div>
       </section>
 
       <section className="card">
         <h2 className="font-semibold mb-2">Warteschlange ({q.unassigned.length})</h2>
-        {q.unassigned.length === 0 ? (
-          <p className="muted text-sm">Alles übernommen.</p>
+        {q.unassigned.length === 0 ? (<p className="empty">Alles übernommen.</p>
         ) : (
           <ul className="space-y-3">
             {q.unassigned.map((w) => (

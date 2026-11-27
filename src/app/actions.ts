@@ -1813,6 +1813,12 @@ export async function signalRenewalAction(fd: FormData) {
   }, "");
 }
 
+/** e64: „Möglich – noch zu früh“ als eigene Schaltfläche im Verlängerungsformular (formAction ohne name/value – sonst Hydration-Fehler). */
+export async function signalRenewalPossibleAction(fd: FormData) {
+  fd.set("signal", "MOEGLICH");
+  return signalRenewalAction(fd);
+}
+
 export async function startRenewalAction(fd: FormData) {
   const data = formToObject(fd);
   return run(backOf(data, `/einsaetze/${data.engagementId ?? ""}#verlaengerung`), async (actor) => {

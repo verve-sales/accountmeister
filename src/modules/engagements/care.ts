@@ -1,3 +1,4 @@
+import { isoDe } from "@/lib/labels";
 import { and, asc, desc, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema, type Db, type Tx } from "@/db/client";
@@ -274,7 +275,7 @@ export async function notifyDueCheckins(workspaceId?: string): Promise<number> {
     const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, c.engagementId) });
     if (!e) continue;
     const overdue = c.dueDate < t;
-    n += await notify(db, { workspaceId: e.workspaceId, userIds: [c.ownerUserId], kind: overdue ? "UEBERFAELLIG" : "ZUGEWIESEN", title: `${overdue ? "Überfälliger" : "Fälliger"} Check-in (${c.side === "KUNDE" ? "Kunde" : "Freelancer"}) bis ${c.dueDate}: ${await engagementLabel(db, e)}`, link: `/einsaetze/${c.engagementId}#checkins`, dedupeKey: `checkin:${c.id}:${c.dueDate}:${overdue ? "ueberfaellig" : "faellig"}` });
+    n += await notify(db, { workspaceId: e.workspaceId, userIds: [c.ownerUserId], kind: overdue ? "UEBERFAELLIG" : "ZUGEWIESEN", title: `${overdue ? "Überfälliger" : "Fälliger"} Check-in (${c.side === "KUNDE" ? "Kunde" : "Freelancer"}) bis ${isoDe(c.dueDate)}: ${await engagementLabel(db, e)}`, link: `/einsaetze/${c.engagementId}#checkins`, dedupeKey: `checkin:${c.id}:${c.dueDate}:${overdue ? "ueberfaellig" : "faellig"}` });
   }
   return n;
 }
@@ -450,7 +451,7 @@ export async function startRenewal(actor: Actor, engagementId: string, raw: unkn
     if (current) [row] = await tx.update(schema.renewalDecisions).set({ ...values, version: current.version + 1 }).where(eq(schema.renewalDecisions.id, current.id)).returning();
     else [row] = await tx.insert(schema.renewalDecisions).values({ workspaceId: actor.workspaceId, engagementId, ...values, createdBy: actor.userId }).returning();
     await recordAudit(tx, actor, "renewal.requested", "ENGAGEMENT", engagementId, { bis: i.newEnd, konditionen: conditionsNote });
-    if (!opts.direct) await notify(tx, { workspaceId: actor.workspaceId, userIds: [e.bdUserId, ...principals], kind: "ZUGEWIESEN", title: `Verlängerung bestätigen: ${person} bei ${a.account.name} bis ${i.newEnd}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId, dedupeKey: `renewal-request:${row!.id}:${i.newEnd}` });
+    if (!opts.direct) await notify(tx, { workspaceId: actor.workspaceId, userIds: [e.bdUserId, ...principals], kind: "ZUGEWIESEN", title: `Verlängerung bestätigen: ${person} bei ${a.account.name} bis ${isoDe(i.newEnd)}`, link: `/einsaetze/${engagementId}#verlaengerung`, actorUserId: actor.userId, dedupeKey: `renewal-request:${row!.id}:${i.newEnd}` });
     return row!;
   });
 }

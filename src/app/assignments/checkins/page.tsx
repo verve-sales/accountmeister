@@ -20,7 +20,7 @@ export default async function AsgCheckinsPage({ searchParams }: { searchParams: 
       {groups.map(([title, list]) => (
         <section className="card" key={title}>
           <h2 className="font-semibold">{title} ({list.length})</h2>
-          {list.length === 0 ? <p className="muted text-sm mt-1">Nichts offen.</p> : (
+          {list.length === 0 ? <p className="empty">Nichts offen.</p> : (
             <table className="list text-sm mt-1">
               <thead><tr><th>Person</th><th>Kunde</th><th>Fällig</th><th>Zuständig</th><th>Zuletzt</th><th>Erledigen</th></tr></thead>
               <tbody>
@@ -28,16 +28,16 @@ export default async function AsgCheckinsPage({ searchParams }: { searchParams: 
                   <tr key={c.id}>
                     <td><Link href={`/einsaetze/${c.engagementId}#checkins`}><strong>{c.person}</strong></Link></td>
                     <td>{c.accountName}</td>
-                    <td style={{ whiteSpace: "nowrap", color: c.overdue ? "#c0392b" : undefined, fontWeight: c.overdue ? 600 : undefined }}>{fmtDate(c.due)}</td>
+                    <td style={{ whiteSpace: "nowrap", color: c.overdue ? "var(--danger)" : undefined, fontWeight: c.overdue ? 600 : undefined }}>{fmtDate(c.due)}</td>
                     <td>{c.owner}</td>
                     <td className="muted">{c.lastNote ?? "–"}</td>
                     <td>
                       <form action={checkinAction} className="flex flex-wrap gap-1 items-center">
                         <input type="hidden" name="checkinId" value={c.id} /><input type="hidden" name="version" value={c.version} /><input type="hidden" name="action" value="ERLEDIGEN" /><input type="hidden" name="back" value="/assignments/checkins" />
                         <input name="note" className="input" placeholder="Notiz (optional)" style={{ width: "12rem" }} />
-                        <button className="btn btn-small" name="mood" value="POSITIV" style={{ background: "#2f7d32", borderColor: "#2f7d32" }}>positiv</button>
-                        <button className="btn btn-small" name="mood" value="MITTEL" style={{ background: "#b7791f", borderColor: "#b7791f" }}>mittel</button>
-                        <button className="btn btn-small" name="mood" value="NEGATIV" style={{ background: "#c0392b", borderColor: "#c0392b" }}>negativ</button>
+                        <button className="mood-btn" data-mood="positiv" type="submit" name="mood" value="POSITIV">positiv</button>
+                        <button className="mood-btn" data-mood="mittel" type="submit" name="mood" value="MITTEL">mittel</button>
+                        <button className="mood-btn" data-mood="negativ" type="submit" name="mood" value="NEGATIV">negativ</button>
                       </form>
                     </td>
                   </tr>

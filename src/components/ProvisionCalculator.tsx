@@ -9,12 +9,15 @@ const eur = (n: number) => n.toLocaleString("de-DE", { style: "currency", curren
 const pct = (n: number) => `${(n * 100).toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
 const num = (v: string) => (v.trim() === "" ? null : Number(v.replace(",", ".")));
 
-const TIER_COLOR: Record<string, string> = { KEINE: "#c0392b", BASIS: "#d68910", STANDARD: "#2f7d32", PREMIUM: "#2f7d32", PRINCIPAL: "#1f5fa8" };
+const TIER_COLOR: Record<string, string> = { KEINE: "var(--danger)", BASIS: "#d68910", STANDARD: "#2f7d32", PREMIUM: "#2f7d32", PRINCIPAL: "#1f5fa8" };
 
 let nextId = 1;
 const emptyRow = (): Row => ({ id: nextId++, name: "", profile: FREELANCER, ek: null, vk: null, days: null, findingShare: 100, signingShare: 100 });
 
 /** Provisionsrechner zum freien Ausfüllen – rechnet nur im Browser, speichert nichts. */
+/** e64: Legende in ihren echten Farben */
+const LEGEND_TONE: Record<string, React.CSSProperties> = { Rot: { background: "#fdeceb", color: "#b42318", borderColor: "#f5c2bd" }, Orange: { background: "#fff4e0", color: "#8a5300", borderColor: "#f3d7a2" }, "Grün": { background: "#e8f6ed", color: "#1f6b3a", borderColor: "#bfe0c8" }, Blau: { background: "#edf2fd", color: "#1b3f99", borderColor: "#c7d5f6" } };
+
 export function ProvisionCalculator({ isPrincipal, config }: { isPrincipal: boolean; config: ProvisionConfig }) {
   const PROVISION_CONFIG = config;
   const [recipient, setRecipient] = useState<Recipient>(isPrincipal ? "PRINCIPAL" : "BD");
@@ -121,7 +124,7 @@ export function ProvisionCalculator({ isPrincipal, config }: { isPrincipal: bool
         <h2 className="font-semibold mb-2">Legende</h2>
         <ul className="text-sm space-y-1">
           {legend.map((l) => (
-            <li key={l.text} className="flex gap-2 items-baseline"><span className="status" style={{ minWidth: "4.5rem", textAlign: "center" }}>{l.color}</span><span>{l.text}</span></li>
+            <li key={l.text} className="flex gap-2 items-baseline"><span className="status" style={{ minWidth: "4.5rem", justifyContent: "center", ...(LEGEND_TONE[l.color] ?? {}) }}>{l.color}</span><span>{l.text}</span></li>
           ))}
         </ul>
         <p className="muted text-xs mt-3">Formeln: Kosten = gestaffelte Kostenpauschale je Einsatztag (Tag 1–50, 51–100, ab 101: je {PROVISION_CONFIG.costTiers[0]!.perDay} €). Nettomarge = Tage × (VK − EK) − Kosten; Nettomarge % = Nettomarge / Umsatz. Provision gesamt = Nettomarge × Satz + Finding Fee + Signing Fee (jeweils mit deinem Anteil). Der Rechner speichert nichts – die Werte verschwinden beim Verlassen der Seite. Verbindlich ist die Abrechnung, nicht dieser Rechner.</p>

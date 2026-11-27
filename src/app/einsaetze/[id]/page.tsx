@@ -1,3 +1,4 @@
+import { titleWithoutPerson } from "@/lib/labels";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -24,7 +25,7 @@ import { addSharePointDocumentAction, addContractDocumentAction, uploadSignedVer
 import { contractDefaults } from "@/modules/conversion/contractService";
 
 const eur = (v: string | null, unit: string) => (v ? `${Number(v).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${rateUnitLabel[unit] ?? unit}` : "offen");
-const RED = "#c0392b";
+const RED = "var(--danger)";
 
 function Btn({ id, version, back, status, label, secondary, fields }: { id: string; version: number; back: string; status: string; label: string; secondary?: boolean; fields?: React.ReactNode }) {
   return (
@@ -88,9 +89,9 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-sm"><Link href="/einsaetze">Einsätze</Link> · <Link href={`/kunden/${e.accountId}`}>{e.accountName}</Link> · <Link href={`/besetzung/${e.positionId}`}>Position</Link> · <Link href={`/bedarfe/${e.opportunityId}#auftrag`}>Chance / Auftrag</Link></p>
+        <nav className="crumbs" aria-label="Pfad"><Link href="/einsaetze">Einsätze</Link><Link href={`/kunden/${e.accountId}`}>{e.accountName}</Link>{a.commercial ? <Link href={`/besetzung/${e.positionId}`}>Position</Link> : <span>Position</span>}<Link href={`/bedarfe/${e.opportunityId}#auftrag`}>Chance / Auftrag</Link></nav>
         <h1 className="text-2xl font-semibold mt-1">{personName} <span className="muted font-normal">bei</span> {e.accountName}</h1>
-        <p className="text-sm muted">{e.title}{e.mocoProjectId ? ` · Moco-Projekt ${e.mocoProjectId}` : ""}</p>
+        <p className="text-sm muted">{titleWithoutPerson(e.title, personName)}{e.mocoProjectId ? ` · Moco-Projekt ${e.mocoProjectId}` : ""}</p>
         <div className="flex flex-wrap gap-x-4 gap-y-1 items-baseline mt-1 text-sm">
           <span className="status">{engagementStatusLabel[e.status] ?? e.status}</span>
           <span>{e.freelancerId ? <>Freelancer: <Link href={`/besetzung/freelancer/${e.freelancerId}`}>{e.freelancerName}</Link></> : <>Besetzt mit: {e.freelancerName}</>}</span>
@@ -108,7 +109,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
               </form>
             </details>
           )}
-          {nextDue && <span style={nextDue < new Date().toISOString().slice(0, 10) ? { color: RED, fontWeight: 600 } : undefined}>nächste Frist {fmtDate(nextDue)}</span>}
+          {nextDue && (nextDue < today ? <span style={{ color: RED, fontWeight: 600 }}>Frist überfällig seit {fmtDate(nextDue)}</span> : <span>nächste Frist {fmtDate(nextDue)}</span>)}
           <span className="muted text-xs ml-auto">{a.commercial ? "BD-Kontext" : a.ops ? "Sales Operations" : a.readOnly ? "Coach (nur lesen)" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
         </div>
         {!final && (a.manage || a.care) && (asgUser || !(openRenewal && openRenewal.proposedTo && openRenewal.status !== "MOEGLICH")) && (
@@ -283,7 +284,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
             </form>
           </details>
         )}
-        {d.documents.length === 0 ? <p className="muted text-sm">Noch keine Unterlage verknüpft.</p> : (
+        {d.documents.length === 0 ? <p className="empty">Noch keine Unterlage verknüpft.</p> : (
           <ul className="text-sm space-y-2">
             {d.documents.map((doc) => (
               <li key={doc.id} className="flex flex-wrap items-baseline gap-2">
@@ -549,7 +550,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
       {/* Verlängerung */}
       <section className="card" id="verlaengerung">
         <h2 className="font-semibold mb-2">Verlängerung</h2>
-        {d.renewals.length === 0 ? <p className="muted text-sm">Noch keine Verlängerungsentscheidung. Sie entsteht automatisch {e.pingDate ? `ab ${fmtDate(e.pingDate)}` : "sobald ein Ende oder eine Frist hinterlegt ist"} (90 Tage vor Ende bzw. 30 Tage vor der Frist) – oder jetzt manuell.</p> : (
+        {d.renewals.length === 0 ? <p className="empty">Noch keine Verlängerungsentscheidung. Sie entsteht automatisch {e.pingDate ? `ab ${fmtDate(e.pingDate)}` : "sobald ein Ende oder eine Frist hinterlegt ist"} (90 Tage vor Ende bzw. 30 Tage vor der Frist) – oder jetzt manuell.</p> : (
           <ul className="text-sm space-y-1">
             {d.renewals.map((r) => (
               <li key={r.id}><span className="status">{renewalStatusLabel[r.status] ?? r.status}</span> Auslöser {fmtDate(r.triggerDate)}{r.proposedFrom ? ` · Zeitraum ${fmtDate(r.proposedFrom)} – ${fmtDate(r.proposedTo)}` : ""}{r.conditionsNote ? ` · ${r.conditionsNote}` : ""}{r.availabilityNote ? ` · Verfügbarkeit: ${r.availabilityNote}` : ""}{r.contractFollowUp ? ` · Vertragsfolge: ${r.contractFollowUp}` : ""}{r.ownerName ? ` · kommerziell: ${r.ownerName}` : ""}{r.decidedAt ? ` · entschieden ${fmtDate(r.decidedAt)}` : ""}
@@ -590,7 +591,6 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
       </section>
 
       <Comments actor={actor} subjectType="CHANCE" subjectId={e.opportunityId} back={back} />
-      {a.manage && <DeleteBlock kind="EINSATZ" id={e.id} label={e.title} scope="samt Check-ins, Perioden, Betreuung, Unterlagen-Verknüpfungen, Kandidatur, Position (wenn leer) und Auftrag (wenn kein anderer Einsatz daran hängt); die Chance bleibt" back={back} />}
 
       <section className="card">
         <details>
@@ -602,6 +602,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           </ul>
         </details>
       </section>
+      {a.manage && <DeleteBlock kind="EINSATZ" id={e.id} label={e.title} scope="samt Check-ins, Perioden, Betreuung, Unterlagen-Verknüpfungen, Kandidatur, Position (wenn leer) und Auftrag (wenn kein anderer Einsatz daran hängt); die Chance bleibt" back={back} />}
     </div>
   );
 }

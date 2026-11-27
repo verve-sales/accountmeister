@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { TechRef } from "@/components/TechDetails";
+import { TechDetails, TechRef } from "@/components/TechDetails";
 import { redirect } from "next/navigation";
 import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Status } from "@/components/Status";
@@ -100,7 +100,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
         <div className="mt-3 flex flex-wrap gap-3 items-end">
           {!conn.state.connected ? (
             <>
-              <form action={connectMailboxAction}><input type="hidden" name="mode" value="fixture" /><button className="btn" type="submit">Verbinden (Fixture-Modus)</button></form>
+              <form action={connectMailboxAction}><input type="hidden" name="mode" value="fixture" /><button className="btn" type="submit" title="Testverbindung mit Beispieldaten (Fixture-Modus)">Testverbindung herstellen</button></form>
               <a className="btn btn-secondary" href="/api/integrations/microsoft/authorize">Echtes Postfach verbinden</a>
               <p className="muted text-sm">Führt zur Anmeldung bei Microsoft. Setzt voraus, dass die Betriebsverwaltung der App die nötigen Berechtigungen gegeben hat – sonst wird die Verbindung abgewiesen. <TechRef>docs/installation-ionos.md, Schritt 4b</TechRef></p>
             </>
@@ -125,19 +125,19 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
         <table className="list">
           <tbody>
             <tr><td>KI-Anbieter</td><td>{ai.id} · {ai.model} · {ai.enabled ? "aktiv" : "deaktiviert"}<div className="muted text-sm">{ai.description}</div></td></tr>
-            <tr><td>Prompt-/Schemaversion</td><td>{ai.promptVersion}</td></tr>
             <tr><td>Nutzungsgrenze</td><td>{ai.dailyLimit} KI-Aufträge je Arbeitsraum und Tag</td></tr>
             <tr><td>Anmeldung</td><td>{cfg.AUTH_MODE === "development" ? "Entwicklungsanmeldung (nur lokal)" : "Unternehmensanmeldung (OIDC)"}</td></tr>
             <tr><td>Mail-/Kalenderanbieter</td><td>Microsoft 365 / Outlook über Microsoft Graph <TechRef>Entscheidung E-018</TechRef>. Echter Abruf möglich, sobald die Berechtigungen in Entra ID gesetzt sind <TechRef>docs/installation-ionos.md, Schritt 4b</TechRef> – jede Person verbindet ihr eigenes Postfach selbst, oben.</td></tr>
           </tbody>
         </table>
         <p className="muted text-sm mt-2">Änderungen nimmt die Betriebsverwaltung in der Serverkonfiguration vor, nicht auf dieser Seite. <TechRef>.env</TechRef></p>
+        <TechDetails><div>Prompt-/Schemaversion: {ai.promptVersion}</div></TechDetails>
       </section>
       {(hasRole(actor, "BD") || hasRole(actor, "PRINCIPAL") || hasRole(actor, "CEO")) && (
         <section className="card">
           <h2 className="font-semibold mb-2">Freigegebene Profilreferenzen ({profileRefs.length})</h2>
           <p className="muted text-sm mb-2">Nur Verweise auf freigegebene Profile (Bezeichnung, Ablageort, Verfügbarkeit) – kein Profilinhalt, kein Kandidatenmanagement. Sichtbar für BD, Principal und CEO.</p>
-          {profileRefs.length === 0 ? <p className="muted text-sm">Noch keine Profilreferenz.</p> : (
+          {profileRefs.length === 0 ? <p className="empty">Noch keine Profilreferenz.</p> : (
             <table className="list"><thead><tr><th>Bezeichnung</th><th>Ablage/Referenz</th><th>Verfügbarkeit</th><th>Freigegeben</th></tr></thead>
               <tbody>{profileRefs.map((r) => <tr key={r.id}><td>{r.label}</td><td className="text-sm">{r.sourceRef ?? "–"}</td><td className="text-sm">{r.availabilityNote ?? "–"}</td><td className="text-sm">{r.approvedAt ? fmtDateTime(r.approvedAt) : "–"}</td></tr>)}</tbody>
             </table>
@@ -155,7 +155,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
       )}
       <section className="card">
         <h2 className="font-semibold mb-2">Administration und Aufbewahrung</h2>
-        <p className="text-sm">Rollen, Zugänge, Protokoll und Bestandszahlen pflegt die Betriebsverwaltung unter <Link href="/verwaltung">Verwaltung</Link> (nur Rolle ADMIN, ohne Inhaltszugriff). Sperren und Löschen einzelner Quellen erfolgt auf der jeweiligen Quellenseite. Aufbewahrungsfristen und Erinnerungen folgen mit dem Löschkonzept bzw. der Unternehmensanmeldung (siehe <code>docs/pilotfreigabe.md</code>).</p>
+        <p className="text-sm">Rollen, Zugänge, Protokoll und Bestandszahlen pflegt die Betriebsverwaltung unter {actor.roles.has("ADMIN") ? <Link href="/verwaltung">Verwaltung</Link> : "Verwaltung"} (nur Rolle ADMIN, ohne Inhaltszugriff). Sperren und Löschen einzelner Quellen erfolgt auf der jeweiligen Quellenseite. Aufbewahrungsfristen und Erinnerungen folgen mit dem Löschkonzept bzw. der Unternehmensanmeldung. <TechRef>docs/pilotfreigabe.md</TechRef></p>
       </section>
     </div>
   );

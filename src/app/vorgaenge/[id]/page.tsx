@@ -95,7 +95,7 @@ export default async function VorgangPage({ params, searchParams }: { params: Pr
           <div><dt className="muted">Auftraggeber:in</dt><dd>{w.requesterName}</dd></div>
           <div><dt className="muted">Bearbeitet von</dt><dd>{w.assigneeName ?? (w.teamName ? `${w.teamName} – noch nicht übernommen` : "–")}{w.deputyForName ? ` (Vertretung für ${w.deputyForName})` : ""}</dd></div>
           <div><dt className="muted">Bezug</dt><dd>{d.subject?.link ? <Link href={d.subject.link}>{d.subject.label}</Link> : subjectTypeLabel[w.subjectType] ?? "–"}</dd></div>
-          <div><dt className="muted">Frist</dt><dd style={w.overdue ? { color: "#c0392b", fontWeight: 600 } : undefined}>{fmtDate(w.dueDate)}{w.overdue ? " (überfällig)" : ""}</dd></div>
+          <div><dt className="muted">Frist</dt><dd style={w.overdue ? { color: "var(--danger)", fontWeight: 600 } : undefined}>{fmtDate(w.dueDate)}{w.overdue ? " (überfällig)" : ""}</dd></div>
           {w.slaDueDate && <div><dt className="muted">Zusage Team (SLA)</dt><dd>{fmtDate(w.slaDueDate)}</dd></div>}
           <div><dt className="muted">Ergebnis prüfen</dt><dd>{w.reviewRequired ? "ja, vor Abschluss durch Auftraggeber:in" : "nein"}</dd></div>
           {d.blockedBy && <div><dt className="muted">Wartet auf</dt><dd><Link href={`/vorgaenge/${d.blockedBy.id}`}>{d.blockedBy.title}</Link> ({workStatusLabel[d.blockedBy.status]})</dd></div>}

@@ -55,7 +55,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
         {p.portfolio && (
           <div className="mt-3">
             <h3 className="text-sm font-semibold mb-1">Portfolio – Zählungen aus den Accountplänen</h3>
-            {p.portfolio.entries.length === 0 ? <p className="muted text-sm">Keine sichtbaren Kunden.</p> : (
+            {p.portfolio.entries.length === 0 ? <p className="empty">Keine sichtbaren Kunden.</p> : (
               <table className="list text-sm">
                 <thead><tr><th>Kunde</th><th>BD</th><th>Setups</th><th>Änderungen</th><th>Fragen</th><th>Zugangslücken</th><th>Blockiert</th><th>Unterstützung</th><th>Letztes Weekly</th></tr></thead>
                 <tbody>
@@ -81,7 +81,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
 
         <div className="mt-3">
           <h3 className="text-sm font-semibold mb-1">Offene Unterstützungsaufträge ({p.support.length})</h3>
-          {p.support.length === 0 ? <p className="muted text-sm">Keine offenen Unterstützungsaufträge mit deiner Beteiligung.</p> : (
+          {p.support.length === 0 ? <p className="empty">Keine offenen Unterstützungsaufträge mit deiner Beteiligung.</p> : (
             <ul className="space-y-2">
               {p.support.map((s) => (
                 <li key={s.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
@@ -107,7 +107,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
 
         <div className="mt-3">
           <h3 className="text-sm font-semibold mb-1">Ziele ({p.goals.length})</h3>
-          {p.goals.length === 0 ? <p className="muted text-sm">Keine Ziele sichtbar.{isZielgespraech && isLeader && <> Ziele werden unter <Link href="/ziele">Ziele & Portfolio</Link> angelegt und hier besprochen.</>}</p> : (
+          {p.goals.length === 0 ? <p className="empty">Keine Ziele sichtbar.{isZielgespraech && isLeader && <> Ziele werden unter <Link href="/ziele">Ziele & Portfolio</Link> angelegt und hier besprochen.</>}</p> : (
             <table className="list text-sm">
               <thead><tr><th>Ziel</th><th>Verantwortlich</th><th>Status</th><th>Vereinbart von</th><th>Beiträge</th></tr></thead>
               <tbody>
@@ -145,7 +145,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
       {/* Entscheidungen */}
       <section className="card">
         <h2 className="font-semibold mb-2">Entscheidungen ({p.decisions.length})</h2>
-        {p.decisions.length === 0 ? <p className="muted text-sm">Noch keine Entscheidungen festgehalten.</p> : (
+        {p.decisions.length === 0 ? <p className="empty">Noch keine Entscheidungen festgehalten.</p> : (
           <ul className="text-sm space-y-1">
             {p.decisions.map((d) => (
               <li key={d.id}><strong>{d.content}</strong>{d.scope && <> · Geltung: {d.scope}</>}{d.rationale && <> · Begründung: {d.rationale}</>}<span className="muted"> · {d.decidedByUserIds.map((u) => p.userNames.get(u) ?? "?").join(", ")} · {fmtDate(d.decidedOn)}</span></li>
@@ -171,7 +171,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
         <section className="card">
           <h2 className="font-semibold mb-2">Vertrauliche Notizen ({p.confidential.length})</h2>
           <p className="muted text-sm mb-2">Sichtbar nur für den gewählten Empfängerkreis. Erscheint nie im Setup, im Accountplan oder im KI-Kontext <TechRef>Briefing 11.4</TechRef>.</p>
-          {p.confidential.length === 0 ? <p className="muted text-sm">Keine vertraulichen Notizen für dich in diesem Review.</p> : (
+          {p.confidential.length === 0 ? <p className="empty">Keine vertraulichen Notizen für dich in diesem Review.</p> : (
             <ul className="text-sm space-y-2">
               {p.confidential.map((n) => (
                 <li key={n.id} className="border rounded-md p-3" style={{ borderColor: "var(--border)" }}>

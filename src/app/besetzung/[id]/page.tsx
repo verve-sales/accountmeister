@@ -1,3 +1,4 @@
+import { canBrowseFreelancerPool } from "@/modules/staffing/authz";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -37,7 +38,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
   if (!a.full) {
     return (
       <div className="space-y-5">
-        <p className="text-sm"><Link href="/besetzung">Besetzungen</Link></p>
+        <nav className="crumbs" aria-label="Pfad"><Link href="/besetzung">Besetzung</Link></nav>
         <h1 className="text-2xl font-semibold">{v.title}</h1>
         <Feedback params={sp} />
         <section className="card text-sm space-y-2">
@@ -70,7 +71,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
     <div className="space-y-5">
       <div>
         <p className="text-sm">
-          <Link href="/besetzung">Besetzungen</Link> · <Link href={`/bedarfe/${p.opportunityId}#besetzung`}>{v.accountName} · {v.opportunityTitle}</Link>
+          <Link href="/besetzung">Besetzung</Link> · <Link href={`/bedarfe/${p.opportunityId}#besetzung`}>{v.accountName} · {v.opportunityTitle}</Link>
           {p.copiedFromId && <> · <Link href={`/besetzung/${p.copiedFromId}`}>Kopie</Link></>}
         </p>
         <h1 className="text-2xl font-semibold mt-1">{filledName ? <>{filledName} <span className="muted font-normal">als</span> {p.title}</> : <>{p.title} <span className="muted font-normal">· noch offen</span></>} <span className="muted font-normal text-base">bei {v.accountName}</span></h1>
@@ -78,7 +79,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
           <span className="status">{positionStatusLabel[p.status] ?? p.status}</span>
           <span className="status">{resourceKindLabel[p.resourceKind] ?? p.resourceKind}</span>
           <span className="muted text-sm">{v.progress}</span>
-          {v.nextDue && <span className="text-sm" style={v.overdue ? { color: "#c0392b", fontWeight: 600 } : undefined}>nächste Frist {fmtDate(v.nextDue)}{v.overdue ? " (überfällig)" : ""}</span>}
+          {v.nextDue && <span className="text-sm" style={v.overdue ? { color: "var(--danger)", fontWeight: 600 } : undefined}>nächste Frist {fmtDate(v.nextDue)}{v.overdue ? " (überfällig)" : ""}</span>}
           <span className="muted text-xs ml-auto">{a.manage ? "Du führst diese Position (BD-Kontext)." : "Du bearbeitest die Suche (Suchbearbeiter:in)."}</span>
         </div>
       </div>
@@ -425,7 +426,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
               <div className="sm:col-span-4"><label className="label" htmlFor="c-notes">Interne Notizen</label><textarea id="c-notes" name="notes" className="input" rows={2} /></div>
               <div className="sm:col-span-4"><button className="btn btn-small" type="submit">Kandidatur anlegen</button></div>
             </form>
-            <p className="muted text-xs mt-1">Dublettenhinweis: Vor dem Anlegen im <Link href="/besetzung/freelancer">Pool</Link> nach dem Namen suchen (Sales Operations, Principal, CEO). Keine Bank-, Ausweis- oder Steuerdaten erfassen.</p>
+            <p className="muted text-xs mt-1">Dublettenhinweis: Vor dem Anlegen im {canBrowseFreelancerPool(actor) ? <Link href="/besetzung/freelancer">Pool</Link> : "Pool"} nach dem Namen suchen (Sales Operations, Principal, CEO). Keine Bank-, Ausweis- oder Steuerdaten erfassen.</p>
           </details>
         )}
       </section>

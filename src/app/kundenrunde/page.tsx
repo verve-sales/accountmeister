@@ -10,7 +10,7 @@ import { PendingButton } from "@/components/PendingButton";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { closeRoundAction, prepareRoundNoteAction } from "@/app/actions";
 
-const COLOR: Record<Ampel, string> = { ROT: "#c0392b", GELB: "#b7791f", GRUEN: "#2f7d4f" };
+const COLOR: Record<Ampel, string> = { ROT: "var(--danger)", GELB: "#b7791f", GRUEN: "#2f7d4f" };
 
 function Dot({ a }: { a: Ampel }) {
   return <span aria-label={`Ampel ${ampelLabel[a]}`} title={`Ampel ${ampelLabel[a]}`} style={{ display: "inline-block", width: 12, height: 12, borderRadius: 999, background: COLOR[a], flexShrink: 0, marginTop: 4 }} />;
@@ -84,7 +84,7 @@ export default async function KundenrundePage({ searchParams }: { searchParams: 
                       <Link href={`/kunden/${a.accountId}`}><strong>{a.name}</strong></Link>
                       {a.health && <HealthBadge score={a.health.score} level={a.health.level} coverage={a.health.coverage} />}
                     </div>
-                    <ul className="text-sm mt-1" style={{ color: COLOR[a.ampel] }}>{a.reasons.map((x, i) => <li key={i}>{x}</li>)}</ul>
+                    <ul className="reason-list" data-tone={a.ampel === "ROT" ? "danger" : a.ampel === "GELB" ? "warn" : "ok"}>{a.reasons.map((x, i) => <li key={i}>{x}</li>)}</ul>
                     <div className="grid md:grid-cols-2 gap-4 text-sm mt-2">
                       <div>
                         <div className="muted text-xs">Nachhaltigkeit</div>

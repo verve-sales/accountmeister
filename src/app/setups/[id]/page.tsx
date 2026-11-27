@@ -160,79 +160,71 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       )}
       <Feedback params={sp} />
 
-      {(setupEngs.length > 0 || d.setup.renewalContactPersonId) && (
-        <section className="card space-y-2" id="verlaengerung">
-          <h2 className="font-semibold">Verlängerung läuft über <span className="muted text-sm font-normal">– Vorgabe für {setupEngs.filter((x) => !["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(x.status)).length} laufende Einsätze; am Einsatz abweichend möglich</span></h2>
-          <p className="text-sm">
-            fachlich: {pName(d.setup.renewalContactPersonId) ?? <span style={{ color: "#b7791f" }}>offen</span>} · Bestellung/Vertrag: {pName(d.setup.orderContactPersonId) ?? <span className="muted">–</span>} · spricht an: {d.setup.renewalApproach ? approachLabel[d.setup.renewalApproach] : <span className="muted">–</span>}
-          </p>
-          {mayContacts && (
-            <details open={!d.setup.renewalContactPersonId}>
-              <summary className="text-sm cursor-pointer">Vorgabe ändern</summary>
-              <form action={setupContactsAction.bind(null, id)} className="flex flex-wrap gap-3 items-end text-sm mt-2">
-                <label className="space-y-1"><span className="block muted text-xs">fachlich über</span>
-                  <select name="renewalContactPersonId" className="input" defaultValue={d.setup.renewalContactPersonId ?? ""}><option value="">– offen –</option>{accountPersons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select>
-                </label>
-                <label className="space-y-1"><span className="block muted text-xs">Bestellung/Vertrag über</span>
-                  <select name="orderContactPersonId" className="input" defaultValue={d.setup.orderContactPersonId ?? ""}><option value="">– wie fachlich / offen –</option>{accountPersons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select>
-                </label>
-                <label className="space-y-1"><span className="block muted text-xs">wer spricht an</span>
-                  <select name="renewalApproach" className="input" defaultValue={d.setup.renewalApproach ?? ""}><option value="">– offen –</option>{approachValues.map((v) => <option key={v} value={v}>{approachLabel[v]}</option>)}</select>
-                </label>
-                <fieldset className="flex flex-wrap gap-2 items-end" style={{ flexBasis: "100%", border: 0, padding: 0 }}>
-                  <legend className="muted text-xs">Noch nicht erfasst? Fachlichen Ansprechpartner direkt neu anlegen (hat Vorrang vor der Auswahl):</legend>
-                  <input name="newRenewalName" className="input" placeholder="Vor- und Nachname" aria-label="Neuer fachlicher Ansprechpartner: Name" />
-                  <input name="newRenewalFunction" className="input" placeholder="Funktion (optional)" aria-label="Funktion" />
-                  <input name="newRenewalEmail" className="input" type="email" placeholder="E-Mail (optional)" aria-label="E-Mail" />
-                </fieldset>
-                <fieldset className="flex flex-wrap gap-2 items-end" style={{ flexBasis: "100%", border: 0, padding: 0 }}>
-                  <legend className="muted text-xs">Neuer Ansprechpartner für Bestellung/Vertrag:</legend>
-                  <input name="newOrderName" className="input" placeholder="Vor- und Nachname" aria-label="Neuer Ansprechpartner Bestellung: Name" />
-                  <input name="newOrderFunction" className="input" placeholder="Funktion (optional)" aria-label="Funktion" />
-                  <input name="newOrderEmail" className="input" type="email" placeholder="E-Mail (optional)" aria-label="E-Mail" />
-                </fieldset>
-                <button className="btn btn-small" type="submit">Speichern</button>
-              </form>
-            </details>
-          )}
-        </section>
-      )}
-
-      {mayContacts && (
-        <section className="card space-y-2" id="angebotsweg">
-          <h2 className="font-semibold">Angebotsweg <span className="muted text-sm font-normal">– bestimmt Schritt 4 im Konvertierungsvorgang</span></h2>
-          <form action={setupOfferPathAction.bind(null, id)} className="flex flex-wrap gap-2 items-end text-sm">
-            <select name="offerPath" className="input" defaultValue={d.setup.offerPath} aria-label="Angebotsweg">
-              {offerPathValues.map((v) => <option key={v} value={v}>{offerPathLabel[v]}</option>)}
-            </select>
-            <button className="btn btn-small" type="submit">Speichern</button>
-          </form>
-          <p className="muted text-xs">Das Angebot entsteht immer in Moco. Hat der Kunde eine eigene Vorlage, wird sie mit der Moco-Angebotsnummer gefüllt; an den Kunden geht dann nur die Vorlage. Im Vermittlergeschäft gibt es kein Angebot, nur Konditionen per Mail.</p>
-        </section>
-      )}
-
-      {(setupRuns.length > 0 || d.canEdit || mayReassign) && (
-        <PlaybookRuns
-          startCollapsed
-          runs={setupRuns}
-          back={back}
-          users={allUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
-          start={(d.canEdit || mayReassign) && d.setup.status !== "ARCHIVIERT" ? {
-            playbooks: setupPlaybooks,
-            hidden: { setupId: d.setup.id, accountId: d.account.id },
-            defaultOwnerId: d.setup.bdUserId,
-            salesOps,
-            recommendedId: looksLikeReactivation && reactivation ? reactivation.id : null,
-            recommendation: looksLikeReactivation && reactivation && !setupRuns.some((r) => r.status === "AKTIV") ? "Dieses Setup sieht nach einer Reaktivierung aus – „Altkunden-Reaktivierung“ führt Schritt für Schritt durch und erstellt je Schritt Entwürfe (Mail, Metriken, Pitch)." : null,
-          } : null}
-        />
-      )}
-
-      <WorkBlock actor={actor} subjectType="SETUP" subjectId={d.setup.id} back={back} canCreate={d.setup.status !== "ARCHIVIERT"} />
+      {/* 3. Was haben wir vereinbart? */}
+      {/* Chancen (Etappe 5): je Setup mehrere, unabhängige Zustände (F02); direkt erfassbar (F08) */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Chancen ({openOpportunities.length} offen)</h2>
+        {opportunities.length === 0 ? <p className="empty">Noch keine Chance. Eine Chance kann direkt erfasst werden – ohne vollständiges Setup oder Qualifizierung (Fast-Track).</p> : (
+          <table className="list">
+            <thead><tr><th>Chance</th><th>Wofür</th><th>Status</th><th>Verantwortlich</th><th>Bestätigt</th><th>Geändert</th></tr></thead>
+            <tbody>
+              {opportunities.map((o) => (
+                <tr key={o.id}>
+                  <td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link>{o.fastTrack && <span className="muted text-sm"> · direkte Anfrage</span>}</td>
+                  <td className="text-sm">{chanceKindLabel[o.kind]}{o.roleId && roleName.get(o.roleId) ? ` · ${roleName.get(o.roleId)}` : ""}{o.headcount ? ` · ${o.headcount}×` : ""}{o.horizon ? ` · ${o.horizon}` : ""}</td>
+                  <td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td>
+                  <td>{name(o.ownerUserId)}</td>
+                  <td>{o.confirmedAt ? fmtDate(o.confirmedAt) : <span className="muted">–</span>}</td>
+                  <td>{fmtDate(o.updatedAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {d.canEdit && (
+          <details className="mt-3">
+            <summary>Chance erfassen<Term k="CHANCE" /></summary>
+            <form action={createOpportunityAction} className="mt-2 grid sm:grid-cols-2 gap-3">
+              <input type="hidden" name="setupId" value={id} />
+              <input type="hidden" name="back" value={back} />
+              <div><label className="label" htmlFor="opTitle">Titel</label><input id="opTitle" name="title" className="input" required minLength={3} placeholder="z. B. Testkoordination Migrationsteam" /></div>
+              <div>
+                <label className="label" htmlFor="opKind">Wofür – Art der Chance</label>
+                <select id="opKind" name="kind" className="select" defaultValue="VERVE_EXPERTE">{chanceKindValues.map((k) => <option key={k} value={k}>{chanceKindLabel[k]}</option>)}</select>
+              </div>
+              <div>
+                <label className="label" htmlFor="opRole">Standardrolle (optional)</label>
+                <select id="opRole" name="roleId" className="select" defaultValue="">
+                  <option value="">– noch offen –</option>
+                  {roleGroups.map((g) => <optgroup key={g.family} label={g.label}>{g.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="label" htmlFor="opHeadcount">Anzahl (optional)</label><input id="opHeadcount" name="headcount" type="number" min={1} max={999} step={1} className="input" /></div>
+                <div><label className="label" htmlFor="opHorizon">Zeithorizont (optional)</label><input id="opHorizon" name="horizon" className="input" placeholder="z. B. Q1 2027" maxLength={60} /></div>
+              </div>
+              <div>
+                <label className="label" htmlFor="opSignal">Hervorgegangen aus Beobachtung (optional)</label>
+                <select id="opSignal" name="signalId" className="select" defaultValue=""><option value="">– direkt erfasst –</option>{linkableSignals.map((s) => <option key={s.id} value={s.id}>{s.observation.slice(0, 80)}</option>)}</select>
+              </div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="opNeed">Beschreibung in Kundensprache: was der Kunde erreichen will</label><textarea id="opNeed" name="needDescription" className="textarea" required minLength={10} rows={3} /></div>
+              <div><label className="label" htmlFor="opTrigger">Konkreter Anlass (optional)</label><input id="opTrigger" name="trigger" className="input" /></div>
+              <div className="flex flex-col gap-1 text-sm self-end">
+                <label className="flex items-center gap-2"><input type="checkbox" name="anticipated" value="on" /> Antizipiert – vermutet aus Beobachtungen, vom Kunden noch nicht ausgesprochen</label>
+                <label className="flex items-center gap-2"><input type="checkbox" name="fastTrack" value="on" /> Direkte Anfrage (Fast-Track, Messstart jetzt)</label>
+              </div>
+              <div className="sm:col-span-2 flex flex-wrap items-start gap-3">
+                <button className="btn" type="submit">Chance anlegen</button>
+                <SuggestButton kind="CHANCE" setupId={id} fields={[{ name: "title", label: "Titel der Chance (kurz)" }, { name: "needDescription", label: "Beschreibung in Kundensprache: was der Kunde erreichen will" }, { name: "trigger", label: "Konkreter Anlass" }, { name: "kind", label: "Art der Chance", options: [...chanceKindValues] }, { name: "horizon", label: "Zeithorizont, z. B. Q1 2027" }]} />
+              </div>
+            </form>
+          </details>
+        )}
+      </section>
 
       {/* 1. Was läuft hier? */}
       <section className="card">
-        <h2 className="font-semibold mb-1">1. Was läuft hier?</h2>
+        <h2 className="font-semibold mb-1">Was läuft hier?</h2>
         {d.setup.contextNote ? <p>{d.setup.contextNote}</p> : <p className="muted">Noch kein Kontextsatz – bewusster Entwurf. Ergänzen, wenn passend.</p>}
         <div className="text-sm mt-2 muted flex flex-wrap gap-3 items-center">
           <span>Beteiligte:</span>
@@ -254,7 +246,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
           ))}
         </div>
         {mayReassign && (
-          <details className="mt-3" id="zustaendigkeit" open={!d.canEdit || !d.setup.bdUserId}>
+          <details className="mt-3" id="zustaendigkeit" open={!d.canEdit}>
             <summary className="text-sm">{d.setup.bdUserId ? "Zuständigkeit umstellen (BD, Anker)" : "Zuständigen BD zuordnen (und Anker umstellen)"}</summary>
             <form action={reassignSetupBdAction} className="mt-2 flex flex-wrap items-end gap-2">
               <input type="hidden" name="setupId" value={d.setup.id} />
@@ -336,10 +328,9 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
 
       {/* 2. Was hat sich geändert? */}
       <section className="card">
-        <h2 className="font-semibold mb-1">2. Was hat sich seit dem letzten Weekly geändert?</h2>
+        <h2 className="font-semibold mb-1">Was hat sich seit dem letzten Weekly geändert?</h2>
         <p className="muted text-sm mb-2">{d.recentLabel}</p>
-        {recentSignals.length === 0 && recentDone.length === 0 ? (
-          <p className="muted text-sm">Keine neuen Beobachtungen oder erledigten Aktionen seit dem letzten bestätigten Stand.</p>
+        {recentSignals.length === 0 && recentDone.length === 0 ? (<p className="empty">Keine neuen Beobachtungen oder erledigten Aktionen seit dem letzten bestätigten Stand.</p>
         ) : (
           <ul className="text-sm space-y-1">
             {recentSignals.map((s) => (
@@ -352,71 +343,9 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
       </section>
 
-      {/* 3. Was haben wir vereinbart? */}
-      {/* Chancen (Etappe 5): je Setup mehrere, unabhängige Zustände (F02); direkt erfassbar (F08) */}
-      <section className="card">
-        <h2 className="font-semibold mb-2">Chancen ({openOpportunities.length} offen)</h2>
-        {opportunities.length === 0 ? <p className="muted text-sm">Noch keine Chance. Eine Chance kann direkt erfasst werden – ohne vollständiges Setup oder Qualifizierung (Fast-Track).</p> : (
-          <table className="list">
-            <thead><tr><th>Chance</th><th>Wofür</th><th>Status</th><th>Verantwortlich</th><th>Bestätigt</th><th>Geändert</th></tr></thead>
-            <tbody>
-              {opportunities.map((o) => (
-                <tr key={o.id}>
-                  <td><Link href={`/bedarfe/${o.id}`}>{o.title}</Link>{o.fastTrack && <span className="muted text-sm"> · direkte Anfrage</span>}</td>
-                  <td className="text-sm">{chanceKindLabel[o.kind]}{o.roleId && roleName.get(o.roleId) ? ` · ${roleName.get(o.roleId)}` : ""}{o.headcount ? ` · ${o.headcount}×` : ""}{o.horizon ? ` · ${o.horizon}` : ""}</td>
-                  <td><Status label={opportunityStatusLabel[o.status] ?? o.status} /></td>
-                  <td>{name(o.ownerUserId)}</td>
-                  <td>{o.confirmedAt ? fmtDate(o.confirmedAt) : <span className="muted">–</span>}</td>
-                  <td>{fmtDate(o.updatedAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {d.canEdit && (
-          <details className="mt-3">
-            <summary>Chance erfassen<Term k="CHANCE" /></summary>
-            <form action={createOpportunityAction} className="mt-2 grid sm:grid-cols-2 gap-3">
-              <input type="hidden" name="setupId" value={id} />
-              <input type="hidden" name="back" value={back} />
-              <div><label className="label" htmlFor="opTitle">Titel</label><input id="opTitle" name="title" className="input" required minLength={3} placeholder="z. B. Testkoordination Migrationsteam" /></div>
-              <div>
-                <label className="label" htmlFor="opKind">Wofür – Art der Chance</label>
-                <select id="opKind" name="kind" className="select" defaultValue="VERVE_EXPERTE">{chanceKindValues.map((k) => <option key={k} value={k}>{chanceKindLabel[k]}</option>)}</select>
-              </div>
-              <div>
-                <label className="label" htmlFor="opRole">Standardrolle (optional)</label>
-                <select id="opRole" name="roleId" className="select" defaultValue="">
-                  <option value="">– noch offen –</option>
-                  {roleGroups.map((g) => <optgroup key={g.family} label={g.label}>{g.roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="label" htmlFor="opHeadcount">Anzahl (optional)</label><input id="opHeadcount" name="headcount" type="number" min={1} max={999} step={1} className="input" /></div>
-                <div><label className="label" htmlFor="opHorizon">Zeithorizont (optional)</label><input id="opHorizon" name="horizon" className="input" placeholder="z. B. Q1 2027" maxLength={60} /></div>
-              </div>
-              <div>
-                <label className="label" htmlFor="opSignal">Hervorgegangen aus Beobachtung (optional)</label>
-                <select id="opSignal" name="signalId" className="select" defaultValue=""><option value="">– direkt erfasst –</option>{linkableSignals.map((s) => <option key={s.id} value={s.id}>{s.observation.slice(0, 80)}</option>)}</select>
-              </div>
-              <div className="sm:col-span-2"><label className="label" htmlFor="opNeed">Beschreibung in Kundensprache: was der Kunde erreichen will</label><textarea id="opNeed" name="needDescription" className="textarea" required minLength={10} rows={3} /></div>
-              <div><label className="label" htmlFor="opTrigger">Konkreter Anlass (optional)</label><input id="opTrigger" name="trigger" className="input" /></div>
-              <div className="flex flex-col gap-1 text-sm self-end">
-                <label className="flex items-center gap-2"><input type="checkbox" name="anticipated" value="on" /> Antizipiert – vermutet aus Beobachtungen, vom Kunden noch nicht ausgesprochen</label>
-                <label className="flex items-center gap-2"><input type="checkbox" name="fastTrack" value="on" /> Direkte Anfrage (Fast-Track, Messstart jetzt)</label>
-              </div>
-              <div className="sm:col-span-2 flex flex-wrap items-start gap-3">
-                <button className="btn" type="submit">Chance anlegen</button>
-                <SuggestButton kind="CHANCE" setupId={id} fields={[{ name: "title", label: "Titel der Chance (kurz)" }, { name: "needDescription", label: "Beschreibung in Kundensprache: was der Kunde erreichen will" }, { name: "trigger", label: "Konkreter Anlass" }, { name: "kind", label: "Art der Chance", options: [...chanceKindValues] }, { name: "horizon", label: "Zeithorizont, z. B. Q1 2027" }]} />
-              </div>
-            </form>
-          </details>
-        )}
-      </section>
-
       <section className="card" id="aktionen">
-        <h2 className="font-semibold mb-2">3. Was haben wir als Nächstes vereinbart?</h2>
-        {openActions.length === 0 ? <p className="muted text-sm">Keine offenen Aktionen.</p> : (
+        <h2 className="font-semibold mb-2">Was haben wir als Nächstes vereinbart?</h2>
+        {openActions.length === 0 ? <p className="empty">Keine offenen Aktionen.</p> : (
           <table className="list">
             <thead><tr><th>Aktion</th><th>Verantwortlich</th><th>Status</th><th>Fällig</th>{d.canEdit && <th></th>}</tr></thead>
             <tbody>
@@ -503,9 +432,79 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         )}
       </section>
 
+      {(setupEngs.length > 0 || d.setup.renewalContactPersonId) && (
+        <section className="card space-y-2" id="verlaengerung">
+          <h2 className="font-semibold">Verlängerung läuft über <span className="muted text-sm font-normal">– Vorgabe für {setupEngs.filter((x) => !["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(x.status)).length} laufende Einsätze; am Einsatz abweichend möglich</span></h2>
+          <p className="text-sm">
+            fachlich: {pName(d.setup.renewalContactPersonId) ?? <span style={{ color: "#b7791f" }}>offen</span>} · Bestellung/Vertrag: {pName(d.setup.orderContactPersonId) ?? <span className="muted">–</span>} · spricht an: {d.setup.renewalApproach ? approachLabel[d.setup.renewalApproach] : <span className="muted">–</span>}
+          </p>
+          {mayContacts && (
+            <details>
+              <summary className="text-sm cursor-pointer">Vorgabe ändern</summary>
+              <form action={setupContactsAction.bind(null, id)} className="flex flex-wrap gap-3 items-end text-sm mt-2">
+                <label className="space-y-1"><span className="block muted text-xs">fachlich über</span>
+                  <select name="renewalContactPersonId" className="input" defaultValue={d.setup.renewalContactPersonId ?? ""}><option value="">– offen –</option>{accountPersons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select>
+                </label>
+                <label className="space-y-1"><span className="block muted text-xs">Bestellung/Vertrag über</span>
+                  <select name="orderContactPersonId" className="input" defaultValue={d.setup.orderContactPersonId ?? ""}><option value="">– wie fachlich / offen –</option>{accountPersons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select>
+                </label>
+                <label className="space-y-1"><span className="block muted text-xs">wer spricht an</span>
+                  <select name="renewalApproach" className="input" defaultValue={d.setup.renewalApproach ?? ""}><option value="">– offen –</option>{approachValues.map((v) => <option key={v} value={v}>{approachLabel[v]}</option>)}</select>
+                </label>
+                <fieldset className="flex flex-wrap gap-2 items-end" style={{ flexBasis: "100%", border: 0, padding: 0 }}>
+                  <legend className="muted text-xs">Noch nicht erfasst? Fachlichen Ansprechpartner direkt neu anlegen (hat Vorrang vor der Auswahl):</legend>
+                  <input name="newRenewalName" className="input" placeholder="Vor- und Nachname" aria-label="Neuer fachlicher Ansprechpartner: Name" />
+                  <input name="newRenewalFunction" className="input" placeholder="Funktion (optional)" aria-label="Funktion" />
+                  <input name="newRenewalEmail" className="input" type="email" placeholder="E-Mail (optional)" aria-label="E-Mail" />
+                </fieldset>
+                <fieldset className="flex flex-wrap gap-2 items-end" style={{ flexBasis: "100%", border: 0, padding: 0 }}>
+                  <legend className="muted text-xs">Neuer Ansprechpartner für Bestellung/Vertrag:</legend>
+                  <input name="newOrderName" className="input" placeholder="Vor- und Nachname" aria-label="Neuer Ansprechpartner Bestellung: Name" />
+                  <input name="newOrderFunction" className="input" placeholder="Funktion (optional)" aria-label="Funktion" />
+                  <input name="newOrderEmail" className="input" type="email" placeholder="E-Mail (optional)" aria-label="E-Mail" />
+                </fieldset>
+                <button className="btn btn-small" type="submit">Speichern</button>
+              </form>
+            </details>
+          )}
+        </section>
+      )}
+
+      {mayContacts && (
+        <section className="card space-y-2" id="angebotsweg">
+          <h2 className="font-semibold">Angebotsweg <span className="muted text-sm font-normal">– bestimmt Schritt 4 im Konvertierungsvorgang</span></h2>
+          <form action={setupOfferPathAction.bind(null, id)} className="flex flex-wrap gap-2 items-end text-sm">
+            <select name="offerPath" className="input" defaultValue={d.setup.offerPath} aria-label="Angebotsweg">
+              {offerPathValues.map((v) => <option key={v} value={v}>{offerPathLabel[v]}</option>)}
+            </select>
+            <button className="btn btn-small" type="submit">Speichern</button>
+          </form>
+          <p className="muted text-xs">Das Angebot entsteht immer in Moco. Hat der Kunde eine eigene Vorlage, wird sie mit der Moco-Angebotsnummer gefüllt; an den Kunden geht dann nur die Vorlage. Im Vermittlergeschäft gibt es kein Angebot, nur Konditionen per Mail.</p>
+        </section>
+      )}
+
+      {(setupRuns.length > 0 || d.canEdit || mayReassign) && (
+        <PlaybookRuns
+          startCollapsed
+          runs={setupRuns}
+          back={back}
+          users={allUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
+          start={(d.canEdit || mayReassign) && d.setup.status !== "ARCHIVIERT" ? {
+            playbooks: setupPlaybooks,
+            hidden: { setupId: d.setup.id, accountId: d.account.id },
+            defaultOwnerId: d.setup.bdUserId,
+            salesOps,
+            recommendedId: looksLikeReactivation && reactivation ? reactivation.id : null,
+            recommendation: looksLikeReactivation && reactivation && !setupRuns.some((r) => r.status === "AKTIV") ? "Dieses Setup sieht nach einer Reaktivierung aus – „Altkunden-Reaktivierung“ führt Schritt für Schritt durch und erstellt je Schritt Entwürfe (Mail, Metriken, Pitch)." : null,
+          } : null}
+        />
+      )}
+
+      <WorkBlock actor={actor} subjectType="SETUP" subjectId={d.setup.id} back={back} canCreate={d.setup.status !== "ARCHIVIERT"} />
+
       {/* 4. Anregungen */}
       <section className="card">
-        <h2 className="font-semibold mb-1">4. Welche Anregungen sind jetzt hilfreich?</h2>
+        <h2 className="font-semibold mb-1">Welche Anregungen sind jetzt hilfreich?</h2>
         {!ai.enabled && <p className="muted text-sm">KI-Anbieter deaktiviert – keine automatischen Vorschläge. Offene Beobachtungen unten sind die manuelle Arbeitsliste.</p>}
         {ai.enabled && sugg.prominent.length === 0 && <p className="muted text-sm">Keine offenen Vorschläge. Vorschläge entstehen aus strukturierten Weekly-Notizen.</p>}
         {sugg.prominent.length > 0 && (
@@ -523,7 +522,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       {/* Beobachtungen */}
       <section className="card">
         <h2 className="font-semibold mb-2">Beobachtungen ({openSignals.length} offen)</h2>
-        {d.signals.length === 0 ? <p className="muted text-sm">Noch keine Beobachtungen erfasst.</p> : (
+        {d.signals.length === 0 ? <p className="empty">Noch keine Beobachtungen erfasst.</p> : (
           <ul className="space-y-3">
             {d.signals.map((s) => {
               const relatedHandover = d.handovers.find((h) => h.subjectType === "SIGNAL" && h.subjectId === s.id && h.status === "ANGEFRAGT");
@@ -651,7 +650,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       <section className="card">
         <h2 className="font-semibold mb-2">Unterstützung durch Principal, CEO oder Sales Operations ({openSupport.length} offen)</h2>
         <p className="muted text-sm mb-2">Ein Unterstützungsauftrag ist begrenzt und konkret – an Principal/CEO z. B. „Kontakt zu Frau X herstellen“, an Sales Operations z. B. „Einseiter zum früheren Projekt bis Freitag vorbereiten“ oder „Registrierung im Lieferantenportal anstoßen“. Die operative Fallverantwortung bleibt beim BD.</p>
-        {support.length === 0 ? <p className="muted text-sm">Keine Unterstützungsaufträge zu diesem Setup.</p> : (
+        {support.length === 0 ? <p className="empty">Keine Unterstützungsaufträge zu diesem Setup.</p> : (
           <ul className="space-y-2">
             {support.map((s) => (
               <li key={s.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
@@ -696,7 +695,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
 
       <section className="card">
         <h2 className="font-semibold mb-2">Quellen</h2>
-        {d.sources.length === 0 ? <p className="muted text-sm">Keine Quellen in deinem Berechtigungsbereich.</p> : (
+        {d.sources.length === 0 ? <p className="empty">Keine Quellen in deinem Berechtigungsbereich.</p> : (
           <table className="list">
             <thead><tr><th>Titel</th><th>Typ</th><th>Quellenzeit</th><th>Inhaber</th><th>Zugriff</th></tr></thead>
             <tbody>

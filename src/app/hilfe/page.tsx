@@ -30,26 +30,31 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ q
         <p className="text-sm" style={{ whiteSpace: "pre-wrap" }}>{mine}</p>
       </section>
 
-      {!q && (
-        <nav aria-label="Inhalt" className="card">
-          <h2 className="font-semibold mb-2">Inhalt</h2>
-          <ul className="text-sm space-y-1">
-            {HELP_SECTIONS.map((s) => (
-              <li key={s.id}><a href={`#${s.id}`}>{s.title}</a></li>
-            ))}
-          </ul>
-        </nav>
-      )}
-
       {q && sections.length === 0 && <p className="muted">Kein Abschnitt passt zu „{q}“. Versuch einen anderen Begriff oder frag den Assistenten.</p>}
 
-      {sections.map((s) => (
-        <section key={s.id} id={s.id} className="card">
-          <h2 className="font-semibold">{s.title}</h2>
-          <p className="muted text-sm mb-2">Wo: {s.where}</p>
-          <div className="text-sm" style={{ whiteSpace: "pre-wrap" }}>{s.body}</div>
-        </section>
-      ))}
+      <div className={q ? "" : "help-layout"}>
+        {!q && (
+          <nav aria-label="Inhalt" className="help-toc">
+            <div className="nav-section-label">Inhalt ({HELP_SECTIONS.length})</div>
+            <ul>
+              {HELP_SECTIONS.map((s) => (
+                <li key={s.id}><a href={`#${s.id}`}>{s.title}</a></li>
+              ))}
+            </ul>
+          </nav>
+        )}
+        <div className="space-y-2" style={{ minWidth: 0 }}>
+          {sections.map((s) => (
+            <details key={s.id} id={s.id} className="card help-item" open={!!q}>
+              <summary>
+                <span className="font-semibold">{s.title}</span>
+              </summary>
+              <p className="muted text-sm mb-2 mt-1">Wo: {s.where}</p>
+              <div className="text-sm" style={{ whiteSpace: "pre-wrap" }}>{s.body}</div>
+            </details>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

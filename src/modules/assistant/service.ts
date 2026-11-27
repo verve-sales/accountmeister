@@ -1,3 +1,4 @@
+import { isoDe } from "@/lib/labels";
 import { createAction } from "@/modules/actions/service";
 import { createHash, randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, gte, inArray, isNull, lt, notInArray, or } from "drizzle-orm";
@@ -122,7 +123,7 @@ export async function computeOpenPoints(actor: Actor, res: Resolved): Promise<Op
     // Überfällige Aktionen des Akteurs
     const today = new Date().toISOString().slice(0, 10);
     const overdue = await db.query.actions.findMany({ where: and(inArray(schema.actions.setupId, setupIds), eq(schema.actions.ownerUserId, actor.userId), lt(schema.actions.dueDate, today), inArray(schema.actions.status, ["VORGESCHLAGEN", "ANGENOMMEN", "IN_ARBEIT"])), limit: 5 });
-    for (const a of overdue) points.push({ kind: "AKTION", text: `Überfällig seit ${a.dueDate ?? "?"}: ${a.title}${tag(a.setupId)}`, href: `/setups/${a.setupId ?? ""}` });
+    for (const a of overdue) points.push({ kind: "AKTION", text: `Überfällig seit ${a.dueDate ? isoDe(a.dueDate) : "?"}: ${a.title}${tag(a.setupId)}`, href: `/setups/${a.setupId ?? ""}` });
     // Offene Fragen
     const [oq] = await db.select({ n: count() }).from(schema.openQuestions).where(and(inArray(schema.openQuestions.setupId, setupIds), eq(schema.openQuestions.status, "OFFEN")));
     if (Number(oq?.n ?? 0) > 0) points.push({ kind: "FRAGE", text: `${oq!.n} offene Frage(n) fürs nächste Kundengespräch.`, href: res.ref.type === "SETUP" ? `/setups/${setupIds[0]}` : "/meine-arbeit" });
@@ -906,7 +907,7 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     const account = await getAccount(actor, res.account.id);
     if (item.type === "INITIATIVE") {
       const ini = await createInitiative(actor, { accountId: account.id, kind: item.kind, title: item.title, description: item.description, dueHint: item.dueHint });
-      return { type: "INITIATIVE", id: ini.id, note: `In die Kundenagenda aufgenommen${ini.dueDate ? ` (Termin ${ini.dueDate} – der Accountmeister erinnert rechtzeitig)` : ""}.` };
+      return { type: "INITIATIVE", id: ini.id, note: `In die Kundenagenda aufgenommen${ini.dueDate ? ` (Termin ${isoDe(ini.dueDate)} – der Accountmeister erinnert rechtzeitig)` : ""}.` };
     }
     if (item.type === "BESCHAFFUNG") {
       await updateProcurement(actor, account.id, { version: account.version, procurementChannel: item.channel, intermediaryName: item.intermediaryName, procurementNote: item.note });
@@ -956,7 +957,7 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     if (!res.account || !res.ctx) throw new ValidationError("Für einen laufenden Einsatz braucht es Kunde und Setup – übernimm zuerst die Karte „Kunde“.");
     const plannedEnd = /^\d{4}-\d{2}-\d{2}$/.test(item.plannedEnd) ? item.plannedEnd : parseDueHint(item.endHint || item.plannedEnd) ?? "";
     const order = await recordExistingEngagement(actor, res.account.id, { setupId: res.ctx.setup.id, title: item.title, kind: item.kind, plannedEnd, evidenceText: `Aus dem Assistenten übernommen: „${item.evidenceQuote.slice(0, 400)}“`, consultantName: item.consultantName });
-    return { type: "ORDER", id: order.id, note: `Laufender Einsatz nachgetragen${plannedEnd ? ` (Ende ${plannedEnd} – die Verlängerungsregel greift rechtzeitig)` : " – Einsatzende bitte im Health-Check ergänzen"}.` };
+    return { type: "ORDER", id: order.id, note: `Laufender Einsatz nachgetragen${plannedEnd ? ` (Ende ${isoDe(plannedEnd)} – die Verlängerungsregel greift rechtzeitig)` : " – Einsatzende bitte im Health-Check ergänzen"}.` };
   }
   if (!res.ctx) throw new ValidationError(res.account ? `Bei ${res.account.name} gibt es kein Setup, das du bearbeiten darfst – bitte den zuständigen BD fragen.` : "Dafür fehlt der Kunde – sag mir, um welchen Kunden es geht.");
   if (!canEditSetup(actor, res.ctx)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");

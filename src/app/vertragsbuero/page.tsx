@@ -10,6 +10,8 @@ import { canManageSharePoint } from "@/modules/sharepoint/service";
 import { approachLabel, approachValues } from "@/modules/engagements/contacts";
 import { renewalStatusLabel } from "@/modules/engagements/care";
 import { RenewalCards } from "@/components/Renewal";
+import { KpiTile } from "@/components/Kpi";
+import { canRunMocoImport } from "@/modules/moco/import";
 import { Feedback } from "@/components/Feedback";
 import { PendingButton } from "@/components/PendingButton";
 import { fmtDate } from "@/lib/labels";
@@ -19,13 +21,8 @@ export const metadata = { title: "Sales-Ops-Sicht" };
 
 const AMBER = "#b7791f";
 
-function Kpi({ n, label, href, warn }: { n: number; label: string; href: string; warn?: boolean }) {
-  return (
-    <Link href={href} className="card block" style={{ minWidth: 150, textDecoration: "none" }}>
-      <div className="text-2xl font-semibold" style={{ color: warn && n > 0 ? AMBER : undefined, fontVariantNumeric: "tabular-nums" }}>{n}</div>
-      <div className="muted text-xs">{label}</div>
-    </Link>
-  );
+function Kpi({ n, label, href, warn }: { n: number; label: string; href: string | null; warn?: boolean }) {
+  return <KpiTile value={n} label={label} href={href} tone={warn && n > 0 ? "warn" : null} />;
 }
 
 export default async function VertragsbueroPage({ searchParams }: { searchParams: Promise<{ fehler?: string; ok?: string; setup?: string }> }) {
@@ -48,21 +45,21 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
       </div>
       <Feedback params={sp} />
 
-      <div className="flex flex-wrap gap-3">
+      <div className="kpi-row">
         <Kpi n={k.anzustossen} label="Verlängerung anzustoßen" href="#anstossen" warn />
         <Kpi n={k.ohneAnsprechpartner} label="ohne Verlängerungs-Ansprechpartner" href="/einsaetze?f=ohne_ansprechpartner" warn />
         <Kpi n={k.unterlagenOffen} label="Unterlagen offen" href="/einsaetze?f=vertrag_offen" warn />
         <Kpi n={k.endeUeberschritten} label="Ende überschritten" href={canClean(actor) ? "/bereinigung#ende" : "/einsaetze?f=ende_ueberschritten"} warn />
         <Kpi n={k.uebergabenOffen} label="Übergaben ans Backoffice offen" href="/uebergaben" warn />
         <Kpi n={k.vorgaenge} label="laufende Konvertierungsvorgänge" href="#vorgaenge" />
-        <Kpi n={k.mocoHinweise} label="Moco-Hinweise offen" href="/moco" warn />
+        <Kpi n={k.mocoHinweise} label="Moco-Hinweise offen" href={k.mocoHinweise > 0 || canRunMocoImport(actor) ? "/moco" : null} warn />
         {canClean(actor) && <Kpi n={cleanN} label="in der Bereinigung" href="/bereinigung" warn />}
         <Kpi n={k.laufend} label="laufende Einsätze" href="/einsaetze" />
       </div>
 
       <section className="card space-y-2" id="vorgaenge">
         <h2 className="font-semibold">Laufende Konvertierungsvorgänge ({o.vorgaenge.length})</h2>
-        {o.vorgaenge.length === 0 ? <p className="muted text-sm">Kein laufender Vorgang. Gestartet wird er an der Chance.</p> : (
+        {o.vorgaenge.length === 0 ? <p className="empty">Kein laufender Vorgang. Gestartet wird er an der Chance.</p> : (
           <table className="list text-sm">
             <thead><tr><th>Position · Chance · Kunde</th><th>Jetzt dran</th><th>Was fehlt</th></tr></thead>
             <tbody>
@@ -80,7 +77,7 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
 
       <section className="card space-y-2" id="enden">
         <h2 className="font-semibold">Enden in den nächsten 8 Wochen ({o.ending.length})</h2>
-        {o.ending.length === 0 ? <p className="muted text-sm">Keine Einsätze mit Ende in den nächsten 8 Wochen.</p> : (
+        {o.ending.length === 0 ? <p className="empty">Keine Einsätze mit Ende in den nächsten 8 Wochen.</p> : (
           <table className="list text-sm">
             <thead><tr><th>Person · Kunde</th><th>Ende</th><th>Verlängerung</th><th>läuft über</th><th>Unterlagen</th></tr></thead>
             <tbody>
@@ -104,7 +101,7 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
 
       <section className="card space-y-2" id="anstossen">
         <h2 className="font-semibold">Verlängerung anzustoßen ({o.renewalCards.length})</h2>
-        {o.renewalCards.length === 0 ? <p className="muted text-sm">Nichts anzustoßen.</p> : <RenewalCards cards={o.renewalCards} back="/vertragsbuero#anstossen" />}
+        {o.renewalCards.length === 0 ? <p className="empty">Nichts anzustoßen.</p> : <RenewalCards cards={o.renewalCards} back="/vertragsbuero#anstossen" />}
       </section>
 
       <section className="card space-y-3" id="erfassen">

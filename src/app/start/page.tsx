@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { KpiRow, KpiTile } from "@/components/Kpi";
 import { pl } from "@/lib/labels";
 import { PendingButton } from "@/components/PendingButton";
 import { AutoRefresh } from "@/components/AutoRefresh";
@@ -8,7 +9,7 @@ import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { buildDashboard, loadHat, viewLabel } from "@/modules/dashboard/service";
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
-import { hasAnyContentRole, hasRole, isCoach, isReadOnlyActor } from "@/modules/identity/actor";
+import { hasAnyContentRole, hasRole, isCoach, isReadOnlyActor, type Actor } from "@/modules/identity/actor";
 import { buildGfOverview } from "@/modules/overview/gf";
 import { GfCustomers, GfExpiring, GfKpis, GfPipeline, GfTeam } from "@/components/GfStart";
 import { canEditSetup, loadSetupContext } from "@/modules/identity/authz";
@@ -131,7 +132,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const arbeitsliste =
     nDecide + nTasks + nSuggest === 0 ? (
       <section className="card text-sm" id="arbeitsliste">
-        <strong>Alles erledigt.</strong> <span className="muted">Nichts zu entscheiden, nichts fällig, keine offenen Vorschläge.</span>
+        <strong>Keine persönlichen Aufgaben.</strong> <span className="muted">Für dich ist nichts zu entscheiden, nichts fällig und kein Vorschlag offen.</span>
       </section>
     ) : (
       <>
@@ -198,11 +199,12 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold">Start</h1>
         <Feedback params={params} />
+        {actor.roles.has("SALES_OPS") && <SalesOpsKpis actor={actor} />}
         {quickEntry}
         {timeline}
         {arbeitsliste}
         {actor.roles.has("SALES_OPS") ? (
-          <p className="text-sm">Sales Operations: <Link href="/einsaetze">alle Einsätze</Link> (Person, Kunde, Ende, Stimmung, Verlängerung) · <Link href="/besetzung">Besetzungen</Link> · <Link href="/meine-arbeit">Meine Arbeit</Link>.</p>
+          <SalesOpsStart actor={actor} />
         ) : (
           <p className="muted text-sm">Für dein Konto ist keine fachliche Rolle hinterlegt. {actor.roles.has("ADMIN") ? <Link href="/verwaltung">Zur Verwaltung</Link> : "Bitte an die Betriebsverwaltung wenden."}</p>
         )}
@@ -250,6 +252,9 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const quiet = d.accounts.filter((c) => c.daysSinceActivity > 14).sort((a, b) => b.daysSinceActivity - a.daysSinceActivity);
   const kindLabel: Record<string, string> = { AKTION: "Aktion", UEBERGABE: "Übergabe", VORSCHLAG: "Vorschlag", UNTERSTUETZUNG: "Unterstützung", REVIEW: "Weekly", FRAGE: "Frage" };
 
+  // e64: dieselbe Zählung wie „Einsätze › enden in 8 Wochen“ (laufende Einsätze, nicht nur bestätigte Aufträge)
+  const in56 = new Date(Date.parse(`${today}T00:00:00Z`) + 56 * 86400000).toISOString().slice(0, 10);
+  const endingSoon = new Set(healthAll.flatMap((h) => h.engagements.filter((x) => x.plannedEnd && x.plannedEnd >= today && x.plannedEnd <= in56).map((x) => x.engagementId ?? x.orderId))).size;
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-4">
@@ -257,6 +262,15 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       </div>
       <Feedback params={params} />
       <SosBanner sos={openSos} />
+      {d.view === "SALES_OPS" ? <SalesOpsKpis actor={actor} /> : (
+        <KpiRow>
+          <KpiTile value={d.accounts.length} label={d.view === "BD" ? "meine Kunden" : "Kunden im Blick"} href="/kunden" />
+          <KpiTile value={Object.values(chanceCounts).reduce((a, b) => a + b, 0)} label="offene Chancen" href="#uebersicht-chancen" />
+          <KpiTile value={endingSoon} label="Einsätze enden in 8 Wochen" href="/einsaetze?f=enden_8w" tone={endingSoon ? "warn" : null} />
+          <KpiTile value={healthGaps.length} label="Kunden mit fehlenden Health-Angaben" href="#uebersicht-health" tone={healthGaps.length ? "warn" : null} />
+          <KpiTile value={timelineTasks.filter((t) => t.due && t.due < today).length} label="überfällige Aufgaben" href="#zeitleiste" tone={timelineTasks.some((t) => t.due && t.due < today) ? "danger" : null} />
+        </KpiRow>
+      )}
       {quickEntry}
       {timeline}
       {readOnly ? (
@@ -279,8 +293,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             <h2 className="font-semibold">Bei deinen BDs im Blick</h2>
             {canBrowsePortfolio(actor) && <Link href="/meine-bds" className="text-sm ml-auto">Kunden je BD durchgehen</Link>}
           </div>
-          {teamRenewals.length + atRisk.length + quiet.length === 0 ? (
-            <p className="muted text-sm mt-1">Keine offenen Verlängerungen bei den BDs, kein gefährdeter Kunde, überall Bewegung in den letzten 14 Tagen.</p>
+          {teamRenewals.length + atRisk.length + quiet.length === 0 ? (<p className="empty">Keine offenen Verlängerungen bei den BDs, kein gefährdeter Kunde, überall Bewegung in den letzten 14 Tagen.</p>
           ) : (
             <div className="grid md:grid-cols-3 gap-4 mt-2 text-sm">
               <div>
@@ -327,7 +340,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         <section className="card flex flex-wrap items-center gap-4 text-sm" aria-label="Kundenrunde">
           <strong>Kundenrunde</strong>
           <span>{round.accounts} Bestandskunden</span>
-          {round.red > 0 && <span style={{ color: "#c0392b", fontWeight: 600 }}>{round.red} rot</span>}
+          {round.red > 0 && <span style={{ color: "var(--danger)", fontWeight: 600 }}>{round.red} rot</span>}
           {round.yellow > 0 && <span style={{ color: "#b7791f", fontWeight: 600 }}>{round.yellow} gelb</span>}
           <span className={round.prepared < round.accounts ? undefined : "muted"}>{round.prepared < round.accounts ? `${round.accounts - round.prepared} noch vorzubereiten` : "alle vorbereitet"}</span>
           <span className="muted">{round.lastRound ? `letzte Runde ${fmtDate(round.lastRound.heldOn)}` : "noch keine Runde"}</span>
@@ -341,7 +354,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             <span className="muted text-xs">Köpfe · Neukunden · Verlängerungsquote gegen Ziel</span>
             <Link href="/meine-principals" className="text-sm ml-auto">Kundenverantwortliche</Link>
           </div>
-          {principalsQ.rows.length === 0 ? <p className="muted text-sm mt-1">Noch keine Principals zugeordnet.</p> : (
+          {principalsQ.rows.length === 0 ? <p className="empty">Noch keine Principals zugeordnet.</p> : (
             <table className="list text-sm mt-1">
               <tbody>
                 {principalsQ.rows.map((r) => (
@@ -350,7 +363,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                     <td><TargetProgress actual={r.actuals.ref ? r.actuals.headsTotal : null} target={r.targets.headsTotal} /></td>
                     <td><TargetProgress actual={r.actuals.ref ? r.actuals.newCustomers.length : null} target={r.targets.newCustomers} /></td>
                     <td><TargetProgress actual={r.actuals.renewals.quote} target={r.targets.renewalQuote} unit=" %" /></td>
-                    <td className="text-xs">{r.overdueAgreements ? <span style={{ color: "#c0392b", fontWeight: 600 }}>{pl(r.overdueAgreements, "Vereinbarung", "Vereinbarungen")} überfällig</span> : r.openAgreements ? `${pl(r.openAgreements, "Vereinbarung", "Vereinbarungen")} offen` : null}</td>
+                    <td className="text-xs">{r.overdueAgreements ? <span style={{ color: "var(--danger)", fontWeight: 600 }}>{pl(r.overdueAgreements, "Vereinbarung", "Vereinbarungen")} überfällig</span> : r.openAgreements ? `${pl(r.openAgreements, "Vereinbarung", "Vereinbarungen")} offen` : null}</td>
                   </tr>
                 ))}
               </tbody>
@@ -369,7 +382,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             <div><div className="muted text-xs">Köpfe</div><TargetProgress actual={mine.actuals.ref ? mine.actuals.headsTotal : null} target={mine.targets.headsTotal} /></div>
             <div><div className="muted text-xs">Neukunden</div><TargetProgress actual={mine.actuals.ref ? mine.actuals.newCustomers.length : null} target={mine.targets.newCustomers} /></div>
             <div><div className="muted text-xs">Verlängerungsquote</div><TargetProgress actual={mine.actuals.renewals.quote} target={mine.targets.renewalQuote} unit=" %" /></div>
-            <div><div className="muted text-xs">Vereinbarungen</div>{mine.openAgreements ? <span>{mine.openAgreements} offen{mine.overdueAgreements ? <span style={{ color: "#c0392b", fontWeight: 600 }}> · {mine.overdueAgreements} überfällig</span> : null}</span> : <span className="muted">keine offen</span>}</div>
+            <div><div className="muted text-xs">Vereinbarungen</div>{mine.openAgreements ? <span>{mine.openAgreements} offen{mine.overdueAgreements ? <span style={{ color: "var(--danger)", fontWeight: 600 }}> · {mine.overdueAgreements} überfällig</span> : null}</span> : <span className="muted">keine offen</span>}</div>
           </div>
         </section>
       )}
@@ -387,8 +400,8 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       {d.empty && <p className="card text-sm">{d.empty}</p>}
 
       {d.accounts.length > 0 && (
-        <details className="card">
-          <summary className="font-semibold">Chancen je Stufe ({Object.values(chanceCounts).reduce((a, b) => a + b, 0)})</summary>
+        <details className="card" open>
+          <summary className="font-semibold" id="uebersicht-chancen">Chancen je Stufe ({Object.values(chanceCounts).reduce((a, b) => a + b, 0)})</summary>
           <BarChart
             title="Chancen je Stufe"
             labelWidth={220}
@@ -405,7 +418,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       )}
 
       {healthGaps.length > 0 && (
-        <details className="card" aria-label="Health-Check: fehlende Angaben">
+        <details className="card" aria-label="Health-Check: fehlende Angaben" id="uebersicht-health">
           <summary className="font-semibold" style={{ color: "var(--warn)" }}>Health-Check: Angaben fehlen bei {pl(healthGaps.length, "Kunde", "Kunden")}</summary>
           <p className="muted text-xs mb-2">Ohne diese Angaben ist der Health-Check unklar – und Verlängerungen werden nicht rechtzeitig angestoßen.</p>
           <ul className="space-y-2">
@@ -424,7 +437,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
 
       {renewals.length > 0 && (
         <details className="card">
-          <summary className="font-semibold">Auslaufende Einsätze – nächste 8 Wochen ({renewals.length}){renewals.some((r) => r.escalate) ? <span style={{ color: "#c0392b" }}> · {renewals.filter((r) => r.escalate).length} eskaliert</span> : null}</summary>
+          <summary className="font-semibold" id="uebersicht-auslaufend">Auslaufende Einsätze – nächste 8 Wochen ({renewals.length}){renewals.some((r) => r.escalate) ? <span style={{ color: "var(--danger)" }}> · {renewals.filter((r) => r.escalate).length} eskaliert</span> : null}</summary>
           <table className="list">
             <thead><tr><th>Person · Kunde</th><th>Einsatz</th><th>Ende</th><th>Verlängerung</th></tr></thead>
             <tbody>
@@ -469,8 +482,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <div className="space-y-4">
         <details className="card">
           <summary className="font-semibold">Diese Woche dran ({d.week.length})</summary>
-          {d.week.length === 0 ? (
-            <p className="muted text-sm">Nichts Fälliges bis Wochenende. Unten steht, wo der nächste große Schritt hängt.</p>
+          {d.week.length === 0 ? (<p className="empty">Nichts Fälliges bis Wochenende. Unten steht, wo der nächste große Schritt hängt.</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {d.week.map((w, i) => (
@@ -553,8 +565,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         {d.view !== "CEO" && (
           <details className="card">
             <summary className="font-semibold">Ideen aus den Quellen ({d.ideas.length})</summary>
-            {d.ideas.length === 0 ? (
-              <p className="muted text-sm">Keine offenen KI-Vorschläge im Bereich. Neue entstehen aus Weekly-Notizen, Dokumenten und dem Assistenten.</p>
+            {d.ideas.length === 0 ? (<p className="empty">Keine offenen KI-Vorschläge im Bereich. Neue entstehen aus Weekly-Notizen, Dokumenten und dem Assistenten.</p>
             ) : (
               <ul className="space-y-2 text-sm">
                 {d.ideas.map((i, k) => (
@@ -571,8 +582,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         {d.view === "PRINCIPAL" && (
           <details className="card">
             <summary className="font-semibold">Ziele ({d.goals.length})</summary>
-            {d.goals.length === 0 ? (
-              <p className="muted text-sm">Keine laufenden Ziele. <Link href="/ziele">Zu Ziele & Portfolio</Link></p>
+            {d.goals.length === 0 ? (<p className="empty">Keine laufenden Ziele. <Link href="/ziele">Zu Ziele & Portfolio</Link></p>
             ) : (
               <ul className="space-y-1 text-sm">{d.goals.map((g, i) => <li key={i}><Link href={g.href}>{g.title}</Link> <Status label={goalStatusLabel[g.status] ?? g.status} /></li>)}</ul>
             )}
@@ -582,8 +592,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       {d.view === "PRINCIPAL" && (
         <details className="card">
           <summary className="font-semibold">Zusammenarbeit der letzten Woche &amp; Top-Chancen je Kunde</summary>
-          {d.activity.length === 0 ? (
-            <p className="muted text-sm">Keine sichtbaren Kunden mit Aktivität.</p>
+          {d.activity.length === 0 ? (<p className="empty">Keine sichtbaren Kunden mit Aktivität.</p>
           ) : (
             <>
             <BarChart
@@ -625,8 +634,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       {d.view === "PRINCIPAL" && (
         <details className="card">
           <summary className="font-semibold">Hinweise der KI: möglicherweise neue Chancen ({d.opportunityHints.length})</summary>
-          {d.opportunityHints.length === 0 ? (
-            <p className="muted text-sm">Keine offenen Beobachtungen, die auf eine neue Chance hindeuten.</p>
+          {d.opportunityHints.length === 0 ? (<p className="empty">Keine offenen Beobachtungen, die auf eine neue Chance hindeuten.</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {d.opportunityHints.map((h, i) => (
@@ -643,7 +651,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       )}
 
       {d.view === "BD" && d.bdPerformance && (
-        <details className="card">
+        <details className="card" open>
           <summary className="font-semibold">Meine Performance</summary>
           <div className="grid sm:grid-cols-2 gap-4 text-sm">
             <div>
@@ -691,7 +699,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             <thead><tr><th>Mitglied</th><th>Index</th><th>Vorperiode</th><th>Beobachtungen</th><th>Aktionen</th><th>Kontakte</th><th>Check-ins</th><th>Zuletzt aktiv</th></tr></thead>
             <tbody>
               {t.members.map((m) => (
-                <tr key={m.userId} style={m.total === 0 ? { color: "#c0392b" } : undefined}>
+                <tr key={m.userId} style={m.total === 0 ? { color: "var(--danger)" } : undefined}>
                   <td>{m.name}</td>
                   <td><strong>{m.total}</strong></td>
                   <td>{m.previousTotal}{m.total > m.previousTotal ? " ↑" : m.total < m.previousTotal ? " ↓" : ""}</td>
@@ -734,5 +742,38 @@ export default async function StartPage({ searchParams }: { searchParams: Search
 
       <p className="muted text-xs">{d.note}</p>
     </div>
+  );
+}
+
+/** e64: Sales Operations sieht auf dem Start dieselben Kennzahlen wie in der Sales-Ops-Sicht (keine leere Startseite). */
+async function SalesOpsKpis({ actor }: { actor: Actor }) {
+  const { canUseSalesOps, salesOpsOverview } = await import("@/modules/salesops/service");
+  if (getConfig().FEATURE_BESETZUNG !== "true" || !canUseSalesOps(actor)) return null;
+  const k = (await salesOpsOverview(actor)).kpis;
+  const t = (n: number) => (n > 0 ? ("warn" as const) : null);
+  return (
+    <KpiRow>
+      <KpiTile value={k.anzustossen} label="Verlängerung anzustoßen" href="/vertragsbuero#anstossen" tone={t(k.anzustossen)} />
+      <KpiTile value={k.ohneAnsprechpartner} label="ohne Verlängerungs-Ansprechpartner" href="/einsaetze?f=ohne_ansprechpartner" tone={t(k.ohneAnsprechpartner)} />
+      <KpiTile value={k.unterlagenOffen} label="Unterlagen offen" href="/einsaetze?f=vertrag_offen" tone={t(k.unterlagenOffen)} />
+      <KpiTile value={k.endeUeberschritten} label="Ende überschritten" href="/einsaetze?f=ende_ueberschritten" tone={t(k.endeUeberschritten)} />
+      <KpiTile value={k.uebergabenOffen} label="Übergaben ans Backoffice offen" href="/uebergaben" tone={t(k.uebergabenOffen)} />
+      <KpiTile value={k.laufend} label="laufende Einsätze" href="/einsaetze" />
+    </KpiRow>
+  );
+}
+
+function SalesOpsStart({ actor }: { actor: Actor }) {
+  void actor;
+  return (
+    <section className="card text-sm">
+      <h2 className="font-semibold">Weiter zu</h2>
+      <div className="flex flex-wrap gap-2 mt-1">
+        <Link href="/vertragsbuero" className="btn btn-secondary btn-small">Sales-Ops-Sicht</Link>
+        <Link href="/einsaetze" className="btn btn-secondary btn-small">Alle Einsätze</Link>
+        <Link href="/besetzung" className="btn btn-secondary btn-small">Besetzung</Link>
+        <Link href="/meine-arbeit" className="btn btn-secondary btn-small">Meine Arbeit</Link>
+      </div>
+    </section>
   );
 }

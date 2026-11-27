@@ -7,16 +7,17 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { cookies } from "next/headers";
 import { logoutAction, setHatAction } from "./actions";
 import { loadHat, viewLabel, viewDescription } from "@/modules/dashboard/service";
-import { splitNav } from "@/modules/dashboard/hat";
+import { ALL_LINKS } from "@/modules/dashboard/hat";
 import { canSetTargets } from "@/modules/principals/service";
 import { canSeeRound } from "@/modules/rounds/service";
 import { roleLabel } from "@/lib/labels";
-import { AssistantPanel } from "@/components/AssistantPanel";
+import { AssistantButton, AssistantPanel } from "@/components/AssistantPanel";
 import { provisionAccess } from "@/modules/provision/access";
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
 import { unreadCount } from "@/modules/notifications/service";
 import { CloseMenus } from "@/components/CloseMenus";
-import { AppChrome } from "@/components/AppChrome";
+import { AppShell, type NavItem, type NavSection } from "@/components/AppShell";
+import { Icon } from "@/components/Icon";
 import { canUseAssignments } from "@/modules/assignments/service";
 import type { Actor } from "@/modules/identity/actor";
 
@@ -56,131 +57,73 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (actor && staffing && staffingNav(actor)) allowed.add("besetzung");
   if (actor && staffing && canUseSalesOps(actor)) allowed.add("salesops");
   if (actor && canClean(actor)) allowed.add("bereinigung");
-  const nav = splitNav(hat, allowed);
   const unread = actor ? await unreadCount(actor).catch(() => 0) : 0;
   // Moco (Etappe 31): Link für Importberechtigte, wenn die Anbindung an ist, oder bei offenen Hinweisen für die Person
   const mocoLink = actor && cfg.MOCO_MODE !== "off" && (actor.roles.has("CEO") || actor.roles.has("PRINCIPAL") || (await (await import("@/modules/moco/sync")).openHintCount(actor).catch(() => 0)) > 0);
   const asgAllowed = actor ? await canUseAssignments(actor).catch(() => false) : false;
-  const initialApp = (await cookies()).get("vm_app")?.value === "asg" && asgAllowed ? "asg" : "am";
-  const switcher = asgAllowed ? (
-    <div className="app-switch" role="group" aria-label="Anwendung wechseln">
-      <Link href="/start" data-app-link="am">Accountmeister</Link>
-      <Link href="/assignments" data-app-link="asg">Assignmentmanager</Link>
-    </div>
-  ) : null;
-  const rightSide = (
-            <div className="ml-auto text-sm muted flex flex-wrap items-center gap-3">
-              {actor ? (
-                <>
-                  <form method="get" action="/suche" role="search" className="flex items-center">
-                    <input name="q" className="input" placeholder="Suchen: Kunde, Person, Einsatz …" aria-label="Suchen" style={{ minWidth: 220, padding: "2px 8px", fontSize: 13 }} />
-                  </form>
-                  <Link href="/benachrichtigungen" className="no-underline" aria-label={unread ? `Benachrichtigungen: ${unread} ungelesen` : "Benachrichtigungen"} title="Benachrichtigungen" style={{ color: "var(--text)", position: "relative", display: "inline-flex", alignItems: "center" }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-                      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
-                    </svg>
-                    {unread > 0 && (
-                      <span style={{ position: "absolute", top: -6, right: -10, background: "#c0392b", color: "#fff", borderRadius: 999, fontSize: 10, lineHeight: "15px", minWidth: 15, padding: "0 4px", textAlign: "center", fontWeight: 700 }}>{unread > 99 ? "99+" : unread}</span>
-                    )}
-                  </Link>
-                  {/* e62: ein Personenmenü – Name, Rolle bzw. Startseiten-Ansicht, Einstellungen, Abmelden */}
-                  <details className="nav-more nav-hat" aria-label="Mein Konto">
-                    <summary title="Mein Konto: Ansicht der Startseite, Einstellungen, Abmelden">
-                      {actor.displayName}{hat ? <> · <strong style={{ color: "var(--text)" }}>{viewLabel[hat]}</strong></> : null} ▾
-                    </summary>
-                    <div className="nav-more-menu" style={{ minWidth: 260 }}>
-                      <span className="muted text-xs" style={{ padding: "4px 8px" }}>Rollen: {roles.join(", ") || "keine fachliche Rolle"}{actor.roles.has("ADMIN") ? " · Betriebsverwaltung" : ""}</span>
-                      {hat && available.length > 1 && (
-                        <form action={setHatAction} className="flex flex-col gap-1" style={{ padding: "4px 8px" }}>
-                          <span className="muted text-xs">Startseite zeigen als:</span>
-                          {available.map((v) => (
-                            <button key={v} name="hat" value={v} type="submit" className={v === hat ? "btn btn-small" : "btn btn-secondary btn-small"} aria-pressed={v === hat} title={viewDescription[v]} style={{ textAlign: "left" }}>
-                              {viewLabel[v]}
-                            </button>
-                          ))}
-                        </form>
-                      )}
-                      <Link href="/einstellungen">Einstellungen</Link>
-                      <form action={logoutAction} style={{ padding: "4px 8px" }}>
-                        <button className="btn btn-secondary btn-small" type="submit" style={{ width: "100%" }}>
-                          Abmelden
-                        </button>
-                      </form>
-                    </div>
-                  </details>
-                </>
-              ) : (
-                <Link href="/anmelden">Anmelden</Link>
-              )}
-            </div>
+  // e64: eine Oberfläche – Seitenleiste mit Bereichen (Accountmeister und Assignmentmanager), dieselben Ziele wie zuvor
+  const L = (key: string, icon: string): NavItem | null => (allowed.has(key) ? { ...ALL_LINKS[key]!, icon } : null);
+  const sections: NavSection[] = actor
+    ? [
+        { label: null, items: [L("start", "home"), { href: "/meine-arbeit", label: "Meine Arbeit", icon: "check" }, { href: "/eingang", label: "Eingang", icon: "inbox" }].filter((x): x is NavItem => !!x) },
+        { label: "Kunden & Pipeline", items: [L("kunden", "building"), L("runde", "refresh"), { href: "/chancen", label: "Chancen", icon: "target" }, L("besetzung", "userplus")].filter((x): x is NavItem => !!x) },
+        { label: "Einsätze", items: [...(asgAllowed ? [{ href: "/assignments", label: "Übersicht", icon: "layout" }] : []), L("einsaetze", "briefcase"), ...(asgAllowed ? [{ href: "/assignments/konditionen", label: "Laufzeiten & Konditionen", icon: "calendar" }, { href: "/assignments/checkins", label: "Check-ins", icon: "heart" }, { href: "/uebergaben", label: "Übergaben", icon: "swap" }] : [])].filter((x): x is NavItem => !!x) },
+        { label: "Steuerung", items: [L("ziele", "chart"), L("principals", "users"), L("bds", "user"), { href: "/weeklys", label: "Weeklys", icon: "calendar" }].filter((x): x is NavItem => !!x) },
+        { label: "Operations", items: [L("salesops", "clipboard"), ...(asgAllowed ? [{ href: "/vertragsbuero#erfassen", label: "Assignment erfassen", icon: "plus" }] : []), L("bereinigung", "broom"), ...(mocoLink ? [{ href: "/moco", label: "Moco", icon: "link" }] : []), ...(asgAllowed && (actor.roles.has("CEO") || actor.roles.has("ADMIN")) ? [{ href: "/verwaltung/sharepoint", label: "SharePoint-Ablage", icon: "file" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung", icon: "settings" }] : [])].filter((x): x is NavItem => !!x) },
+        { label: "Wissen und Werkzeuge", items: [{ href: "/vorgehen", label: "Vorgehensmuster", icon: "route" }, ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte", icon: "book" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner", icon: "calculator" }] : []), { href: "/hilfe", label: "Hilfe", icon: "help" }] },
+      ].filter((s) => s.items.length > 0)
+    : [];
+  const initials = actor ? actor.displayName.replace(/\(.*?\)/g, "").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() : "";
+  const brand = (
+    <Link href="/start" className="brand" aria-label="Verve AI – Accountmeister, zur Startseite">
+      {/* Logo: public/verve-ai-lockup.png (Verve AI Lockup); Höhe 26px, Breite folgt dem Seitenverhältnis 815:200 */}
+      <Image src="/verve-ai-lockup.png" alt="Verve AI" width={90} height={22} priority style={{ height: 22, width: "auto" }} />
+      <span className="brand-name">Accountmeister</span>
+    </Link>
   );
-  const amHeader = (
-        <header className="border-b" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
-          <div className="mx-auto max-w-6xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Link href="/start" className="no-underline flex items-center gap-3" style={{ color: "var(--text)" }} aria-label="Verve AI – Accountmeister, zur Startseite">
-              {/* Logo: public/verve-ai-lockup.png (Verve AI Lockup); Höhe 32px, Breite folgt dem Seitenverhältnis 815:200 */}
-              <Image src="/verve-ai-lockup.png" alt="Verve AI" width={130} height={32} priority style={{ height: 32, width: "auto" }} />
-              <span className="font-semibold">Accountmeister</span>
-            </Link>
-            {actor && (
-              <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm items-center">
-                {nav.main.map((n) => (
-                  <Link key={n.href} href={n.href}>
-                    {n.label}
-                  </Link>
-                ))}
-                <details className="nav-more">
-                  <summary>Mehr ▾</summary>
-                  <div className="nav-more-menu nav-more-grouped">
-                    {[
-                      ...nav.groups.map((g) => g.label === "Operations" ? { ...g, links: [...g.links, ...(mocoLink ? [{ href: "/moco", label: "Moco" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung" }] : [])] } : g),
-                      { label: "Wissen und Werkzeuge", links: [{ href: "/vorgehen", label: "Vorgehensmuster" }, ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner" }] : []), { href: "/hilfe", label: "Hilfe" }] },
-                    ].filter((g) => g.links.length > 0).map((g) => (
-                      <div key={g.label} className="nav-more-group">
-                        <span className="nav-more-label">{g.label}</span>
-                        {g.links.map((n) => (
-                          <Link key={n.href} href={n.href}>
-                            {n.label}
-                          </Link>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              </nav>
-            )}
-            {switcher}
-            {rightSide}
-          </div>
-        </header>
-  );
-  const asgHeader = asgAllowed && actor ? (
-    <header className="border-b" style={{ borderColor: "var(--border)", background: "var(--surface)", borderTop: "3px solid var(--accent)" }}>
-      <div className="mx-auto max-w-6xl px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-2">
-        <Link href="/assignments" className="no-underline flex items-center gap-3" style={{ color: "var(--text)" }} aria-label="Verve AI – Assignmentmanager, zur Übersicht">
-          <Image src="/verve-ai-lockup.png" alt="Verve AI" width={130} height={32} priority style={{ height: 32, width: "auto" }} />
-          <span className="font-semibold">Assignmentmanager</span>
+  const topbar = actor ? (
+    <>
+      <form method="get" action="/suche" role="search" className="topbar-search">
+        <Icon name="search" size={16} />
+        <input name="q" placeholder="Suchen: Kunde, Person, Einsatz …" aria-label="Suchen" />
+      </form>
+      <div className="topbar-actions">
+        <AssistantButton />
+        <Link href="/benachrichtigungen" className="icon-btn" aria-label={unread ? `Benachrichtigungen: ${unread} ungelesen` : "Benachrichtigungen"} title="Benachrichtigungen">
+          <Icon name="bell" size={19} />
+          {unread > 0 && <span className="icon-badge">{unread > 99 ? "99+" : unread}</span>}
         </Link>
-        <nav aria-label="Hauptnavigation" className="flex flex-wrap gap-x-4 gap-y-1 text-sm items-center">
-          <Link href="/assignments">Übersicht</Link>
-          <Link href="/assignments/konditionen">Laufzeiten &amp; Konditionen</Link>
-          <Link href="/assignments/checkins">Check-ins</Link>
-          <Link href="/uebergaben">Übergaben</Link>
-          <details className="nav-more">
-            <summary>Mehr ▾</summary>
-            <div className="nav-more-menu">
-              <Link href="/vertragsbuero#erfassen">Assignment erfassen</Link>
-              {cfg.MOCO_MODE !== "off" && <Link href="/moco">Moco</Link>}
-              {(actor.roles.has("CEO") || actor.roles.has("ADMIN")) && <Link href="/verwaltung/sharepoint">SharePoint-Ablage</Link>}
-              <Link href="/hilfe">Hilfe</Link>
-            </div>
-          </details>
-        </nav>
-        {switcher}
-        {rightSide}
+        {/* e62: ein Personenmenü – Name, Rolle bzw. Startseiten-Ansicht, Einstellungen, Abmelden */}
+        <details className="nav-more nav-hat" aria-label="Mein Konto">
+          <summary title="Mein Konto: Ansicht der Startseite, Einstellungen, Abmelden" className="user-chip">
+            <span className="avatar" aria-hidden="true">{initials}</span>
+            <span className="user-chip-text">
+              <span className="user-chip-name">{actor.displayName}</span>
+              {hat ? <span className="user-chip-role">{viewLabel[hat]}</span> : null}
+            </span>
+          </summary>
+          <div className="nav-more-menu" style={{ minWidth: 260 }}>
+            <span className="muted text-xs" style={{ padding: "4px 8px" }}>Rollen: {roles.join(", ") || "keine fachliche Rolle"}{actor.roles.has("ADMIN") ? " · Betriebsverwaltung" : ""}</span>
+            {hat && available.length > 1 && (
+              <form action={setHatAction} className="flex flex-col gap-1" style={{ padding: "4px 8px" }}>
+                <span className="muted text-xs">Startseite zeigen als:</span>
+                {available.map((v) => (
+                  <button key={v} name="hat" value={v} type="submit" className={v === hat ? "btn btn-small" : "btn btn-secondary btn-small"} aria-pressed={v === hat} title={viewDescription[v]} style={{ textAlign: "left" }}>
+                    {viewLabel[v]}
+                  </button>
+                ))}
+              </form>
+            )}
+            <Link href="/einstellungen">Einstellungen</Link>
+            <form action={logoutAction} style={{ padding: "4px 8px" }}>
+              <button className="btn btn-secondary btn-small" type="submit" style={{ width: "100%" }}>
+                Abmelden
+              </button>
+            </form>
+          </div>
+        </details>
       </div>
-    </header>
+    </>
   ) : null;
   return (
     <html lang="de">
@@ -191,10 +134,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             Entwicklungsmodus: Anmeldung ohne Passwort, ausschließlich fiktive Daten. KI-Anbieter: {cfg.AI_PROVIDER === "disabled" ? "deaktiviert" : "Testanbieter"}. Kein Produktivbetrieb.
           </div>
         )}
-        <AppChrome initial={initialApp} am={amHeader} asg={asgHeader}>
-          <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
-          {actor ? <AssistantPanel signedIn /> : null}
-        </AppChrome>
+        {actor ? (
+          <AppShell sections={sections} brand={brand} topbar={topbar}>
+            {children}
+          </AppShell>
+        ) : (
+          <>
+            <header className="topbar topbar-public">{brand}</header>
+            <main className="page page-public">{children}</main>
+          </>
+        )}
+        {actor ? <AssistantPanel signedIn /> : null}
       </body>
     </html>
   );

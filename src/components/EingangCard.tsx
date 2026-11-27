@@ -75,7 +75,7 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
           <p>
             Einsatz <Link href={`/einsaetze/${renewal.engagementId}#verlaengerung`}>{renewal.title}</Link> · Ende heute <strong>{renewal.currentEnd ? fmtDate(renewal.currentEnd) : "offen"}</strong>
             {renewal.openStatus ? <span style={{ color: AMBER }}> · Verlängerung {renewal.openStatus === "ZU_KLAEREN" ? "zu klären" : "in Abstimmung"}</span> : null}
-            {item.decision === "ENDET" ? <span style={{ color: "#c0392b" }}> · laut Text: keine Verlängerung</span> : null}
+            {item.decision === "ENDET" ? <span style={{ color: "var(--danger)" }}> · laut Text: keine Verlängerung</span> : null}
             {item.conditionsNote ? ` · ${item.conditionsNote}` : ""}
           </p>
         )}
@@ -134,7 +134,7 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
               <input type="hidden" name="back" value={back} />
               {item.type === "KUNDE" && (
                 <div>
-                  <label className="label" htmlFor={`ot-${s.id}`}>Organisationstyp <span style={{ color: "#c0392b" }}>*</span></label>
+                  <label className="label" htmlFor={`ot-${s.id}`}>Organisationstyp <span style={{ color: "var(--danger)" }}>*</span></label>
                   <select id={`ot-${s.id}`} name="orgType" className="select" required defaultValue={item.orgType && item.orgType !== "SONSTIGE" ? item.orgType : ""}>
                     <option value="" disabled>Bitte wählen …</option>
                     {schema.orgTypeEnum.enumValues.map((v) => <option key={v} value={v}>{orgTypeLabel[v] ?? v}</option>)}

@@ -10,7 +10,7 @@ import { fmtDate } from "@/lib/labels";
 import { renewalStatusLabel } from "@/modules/engagements/care";
 import { addPrincipalAgreementAction, savePrincipalTargetsAction } from "@/app/actions";
 
-const RED = "#c0392b";
+const RED = "var(--danger)";
 const AMBER = "#b7791f";
 
 /** Gesprächsseite GF ↔ Principal (Etappe 38): Lage → Zahlen → offene Entscheidungen → Vereinbarungen. */
@@ -39,7 +39,7 @@ export default async function PrincipalTalkPage({ params, searchParams }: { para
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">{canEdit ? `Gespräch mit ${t.principal.name}` : `Meine Ziele als ${levelLabel[t.principal.level]}`}</h1>
-        <span className="muted text-sm">{q.label} · {ref ? (ref === q.end ? `Stichtag ${fmtDate(q.end)}` : `Stand heute, Stichtag ${fmtDate(q.end)}`) : "Quartal hat noch nicht begonnen"}</span>
+        <span className="muted text-sm">{q.label} · {(() => { const t = new Date().toISOString().slice(0, 10); return t < q.start ? "Quartal hat noch nicht begonnen" : t > q.end || ref === q.end ? `Stichtag ${fmtDate(q.end)}` : `Stand heute, Stichtag ${fmtDate(q.end)}`; })()}</span>
         <span className="ml-auto text-sm flex gap-3">
           {canEdit && <Link href={`/meine-principals?q=${q.key}`}>Alle Principals</Link>}
           <Link href={`${base}?q=${shiftQuarter(q, -1).key}`}>← {shiftQuarter(q, -1).label}</Link>
@@ -51,7 +51,7 @@ export default async function PrincipalTalkPage({ params, searchParams }: { para
 
       <section className="card space-y-2" id="lage">
         {step(1, "Lage", `${t.lage.length} Kunden · ${t.bdCount} BDs`)}
-        {t.lage.length === 0 ? <p className="muted text-sm">Keine Kunden zugeordnet.</p> : (
+        {t.lage.length === 0 ? <p className="empty">Keine Kunden zugeordnet.</p> : (
           <table className="list text-sm">
             <thead><tr><th>Kunde</th><th>BD</th><th>Köpfe heute</th><th>Nächstes Ende</th><th>Köpfe {ref === q.end ? "Stichtag" : "Ist"} / Ziel {q.label}</th></tr></thead>
             <tbody>
@@ -104,7 +104,7 @@ export default async function PrincipalTalkPage({ params, searchParams }: { para
 
       <section className="card space-y-2" id="entscheidungen">
         {step(3, "Offene Entscheidungen", t.openDecisions.length ? `${pl(t.openDecisions.length, "Verlängerung", "Verlängerungen")}` : undefined)}
-        {t.openDecisions.length === 0 ? <p className="muted text-sm">Keine offenen Verlängerungen bei den Kunden.</p> : (
+        {t.openDecisions.length === 0 ? <p className="empty">Keine offenen Verlängerungen bei den Kunden.</p> : (
           <ul className="space-y-1 text-sm">
             {t.openDecisions.map((d) => (
               <li key={d.engagementId}>
@@ -119,7 +119,7 @@ export default async function PrincipalTalkPage({ params, searchParams }: { para
 
       <section className="card space-y-2" id="vereinbarungen">
         {step(4, "Vereinbarungen", "jede wird ein Vorgang mit Frist beim Principal")}
-        {t.agreements.length === 0 ? <p className="muted text-sm">Noch keine Vereinbarungen.</p> : (
+        {t.agreements.length === 0 ? <p className="empty">Noch keine Vereinbarungen.</p> : (
           <ul className="space-y-1 text-sm">
             {t.agreements.map((a) => (
               <li key={a.id} style={a.done ? { opacity: 0.6 } : undefined}>
