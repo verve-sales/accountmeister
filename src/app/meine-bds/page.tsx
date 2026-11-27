@@ -25,7 +25,7 @@ export default async function MeineBdsPage({ searchParams }: { searchParams: Sea
       {byBd.length === 0 && <p className="card muted text-sm">Keine zugeordneten Kunden.</p>}
       {byBd.map((g) => (
         <section key={g.bdName} className="card">
-          <h2 className="font-semibold mb-2">{g.bdName} <span className="muted text-sm font-normal">· {g.rows.length} Kunden · {g.rows.reduce((n, r) => n + r.runningEngagements, 0)} laufende Einsätze · {g.rows.reduce((n, r) => n + r.chancesInWork, 0)} Chancen in Arbeit</span></h2>
+          <h2 className="font-semibold mb-2">{g.bdName} <span className="muted text-sm font-normal">· {g.rows.length} Kunden · {g.rows.reduce((n, r) => n + r.runningEngagements, 0)} laufende Einsätze · {g.rows.reduce((n, r) => n + r.chancesInWork + r.chancesAnticipated, 0)} offene Chancen{g.rows.some((r) => r.chancesAnticipated) ? ` (davon ${g.rows.reduce((n, r) => n + r.chancesAnticipated, 0)} antizipiert)` : ""}</span></h2>
           <table className="list text-sm">
             <thead><tr><th>Kunde</th><th>Team</th><th>Einsätze</th><th>Nächstes Ende</th><th>Chancen</th><th>Letzter Kontakt</th><th>Offen</th><th>Ampel</th></tr></thead>
             <tbody>

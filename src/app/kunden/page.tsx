@@ -15,6 +15,7 @@ import { DORMANT_AFTER_DAYS, listDormantAccounts } from "@/modules/playbooks/ser
 import { fmtDate } from "@/lib/labels";
 import { computeHealthFor } from "@/modules/health/service";
 import { HealthBadge } from "@/components/HealthBadge";
+import { canClean } from "@/modules/cleanup/service";
 
 export default async function KundenPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -31,6 +32,11 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
   const active = accounts.filter((a) => a.status !== "ARCHIVED");
   const archived = accounts.filter((a) => a.status === "ARCHIVED");
   const dormant = await listDormantAccounts(actor);
+  // e66: gleichnamige Kunden direkt in der Liste kennzeichnen (Zusammenführen bleibt in der Bereinigung)
+  const normName = (n: string) => n.toLocaleLowerCase("de").replace(/\(.*?\)/g, " ").replace(/\b(gmbh|ag|eg|se|kg|mbh|co|e\.?v\.?)\b/g, " ").replace(/[^a-z0-9äöüß]+/g, " ").trim();
+  const nameCount = new Map<string, number>();
+  for (const a of active) nameCount.set(normName(a.name), (nameCount.get(normName(a.name)) ?? 0) + 1);
+  const mayClean = canClean(actor);
   const healthBy = new Map((await computeHealthFor(active.map((a) => ({ id: a.id, name: a.name })))).map((h) => [h.accountId, h]));
 
   return (
@@ -45,7 +51,7 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
             <tbody>
               {active.map((a) => (
                 <tr key={a.id}>
-                  <td><Link href={`/kunden/${a.id}`}>{a.name}</Link>{a.isDemo && <span className="muted text-sm"> · Demo</span>}</td>
+                  <td><Link href={`/kunden/${a.id}`}>{a.name}</Link>{a.isDemo && <span className="muted text-sm"> · Demo</span>}{(nameCount.get(normName(a.name)) ?? 0) > 1 && (mayClean ? <Link href="/bereinigung" className="chip" data-tone="warn" style={{ marginLeft: 6 }} title="Gleichnamiger Kunde vorhanden – in der Bereinigung zusammenführen">möglicherweise doppelt</Link> : <span className="chip" data-tone="warn" style={{ marginLeft: 6 }} title="Gleichnamiger Kunde vorhanden">möglicherweise doppelt</span>)}</td>
                   <td>{orgTypeLabel[a.orgType] ?? a.orgType}</td>
                   <td>{a.responsibleBdUserId ? bdNames.get(a.responsibleBdUserId) : <Status label="offen" />}</td>
                   <td><Status label={accountStatusLabel[a.status] ?? a.status} /></td>

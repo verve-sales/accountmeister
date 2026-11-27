@@ -388,3 +388,14 @@ button.tab { background: none; border: 0; border-bottom: 2px solid transparent; 
 .row-actions { display: flex; gap: .35rem; align-items: center; flex-wrap: nowrap; white-space: nowrap; position: relative; }
 .row-more { position: relative; }
 .row-more-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; display: flex; flex-direction: column; gap: .35rem; min-width: 14rem; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-pop); padding: .5rem; }
+
+/* e66: Bereiche in der Seitenleiste; der aktive Bereich zeigt seine Seiten eingerückt */
+.nav-area { display: flex; flex-direction: column; }
+.nav-area + .nav-area { margin-top: 2px; }
+.nav-sub { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 6px 1.55rem; padding-left: .6rem; border-left: 1px solid var(--border); }
+.nav-subitem { display: flex; align-items: center; justify-content: space-between; gap: .4rem; padding: .28rem .55rem; border-radius: 6px; font-size: .83rem; color: var(--text-2); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-subitem:hover { background: var(--surface-3); color: var(--text); text-decoration: none; }
+.nav-subitem[aria-current="page"] { color: var(--accent-ink); font-weight: 600; background: var(--accent-soft); }
+.nav-area-open > .nav-item[aria-current="page"] { background: transparent; }
+.nav-area-open > .nav-item[aria-current="page"]::before { display: none; }
+.chip[data-tone="warn"] { background: var(--warn-soft, #fff4e0); border-color: #f1d39c; color: #8a5a00; font-size: .72rem; padding: .1rem .5rem; }

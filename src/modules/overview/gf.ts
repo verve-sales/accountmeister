@@ -6,6 +6,7 @@ import { hasRole, type Actor } from "@/modules/identity/actor";
 import { listEngagements, RUNNING_STATUSES } from "@/modules/engagements/service";
 import { renewalStatusLabel } from "@/modules/engagements/care";
 import { buildRound } from "@/modules/rounds/service";
+import { computeHealthFor } from "@/modules/health/service";
 import { todayIso } from "@/modules/work/calendar";
 
 /**
@@ -22,7 +23,7 @@ export const DAYS_PER_MONTH = 20;
 
 export type GfExpiring = { engagementId: string; person: string; accountId: string; accountName: string; end: string; daysToEnd: number; renewal: string; decided: boolean; owner: string; mood: string | null; urgent: boolean };
 export type GfCustomer = { accountId: string; name: string; ampel: "ROT" | "GELB" | "GRUEN"; score: number | null; level: string | null; coverage: number | null; heads: number; headsDelta: number; nextEnd: string | null; owner: string; sentence: string };
-export type GfPipeline = { opportunityId: string; title: string; accountId: string; accountName: string; status: string; daysInStage: number; owner: string; heads: number; vkPerDay: number | null; next: string | null; nextDue: string | null; overdue: boolean };
+export type GfPipeline = { opportunityId: string; title: string; accountId: string; accountName: string; status: string; daysInStage: number; owner: string; heads: number; vkPerDay: number | null; next: string | null; nextDue: string | null; overdue: boolean; stageLag: boolean };
 export type GfTeam = { userId: string; name: string; open: number; overdue: number; oldestOverdue: string | null; lastActive: string | null };
 export type GfOverview = {
   windowDays: number;
@@ -31,6 +32,8 @@ export type GfOverview = {
   kpis: { heads: number; persons: number; endingUndecided: number; pipelinePerDay: number; pipelineCount: number; red: number; yellow: number; teamOverdue: number; openSuggestions: number };
   expiring: GfExpiring[];
   customers: GfCustomer[];
+  /** e66: gefährdete Kunden ohne laufenden Einsatz – stehen nicht in der Kundenrunde, sollen aber nicht fehlen */
+  atRiskOther: Array<{ accountId: string; name: string; score: number | null; level: string; coverage: number }>;
   pipeline: GfPipeline[];
   team: GfTeam[];
 };
@@ -95,6 +98,12 @@ export async function buildGfOverview(actor: Actor, today = todayIso()): Promise
     .sort((x, y) => ({ ROT: 0, GELB: 1, GRUEN: 2 })[x.ampel] - ({ ROT: 0, GELB: 1, GRUEN: 2 })[y.ampel] || y.heads - x.heads || x.name.localeCompare(y.name, "de"));
 
   // 3) Pipeline – offene Chancen mit VK × Köpfe und Tagen in der Stufe
+  const inRound = new Set(customers.map((c) => c.accountId));
+  const otherAccounts = (await db.query.accounts.findMany({ where: and(eq(schema.accounts.workspaceId, ws), eq(schema.accounts.status, "ACTIVE")), columns: { id: true, name: true } })).filter((a) => !inRound.has(a.id));
+  const atRiskOther = (await computeHealthFor(otherAccounts))
+    .filter((h) => h.level === "GEFAEHRDET")
+    .map((h) => ({ accountId: h.accountId, name: h.accountName, score: h.score, level: h.level, coverage: h.coverage }))
+    .sort((a, b) => (a.score ?? 0) - (b.score ?? 0));
   const opps = await db.query.opportunities.findMany({ where: and(eq(schema.opportunities.workspaceId, ws), inArray(schema.opportunities.status, [...OPEN_OPP])) });
   const oppIds = opps.map((o) => o.id);
   const [accs, positions, events, oppActions] = await Promise.all([
@@ -103,6 +112,7 @@ export async function buildGfOverview(actor: Actor, today = todayIso()): Promise
     oppIds.length ? db.query.auditEvents.findMany({ where: and(eq(schema.auditEvents.objectType, "OPPORTUNITY"), inArray(schema.auditEvents.objectId, oppIds), eq(schema.auditEvents.action, "opportunity.status_changed")), orderBy: desc(schema.auditEvents.at), columns: { objectId: true, at: true } }) : Promise.resolve([]),
     oppIds.length ? db.query.actions.findMany({ where: and(inArray(schema.actions.opportunityId, oppIds), inArray(schema.actions.status, [...OPEN_ACTION])), columns: { opportunityId: true, title: true, dueDate: true } }) : Promise.resolve([]),
   ]);
+  const runningOpp = new Set((oppIds.length ? await db.query.engagements.findMany({ where: and(inArray(schema.engagements.opportunityId, oppIds), inArray(schema.engagements.status, ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET"])), columns: { opportunityId: true } }) : []).map((e) => e.opportunityId));
   const posIds = positions.map((p) => p.id);
   const cands = posIds.length ? await db.query.candidacies.findMany({ where: and(inArray(schema.candidacies.positionId, posIds), isNotNull(schema.candidacies.vkRate)), columns: { positionId: true, vkRate: true, rateUnit: true, status: true } }) : [];
   const an = new Map(accs.map((a) => [a.id, a.name]));
@@ -136,6 +146,7 @@ export async function buildGfOverview(actor: Actor, today = todayIso()): Promise
       next: next?.title ?? null,
       nextDue: next?.dueDate ?? null,
       overdue: !!next?.dueDate && next.dueDate < today,
+      stageLag: runningOpp.has(o.id),
     };
   }).sort((a, b) => b.daysInStage - a.daysInStage);
 
@@ -187,6 +198,7 @@ export async function buildGfOverview(actor: Actor, today = todayIso()): Promise
     },
     expiring,
     customers,
+    atRiskOther,
     pipeline,
     team,
   };

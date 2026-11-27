@@ -62,8 +62,9 @@ async function teamFor(workspaceId: string, accountIds: string[]) {
   const un = new Map(users.map((u) => [u.id, u.displayName]));
   const out = new Map<string, { anker: string[]; principal: string[] }>();
   for (const id of accountIds) {
+    // e66: wie Kundenverantwortliche – nur kundenbezogene Zuordnung macht verantwortlich (arbeitsraumweite Rolle = nur Rechte)
     const anker = live.filter((r) => r.role === "ANKER" && r.accountId === id).map((r) => un.get(r.userId)).filter((x): x is string => !!x);
-    const principal = live.filter((r) => r.role === "PRINCIPAL" && (r.accountId === id || r.scope === "WORKSPACE")).map((r) => un.get(r.userId)).filter((x): x is string => !!x);
+    const principal = live.filter((r) => r.role === "PRINCIPAL" && r.scope === "ACCOUNT" && r.accountId === id).map((r) => un.get(r.userId)).filter((x): x is string => !!x);
     out.set(id, { anker: [...new Set(anker)], principal: [...new Set(principal)] });
   }
   return out;

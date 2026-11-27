@@ -11,6 +11,7 @@ import { Sparkline, TrendChart } from "@/components/charts/TrendChart";
 import { CHANCE_STEPS } from "@/lib/chanceStages";
 
 const AMPEL: Record<string, string> = { ROT: "var(--danger)", GELB: "#b7791f", GRUEN: "#2f7d32" };
+const AMPEL_LABEL: Record<string, string> = { ROT: "dringend", GELB: "beobachten", GRUEN: "keiner" };
 const eur = (n: number) => `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(n)} €`;
 const MOOD: Record<string, string> = { POSITIV: "positiv", MITTEL: "mittel", NEGATIV: "negativ" };
 
@@ -26,7 +27,7 @@ export function GfKpis({ o }: { o: GfOverview }) {
       <KpiTile value={k.persons} label={<>Köpfe im Einsatz<span className="muted"> · {k.heads} Einsätze</span><Sparkline values={o.headsTrend.map((p) => p.value)} futureFrom={13} /></>} href="#koepfe" />
       <Kpi value={k.endingUndecided} label={`enden in ${EXPIRY_WINDOW_LABEL}, offen`} href="#laeuft-aus" warn={k.endingUndecided > 0} />
       <Kpi value={k.pipelinePerDay ? eur(k.pipelinePerDay) : "–"} label={`Pipeline VK/Tag · ${k.pipelineCount} Chancen`} href="#pipeline" />
-      <Kpi value={<>{k.red} <span className="text-base font-medium">rot</span><span className="muted text-base font-normal"> · {k.yellow} gelb</span></>} label="Kunden mit Handlungsbedarf" href="#kunden" warn={k.red > 0} />
+      <Kpi value={<>{k.red} <span className="text-base font-medium">dringend</span><span className="muted text-sm font-normal"> · {k.yellow} beobachten</span></>} label="Kunden mit Handlungsbedarf" href="#kunden" warn={k.red > 0} />
       <Kpi value={k.teamOverdue} label="überfällig im Team" href="#team" warn={k.teamOverdue > 0} />
       <Kpi value={k.openSuggestions} label="offene KI-Vorschläge" href="/benachrichtigungen" />
     </section>
@@ -70,11 +71,11 @@ export function GfCustomers({ o }: { o: GfOverview }) {
       </div>
       {o.customers.length === 0 ? <p className="empty">Keine Bestandskunden.</p> : (
         <table className="list text-sm mt-1">
-          <thead><tr><th></th><th>Kunde</th><th>Health · Datenlage</th><th style={{ textAlign: "right" }}>Köpfe</th><th>Nächstes Ende</th><th>Verantwortlich</th><th>Warum</th></tr></thead>
+          <thead><tr><th title="Handlungsbedarf laut Kundenrunde">Bedarf</th><th>Kunde</th><th>Health · Datenlage</th><th style={{ textAlign: "right" }}>Köpfe</th><th>Nächstes Ende</th><th>Verantwortlich</th><th>Warum</th></tr></thead>
           <tbody>
             {o.customers.map((c) => (
               <tr key={c.accountId}>
-                <td><span aria-label={c.ampel} title={c.ampel} style={{ display: "inline-block", width: 10, height: 10, borderRadius: 999, background: AMPEL[c.ampel] }} /></td>
+                <td><span aria-label={AMPEL_LABEL[c.ampel]} title={`Handlungsbedarf: ${AMPEL_LABEL[c.ampel]}`} style={{ display: "inline-block", width: 10, height: 10, borderRadius: 999, background: AMPEL[c.ampel] }} /></td>
                 <td><Link href={`/kunden/${c.accountId}`}><strong>{c.name}</strong></Link></td>
                 <td style={{ whiteSpace: "nowrap" }}>{c.level ? <Link href={`/kunden/${c.accountId}/health`} className="no-underline"><HealthBadge score={c.score} level={c.level as never} coverage={c.coverage ?? 0} /></Link> : "–"}{c.coverage != null && <span className="muted text-xs"> {c.coverage} %</span>}</td>
                 <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{c.heads}{c.headsDelta !== 0 && <span style={{ color: c.headsDelta < 0 ? "var(--danger)" : "#2f7d32" }}> ({c.headsDelta > 0 ? "+" : ""}{c.headsDelta})</span>}</td>
@@ -85,6 +86,14 @@ export function GfCustomers({ o }: { o: GfOverview }) {
             ))}
           </tbody>
         </table>
+      )}
+      {o.atRiskOther.length > 0 && (
+        <p className="text-sm mt-3">
+          <span className="muted">Gefährdet ohne laufenden Einsatz:</span>{" "}
+          {o.atRiskOther.map((a, i) => (
+            <span key={a.accountId}>{i > 0 && " · "}<Link href={`/kunden/${a.accountId}`}>{a.name}</Link> <Link href={`/kunden/${a.accountId}/health`} className="no-underline"><HealthBadge score={a.score} level={a.level as never} coverage={a.coverage} /></Link></span>
+          ))}
+        </p>
       )}
     </section>
   );
@@ -119,7 +128,7 @@ export function GfPipeline({ o }: { o: GfOverview }) {
               <tr key={p.opportunityId}>
                 <td><Link href={`/bedarfe/${p.opportunityId}`}><strong>{p.title}</strong></Link></td>
                 <td><Link href={`/kunden/${p.accountId}`}>{p.accountName}</Link></td>
-                <td>{opportunityStatusLabel[p.status] ?? p.status}</td>
+                <td>{opportunityStatusLabel[p.status] ?? p.status}{p.stageLag && <span className="chip" data-tone="warn" title="Einsatz läuft bereits – Stufe auf der Chance nachziehen" style={{ marginLeft: 6 }}>Einsatz läuft</span>}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", color: p.daysInStage > 30 ? "#b7791f" : undefined }}>{p.daysInStage} T.</td>
                 <td>{p.owner}</td>
                 <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{p.heads}</td>

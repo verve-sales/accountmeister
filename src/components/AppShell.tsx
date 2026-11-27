@@ -7,7 +7,18 @@ import { Icon } from "./Icon";
 import { TableTools } from "./TableTools";
 
 export type NavItem = { href: string; label: string; icon: string; badge?: number };
-export type NavSection = { label: string | null; items: NavItem[] };
+export type NavSection = { label: string | null; icon?: string; items: NavItem[] };
+
+/** e66: Detailseiten ohne eigenen Menüpunkt dem passenden Bereich zuordnen (nur für die Markierung in der Seitenleiste). */
+const AREA_PREFIX: Record<string, string[]> = {
+  Heute: ["/vorgaenge", "/suche"],
+  Kunden: ["/kunden", "/setups", "/health", "/quellen", "/interviews"],
+  Pipeline: ["/bedarfe", "/chancen", "/besetzung"],
+  Einsätze: ["/einsaetze", "/assignments"],
+  Steuerung: ["/weeklys", "/meine-bds", "/meine-principals", "/kundenverantwortliche", "/ziele", "/fuehrung", "/team", "/ceo"],
+  Operations: ["/vertragsbuero", "/sales-ops", "/bereinigung", "/moco", "/verwaltung"],
+  "Wissen & Werkzeuge": ["/vorgehen", "/artefakte", "/provision", "/hilfe"],
+};
 
 /**
  * e64: Eine Oberfläche für Accountmeister und Assignmentmanager – feste Seitenleiste mit Bereichen statt zwei
@@ -51,27 +62,38 @@ export function AppShell({ sections, brand, topbar, children }: { sections: NavS
   // aktiver Eintrag: längster passender Pfad (Anker und Abfrage ignoriert)
   const all = sections.flatMap((s) => s.items.map((i) => i.href.split(/[?#]/)[0]!));
   const active = all.filter((h) => path === h || (h !== "/" && path.startsWith(`${h}/`))).sort((a, b) => b.length - a.length)[0];
+  // Bereich: über die Menüpunkte, sonst über bekannte Pfadanfänge (Detailseiten)
+  let activeArea = active ? sections.findIndex((s) => s.items.some((it) => it.href.split(/[?#]/)[0] === active)) : -1;
+  if (activeArea < 0) activeArea = sections.findIndex((s) => (AREA_PREFIX[s.label ?? ""] ?? []).some((p) => path === p || path.startsWith(`${p}/`)));
   return (
     <div className="shell" data-nav={open ? "open" : "closed"}>
       <aside className="sidebar" aria-label="Navigation">
         <div className="sidebar-brand">{brand}</div>
         <nav aria-label="Hauptnavigation" className="sidebar-nav">
-          {sections.map((s, i) => (
-            <div key={s.label ?? i} className="nav-section">
-              {s.label && <div className="nav-section-label">{s.label}</div>}
-              {s.items.map((it) => {
-                const base = it.href.split(/[?#]/)[0];
-                const isActive = base === active && !it.href.includes("#");
-                return (
-                  <Link key={it.href} href={it.href} className="nav-item" aria-current={isActive ? "page" : undefined}>
-                    <Icon name={it.icon} size={17} />
-                    <span className="nav-item-label">{it.label}</span>
-                    {it.badge ? <span className="nav-badge">{it.badge > 99 ? "99+" : it.badge}</span> : null}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+          {sections.map((s, i) => {
+            const isActive = i === activeArea;
+            return (
+              <div key={s.label ?? i} className={isActive && s.items.length > 1 ? "nav-area nav-area-open" : "nav-area"}>
+                <Link href={s.items[0]!.href} className="nav-item" aria-current={isActive ? "page" : undefined}>
+                  <Icon name={s.icon ?? s.items[0]!.icon} size={17} />
+                  <span className="nav-item-label">{s.label ?? s.items[0]!.label}</span>
+                </Link>
+                {isActive && s.items.length > 1 && (
+                  <div className="nav-sub">
+                    {s.items.map((it) => {
+                      const base = it.href.split(/[?#]/)[0];
+                      return (
+                        <Link key={it.href} href={it.href} className="nav-subitem" aria-current={base === active && !it.href.includes("#") ? "page" : undefined}>
+                          {it.label}
+                          {it.badge ? <span className="nav-badge">{it.badge > 99 ? "99+" : it.badge}</span> : null}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
       </aside>
       <div className="sidebar-scrim" onClick={() => setOpen(false)} aria-hidden="true" />
@@ -82,7 +104,9 @@ export function AppShell({ sections, brand, topbar, children }: { sections: NavS
           </button>
           {topbar}
         </header>
-        <main className="page">{children}</main>
+        <main className="page">
+          {children}
+        </main>
         <TableTools />
       </div>
     </div>

@@ -64,7 +64,9 @@ function enhance(table: HTMLTableElement) {
       }
     });
   });
-  if (body.rows.length >= 6 && !table.hasAttribute("data-nofilter")) {
+  // e66: Seiten mit eigener Suche (Feld „q“) bekommen kein zweites Filterfeld – ein Filtermuster je Seite
+  const ownSearch = !!document.querySelector('main.page form input[name="q"]');
+  if (body.rows.length >= 6 && !table.hasAttribute("data-nofilter") && !ownSearch) {
     const wrap = document.createElement("div");
     wrap.className = "table-filter";
     const input = document.createElement("input");

@@ -12,7 +12,7 @@ export default async function ChancenPage({ searchParams }: { searchParams: Prom
   const r = await drilldown(actor, sp);
   return (
     <div className="space-y-5">
-      <nav className="crumbs" aria-label="Pfad"><Link href="/start">Start</Link><span>Drill-down</span></nav>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/chancen">Pipeline</Link><span>Chancen</span></nav>
       <h1 className="text-2xl font-semibold">{r.title}</h1>
       <section className="card">
         {r.mode === "kunden" ? (
@@ -31,7 +31,7 @@ export default async function ChancenPage({ searchParams }: { searchParams: Prom
                   <td><Link href={`/bedarfe/${c.id}`}>{c.title}</Link></td>
                   <td><Link href={`/kunden/${c.accountId}?b=strategie`}>{c.accountName}</Link>{c.setupName ? <span className="muted"> · {c.setupName}</span> : null}</td>
                   <td>{c.kind}</td>
-                  <td>{c.status}</td>
+                  <td>{c.status}{c.stageLag && <span className="chip" data-tone="warn" title="Einsatz läuft bereits – Stufe auf der Chance nachziehen" style={{ marginLeft: 6 }}>Einsatz läuft</span>}</td>
                   <td>{c.bdName}</td>
                   <td>{fmtDate(c.createdAt)}</td>
                   {sp.vorgestellt ? <td style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{c.offers}</td> : null}

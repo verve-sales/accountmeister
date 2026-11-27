@@ -69,12 +69,16 @@ export async function drilldown(actor: Actor, p: DrillParams, now = new Date()) 
     parts.push(`mit vorgestelltem Angebot/Profil in ${p.vorgestellt} Tagen`);
   }
   const accName = new Map(accounts.map((a) => [a.id, a]));
+  // e66: laufender Einsatz bei noch offener Stufe – derselbe Hinweis wie auf der Chance („Stufe nachziehen“)
+  const openIds = list.filter((o) => ["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG"].includes(o.status)).map((o) => o.id);
+  const running = openIds.length ? await db.query.engagements.findMany({ where: and(inArray(schema.engagements.opportunityId, openIds), inArray(schema.engagements.status, ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET"])), columns: { opportunityId: true } }) : [];
+  const runningOpp = new Set(running.map((e) => e.opportunityId));
   return {
     mode: "chancen" as const,
     title: ["Chancen", ...parts].join(" · "),
     accounts: [],
     chances: list
-      .map((o) => ({ id: o.id, title: o.title, kind: chanceKindLabel[o.kind as (typeof chanceKindValues)[number]] ?? o.kind, status: opportunityStatusLabel[o.status] ?? o.status, accountId: o.accountId, accountName: accName.get(o.accountId)?.name ?? "?", setupName: setups.find((s) => s.id === o.setupId)?.name ?? "", bdName: bdName(accName.get(o.accountId)?.responsibleBdUserId ?? null), createdAt: o.createdAt, offers: offerCount.get(o.id) ?? 0 }))
+      .map((o) => ({ id: o.id, title: o.title, kind: chanceKindLabel[o.kind as (typeof chanceKindValues)[number]] ?? o.kind, status: opportunityStatusLabel[o.status] ?? o.status, accountId: o.accountId, accountName: accName.get(o.accountId)?.name ?? "?", setupName: setups.find((s) => s.id === o.setupId)?.name ?? "", bdName: bdName(accName.get(o.accountId)?.responsibleBdUserId ?? null), createdAt: o.createdAt, offers: offerCount.get(o.id) ?? 0, stageLag: runningOpp.has(o.id) }))
       .sort((x, y) => y.createdAt.getTime() - x.createdAt.getTime()),
   };
 }

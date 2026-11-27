@@ -32,7 +32,7 @@ export default async function MeinePrincipalsPage({ searchParams }: { searchPara
           <div>
             <h2 className="font-semibold">Noch keine Kundenverantwortung vergeben</h2>
             <p className="muted text-sm">Sobald Principals Kunden zugeordnet sind, stehen hier je Person Ziel und Stand des Quartals: Köpfe, Neukunden und Verlängerungsquote.</p>
-            {actor.roles.has("ADMIN") ? <Link href="/verwaltung/rollen" className="btn btn-small mt-2">Rolle zuweisen</Link> : <p className="muted text-xs mt-1">Vergeben wird sie in der Verwaltung unter „Rolle zuweisen“ (Principal, Stufe und Kunde).</p>}
+            {actor.roles.has("ADMIN") ? <Link href="/verwaltung/rollen" className="btn btn-small mt-2">Rolle zuweisen</Link> : <p className="muted text-xs mt-1">Eine Principal-Rolle für den ganzen Arbeitsraum gibt Rechte bei allen Kunden, macht aber noch nicht verantwortlich. Vergeben wird die Verantwortung in der Verwaltung unter „Rolle zuweisen“ (Principal, Stufe und Kunde).</p>}
           </div>
         </section>
       ) : (
