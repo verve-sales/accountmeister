@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { moveOpportunityStageAction } from "../actions";
 import type { BoardCard, BoardStage } from "@/modules/opportunities/board";
 
-const LABEL: Record<BoardStage, string> = { ANTIZIPIERT: "Antizipiert", IN_KLAERUNG: "In Klärung", BESTAETIGT: "Bestätigt", PROFIL_ANGEBOT_VORGESTELLT: "Profil/Angebot vorgestellt", AUSWAHL_BESTELLUNG: "Auswahl/Bestellung", BEAUFTRAGT: "Beauftragt (60 Tage)" };
+const LABEL: Record<BoardStage, string> = { ANTIZIPIERT: "Antizipiert", IN_KLAERUNG: "In Klärung", BESTAETIGT: "Bestätigt", PROFIL_ANGEBOT_VORGESTELLT: "Profil/Angebot vorgestellt", AUSWAHL_BESTELLUNG: "Auswahl / Bestellung", BEAUFTRAGT: "Beauftragt (60 Tage)" };
 const eur = (n: number) => `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(n)} €`;
 
 /** Pipeline-Board (e69): Spalten je Stufe; Karte ziehen ändert die Stufe, wo das ohne weitere Angaben geht. */
@@ -33,7 +33,7 @@ export function PipelineBoard({ cards, stages }: { cards: BoardCard[]; stages: r
     <div>
       <p className="muted text-xs mb-2" aria-live="polite">{pending ? "Speichere …" : msg ? <span style={{ color: msg.ok ? "var(--ok, #1f6b3a)" : "var(--danger)" }}>{msg.text}</span> : "Karte in eine andere Spalte ziehen, um die Stufe zu ändern. „Vorgestellt“ und „beauftragt“ entstehen über Angebot und Bestellung."}</p>
       {/* e73: alle Stufen nebeneinander – leere Spalten schmal, damit bei normaler Breite nichts waagerecht scrollt */}
-      <div className="board" role="list" style={{ ["--board-cols" as string]: stages.map((st) => (local.some((c) => c.status === st) ? "minmax(150px, 1fr)" : "minmax(92px, .42fr)")).join(" ") }}>
+      <div className="board" role="list" style={{ ["--board-cols" as string]: stages.map(() => "minmax(0, 1fr)").join(" ") }}>
         {stages.map((s) => {
           const col = local.filter((c) => c.status === s);
           const sum = col.reduce((n, c) => n + (c.vkPerDay ?? 0) * c.heads, 0);

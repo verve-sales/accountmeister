@@ -17,13 +17,15 @@ const AREA_PREFIX: Record<string, string[]> = {
   Pipeline: ["/bedarfe", "/chancen", "/besetzung"],
   Einsätze: ["/einsaetze", "/assignments", "/auftragseingang"],
   Steuerung: ["/weeklys", "/meine-principals", "/kundenverantwortliche", "/ziele", "/fuehrung", "/team", "/ceo"],
-  Operations: ["/vertragsbuero", "/sales-ops", "/bereinigung", "/moco", "/verwaltung"],
+  Operations: ["/vertragsbuero", "/sales-ops", "/bereinigung", "/moco"],
+  Einrichtung: ["/verwaltung"],
   "Wissen & Werkzeuge": ["/vorgehen", "/artefakte", "/provision", "/hilfe"],
 };
 
 /** e73: Detailseiten markieren den Menüpunkt, unter dem sie fachlich liegen (Seitenleiste und Brotkrume). */
 const ITEM_PREFIX: [string, string][] = [
   ["/bedarfe", "/chancen"],
+  ["/einsaetze", "/assignments"],
   ["/setups", "/kunden"],
   ["/health", "/kunden"],
   ["/quellen", "/kunden"],
@@ -128,7 +130,7 @@ export function AppShell({ sections, brand, topbar, children }: { sections: NavS
           {area && (
             <nav className="crumbs auto-crumbs" aria-label="Pfad">
               <Link href={area.items[0]!.href}>{area.label}</Link>
-              {activeItem && (path === activeItem.href.split(/[?#]/)[0] ? <span>{activeItem.label}</span> : <Link href={activeItem.href}>{activeItem.label}</Link>)}
+              {activeItem && activeItem.label !== area.label && (path === activeItem.href.split(/[?#]/)[0] ? <span>{activeItem.label}</span> : <Link href={activeItem.href}>{activeItem.label}</Link>)}
             </nav>
           )}
           {children}

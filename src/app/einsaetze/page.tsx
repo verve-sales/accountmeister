@@ -1,5 +1,6 @@
 import { titleWithoutPerson } from "@/lib/labels";
 import Link from "next/link";
+import { EinsatzViews } from "@/components/EinsatzViews";
 import { Pills } from "@/components/ViewSwitch";
 import { pl } from "@/lib/labels";
 import { notFound, redirect } from "next/navigation";
@@ -46,18 +47,22 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
   const dups = await findEngagementDuplicates(actor, items);
   const dupIds = new Set(dups.flatMap((g) => [g.keep.id, ...g.drop.map((d) => d.id)]));
   const cleaner = canClean(actor);
+  // e77: betrifft eine Warnung fast alle Zeilen, steht sie einmal über der Tabelle statt orange in jeder Zeile
+  const noContact = items.filter((e) => !e.contacts.renewal).length;
+  const noContactShare = items.length >= 4 ? noContact / items.length : 0;
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">Einsätze</h1>
         <span className="muted text-sm">Wer ist wo bis wann – mit Stimmung aus den Check-ins und Stand der Verlängerung. Stundenzettel bleiben in Moco.</span>
         <span className="flex gap-3 ml-auto text-sm">
-          {asg && <Link href="/assignments">Zeitleiste</Link>}
           {asg && <Link href="/vertragsbuero#erfassen">Von Hand erfassen</Link>}
           <Link href="/auftragseingang" className="btn btn-small">Bestellung hochladen</Link>
         </span>
       </div>
+      <EinsatzViews active="liste" asg={!!asg} />
       <Feedback params={sp} />
+      {noContactShare >= 0.6 && <p className="text-sm muted">Bei {noContact} von {items.length} Einsätzen ist noch kein Ansprechpartner für die Verlängerung hinterlegt – <Link href="/einsaetze?f=ohne_ansprechpartner">nur diese zeigen</Link>.</p>}
       <form method="get" action="/einsaetze" className="flex flex-wrap gap-2 items-center text-sm">
         <input type="hidden" name="f" value={filter} />
         <input name="q" className="input" defaultValue={q} placeholder="Kunde, Person oder Einsatz suchen …" aria-label="Suchen" style={{ width: 360 }} />
@@ -103,8 +108,8 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
                     </td>
                     <td className="text-xs">
                       {e.renewalStatus ? <>{renewalStatusLabel[e.renewalStatus] ?? e.renewalStatus}{e.renewalTo && e.renewalStatus !== "ZU_KLAEREN" ? <> bis {fmtDate(e.renewalTo)}</> : null}</> : <span className="muted">–</span>}
-                      <div>{e.contacts.renewal ? <span title={[e.contacts.renewal.role, e.contacts.renewal.email, e.contacts.renewal.phone].filter(Boolean).join(" · ") || undefined}>{e.contacts.renewal.name}</span> : <span style={{ color: "#b7791f" }}>Ansprechpartner offen</span>}{e.contacts.approach ? <span className="muted"> · spricht an: {approachLabel[e.contacts.approach]}</span> : null}</div>
-                      {renewalOpen && !isReadOnlyFor(actor, e.accountId) && ["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status) && <div><Link href={`/einsaetze/${e.id}#verlaengerung`}>anstoßen</Link></div>}
+                      <div>{e.contacts.renewal ? <span title={[e.contacts.renewal.role, e.contacts.renewal.email, e.contacts.renewal.phone].filter(Boolean).join(" · ") || undefined}>{e.contacts.renewal.name}</span> : <span className={noContactShare >= 0.6 ? "muted" : undefined} style={noContactShare >= 0.6 ? undefined : { color: "#b7791f" }}>Ansprechpartner offen</span>}{e.contacts.approach ? <span className="muted"> · spricht an: {approachLabel[e.contacts.approach]}</span> : null}</div>
+                      {renewalOpen && !isReadOnlyFor(actor, e.accountId) && ["AKTIV", "PAUSIERT", "GEPLANT", "ENDET"].includes(e.status) && <div className="mt-1"><Link href={`/einsaetze/${e.id}#verlaengerung`} className="btn btn-small btn-quiet">Verlängerung anstoßen</Link></div>}
                     </td>
                     <td className="text-xs">{e.careNames.length ? e.careNames.map((n) => n.replace(/ \((Kundenbetreuung|Freelancer-Betreuung)\)$/, "")).join(", ") : <span style={{ color: "#b7791f" }}>offen</span>}</td>
                   </tr>

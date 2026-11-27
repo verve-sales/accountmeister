@@ -251,7 +251,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       {d.view === "SALES_OPS" ? <SalesOpsKpis actor={actor} /> : (
         <KpiRow>
           <KpiTile value={d.accounts.length} label={d.view === "BD" ? "meine Kunden" : "Kunden im Blick"} href="/kunden" />
-          <KpiTile value={Object.values(chanceCounts).reduce((a, b) => a + b, 0)} label="offene Chancen" href="#uebersicht-chancen" />
+          <KpiTile value={Object.entries(chanceCounts).filter(([k]) => !["BEAUFTRAGT", "ZURUECKGESTELLT", "BEENDET"].includes(k)).reduce((a, [, b]) => a + b, 0)} label="offene Chancen" href="#uebersicht-chancen" />
           <KpiTile value={endingSoon} label="Einsätze enden in 8 Wochen" href="/einsaetze?f=enden_8w" tone={endingSoon ? "warn" : null} />
           <KpiTile value={healthGaps.length} label="Kunden mit fehlenden Health-Angaben" href="#uebersicht-health" tone={healthGaps.length ? "warn" : null} />
           <KpiTile value={timelineTasks.filter((t) => t.due && t.due < today).length} label="überfällige Aufgaben" href="#zeitleiste" tone={timelineTasks.some((t) => t.due && t.due < today) ? "danger" : null} />
@@ -434,7 +434,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                   <td className="text-sm" style={{ fontVariantNumeric: "tabular-nums" }}>{fmtDate(r.plannedEnd)} (noch {r.daysToEnd} Tage)</td>
                   <td className="text-sm">
                     {r.escalate && <Status label="Eskalation: ohne Fortschritt" />} {r.decisionStatus ? `${renewalStatusLabel[r.decisionStatus] ?? r.decisionStatus}${r.decisionTo ? ` bis ${fmtDate(r.decisionTo)}` : ""}` : r.runStatus === "LAEUFT" ? `Vorgehen läuft – ${r.currentStep ?? "Schritt offen"}` : r.runStatus === "ABGESCHLOSSEN" ? "Vorgehen abgeschlossen" : "offen"}
-                    {r.engagementId && (!r.decisionStatus || r.decisionStatus === "ZU_KLAEREN") && <> · <Link href={`/einsaetze/${r.engagementId}#verlaengerung`}>anstoßen</Link></>}
+                    {r.engagementId && (!r.decisionStatus || r.decisionStatus === "ZU_KLAEREN") && <> · <Link href={`/einsaetze/${r.engagementId}#verlaengerung`} className="btn btn-small btn-quiet">anstoßen</Link></>}
                   </td>
                 </tr>
               ))}

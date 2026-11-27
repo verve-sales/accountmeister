@@ -1,6 +1,7 @@
 import { titleWithoutPerson } from "@/lib/labels";
 import { Hint } from "@/components/Hint";
 import Link from "next/link";
+import { EinsatzViews } from "@/components/EinsatzViews";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { asgOverview, asgStateLabel, canUseAssignments } from "@/modules/assignments/service";
@@ -26,7 +27,7 @@ export default async function KonditionenPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-4">
-        <h1 className="text-2xl font-semibold">Laufzeiten &amp; Konditionen</h1>
+        <h1 className="text-2xl font-semibold">Einsätze</h1><EinsatzViews active="konditionen" asg />
         <form method="get" className="flex gap-2 items-end ml-auto text-sm">
           <select name="wer" className="select" defaultValue={wer} aria-label="Wer" style={{ width: "9rem" }}><option value="alle">alle</option><option value="freelancer">Freelancer</option><option value="intern">Interne</option></select>
           <input name="q" className="input" defaultValue={sp.q ?? ""} placeholder="Person, Kunde, Bestellnummer …" style={{ width: "16rem" }} />

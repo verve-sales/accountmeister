@@ -61,7 +61,7 @@ export default async function ChancenPage({ searchParams }: { searchParams: Prom
             </tbody>
           </table></div>
         )}
-        <p className="muted text-xs mt-2">{r.mode === "kunden" ? `${r.accounts.length} Kunden` : `${r.chances.length} Chancen${!filtered ? " (offen und in den letzten 60 Tagen beauftragt – wie im Board)" : ""}`} · dieselben Regeln wie die Zählung, nur Kunden, die du sehen darfst.</p>
+        <p className="muted text-xs mt-2">{r.mode === "kunden" ? `${r.accounts.length} Kunden` : (!filtered ? `${r.chances.filter((c) => c.status !== "Konvertiert" && c.status !== "Beauftragt").length} offen · ${r.chances.filter((c) => c.status === "Konvertiert" || c.status === "Beauftragt").length} in den letzten 60 Tagen beauftragt (wie im Board)` : `${r.chances.length} Chancen`)} · dieselben Regeln wie die Zählung, nur Kunden, die du sehen darfst.</p>
       </section>
     </div>
   );

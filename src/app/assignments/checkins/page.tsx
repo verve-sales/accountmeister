@@ -1,3 +1,4 @@
+import { EinsatzViews } from "@/components/EinsatzViews";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -15,7 +16,7 @@ export default async function AsgCheckinsPage({ searchParams }: { searchParams: 
   const groups: [string, typeof rows][] = [["Freelancer und Berater:innen", rows.filter((r) => r.side === "FREELANCER")], ["Kunden (führt der BD – hier zur Übersicht)", rows.filter((r) => r.side !== "FREELANCER")]];
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Check-ins</h1>
+      <div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-semibold">Einsätze</h1><span className="ml-auto"><EinsatzViews active="checkins" asg /></span></div>
       <Feedback params={params} />
       {groups.map(([title, list]) => (
         <section className="card" key={title}>

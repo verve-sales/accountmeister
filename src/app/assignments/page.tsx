@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EinsatzViews } from "@/components/EinsatzViews";
 import { Pills, Segmented } from "@/components/ViewSwitch";
 import { KpiRow, KpiTile } from "@/components/Kpi";
 import { notFound, redirect } from "next/navigation";
@@ -48,7 +49,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
   ];
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Einsätze im Überblick</h1>
+      <div className="flex flex-wrap items-center gap-3"><h1 className="text-2xl font-semibold">Einsätze</h1><span className="ml-auto"><EinsatzViews active="zeitleiste" asg /></span></div>
       <Feedback params={params} />
       {(flDup.length > 0 || engDup.length > 0) && (
         <p className="card text-sm" style={{ borderLeft: `3px solid ${RED}` }}>

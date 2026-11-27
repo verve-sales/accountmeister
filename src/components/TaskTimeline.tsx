@@ -51,7 +51,7 @@ export function TaskTimeline({ tasks, today, title, children }: { tasks: Timelin
       <div className="flex flex-wrap items-baseline gap-3 mb-2">
         <h2 className="font-semibold">{title ?? "Wochenplan"} ({tasks.length})</h2>
         {overdue > 0 && <span className="text-sm" style={{ color: "var(--danger)", fontWeight: 600 }}>{overdue} überfällig</span>}
-        <span className="muted text-xs flex flex-wrap gap-3 ml-auto">{Object.values(KIND).map((k) => <span key={k.label}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: k.color, marginRight: 4 }} />{k.label}</span>)}</span>
+        <span className="muted text-xs flex flex-wrap gap-3 ml-auto" hidden={tasks.length === 0}>{Object.values(KIND).map((k) => <span key={k.label}><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: k.color, marginRight: 4 }} />{k.label}</span>)}</span>
       </div>
       {children}
       {tasks.length === 0 ? <p className="empty">Nichts geplant – neue Aufgaben oben eintragen.</p> : (
