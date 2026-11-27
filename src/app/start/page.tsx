@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Hint } from "@/components/Hint";
 import { KpiRow, KpiTile } from "@/components/Kpi";
 import { pl } from "@/lib/labels";
 import { PendingButton } from "@/components/PendingButton";
@@ -31,7 +32,7 @@ import { ensureInitiativeRemindersSafe } from "@/modules/agenda/service";
 import { listOpenSosForActor } from "@/modules/sos/service";
 import { SosBanner } from "@/components/SosPanel";
 import { ensureOverdueNotificationsSafe, listMyWork } from "@/modules/work/service";
-import { createActionAction, createOpportunityAction, eingangAction } from "../actions";
+import { createActionAction, createOpportunityAction } from "../actions";
 import { TaskTimeline, type TimelineTask } from "@/components/TaskTimeline";
 import { canSeeTeamTimeline, teamTimeline, type TimelineScope } from "@/modules/tasks/timeline";
 import { listMyCheckins } from "@/modules/engagements/care";
@@ -187,32 +188,13 @@ export default async function StartPage({ searchParams }: { searchParams: Search
     </p>
   ) : null;
   const timeline = !readOnly && hasAnyContentRole(actor) && <TaskTimeline tasks={shownTasks} today={today} title={scope === "team" ? (hat === "CEO" ? "Aufgaben im Team" : "Aufgaben an meinen Kunden") : undefined}>{scopeSwitch}{scope === "mine" ? taskEntry : null}</TaskTimeline>;
-  const quickEntry = !readOnly && hasAnyContentRole(actor) && (
-    <section className="card" id="neues">
-      <form action={eingangAction} className="flex flex-wrap gap-2 items-end text-sm">
-        <input type="hidden" name="back" value="/start#vorschlaege" />
-        <div style={{ flex: "1 1 24rem" }}>
-          <label className="label" htmlFor="quickText">Was gibt es Neues? <span className="muted font-normal">Mail, Notiz, Gesprächsergebnis einfügen – die KI erkennt Kunde, Personen, Chancen, Verlängerungen und Aufgaben; du übernimmst je Karte mit einem Klick.</span></label>
-          <textarea id="quickText" name="text" className="textarea" rows={3} required minLength={12} placeholder="z. B. Frau Keller sagt, ab Q1 brauchen sie zwei weitere Tester; Budget kommt aus dem Programm ELBE." />
-        </div>
-        <div>
-          <label className="label" htmlFor="quickSetup">Kunde · Setup</label>
-          <select id="quickSetup" name="setupId" className="select" defaultValue="AUTO">
-            <option value="AUTO">automatisch erkennen (auch neuer Kunde)</option>
-            {quickSetups.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}
-          </select>
-        </div>
-        <PendingButton busy="KI wertet aus …">Einspielen</PendingButton>
-      </form>
-    </section>
-  );
+
   if (!d) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-semibold">Start</h1>
         <Feedback params={params} />
         {actor.roles.has("SALES_OPS") && <SalesOpsKpis actor={actor} />}
-        {quickEntry}
         {timeline}
         {arbeitsliste}
         {actor.roles.has("SALES_OPS") ? (
@@ -239,12 +221,6 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         <GfCustomers o={o} />
         <GfPipeline o={o} />
         <GfTeam o={o} />
-        {quickEntry && (
-          <details className="card">
-            <summary className="font-semibold">Was gibt es Neues? <span className="muted text-sm font-normal">Mail oder Notiz einspielen</span></summary>
-            <div className="mt-2">{quickEntry}</div>
-          </details>
-        )}
       </div>
     );
   }
@@ -284,7 +260,6 @@ export default async function StartPage({ searchParams }: { searchParams: Search
           <KpiTile value={timelineTasks.filter((t) => t.due && t.due < today).length} label="überfällige Aufgaben" href="#zeitleiste" tone={timelineTasks.some((t) => t.due && t.due < today) ? "danger" : null} />
         </KpiRow>
       )}
-      {quickEntry}
       {timeline}
       {readOnly ? (
         <section className="card text-sm">
@@ -403,15 +378,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         <p className="text-sm muted">{work.myTeams.map((t) => <Link key={t.id} href={`/team/${t.id}`} className="mr-3">{work.queue.filter((q) => q.teamId === t.id).length} im Eingang {t.name}</Link>)}</p>
       )}
 
-      <div className="pt-2" id="uebersichten">
-        <div className="flex flex-wrap items-baseline gap-3">
-          <h2 className="font-semibold text-lg">Übersichten</h2>
-          <span className="muted text-sm">zum Aufklappen · als {viewLabel[d.view]}: {d.accounts.length} Kunden</span>
-        </div>
-        {d.available.length > 1 && <p className="muted text-xs mt-1">Den Hut wechselst du oben rechts neben deinem Namen. Er bestimmt Navigation und Übersichten, nicht deine Rechte.</p>}
-      </div>
       {d.empty && <p className="card text-sm">{d.empty}</p>}
-
       {d.accounts.length > 0 && (
         <details className="card" open>
           <summary className="font-semibold" id="uebersicht-chancen">Chancen je Stufe ({Object.values(chanceCounts).reduce((a, b) => a + b, 0)})</summary>
@@ -426,14 +393,23 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             }))}
           />
           <p className="text-sm mt-2 flex flex-wrap gap-x-4 gap-y-1">{[...CHANCE_STEPS, "ZURUECKGESTELLT"].filter((st) => (chanceCounts[st] ?? 0) > 0).map((st) => <Link key={st} href={drillHref({ sicht: d.view, stufe: st })}>{opportunityStatusLabel[st] ?? st}: {chanceCounts[st]}</Link>)}</p>
-          <p className="muted text-xs mt-2">Jede Chance zählt mit ihrem eigenen Stand – ein Kunde mit drei Chancen erscheint dreimal. Sicht: {viewLabel[d.view]} – jede Rolle sieht nur ihren eigenen Zuordnungsbereich.</p>
+          <Hint>Jede Chance zählt mit ihrem eigenen Stand – ein Kunde mit drei Chancen erscheint dreimal. Sicht: {viewLabel[d.view]} – jede Rolle sieht nur ihren eigenen Zuordnungsbereich.</Hint>
         </details>
       )}
+
+      {/* e68: alles Weitere eine Ebene tiefer – Start zeigt Kennzahlen, Zu erledigen, Wochenplan und Pipeline */}
+      <details className="overview-more" id="uebersichten">
+        <summary>
+          <span className="font-semibold">Weitere Übersichten</span>
+          <span className="muted text-sm"> · Health-Check, Verlängerungen, Freelancer-Hebel, Ideen, Performance und mehr · als {viewLabel[d.view]}: {d.accounts.length} Kunden</span>
+        </summary>
+        <div className="space-y-4 mt-3">
+          {d.available.length > 1 && <p className="muted text-xs">Den Hut wechselst du oben rechts neben deinem Namen. Er bestimmt Navigation und Übersichten, nicht deine Rechte.</p>}
 
       {healthGaps.length > 0 && (
         <details className="card" aria-label="Health-Check: fehlende Angaben" id="uebersicht-health">
           <summary className="font-semibold" style={{ color: "var(--warn)" }}>Health-Check: Angaben fehlen bei {pl(healthGaps.length, "Kunde", "Kunden")}</summary>
-          <p className="muted text-xs mb-2">Ohne diese Angaben ist der Health-Check unklar – und Verlängerungen werden nicht rechtzeitig angestoßen.</p>
+          <Hint>Ohne diese Angaben ist der Health-Check unklar – und Verlängerungen werden nicht rechtzeitig angestoßen.</Hint>
           <ul className="space-y-2">
             {healthGaps.slice(0, 3).map((h) => (
               <li key={h.accountId} className="flex flex-wrap items-center gap-3 text-sm">
@@ -467,7 +443,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               ))}
             </tbody>
           </table>
-          <p className="muted text-xs mt-2">Stand aus der Einsatzakte. Eskalation: weniger als 4 Wochen bis zum Ende und noch nichts angestoßen.</p>
+          <Hint>Stand aus der Einsatzakte. Eskalation: weniger als 4 Wochen bis zum Ende und noch nichts angestoßen.</Hint>
         </details>
       )}
 
@@ -488,7 +464,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               </div>
             ))}
           </div>
-          <p className="muted text-xs mt-2">Nur Zählungen aus dokumentierten Chancen und Angeboten der Art „Freelancer-Experte“ – keine Umsatz- oder Wahrscheinlichkeitswerte.</p>
+          <Hint>Nur Zählungen aus dokumentierten Chancen und Angeboten der Art „Freelancer-Experte“ – keine Umsatz- oder Wahrscheinlichkeitswerte.</Hint>
         </details>
       )}
 
@@ -640,7 +616,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             </table>
             </>
           )}
-          <p className="muted text-xs mt-2">Aktivität der letzten 7 Tage, gezählt aus dokumentierten Objekten (Weeklys, Beobachtungen, Aktionen, Vorschläge, Kontakte). Aktivitätskoeffizient: Menge × Anzahl beteiligter Rollen (Principal, BD, Anker) ÷ 3.</p>
+          <Hint>Aktivität der letzten 7 Tage, gezählt aus dokumentierten Objekten (Weeklys, Beobachtungen, Aktionen, Vorschläge, Kontakte). Aktivitätskoeffizient: Menge × Anzahl beteiligter Rollen (Principal, BD, Anker) ÷ 3.</Hint>
         </details>
       )}
 
@@ -659,7 +635,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               ))}
             </ul>
           )}
-          <p className="muted text-xs mt-2">Unentschiedene, von der KI abgeleitete Beobachtungen (Kategorie „Neue Information“) aus Weekly-Notizen und Dokumenten – ein Hinweis, keine Vorhersage; ob daraus eine Chance wird, entscheidest du im Setup.</p>
+          <Hint>Unentschiedene, von der KI abgeleitete Beobachtungen (Kategorie „Neue Information“) aus Weekly-Notizen und Dokumenten – ein Hinweis, keine Vorhersage; ob daraus eine Chance wird, entscheidest du im Setup.</Hint>
         </details>
       )}
 
@@ -700,14 +676,14 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               </tbody>
             </table>
           )}
-          <p className="muted text-xs mt-2">{d.bdPerformance.note} Personenbezogen (nicht rollengebündelt): nur eigene dokumentierte Ereignisse und eigene Chancen (Verantwortlich = ich).</p>
+          <Hint>{d.bdPerformance.note} Personenbezogen (nicht rollengebündelt): nur eigene dokumentierte Ereignisse und eigene Chancen (Verantwortlich = ich).</Hint>
         </details>
       )}
 
       {d.teamActivity.map((t) => (
         <details className="card" key={t.teamId}>
           <summary className="font-semibold">Mein Team: {t.teamName}</summary>
-          <p className="muted text-xs mb-2">Aktivitätsindex der letzten {t.days} Tage je Mitglied – Zählungen dokumentierter Ereignisse (Beobachtungen, Aktionen, Vorschläge, Weeklys, Kontakte, Check-ins). Nur Zahlen, keine Inhalte; die Sichtbarkeit von Kunden und Setups bleibt unverändert.</p>
+          <Hint>Aktivitätsindex der letzten {t.days} Tage je Mitglied – Zählungen dokumentierter Ereignisse (Beobachtungen, Aktionen, Vorschläge, Weeklys, Kontakte, Check-ins). Nur Zahlen, keine Inhalte; die Sichtbarkeit von Kunden und Setups bleibt unverändert.</Hint>
           <table className="list text-sm">
             <thead><tr><th>Mitglied</th><th>Index</th><th>Vorperiode</th><th>Beobachtungen</th><th>Aktionen</th><th>Kontakte</th><th>Check-ins</th><th>Zuletzt aktiv</th></tr></thead>
             <tbody>
@@ -753,7 +729,10 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         </details>
       )}
 
-      <p className="muted text-xs">{d.note}</p>
+        </div>
+      </details>
+
+      <Hint>{d.note}</Hint>
     </div>
   );
 }
@@ -764,8 +743,15 @@ async function SalesOpsKpis({ actor }: { actor: Actor }) {
   if (getConfig().FEATURE_BESETZUNG !== "true" || !canUseSalesOps(actor)) return null;
   const k = (await salesOpsOverview(actor)).kpis;
   const t = (n: number) => (n > 0 ? ("warn" as const) : null);
+  // e68 (E3): Wertblick wie bei der Geschäftsführung – laufender Monatsumsatz und was in 8 Wochen ohne Entscheidung ausläuft
+  const { listEngagements } = await import("@/modules/engagements/service");
+  const { revenueKpis } = await import("@/modules/overview/gf");
+  const running = (await listEngagements(actor, "laufend").catch(() => ({ items: [] as { id: string; daysToEnd: number | null; renewalStatus: string | null }[] }))).items;
+  const rev = await revenueKpis(running.map((e) => e.id), new Set(running.filter((e) => e.daysToEnd !== null && e.daysToEnd <= 56 && !["BESTAETIGT", "ABGELEHNT", "ERLEDIGT"].includes(e.renewalStatus ?? "")).map((e) => e.id)));
+  const eur = (n: number) => `${new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(n)} €`;
   return (
     <KpiRow>
+      {rev.revenueMonth != null && <KpiTile value={eur(rev.revenueMonth)} label={`Umsatz je Monat, laufend${rev.expiringMonth ? ` · ${eur(rev.expiringMonth)} davon ohne Entscheidung` : ""}`} href="/einsaetze?f=enden_8w" />}
       <KpiTile value={k.anzustossen} label="Verlängerung anzustoßen" href="/vertragsbuero#anstossen" tone={t(k.anzustossen)} />
       <KpiTile value={k.ohneAnsprechpartner} label="ohne Verlängerungs-Ansprechpartner" href="/einsaetze?f=ohne_ansprechpartner" tone={t(k.ohneAnsprechpartner)} />
       <KpiTile value={k.unterlagenOffen} label="Unterlagen offen" href="/einsaetze?f=vertrag_offen" tone={t(k.unterlagenOffen)} />

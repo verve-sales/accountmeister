@@ -10,7 +10,7 @@ import { canViewAccount } from "@/modules/identity/authz";
 import { todayIso } from "@/modules/work/calendar";
 import { canonicalMime, extensionOf, extractDocumentText } from "@/modules/documents/extract";
 import { readStoredFile, relativePathFor, storeFile } from "@/modules/documents/storage";
-import { parseDocument, type ParsedDoc } from "./parse";
+import type { ParsedDoc } from "./parse";
 import { openPoints, plan, type CaseFacts, type PlanStep } from "./plan";
 
 /**
@@ -145,6 +145,9 @@ export type Suggestion = {
   sourceId: string | null;
   fileName: string | null;
   extractStatus: string | null;
+  /** wie gelesen wurde: KI (mit Modell) oder Regeln */
+  readMode?: "KI" | "REGELN";
+  readNote?: string;
 };
 
 /** Hochladen: Datei ablegen, vorlesen, Kunde, Person und passenden Vorgang vorschlagen; der Vorgang steht dann „zu bestätigen“. */
@@ -165,19 +168,24 @@ export async function uploadForCase(actor: Actor, file: UploadedFile, opts: { fo
   }
   const up = await storeUpload(actor, file);
   const persons = await knownPersons(actor.workspaceId);
-  const parsed = parseDocument(up.text, up.fileName, [...persons.freelancers.map((f) => f.displayName), ...persons.users.map((u) => u.displayName)]);
-  // Vertragspartner: Kennung, Domäne oder Name im Text (dieselbe Erkennung wie im Eingang)
+  const accountNames = (await db.query.accounts.findMany({ where: and(eq(schema.accounts.workspaceId, actor.workspaceId), inArray(schema.accounts.status, ["ACTIVE", "DORMANT"])), columns: { name: true } })).map((a) => a.name);
+  const { readDocument } = await import("./ai");
+  const read = await readDocument(actor, { text: up.text, fileName: up.fileName, knownPersons: [...persons.freelancers.map((f) => f.displayName), ...persons.users.map((u) => u.displayName)], knownAccounts: accountNames });
+  const parsed = read.parsed;
+  // Vertragspartner: zuerst die Vertragspartei laut Dokument (bekannt → Kunde, unbekannt → als neuer Name vorbelegt);
+  // nur wenn das Dokument keine nennt, die allgemeine Erkennung (Kennung, Domäne, Name) – ohne den genannten Endkunden
   let partnerAccountId: string | null = base?.partnerAccountId ?? null;
   let partnerReason: string | null = base ? "vom Vorgang" : null;
-  // Ein genannter Endkunde ist nie der Vertragspartner: seine Zeile wird vor der Erkennung entfernt
-  const senderAcc = !partnerAccountId && parsed.sender ? await findAccountByName(actor, parsed.sender.value) : null;
-  if (senderAcc) {
-    partnerAccountId = senderAcc.id;
-    partnerReason = `Briefkopf „${parsed.sender!.value}“`;
+  if (!partnerAccountId && parsed.sender) {
+    const senderAcc = await findAccountByName(actor, parsed.sender.value);
+    if (senderAcc) {
+      partnerAccountId = senderAcc.id;
+      partnerReason = `Vertragspartei „${parsed.sender.value}“ im Dokument`;
+    } else partnerReason = `Vertragspartei „${parsed.sender.value}“ ist noch nicht angelegt – wird beim Bestätigen neu angelegt`;
   }
-  if (!partnerAccountId && up.text) {
+  if (!partnerAccountId && !parsed.sender && up.text) {
     const { routeText } = await import("@/modules/eingang/service");
-    const withoutEnd = parsed.endCustomer ? up.text.replace(parsed.endCustomer.value, " ") : up.text;
+    const withoutEnd = parsed.endCustomer ? up.text.split(parsed.endCustomer.value).join(" ") : up.text;
     const r = await routeText(actor, withoutEnd.slice(0, 20000)).catch(() => null);
     if (r?.account) {
       partnerAccountId = r.account.id;
@@ -205,6 +213,8 @@ export async function uploadForCase(actor: Actor, file: UploadedFile, opts: { fo
     sourceId: up.sourceId,
     fileName: up.fileName,
     extractStatus: up.extractStatus,
+    readMode: read.mode,
+    readNote: read.note,
   };
   if (!base && parsed.kind?.value === "BESTELLUNG") {
     const m = await matchOpenCase(actor, { offerNumber: parsed.offerNumber?.value ?? null, brokerRef: parsed.brokerRef?.value ?? null, partnerAccountId, freelancerId: fl?.id ?? null, internalUserId: us?.id ?? null });
@@ -221,8 +231,8 @@ export async function uploadForCase(actor: Actor, file: UploadedFile, opts: { fo
       if (running.length === 1 && !sug.matchCaseId) sug.renewalEngagementId = running[0]!.id;
     }
   }
-  // Vermittler: als solcher geführt, oder das Dokument nennt einen Endkunden bzw. der Briefkopf ist ein unbekannter Absender
-  const channel = partner?.accountKind === "VERMITTLER" || (!base && parsed.endCustomer) ? "VERMITTLER" : base?.channel ?? "DIREKT";
+  // Vermittler: als solcher geführt, laut KI ein Vermittler, oder das Dokument nennt einen Endkunden neben dem Vertragspartner
+  const channel = partner?.accountKind === "VERMITTLER" || parsed.intermediary?.value === true || (!base && parsed.endCustomer && parsed.endCustomer.value !== parsed.sender?.value) ? "VERMITTLER" : base?.channel ?? "DIREKT";
   const c = await insertCase(actor, {
     channel,
     status: "ENTWURF",

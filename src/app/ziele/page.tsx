@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Hint } from "@/components/Hint";
 import { pl } from "@/lib/labels";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -70,7 +71,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
             </table></div>
           </details>
         )}
-        <p className="muted text-xs mt-2">{chancen.note}</p>
+        <Hint>{chancen.note}</Hint>
       </section>
 
       {portfolio && (

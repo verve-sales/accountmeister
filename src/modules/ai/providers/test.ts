@@ -7,7 +7,8 @@ import type { AIProvider, AnalyzeDocumentInput, AssistantInput, BuyingCenterAdvi
 import type { AssistantItem, BuyingCenterProposal, FormSuggestion, IntakeProposal, InterviewNext, StrategyProposal, StructuredItem, StructureNoteOutput } from "../schemas";
 import { ruleBasedStepDrafts, type StepDrafts } from "@/modules/playbooks/drafts";
 import { ruleBasedStaffingAd, ruleBasedStaffingText } from "@/modules/staffing/drafts";
-import type { StaffingAdInput, StaffingTextInput } from "../provider";
+import type { StaffingAdInput, StaffingTextInput, OrderDocumentInput } from "../provider";
+import { parseDocument } from "@/modules/o2o/parse";
 import type { PlaybookStepDraftInput } from "../provider";
 import { ASSISTANT_CARDS_MARKER, decisionRoleValues, interviewTopicValues } from "../schemas";
 
@@ -551,6 +552,34 @@ export class TestProvider implements AIProvider {
 
   async structureStaffingText(input: StaffingTextInput) {
     return ruleBasedStaffingText(input);
+  }
+
+  /** e68: Testanbieter liest mit den Regeln und liefert das KI-Format (Wert + wörtliche Textstelle). */
+  async readOrderDocument(input: OrderDocumentInput) {
+    const p = parseDocument(input.text, input.fileName, { knownPersons: input.knownPersons, ownNames: input.ownCompany });
+    const flat = input.text.replace(/\s+/g, " ");
+    const quote = (ev: string | undefined) => {
+      const e = (ev ?? "").replace(/\s*\((?:Stundensatz × 8|Stunden ÷ 8|bekannt nur als[^)]*)\)$/, "").trim();
+      return flat.includes(e) ? e : e.slice(0, 40);
+    };
+    const f = <T>(x: { value: T; evidence: string } | null) => (x ? { value: x.value, quote: quote(x.evidence) } : null);
+    const rateHourly = p.dailyRate?.evidence.includes("Stundensatz") ?? false;
+    const volHours = p.days?.evidence.includes("Stunden ÷ 8") ?? false;
+    return {
+      kind: f(p.kind),
+      contractPartner: f(p.sender),
+      isIntermediary: p.endCustomer && p.sender && p.endCustomer.value !== p.sender.value ? { value: true, quote: quote(p.endCustomer.evidence) } : null,
+      endCustomer: f(p.endCustomer),
+      orderNumber: f(p.orderNumber),
+      offerNumber: f(p.offerNumber),
+      brokerRef: f(p.brokerRef),
+      start: f(p.start),
+      end: f(p.end),
+      rate: p.dailyRate ? { value: { amount: rateHourly ? p.dailyRate.value / 8 : p.dailyRate.value, unit: rateHourly ? "STUNDE" : "TAG" }, quote: quote(p.dailyRate.evidence) } : null,
+      volume: p.days ? { value: { amount: volHours ? p.days.value * 8 : p.days.value, unit: volHours ? "STUNDEN" : "TAGE" }, quote: quote(p.days.evidence) } : null,
+      person: f(p.person),
+      role: f(p.role),
+    };
   }
 
   async suggestForm(input: FormSuggestInput): Promise<FormSuggestion> {

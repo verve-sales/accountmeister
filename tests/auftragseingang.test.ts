@@ -202,3 +202,88 @@ describe("e67 Auftragseingang: dieselbe Datei", () => {
     await expect(uploadForCase(ops, file("dup.txt", text))).rejects.toBeInstanceOf(ConflictError);
   });
 });
+
+describe("e68 Auftragseingang: Projekteinzelvertrag über Vermittler", () => {
+  const vertrag = (person: string) => `12.10.2026
+Rev. 26/606/0
+60M2099000001X00002-01 Seite 1 von 6
+PROJEKTEINZELVERTRAG
+NR. 60M2099000001
+Zwischen der Vermittla AG (fiktiv)
+Musterallee 1
+68000 Musterstadt
+Deutschland
+– nachfolgend „Vermittla“ genannt –
+und Verve Consulting GmbH
+Kaiserswerther Str. 40
+40477 Düsseldorf
+– nachfolgend „Auftragnehmer" genannt –
+Zu Ziffer 2.1.
+Der Auftrag umfasst vom Auftragnehmer zu erbringende Leistungen im Bereich:
+Berater Projekt Umfeldanalyse
+Die Ausführung des Auftrages beginnt am 01.01.2027 und endet voraussichtlich am 31.03.2027.
+Zu Ziffer 2.2.
+Der Leistungsumfang beträgt für das Projekt maximal 480 Stunden.
+Die Leistungserbringung erfolgt remote (nachfolgend: „Projektort“) für Beispielkonzern AG (fiktiv) (nachfolgend: „Kunde“).
+Zu Ziffer 3.5.
+Für die Durchführung des in Ziffer 2.1. genannten Auftrages setzt der Auftragnehmer ${person}
+ein (nachfolgend: „eingesetzte Person“).
+Zu Ziffer 4.1.
+Der Verrechnungssatz beträgt:
+87,50 EUR pro tatsächlich geleisteter Projektstunde zuzüglich der gesetzlichen Umsatzsteuer.
+Die Forderungen sind 45 Tage netto nach Eingang fällig.
+Bei Vor-Ort-Einsätzen wird eine Reisekosten- und Mehraufwandsentschädigung von 200 EUR netto pro Reisetag gezahlt.
+Unterschrift Zeitstempel David Demo (BD) Geschäftsführer`;
+
+  it("Regeln lesen Vertragspartei, Endkunde, Nummer, Laufzeit, Stundensatz, Umfang und Person – ohne Reisepauschale, Zahlungsziel und Unterzeichner", () => {
+    const p = parseDocument(vertrag("Mia Muster"), "Vermittla_-_Projektvertrag.pdf", { knownPersons: ["David Demo (BD)"], ownNames: ["Verve Consulting", "Verve"] });
+    expect(p.kind?.value).toBe("BESTELLUNG");
+    expect(p.orderNumber?.value).toBe("60M2099000001");
+    expect(p.sender?.value).toBe("Vermittla AG (fiktiv)");
+    expect(p.endCustomer?.value).toBe("Beispielkonzern AG (fiktiv)");
+    expect(p.start?.value).toBe("2027-01-01");
+    expect(p.end?.value).toBe("2027-03-31");
+    expect(p.dailyRate?.value).toBe(700);
+    expect(p.days?.value).toBe(60);
+    expect(p.person?.value).toBe("Mia Muster");
+    expect(p.role?.value).toBe("Berater Projekt Umfeldanalyse");
+  });
+
+  it("Upload: Vermittler wird Vertragspartner (neu), bekannter Endkunde wird erkannt, alle Felder vorbelegt", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const person = `Mia Muster${uniq().replace(/\d/g, "")}`;
+    const c = await uploadForCase(ops, file("Vermittla_-_Projektvertrag.txt", vertrag(person.replace(/[^A-Za-zäöüß ]/g, ""))));
+    expect(c.channel).toBe("VERMITTLER");
+    expect(c.partnerAccountId).toBeNull();
+    expect(c.endCustomerAccountId).toBe(s.accountId);
+    expect(c.orderNumber).toBe("60M2099000001");
+    expect(Number(c.dailyRate)).toBe(700);
+    expect(c.days).toBe(60);
+    expect(c.startDate).toBe("2027-01-01");
+    expect(c.endDate).toBe("2027-03-31");
+    const sug = c.parsed as { parsed: { sender: { value: string } }; partnerReason: string; readMode: string };
+    expect(sug.parsed.sender.value).toBe("Vermittla AG (fiktiv)");
+    expect(sug.partnerReason).toContain("noch nicht angelegt");
+    expect(["KI", "REGELN"]).toContain(sug.readMode);
+  });
+
+  it("KI-Werte zählen nur mit wörtlicher Textstelle; Pauschalen und Zahlungsziele fallen raus", async () => {
+    const { fromAi, merge } = await import("@/modules/o2o/ai");
+    const text = vertrag("Mia Muster");
+    const ai = fromAi(text, {
+      contractPartner: { value: "Vermittla AG (fiktiv)", quote: "Zwischen der Vermittla AG (fiktiv)" },
+      endCustomer: { value: "Erfundene GmbH", quote: "steht so nicht im Dokument" },
+      rate: { value: { amount: 87.5, unit: "STUNDE" }, quote: "87,50 EUR pro tatsächlich geleisteter Projektstunde" },
+      volume: { value: { amount: 9999, unit: "TAGE" }, quote: "45 Tage netto" },
+    });
+    expect(ai.sender?.by).toBe("KI");
+    expect(ai.endCustomer).toBeNull();
+    expect(ai.dailyRate?.value).toBe(700);
+    expect(ai.days).toBeNull();
+    const merged = merge(parseDocument(text, "x.pdf", { ownNames: ["Verve"] }), ai);
+    expect(merged.endCustomer?.value).toBe("Beispielkonzern AG (fiktiv)");
+    expect(merged.endCustomer?.by).toBe("REGEL");
+    expect(merged.days?.value).toBe(60);
+  });
+});

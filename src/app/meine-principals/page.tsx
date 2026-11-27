@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Hint } from "@/components/Hint";
 import { Icon } from "@/components/Icon";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -56,7 +57,7 @@ export default async function MeinePrincipalsPage({ searchParams }: { searchPara
           </table>
         </section>
       )}
-      <p className="muted text-xs">Köpfe: verschiedene Personen mit laufendem Einsatz am Stichtag, summiert über die Kunden des Principals (Ziel = Summe der Kundenziele). Neukunden: erster Einsatz beim Kunden beginnt im Quartal. Verlängerungsquote: im Quartal entschiedene Verlängerungen, bestätigt ÷ (bestätigt + nicht verlängert). Kein Umsatz.</p>
+      <Hint>Köpfe: verschiedene Personen mit laufendem Einsatz am Stichtag, summiert über die Kunden des Principals (Ziel = Summe der Kundenziele). Neukunden: erster Einsatz beim Kunden beginnt im Quartal. Verlängerungsquote: im Quartal entschiedene Verlängerungen, bestätigt ÷ (bestätigt + nicht verlängert). Kein Umsatz.</Hint>
     </div>
   );
 }

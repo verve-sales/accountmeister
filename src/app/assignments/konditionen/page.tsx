@@ -1,4 +1,5 @@
 import { titleWithoutPerson } from "@/lib/labels";
+import { Hint } from "@/components/Hint";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -60,7 +61,7 @@ export default async function KonditionenPage({ searchParams }: { searchParams: 
           </table></div>
         )}
       </section>
-      <p className="muted text-xs">Einkaufssätze und Spanne sehen nur Sales Operations, Backoffice und Geschäftsführung. Geändert wird am Einsatz (Klick auf den Namen).</p>
+      <Hint>Einkaufssätze und Spanne sehen nur Sales Operations, Backoffice und Geschäftsführung. Geändert wird am Einsatz (Klick auf den Namen).</Hint>
     </div>
   );
 }

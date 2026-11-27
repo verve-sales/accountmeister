@@ -224,7 +224,8 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       )}
 
           <KundenAgenda accountId={account.id} initiatives={initiatives} canEdit={mayAgenda && account.status !== "ARCHIVED"} back={back} cards={cardsByIni as Record<string, (typeof schema.suggestions.$inferSelect)[]>} kinds={["PRIORITAET", "HERAUSFORDERUNG"]} defaultKind="PRIORITAET" title="Kundenagenda – Prioritäten und Herausforderungen" intro={<>Was den Kunden treibt, in seinen Worten. Die <Link href={`/kunden/${account.id}?b=strategie`}>Schlüssel-Initiativen</Link> stehen unter Strategie – dort hängen Chancen, Vorgänge und KI-Vorschläge.</>} />
-          {account.status === "DORMANT" && <p className="text-sm" style={{ background: "var(--warn-soft)", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ruht. Mit dem Vorgehen „Altkunden-Reaktivierung“ wird er wieder aktiv angegangen.</p>}
+          {account.status === "DORMANT" && <p className="text-sm" style={{ background: "var(--warn-soft)", border: "1px solid var(--border)", borderRadius: 8, padding: ".5rem .8rem" }}>Dieser Kunde ruht.{getConfig().FEATURE_VORGEHEN === "true" ? " Mit dem Vorgehen „Altkunden-Reaktivierung“ wird er wieder aktiv angegangen." : ""}</p>}
+          {(runs.length > 0 || getConfig().FEATURE_VORGEHEN === "true") && (
           <PlaybookRuns
             startCollapsed
             runs={runs}
@@ -232,6 +233,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             users={activeUsers.map((u) => ({ id: u.id, displayName: u.displayName }))}
             start={mayStartPlaybook && account.status !== "ARCHIVED" ? { playbooks: accountPlaybooks, hidden: { accountId: account.id }, setups: setups.filter((x) => x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })), defaultNewSetupName: `Reaktivierung ${new Date().getFullYear()}`, defaultOwnerId: account.responsibleBdUserId, salesOps, hint: "Muster für eine einzelne Chance (z. B. Ausschreibung) startest du auf der Chance selbst, unter „Vorgehen“." } : null}
           />
+          )}
         </>
       )}
 

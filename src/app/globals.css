@@ -412,3 +412,26 @@ button.tab { background: none; border: 0; border-bottom: 2px solid transparent; 
 .sys-dot[data-tone="bad"] { background: #fdecea; border-color: #f4c2bd; color: var(--danger); }
 .status[data-tone="ok"] { background: #e7f5ec; color: #1f6b3a; }
 .status[data-tone="warn"] { background: #fff4e0; color: #8a5a00; }
+
+/* e68: weitere Übersichten eine Ebene tiefer */
+.overview-more > summary { list-style: none; cursor: pointer; padding: .7rem 1rem; border: 1px dashed var(--border-strong, #c9cfdb); border-radius: 12px; background: var(--surface); }
+.overview-more > summary::-webkit-details-marker { display: none; }
+.overview-more > summary::before { content: "›"; display: inline-block; margin-right: .5rem; transition: transform .15s; color: var(--muted); }
+.overview-more[open] > summary::before { transform: rotate(90deg); }
+.bell-menu { position: relative; }
+.bell-menu > summary { list-style: none; }
+.bell-menu > summary::-webkit-details-marker { display: none; }
+.bell-pop { right: 0; left: auto; width: min(420px, calc(100vw - 2rem)); max-height: 70vh; overflow-y: auto; padding: 0; }
+.bell-head, .bell-foot { display: flex; align-items: center; gap: .5rem; padding: .55rem .75rem; }
+.bell-head { border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.bell-foot { border-top: 1px solid var(--border); }
+.bell-pop .notif-list { margin: 0; }
+.table-filter .table-export { margin-left: auto; }
+.hint { margin-top: .4rem; font-size: .78rem; color: var(--muted); }
+.hint > summary { list-style: none; display: inline-flex; align-items: center; gap: .3rem; cursor: pointer; color: var(--muted); }
+.hint > summary::-webkit-details-marker { display: none; }
+.hint > summary:hover { color: var(--text-2); }
+.hint[open] > summary span { text-decoration: underline; }
+.hint-body { margin-top: .3rem; max-width: 70ch; line-height: 1.45; }
+.ev-by { display: inline-block; font-size: .6rem; font-weight: 700; letter-spacing: .03em; padding: 0 .3rem; margin-right: .3rem; border-radius: 4px; background: var(--accent-soft); color: var(--accent-ink); }
+.field-ev-missing { font-style: italic; opacity: .7; }

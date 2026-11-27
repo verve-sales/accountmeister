@@ -29,7 +29,7 @@ export type GfOverview = {
   windowDays: number;
   /** e65: Köpfe je Woche – 12 Wochen zurück (aus Start/Ende der Einsätze) und 12 Wochen voraus (geplante Enden) */
   headsTrend: { date: string; value: number; future: boolean }[];
-  kpis: { heads: number; persons: number; endingUndecided: number; pipelinePerDay: number; pipelineCount: number; red: number; yellow: number; teamOverdue: number; openSuggestions: number };
+  kpis: { heads: number; persons: number; endingUndecided: number; pipelinePerDay: number; pipelineCount: number; red: number; yellow: number; teamOverdue: number; openSuggestions: number; revenueMonth: number | null; expiringMonth: number | null };
   expiring: GfExpiring[];
   customers: GfCustomer[];
   /** e66: gefährdete Kunden ohne laufenden Einsatz – stehen nicht in der Kundenrunde, sollen aber nicht fehlen */
@@ -195,6 +195,7 @@ export async function buildGfOverview(actor: Actor, today = todayIso()): Promise
       yellow: customers.filter((c) => c.ampel === "GELB").length,
       teamOverdue: team.reduce((s, t) => s + t.overdue, 0),
       openSuggestions,
+      ...(await revenueKpis(engs.items.map((e) => e.id), new Set(expiring.filter((x) => !x.decided).map((x) => x.engagementId)))),
     },
     expiring,
     customers,
@@ -202,4 +203,29 @@ export async function buildGfOverview(actor: Actor, today = todayIso()): Promise
     pipeline,
     team,
   };
+}
+
+/**
+ * e68 (Entscheidung E3): Wertblick für Geschäftsführung und Sales Operations – laufender Monatsumsatz aus dem aktuellen
+ * Verkaufssatz der laufenden Einsätze (Tag bzw. Stunde × 8, × 20 Arbeitstage) und der Teil davon, der in 8 Wochen ohne
+ * Entscheidung ausläuft. Keine Prognose, nur Umrechnung vorhandener Sätze; EK und Spanne bleiben außen vor.
+ */
+export async function revenueKpis(engagementIds: string[], expiringIds: Set<string>): Promise<{ revenueMonth: number | null; expiringMonth: number | null }> {
+  if (!engagementIds.length) return { revenueMonth: null, expiringMonth: null };
+  const today = todayIso();
+  const periods = await db.query.engagementPeriods.findMany({ where: inArray(schema.engagementPeriods.engagementId, engagementIds), columns: { engagementId: true, vk: true, rateUnit: true, validFrom: true, validTo: true, supersededById: true, createdAt: true } });
+  let total = 0;
+  let expiring = 0;
+  let any = false;
+  for (const id of engagementIds) {
+    const ps = periods.filter((p) => p.engagementId === id && !p.supersededById && p.vk != null && p.validFrom <= today && (!p.validTo || p.validTo >= today)).sort((a, b) => b.validFrom.localeCompare(a.validFrom) || b.createdAt.getTime() - a.createdAt.getTime());
+    const p = ps[0] ?? periods.filter((x) => x.engagementId === id && !x.supersededById && x.vk != null).sort((a, b) => b.validFrom.localeCompare(a.validFrom))[0];
+    if (!p) continue;
+    const perDay = Number(p.vk) * (p.rateUnit === "STUNDE" ? 8 : 1);
+    if (!Number.isFinite(perDay)) continue;
+    any = true;
+    total += perDay * DAYS_PER_MONTH;
+    if (expiringIds.has(id)) expiring += perDay * DAYS_PER_MONTH;
+  }
+  return any ? { revenueMonth: Math.round(total), expiringMonth: Math.round(expiring) } : { revenueMonth: null, expiringMonth: null };
 }

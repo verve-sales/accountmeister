@@ -26,6 +26,7 @@ export const AI_TASKS = [
   { key: "PLAYBOOK_STEP", label: "Schritt-Assistent (Vorgehensmuster)", description: "Entwirft für den aktuellen Schritt eines Vorgehens (z. B. Altkunden-Reaktivierung) Mail, Gesprächsleitfaden, Metriken, Fragen oder Pitch-Text – Tatsachen nur aus den Daten, Lücken als Platzhalter; nichts wird versendet." },
   { key: "STAFFING_AD_DRAFT", label: "Ausschreibungsentwurf (Besetzung)", description: "Aus den freigegebenen Bedarfsfeldern einer Position einen kundenfähigen Ausschreibungstext entwerfen (Titel, Aufgaben, Muss/Kann, Rahmen, fehlende Angaben). Ohne EK, interne Notizen oder nicht freigegebene Kundennamen. Entwurf, keine Veröffentlichung." },
   { key: "STAFFING_NOTE_STRUCTURE", label: "Texteingang Besetzung (Bedarf aus E-Mail/Notiz)", description: "Aus eingefügtem Text Positionsvorschläge mit Belegstellen ableiten – zur Prüfung vor der Übernahme." },
+  { key: "ORDER_DOCUMENT", label: "Auftragseingang (Angebot/Bestellung vorlesen)", description: "Aus einem hochgeladenen Angebot, einer Bestellung oder einem Projekteinzelvertrag Dokumentart, Vertragspartner, Endkunde, Nummern, Laufzeit, Satz, Umfang, Person und Rolle lesen – jedes Feld mit wörtlicher Textstelle; die Person bestätigt vor der Anlage. Ein genaues Modell empfohlen." },
   { key: "FORM_SUGGEST", label: "Formularvorschläge (Vorhaben, Setup, Chance, MEDDPICC)", description: "Formularfelder aus dem bekannten Kundenkontext vorbelegen („Vorschlagen lassen“), inklusive der MEDDPICC-Qualifizierungshilfe je Chance. Kleines, schnelles Modell genügt." },
 ] as const;
 

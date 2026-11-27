@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { listVisibleAccounts, getUsersByIds } from "@/modules/accounts/service";
 import { canCreateAccount } from "@/modules/identity/authz";
-import { Feedback, type SearchParams } from "@/components/Feedback";
+import { Feedback } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { createAccountAction, startInterviewAction } from "../actions";
 import { getProviderStatus } from "@/modules/suggestions/service";
@@ -16,8 +16,10 @@ import { fmtDate } from "@/lib/labels";
 import { computeHealthFor } from "@/modules/health/service";
 import { HealthBadge } from "@/components/HealthBadge";
 import { canClean } from "@/modules/cleanup/service";
+import { buildPortfolio, canBrowsePortfolio } from "@/modules/portfolio/service";
+import { agoLabel } from "@/lib/labels";
 
-export default async function KundenPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function KundenPage({ searchParams }: { searchParams: Promise<{ fehler?: string; ok?: string; bd?: string }> }) {
   const params = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
@@ -37,6 +39,11 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
   const nameCount = new Map<string, number>();
   for (const a of active) nameCount.set(normName(a.name), (nameCount.get(normName(a.name)) ?? 0) + 1);
   const mayClean = canClean(actor);
+  // e68: „Meine BDs“ als Filter und Spalten der Kundenliste (Principal, GF, Coach); die Kurzfassung je Kunde bleibt
+  const portfolio = canBrowsePortfolio(actor) ? await buildPortfolio(actor).catch(() => null) : null;
+  const pf = new Map((portfolio?.rows ?? []).map((r) => [r.accountId, r]));
+  const bdChoices = [...new Map(active.filter((a) => a.responsibleBdUserId).map((a) => [a.responsibleBdUserId!, bdNames.get(a.responsibleBdUserId!) ?? "?"])).entries()].sort((x, y) => x[1].localeCompare(y[1], "de"));
+  const shown = params.bd ? active.filter((a) => (params.bd === "offen" ? !a.responsibleBdUserId : a.responsibleBdUserId === params.bd)) : active;
   const healthBy = new Map((await computeHealthFor(active.map((a) => ({ id: a.id, name: a.name })))).map((h) => [h.accountId, h]));
 
   return (
@@ -46,20 +53,41 @@ export default async function KundenPage({ searchParams }: { searchParams: Searc
       <section className="card">
         {active.length === 0 ? (<p className="empty">Keine Kunden in deinem Berechtigungsbereich.</p>
         ) : (
+          <>
+          {bdChoices.length > 1 && (
+            <nav className="flex flex-wrap gap-2 mb-3" aria-label="Nach BD filtern">
+              <Link href="/kunden" className="chip" aria-current={!params.bd ? "page" : undefined}>alle BDs</Link>
+              {bdChoices.map(([id, name]) => <Link key={id} href={`/kunden?bd=${id}`} className="chip" aria-current={params.bd === id ? "page" : undefined}>{name}</Link>)}
+              {active.some((a) => !a.responsibleBdUserId) && <Link href="/kunden?bd=offen" className="chip" aria-current={params.bd === "offen" ? "page" : undefined}>ohne BD</Link>}
+            </nav>
+          )}
+          <div className="table-wrap">
           <table className="list">
-            <thead><tr><th>Kunde</th><th>Typ</th><th>Zuständiger BD</th><th>Status</th><th>Health-Check</th></tr></thead>
+            <thead><tr><th>Kunde</th><th>Zuständiger BD</th><th>Status</th><th>Health-Check</th>{portfolio && <><th style={{ textAlign: "right" }}>Einsätze</th><th>Nächstes Ende</th><th>Chancen</th><th>Letzter Kontakt</th></>}</tr></thead>
             <tbody>
-              {active.map((a) => (
+              {shown.map((a) => (
                 <tr key={a.id}>
-                  <td><Link href={`/kunden/${a.id}`}>{a.name}</Link>{a.isDemo && <span className="muted text-sm"> · Demo</span>}{(nameCount.get(normName(a.name)) ?? 0) > 1 && (mayClean ? <Link href="/bereinigung" className="chip" data-tone="warn" style={{ marginLeft: 6 }} title="Gleichnamiger Kunde vorhanden – in der Bereinigung zusammenführen">möglicherweise doppelt</Link> : <span className="chip" data-tone="warn" style={{ marginLeft: 6 }} title="Gleichnamiger Kunde vorhanden">möglicherweise doppelt</span>)}</td>
-                  <td>{orgTypeLabel[a.orgType] ?? a.orgType}</td>
+                  <td><Link href={`/kunden/${a.id}`}>{a.name}</Link>{a.isDemo && <span className="muted text-sm"> · Demo</span>}{(nameCount.get(normName(a.name)) ?? 0) > 1 && (mayClean ? <Link href="/bereinigung" className="chip" data-tone="warn" style={{ marginLeft: 6 }} title="Gleichnamiger Kunde vorhanden – in der Bereinigung zusammenführen">möglicherweise doppelt</Link> : <span className="chip" data-tone="warn" style={{ marginLeft: 6 }} title="Gleichnamiger Kunde vorhanden">möglicherweise doppelt</span>)}<div className="muted text-xs">{orgTypeLabel[a.orgType] ?? a.orgType}</div></td>
                   <td>{a.responsibleBdUserId ? bdNames.get(a.responsibleBdUserId) : <Status label="offen" />}</td>
                   <td><Status label={accountStatusLabel[a.status] ?? a.status} /></td>
                   <td>{healthBy.get(a.id) ? <Link href={`/kunden/${a.id}/health`}><HealthBadge score={healthBy.get(a.id)!.score} level={healthBy.get(a.id)!.level} coverage={healthBy.get(a.id)!.coverage} /></Link> : null}</td>
+                  {portfolio && (() => {
+                    const r = pf.get(a.id);
+                    return (
+                      <>
+                        <td style={{ textAlign: "right" }}>{r?.runningEngagements ?? "–"}</td>
+                        <td className="text-sm">{r?.nextEnd ? <>{fmtDate(r.nextEnd)}{r.nextEndPerson ? <div className="muted text-xs">{r.nextEndPerson}</div> : null}</> : "–"}</td>
+                        <td className="text-sm">{r ? <>{r.chancesInWork} in Arbeit{r.chancesAnticipated ? <span className="muted"> · {r.chancesAnticipated} antizipiert</span> : null}</> : "–"}</td>
+                        <td className="text-sm">{r ? <Link href={`/meine-bds/${a.id}`} title="Kurzfassung zum Durchgehen">{agoLabel(r.daysSinceActivity)}</Link> : "–"}</td>
+                      </>
+                    );
+                  })()}
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
+          </>
         )}
       </section>
       {dormant.length > 0 && (

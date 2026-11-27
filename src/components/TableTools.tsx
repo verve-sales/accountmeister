@@ -66,9 +66,31 @@ function enhance(table: HTMLTableElement) {
   });
   // e66: Seiten mit eigener Suche (Feld „q“) bekommen kein zweites Filterfeld – ein Filtermuster je Seite
   const ownSearch = !!document.querySelector('main.page form input[name="q"]');
-  if (body.rows.length >= 6 && !table.hasAttribute("data-nofilter") && !ownSearch) {
-    const wrap = document.createElement("div");
-    wrap.className = "table-filter";
+  const wantsFilter = body.rows.length >= 6 && !table.hasAttribute("data-nofilter") && !ownSearch;
+  const wrap = document.createElement("div");
+  wrap.className = "table-filter";
+  // e68 (E6): CSV-Export der sichtbaren Zeilen – Semikolon und BOM, damit Excel (deutsch) die Datei direkt öffnet
+  if (body.rows.length >= 6 && !table.hasAttribute("data-noexport")) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary btn-small table-export";
+    btn.textContent = "CSV";
+    btn.title = "Sichtbare Zeilen als CSV herunterladen";
+    btn.addEventListener("click", () => {
+      const esc = (v: string) => `"${v.replace(/\s+/g, " ").trim().replace(/"/g, '""')}"`;
+      const head = ths.map((th) => esc(th.textContent ?? ""));
+      const lines = Array.from(body.rows).filter((r) => r.style.display !== "none").map((r) => Array.from(r.cells).map((c) => esc(c.innerText || c.textContent || "")).join(";"));
+      const blob = new Blob([`\ufeff${[head.join(";"), ...lines].join("\r\n")}`], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      const title = (document.querySelector("main.page h1")?.textContent ?? "liste").trim().toLowerCase().replace(/[^a-z0-9äöüß]+/g, "-").replace(/^-|-$/g, "");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${title || "liste"}-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    wrap.append(btn);
+  }
+  if (wantsFilter) {
     const input = document.createElement("input");
     input.type = "search";
     input.placeholder = "In dieser Liste filtern …";
@@ -87,7 +109,9 @@ function enhance(table: HTMLTableElement) {
       }
       count.textContent = q ? `${shown} von ${total}` : `${total} Einträge`;
     });
-    wrap.append(input, count);
+    wrap.prepend(input, count);
+  }
+  if (wrap.childElementCount) {
     const anchor = table.closest(".table-wrap") ?? table;
     anchor.parentElement?.insertBefore(wrap, anchor);
   }

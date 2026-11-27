@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Hint } from "@/components/Hint";
 import { pl } from "@/lib/labels";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -61,7 +62,7 @@ export default async function KundenrundePage({ searchParams }: { searchParams: 
           </details>
         )}
       </section>
-      <p className="muted text-xs">In der Runde: Kunden mit laufenden Einsätzen, ohne Nebengeschäft. Rot: Health-Check gefährdet oder Einsatz endet in höchstens 4 Wochen ohne Klärung. Gelb: wackelig, zu wenig Daten, Ende in 8 Wochen offen oder weniger Köpfe als bei der letzten Runde. Alles ist aus dem Tool vorbefüllt – die Verantwortlichen bestätigen je Kunde.</p>
+      <Hint>In der Runde: Kunden mit laufenden Einsätzen, ohne Nebengeschäft. Rot: Health-Check gefährdet oder Einsatz endet in höchstens 4 Wochen ohne Klärung. Gelb: wackelig, zu wenig Daten, Ende in 8 Wochen offen oder weniger Köpfe als bei der letzten Runde. Alles ist aus dem Tool vorbefüllt – die Verantwortlichen bestätigen je Kunde.</Hint>
 
       {r.groups.length === 0 && <p className="card muted text-sm">Keine Bestandskunden in deiner Verantwortung.</p>}
       {r.groups.map((g) => {
@@ -123,7 +124,7 @@ export default async function KundenrundePage({ searchParams }: { searchParams: 
       {r.radar.length > 0 && (
         <section className="card">
           <h2 className="font-semibold text-lg mb-1">Auf dem Radar ({r.radar.length})</h2>
-          <p className="muted text-xs mb-2">Prospects und Ex-Kunden, die ihre Verantwortlichen hierher gesetzt haben – eine Zeile je Kunde.</p>
+          <Hint>Prospects und Ex-Kunden, die ihre Verantwortlichen hierher gesetzt haben – eine Zeile je Kunde.</Hint>
           <ul className="space-y-2">
             {r.radar.map((x) => (
               <li key={x.accountId} id={`k-${x.accountId}`} className="text-sm">

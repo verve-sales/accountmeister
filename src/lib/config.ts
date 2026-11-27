@@ -54,6 +54,10 @@ const envSchema = z.object({
   RENEWAL_AUTOMATION: z.enum(["on", "off"]).default("off"),
   /** Vorlagenkatalog „Artefakte“ in Menü, Setup und Chance zeigen (e44: Standard aus) */
   FEATURE_ARTEFAKTE: z.enum(["true", "false"]).default("false"),
+  /** e68: Weeklys (Termin-Protokolle je Setup) – laut Nutzung abgeschaltet; Daten bleiben gespeichert */
+  FEATURE_WEEKLYS: z.enum(["true", "false"]).default("false"),
+  /** e68: Vorgehensmuster (Playbooks) – laut Nutzung abgeschaltet; laufende Vorgehen bleiben sichtbar */
+  FEATURE_VORGEHEN: z.enum(["true", "false"]).default("false"),
   /**
    * SharePoint-Ablage (e45): off (Standard) | graph (Microsoft Graph mit der App des Accountmeisters, Recht über Sites.Selected)
    * | fixture (im Speicher, nur Entwicklung/Tests). SHAREPOINT_SITE_ID = die Graph-Site-ID „<host>,<guid>,<guid>“.

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Hint } from "@/components/Hint";
 import type { ReactNode } from "react";
 import type { GfOverview } from "@/modules/overview/gf";
 import { DAYS_PER_MONTH } from "@/modules/overview/gf";
@@ -26,10 +27,11 @@ export function GfKpis({ o }: { o: GfOverview }) {
     <section className="kpi-row" aria-label="Kennzahlen">
       <KpiTile value={k.persons} label={<>Köpfe im Einsatz<span className="muted"> · {k.heads} Einsätze</span><Sparkline values={o.headsTrend.map((p) => p.value)} futureFrom={13} /></>} href="#koepfe" />
       <Kpi value={k.endingUndecided} label={`enden in ${EXPIRY_WINDOW_LABEL}, offen`} href="#laeuft-aus" warn={k.endingUndecided > 0} />
-      <Kpi value={k.pipelinePerDay ? eur(k.pipelinePerDay) : "–"} label={`Pipeline VK/Tag · ${k.pipelineCount} Chancen`} href="#pipeline" />
+      {k.revenueMonth != null && <Kpi value={eur(k.revenueMonth)} label={`Umsatz je Monat, laufend${k.expiringMonth ? ` · ${eur(k.expiringMonth)} davon ohne Entscheidung` : ""}`} href="#laeuft-aus" />}
+      <Kpi value={k.pipelinePerDay ? eur(k.pipelinePerDay * 20) : "–"} label={`Pipeline je Monat · ${k.pipelineCount} Chancen`} href="#pipeline" />
       <Kpi value={<>{k.red} <span className="text-base font-medium">dringend</span><span className="muted text-sm font-normal"> · {k.yellow} beobachten</span></>} label="Kunden mit Handlungsbedarf" href="#kunden" warn={k.red > 0} />
       <Kpi value={k.teamOverdue} label="überfällig im Team" href="#team" warn={k.teamOverdue > 0} />
-      <Kpi value={k.openSuggestions} label="offene KI-Vorschläge" href="/benachrichtigungen" />
+      {k.openSuggestions > 0 && <Kpi value={k.openSuggestions} label="offene KI-Vorschläge" href="/start#vorschlaege" />}
     </section>
   );
 }
@@ -163,7 +165,7 @@ export function GfTeam({ o }: { o: GfOverview }) {
           </tbody>
         </table>
       )}
-      <p className="muted text-xs mt-2">Gezählt: angenommene Aufgaben, Arbeitsaufträge und angefragte Übergaben je Person.</p>
+      <Hint>Gezählt: angenommene Aufgaben, Arbeitsaufträge und angefragte Übergaben je Person.</Hint>
     </section>
   );
 }
@@ -185,7 +187,7 @@ export function GfHeadsTrend({ o }: { o: GfOverview }) {
       <div className="mt-2">
         <TrendChart title="Köpfe im Einsatz je Woche" points={t.map((p) => ({ label: dm(p.date), value: p.value, future: p.future }))} min={0} />
       </div>
-      <p className="muted text-xs mt-1">Gestrichelt: Stand nach den heute geplanten Enden – jede bestätigte Verlängerung hebt die Linie.</p>
+      <Hint>Gestrichelt: Stand nach den heute geplanten Enden – jede bestätigte Verlängerung hebt die Linie.</Hint>
     </section>
   );
 }

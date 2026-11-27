@@ -483,7 +483,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         </section>
       )}
 
-      {(setupRuns.length > 0 || d.canEdit || mayReassign) && (
+      {(setupRuns.length > 0 || (getConfig().FEATURE_VORGEHEN === "true" && (d.canEdit || mayReassign))) && (
         <PlaybookRuns
           startCollapsed
           runs={setupRuns}

@@ -17,8 +17,8 @@ import { canBrowsePortfolio } from "@/modules/portfolio/service";
 import { unreadCount } from "@/modules/notifications/service";
 import { CloseMenus } from "@/components/CloseMenus";
 import { AppShell, type NavItem, type NavSection } from "@/components/AppShell";
-import { Icon } from "@/components/Icon";
 import { SearchBox } from "@/components/SearchBox";
+import { NotificationBell } from "@/components/NotificationBell";
 import { canUseAssignments } from "@/modules/assignments/service";
 import type { Actor } from "@/modules/identity/actor";
 
@@ -72,13 +72,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const only = (xs: Array<NavItem | null>) => xs.filter((x): x is NavItem => !!x);
   const sections: NavSection[] = actor
     ? [
-        { label: "Heute", icon: "home", items: only([{ href: "/start", label: "Überblick", icon: "home" }, { href: "/meine-arbeit", label: "Meine Arbeit", icon: "check" }, { href: "/eingang", label: "Eingang", icon: "inbox" }, { href: "/benachrichtigungen", label: "Benachrichtigungen", icon: "bell", badge: unread }]) },
+        { label: "Heute", icon: "home", items: only([{ href: "/start", label: "Überblick", icon: "home" }, { href: "/meine-arbeit", label: "Meine Arbeit", icon: "check" }]) },
         { label: "Kunden", icon: "building", items: only([allowed.has("runde") ? { href: "/kunden", label: "Kundenliste", icon: "building" } : L("kunden", "building"), L("runde", "refresh")]) },
         { label: "Pipeline", icon: "target", items: only([{ href: "/chancen", label: "Chancen", icon: "target" }, L("besetzung", "userplus")]) },
-        { label: "Einsätze", icon: "briefcase", items: only([...(asgAllowed ? [{ href: "/assignments", label: "Übersicht", icon: "layout" }] : []), allowed.has("einsaetze") ? { href: "/einsaetze", label: asgAllowed ? "Einsatzliste" : "Einsätze", icon: "briefcase" } : null, ...(intakeAllowed ? [{ href: "/auftragseingang", label: "Angebot & Bestellung", icon: "file", badge: intake.drafts }] : []), ...(asgAllowed ? [{ href: "/assignments/konditionen", label: "Laufzeiten & Konditionen", icon: "calendar" }, { href: "/assignments/checkins", label: "Check-ins", icon: "heart" }, { href: "/uebergaben", label: "Übergaben", icon: "swap" }] : [])]) },
-        { label: "Steuerung", icon: "chart", items: only([L("ziele", "chart"), L("principals", "users"), L("bds", "user"), { href: "/weeklys", label: "Weeklys", icon: "calendar" }]) },
-        { label: "Operations", icon: "clipboard", items: only([L("salesops", "clipboard"), ...(asgAllowed ? [{ href: "/sales-ops#erfassen", label: "Einsatz erfassen", icon: "plus" }] : []), L("bereinigung", "broom"), ...(mocoLink ? [{ href: "/moco", label: "Moco", icon: "link" }] : []), ...(asgAllowed && (actor.roles.has("CEO") || actor.roles.has("ADMIN")) ? [{ href: "/verwaltung/sharepoint", label: "SharePoint-Ablage", icon: "file" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung", icon: "settings" }] : [])]) },
-        { label: "Wissen & Werkzeuge", icon: "book", items: [{ href: "/vorgehen", label: "Vorgehensmuster", icon: "route" }, ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte", icon: "book" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner", icon: "calculator" }] : []), { href: "/hilfe", label: "Hilfe", icon: "help" }] },
+        { label: "Einsätze", icon: "briefcase", items: only([allowed.has("einsaetze") ? { href: "/einsaetze", label: "Einsatzliste", icon: "briefcase" } : null, ...(intakeAllowed ? [{ href: "/auftragseingang", label: "Angebot & Bestellung", icon: "file", badge: intake.drafts }] : []), ...(asgAllowed ? [{ href: "/assignments/konditionen", label: "Laufzeiten & Konditionen", icon: "calendar" }, { href: "/assignments/checkins", label: "Check-ins", icon: "heart" }, { href: "/uebergaben", label: "Übergaben", icon: "swap" }] : [])]) },
+        { label: "Steuerung", icon: "chart", items: only([L("ziele", "chart"), L("principals", "users"), ...(cfg.FEATURE_WEEKLYS === "true" ? [{ href: "/weeklys", label: "Weeklys", icon: "calendar" }] : [])]) },
+        { label: "Operations", icon: "clipboard", items: only([L("bereinigung", "broom"), ...(mocoLink ? [{ href: "/moco", label: "Moco", icon: "link" }] : []), ...(asgAllowed && (actor.roles.has("CEO") || actor.roles.has("ADMIN")) ? [{ href: "/verwaltung/sharepoint", label: "SharePoint-Ablage", icon: "file" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung", icon: "settings" }] : [])]) },
+        { label: "Wissen & Werkzeuge", icon: "book", items: [...(cfg.FEATURE_VORGEHEN === "true" ? [{ href: "/vorgehen", label: "Vorgehensmuster", icon: "route" }] : []), ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte", icon: "book" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner", icon: "calculator" }] : []), { href: "/hilfe", label: "Hilfe", icon: "help" }] },
       ].filter((s) => s.items.length > 0)
     : [];
   const initials = actor ? actor.displayName.replace(/\(.*?\)/g, "").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase() : "";
@@ -94,10 +94,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <SearchBox />
       <div className="topbar-actions">
         <AssistantButton />
-        <Link href="/benachrichtigungen" className="icon-btn" aria-label={unread ? `Benachrichtigungen: ${unread} ungelesen` : "Benachrichtigungen"} title="Benachrichtigungen">
-          <Icon name="bell" size={19} />
-          {unread > 0 && <span className="icon-badge">{unread > 99 ? "99+" : unread}</span>}
-        </Link>
+        <NotificationBell actor={actor} unread={unread} />
         {/* e62: ein Personenmenü – Name, Rolle bzw. Startseiten-Ansicht, Einstellungen, Abmelden */}
         <details className="nav-more nav-hat" aria-label="Mein Konto">
           <summary title="Mein Konto: Ansicht der Startseite, Einstellungen, Abmelden" className="user-chip">

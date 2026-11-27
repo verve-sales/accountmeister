@@ -452,7 +452,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         </section>
       )}
 
-      {(runs.length > 0 || ((canEdit || mayReassign) && !closed)) && (
+      {(runs.length > 0 || (getConfig().FEATURE_VORGEHEN === "true" && (canEdit || mayReassign) && !closed)) && (
         <PlaybookRuns
           runs={runs}
           back={`/bedarfe/${opp.id}`}

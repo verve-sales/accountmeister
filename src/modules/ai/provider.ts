@@ -118,6 +118,8 @@ export type StaffingAdInput = {
 
 /** Texteingang Besetzung (Etappe 28): E-Mail/Notiz → Positionsvorschläge mit Belegstellen. */
 export type StaffingTextInput = { text: string; opportunityTitle: string; accountName: string };
+/** e68: Angebot, Bestellung oder Projekteinzelvertrag vorlesen (Auftragseingang) */
+export type OrderDocumentInput = { text: string; fileName: string; ownCompany: string[]; knownAccounts: string[]; knownPersons: string[] };
 
 /** Aufgabenbezogene Modellwahl (Verwaltung → KI). Anbieter ohne Modellwahl ignorieren sie. */
 export type TaskOptions = {
@@ -170,6 +172,8 @@ export interface AIProvider {
   draftStaffingAd?(input: StaffingAdInput, opts?: TaskOptions): Promise<unknown>;
   /** Positionsvorschläge aus eingefügtem Text (Etappe 28) – optional. */
   structureStaffingText?(input: StaffingTextInput, opts?: TaskOptions): Promise<unknown>;
+  /** Auftragseingang (e68): Felder eines Angebots bzw. einer Bestellung mit wörtlicher Textstelle – optional. */
+  readOrderDocument?(input: OrderDocumentInput, opts?: TaskOptions): Promise<unknown>;
   /** Verbrauch des letzten Aufrufs (Kostenspur), falls der Anbieter ihn liefert. */
   lastUsage?(): Usage | null;
   /** Verfügbare Modelle im Arbeitsraum des Anbieters (für die Konfigurationsseite). */

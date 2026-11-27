@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Hint } from "@/components/Hint";
 import { TechRef } from "@/components/TechDetails";
 import { Term } from "@/components/Term";
 import { redirect } from "next/navigation";
@@ -27,7 +28,7 @@ import { CheckinRow } from "@/components/Arbeitsliste";
 import { plusDaysIso } from "@/modules/work/calendar";
 import { getConfig } from "@/lib/config";
 import { WorkCreateForm } from "@/components/WorkCreateForm";
-import { changeActionStatusAction, respondHandoverAction, respondSupportRequestAction } from "../actions";
+import { bulkActionStatusAction, changeActionStatusAction, respondHandoverAction, respondSupportRequestAction } from "../actions";
 
 const TABS = [
   { key: "mir", label: "Mir zugewiesen" },
@@ -125,7 +126,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
           <section className="card" id="checkins">
             <details open={soon.length > 0}>
               <summary className="font-semibold">Meine Check-ins ({checkins.length}){soon.length ? ` – ${soon.length} fällig bis ${fmtDate(plusDaysIso(today, 7))}` : " – nichts in den nächsten 7 Tagen"}</summary>
-              <p className="muted text-xs mt-1 mb-2">Ein Klick auf die Stimmung erledigt den Check-in mit heutigem Datum; der nächste wird automatisch in 6 Wochen fällig. Details (Termin, Ergebnis, Sales-Hinweis) über „mehr“.</p>
+              <Hint>Ein Klick auf die Stimmung erledigt den Check-in mit heutigem Datum; der nächste wird automatisch in 6 Wochen fällig. Details (Termin, Ergebnis, Sales-Hinweis) über „mehr“.</Hint>
               <ul className="space-y-2 text-sm">{soon.map((c) => <CheckinRow key={c.id} c={c} back="/meine-arbeit#checkins" />)}</ul>
               {later.length > 0 && (
                 <details className="mt-2">
@@ -207,10 +208,20 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         ) : (
           <>
           {[...agreementCount.entries()].filter(([, n]) => n > 1).map(([text, n]) => (
-            <details key={text} className="callout text-sm mb-3">
-              <summary><strong>{n} Aktionen mit gleichem Hintergrund</strong> <span className="muted">– worum es geht</span></summary>
-              <p className="mt-1">{text}</p>
-            </details>
+            <div key={text} className="callout text-sm mb-3" style={{ flexWrap: "wrap" }}>
+              <details style={{ flex: "1 1 20rem" }}>
+                <summary><strong>{n} Aktionen mit gleichem Hintergrund</strong> <span className="muted">– worum es geht</span></summary>
+                <p className="mt-1">{text}</p>
+              </details>
+              {actions.some((a) => a.agreement === text && a.status === "VORGESCHLAGEN") && (
+                <form action={bulkActionStatusAction} className="flex gap-2 items-center">
+                  <input type="hidden" name="back" value="/meine-arbeit#aktionen" />
+                  {actions.filter((a) => a.agreement === text && a.status === "VORGESCHLAGEN").map((a) => <input key={a.id} type="hidden" name="item" value={`${a.id}:${a.version}`} />)}
+                  <button className="btn btn-small" name="status" value="ANGENOMMEN">Alle {actions.filter((a) => a.agreement === text && a.status === "VORGESCHLAGEN").length} annehmen</button>
+                  <button className="btn btn-secondary btn-small" name="status" value="VERWORFEN">Alle verwerfen</button>
+                </form>
+              )}
+            </div>
           ))}
           <table className="list">
             <thead><tr><th>Aktion</th><th>Setup</th><th>Status</th><th>Fällig</th><th>Nächster Schritt</th></tr></thead>
@@ -257,6 +268,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         </section>
       )}
 
+      {getConfig().FEATURE_WEEKLYS === "true" && (
       <section className="card">
         {nextReviews.length === 0 ? <p className="muted text-sm"><strong className="text-[var(--text)]">Nächste Weeklys:</strong> keine anstehenden. <Link href="/weeklys">Weekly anlegen</Link></p> : (
           <>
@@ -267,6 +279,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
           </>
         )}
       </section>
+      )}
 
       <section className="card">
         <details>

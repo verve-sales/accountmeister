@@ -410,7 +410,11 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
                 )}
               </div>
             )}
-            {messages.length === 0 && view && view.openPoints.length === 0 && view.missing.length === 0 && <p className="muted text-sm">Erzähl mir, was du weißt – ich schlage vor, was daraus angelegt werden kann.</p>}
+            {messages.length === 0 && (
+              <p className="muted text-sm">
+                Erzähl mir, was du weißt, oder füge eine Mail, Notiz oder ein Gesprächsergebnis ein – ich erkenne Kunde, Personen, Chancen, Verlängerungen und Aufgaben und schlage Karten vor, die du mit einem Klick übernimmst. Mails aus dem Postfach: <a href="/eingang">Eingang öffnen</a>.
+              </p>
+            )}
 
             {messages.map((m) => (
               <div key={m.id} className={m.role === "NUTZER" ? "pl-8" : ""}>

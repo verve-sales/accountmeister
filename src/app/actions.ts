@@ -2419,3 +2419,18 @@ export async function cancelOrderCaseAction(fd: FormData) {
     return c.status === "VERWORFEN" ? "/auftragseingang" : `/auftragseingang/${id}`;
   }, "Erledigt.");
 }
+
+/** e68 (E6): Sammelaktion – mehrere gleichartige Aktionen auf einmal annehmen oder verwerfen (je Aktion „id:version“). */
+export async function bulkActionStatusAction(fd: FormData) {
+  const back = String(fd.get("back") ?? "/meine-arbeit#aktionen");
+  const status = String(fd.get("status") ?? "");
+  const items = fd.getAll("item").map(String).filter(Boolean);
+  return run(back, async (actor) => {
+    if (!["ANGENOMMEN", "VERWORFEN"].includes(status)) throw new ValidationError("Unbekannte Sammelaktion.");
+    if (!items.length) throw new ValidationError("Keine Aktionen ausgewählt.");
+    for (const it of items.slice(0, 100)) {
+      const [id, version] = it.split(":");
+      await changeActionStatus(actor, id ?? "", { status, version: version ?? "", result: status === "VERWORFEN" ? "Sammelweise verworfen." : "" });
+    }
+  }, status === "ANGENOMMEN" ? `${items.length} Aktionen angenommen.` : `${items.length} Aktionen verworfen.`);
+}

@@ -12,7 +12,7 @@ import { isoDe } from "@/lib/labels";
 import { cancelOrderCaseAction, confirmOrderCaseAction, setEndCustomerAction, uploadOrderCaseAction } from "../../actions";
 import { systemStates } from "../SystemDots";
 
-const Ev = ({ f }: { f: { evidence: string } | null | undefined }) => (f ? <span className="field-ev" title={f.evidence}>aus dem Dokument: „{f.evidence.length > 90 ? `${f.evidence.slice(0, 90)} …` : f.evidence}“</span> : null);
+const Ev = ({ f }: { f: { evidence: string; by?: string } | null | undefined }) => (f ? <span className="field-ev" title={f.evidence}>{f.by === "KI" ? <span className="ev-by">KI</span> : null}„{f.evidence.length > 90 ? `${f.evidence.slice(0, 90)} …` : f.evidence}“</span> : <span className="field-ev field-ev-missing">nicht im Dokument gefunden</span>);
 
 export default async function CasePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string }> }) {
   const { id } = await params;
@@ -53,7 +53,8 @@ export default async function CasePage({ params, searchParams }: { params: Promi
           <div className="flex flex-wrap gap-3 items-baseline mb-3">
             <h2 className="font-semibold">Gelesen aus {draftFile ? <a href={`/api/dokumente/${draftFile.id}`}>{draftFile.fileName}</a> : sug.manual ? "der Erfassung" : "der Datei"}</h2>
             {sug.extractStatus === "LEER" && <span className="chip" data-tone="warn">Scan ohne Text – Felder bitte von Hand füllen</span>}
-            {sug.partnerReason && <span className="muted text-sm">Vertragspartner erkannt über {sug.partnerReason}</span>}
+            {sug.readNote && <span className="chip" data-tone={sug.readMode === "KI" ? undefined : "warn"} title={sug.readNote}>{sug.readMode === "KI" ? "von der KI gelesen" : "regelbasiert gelesen"}</span>}
+            {sug.partnerReason && <span className="muted text-sm">Vertragspartner: {sug.partnerReason}</span>}
           </div>
           {base && (
             <div className="callout mb-3" role="note">
@@ -93,7 +94,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                 <option value="">– offen –</option>
                 {choices!.accounts.filter((a) => !a.broker).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
-              <input name="endCustomerNewName" className="input mt-1" placeholder="oder neuer Endkunde" aria-label="Neuer Endkunde" />
+              <input name="endCustomerNewName" className="input mt-1" defaultValue={!c.endCustomerAccountId ? p?.endCustomer?.value ?? "" : ""} placeholder="oder neuer Endkunde" aria-label="Neuer Endkunde" />
               <input name="endCustomerHint" className="input mt-1" defaultValue={c.endCustomerHint ?? ""} placeholder="Hinweis, z. B. „Versicherer, Köln“" aria-label="Hinweis zum Endkunden" />
               <Ev f={p?.endCustomer} />
             </div>

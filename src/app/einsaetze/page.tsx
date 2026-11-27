@@ -36,6 +36,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
   if (getConfig().FEATURE_BESETZUNG !== "true") notFound();
   const sp = await searchParams;
   const actor = await getCurrentActor();
+  const asg = actor ? await (await import("@/modules/assignments/service")).canUseAssignments(actor).catch(() => false) : false;
   if (!actor) redirect("/anmelden");
   const filter = (engagementFilterValues as readonly string[]).includes(sp.f ?? "") ? (sp.f as EngagementFilter) : "laufend";
   const q = (sp.q ?? "").trim();
@@ -49,7 +50,11 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">Einsätze</h1>
         <span className="muted text-sm">Wer ist wo bis wann – mit Stimmung aus den Check-ins und Stand der Verlängerung. Stundenzettel bleiben in Moco.</span>
-        <Link href="/besetzung" className="text-sm ml-auto">Besetzung</Link>
+        <span className="flex gap-3 ml-auto text-sm">
+          {asg && <Link href="/assignments">Zeitleiste</Link>}
+          {asg && <Link href="/vertragsbuero#erfassen">Von Hand erfassen</Link>}
+          <Link href="/auftragseingang" className="btn btn-small">Bestellung hochladen</Link>
+        </span>
       </div>
       <Feedback params={sp} />
       <form method="get" action="/einsaetze" className="flex flex-wrap gap-2 items-center text-sm">
