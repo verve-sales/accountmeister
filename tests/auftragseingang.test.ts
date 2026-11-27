@@ -287,3 +287,23 @@ Unterschrift Zeitstempel David Demo (BD) Geschäftsführer`;
     expect(merged.days?.value).toBe(60);
   });
 });
+
+describe("e68 Auftragseingang: Person zuordnen", () => {
+  it("bildet den vollen Namen auf eine nur mit Vornamen geführte Person ab, auch „Nachname, Vorname“; mehrdeutig bleibt offen", async () => {
+    const { matchKnownPerson } = await import("@/modules/o2o/service");
+    const persons = { freelancers: [{ id: "f1", displayName: "Lea Lustig (fiktiv)" }, { id: "f2", displayName: "Tim Tal" }, { id: "f3", displayName: "Tom Tal" }], users: [{ id: "u1", displayName: "Moritz" }, { id: "u2", displayName: "Probe, Paula" }] };
+    expect(matchKnownPerson("Moritz Mustermann", persons)).toEqual({ kind: "INTERN", id: "u1", name: "Moritz" });
+    expect(matchKnownPerson("Paula Probe", persons)?.id).toBe("u2");
+    expect(matchKnownPerson("Lea Lustig", persons)?.id).toBe("f1");
+    expect(matchKnownPerson("T. Tal", persons)).toBeNull();
+    expect(matchKnownPerson("Anna Anders", persons)).toBeNull();
+  });
+  it("Verwaltung kann den Anzeigenamen einer Person ändern; andere nicht", async () => {
+    const s = await ensureSeed();
+    const { renameUser } = await import("@/modules/governance/service");
+    const [u] = await db.insert(schema.users).values({ workspaceId: s.workspaceId, email: `vorname-${uniq()}@verve.example`, displayName: "Moritz" }).returning();
+    await expect(renameUser(await actorFor("david"), u!.id, "Moritz Mustermann")).rejects.toBeInstanceOf(ForbiddenError);
+    const r = await renameUser(await actorFor("admin"), u!.id, "  Moritz   Mustermann ");
+    expect(r.displayName).toBe("Moritz Mustermann");
+  });
+});

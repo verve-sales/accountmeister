@@ -108,6 +108,26 @@ async function storeUpload(actor: Actor, file: UploadedFile) {
   return { sourceId, documentId, text: extract.text, extractStatus: extract.status, fileName: file.name, title };
 }
 
+const personTokens = (n: string) => n.replace(/\(.*?\)/g, " ").replace(/,/g, " ").toLocaleLowerCase("de").split(/\s+/).filter((t) => t.length >= 2);
+
+/**
+ * Gelesenen Namen auf eine bekannte Person abbilden (e68): gleicher Name (auch „Nachname, Vorname“), sonst eindeutig
+ * über den Vornamen, wenn die Person nur so geführt ist, sonst eindeutig über den Nachnamen. Mehrdeutig → keine Zuordnung.
+ */
+export function matchKnownPerson(name: string, persons: { freelancers: { id: string; displayName: string }[]; users: { id: string; displayName: string }[] }): { kind: "FREELANCER" | "INTERN"; id: string; name: string } | null {
+  const want = personTokens(name);
+  if (!want.length) return null;
+  const all = [...persons.freelancers.map((f) => ({ kind: "FREELANCER" as const, id: f.id, name: f.displayName })), ...persons.users.map((u) => ({ kind: "INTERN" as const, id: u.id, name: u.displayName }))];
+  const same = all.filter((p) => { const t = personTokens(p.name); return t.length === want.length && t.every((x) => want.includes(x)); });
+  if (same.length === 1) return same[0]!;
+  if (same.length > 1) return null;
+  const firstOnly = all.filter((p) => { const t = personTokens(p.name); return t.length === 1 && t[0] === want[0]; });
+  if (firstOnly.length === 1 && want.length >= 2) return firstOnly[0]!;
+  const last = want[want.length - 1]!;
+  const byLast = all.filter((p) => { const t = personTokens(p.name); return t.length >= 2 && t.includes(last) && t.some((x) => x[0] === want[0]![0]); });
+  return byLast.length === 1 ? byLast[0]! : null;
+}
+
 /** Namen von Freelancern und internen Personen für die Personenerkennung. */
 async function knownPersons(workspaceId: string) {
   const [fls, users] = await Promise.all([
@@ -198,8 +218,12 @@ export async function uploadForCase(actor: Actor, file: UploadedFile, opts: { fo
     partnerReason = null;
   }
   const partner = partnerAccountId ? await db.query.accounts.findFirst({ where: eq(schema.accounts.id, partnerAccountId) }) : null;
-  const fl = parsed.person ? persons.freelancers.find((f) => f.displayName === parsed.person!.value) : null;
-  const us = parsed.person && !fl ? persons.users.find((u) => u.displayName === parsed.person!.value) : null;
+  // Person: der gelesene Name (KI oder Regel) wird auf bekannte Freelancer bzw. interne Personen abgebildet –
+  // auch wenn sie im Tool nur mit Vornamen oder „Nachname, Vorname“ geführt sind
+  const match = parsed.person ? matchKnownPerson(parsed.person.value, persons) : null;
+  const fl = match?.kind === "FREELANCER" ? persons.freelancers.find((f) => f.id === match.id) ?? null : null;
+  const us = match?.kind === "INTERN" ? persons.users.find((u) => u.id === match.id) ?? null : null;
+  if (parsed.person && match && match.name !== parsed.person.value) parsed.person = { ...parsed.person, value: match.name, evidence: `${parsed.person.evidence} → bekannt als „${match.name}“` };
   const sug: Suggestion = {
     parsed,
     partnerAccountId,

@@ -13,7 +13,7 @@ import { fmtDateTime, roleLabel } from "@/lib/labels";
 import { getConfig } from "@/lib/config";
 import { SESSION_IDLE_SECONDS, SESSION_MAX_AGE_SECONDS } from "@/modules/identity/session";
 import { LIMITS } from "@/lib/ratelimit";
-import { assignRoleAction, createUserAccessAction, revokeRoleAction, setUserStatusAction } from "../actions";
+import { assignRoleAction, createUserAccessAction, renameUserAction, revokeRoleAction, setUserStatusAction } from "../actions";
 import { RoleAssignFields } from "@/components/RoleAssignFields";
 
 export default async function VerwaltungPage({ searchParams }: { searchParams: SearchParams }) {
@@ -75,7 +75,17 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
           <tbody>
             {users.filter((u) => u.status === "ACTIVE").map((u) => (
               <tr key={u.id}>
-                <td>{u.displayName}<div className="muted">{u.email}</div></td>
+                <td>
+                  {u.displayName}<div className="muted">{u.email}</div>
+                  <details className="text-xs mt-1">
+                    <summary className="muted">Name ändern</summary>
+                    <form action={renameUserAction} className="flex gap-1 mt-1">
+                      <input type="hidden" name="userId" value={u.id} />
+                      <input name="displayName" className="input" defaultValue={u.displayName} required minLength={2} aria-label={`Neuer Name für ${u.displayName}`} />
+                      <button className="btn btn-small" type="submit">Speichern</button>
+                    </form>
+                  </details>
+                </td>
                 <td><Status label="Aktiv" /></td>
                 <td>
                   <ul className="space-y-1">

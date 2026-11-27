@@ -339,6 +339,18 @@ export async function createUserAccess(actor: Actor, raw: unknown) {
   return u;
 }
 
+/** e68: Anzeigename einer Person ändern (z. B. „Marvin“ → „Marvin Marquardt“); bleibt auch nach der Anmeldung bestehen. */
+export async function renameUser(actor: Actor, userId: string, displayName: string) {
+  assertAdmin(actor);
+  const name = displayName.trim().replace(/\s+/g, " ");
+  if (name.length < 2 || name.length > 200) throw new ValidationError("Bitte einen Namen mit mindestens 2 Zeichen angeben.");
+  const before = await db.query.users.findFirst({ where: and(eq(schema.users.id, userId), eq(schema.users.workspaceId, actor.workspaceId)) });
+  if (!before) throw new NotFoundError("Person");
+  const [u] = await db.update(schema.users).set({ displayName: name, updatedAt: new Date() }).where(eq(schema.users.id, before.id)).returning();
+  await recordAudit(db, actor, "user.renamed", "USER", userId, { vorher: before.displayName, nachher: name });
+  return u!;
+}
+
 export async function setUserStatus(actor: Actor, userId: string, status: "ACTIVE" | "INACTIVE") {
   assertAdmin(actor);
   if (userId === actor.userId) throw new ValidationError("Der eigene Zugang kann nicht deaktiviert werden.");

@@ -34,7 +34,7 @@ import { connectMailbox, revokeMailbox } from "@/modules/integrations/service";
 import { refreshCompanyResearch } from "@/modules/research/service";
 import { confirmImport, decideMerge, importMailboxItem, importMailboxItemSmart, importProtocol, validateFileName } from "@/modules/imports/service";
 import { eingangFromSource, eingangFromText } from "@/modules/eingang/service";
-import { assignRole, createUserAccess, eraseSourceContent, lockSource, purgeExpiredLogs, pseudonymizePerson, revokeRole, setUserStatus } from "@/modules/governance/service";
+import { assignRole, createUserAccess, eraseSourceContent, lockSource, purgeExpiredLogs, pseudonymizePerson, revokeRole, setUserStatus, renameUser } from "@/modules/governance/service";
 import { addParticipation, addStartRequirement, cancelOrder, changeOfferStatus, changeOpportunityStatus, confirmOpportunity, confirmOrder, createOffer, createOpportunity, createOrder, createProfileReference, markOrderEvidenceIncomplete, markReady, markStarted, presentOffer, reassignOpportunityOwner, removeParticipation, saveMeddpicc, setRequirementStatus, updateOpportunity } from "@/modules/opportunities/service";
 import { uploadDocument } from "@/modules/documents/service";
 import { applyIntake, discardIntake, formToApplyInput, startIntake } from "@/modules/intake/service";
@@ -917,6 +917,13 @@ export async function setUserStatusAction(fd: FormData) {
   return run("/verwaltung", async (actor) => {
     await setUserStatus(actor, data.userId ?? "", data.status === "INACTIVE" ? "INACTIVE" : "ACTIVE");
   }, "Zugangsstatus geändert.");
+}
+
+export async function renameUserAction(fd: FormData) {
+  const data = formToObject(fd);
+  return run("/verwaltung", async (actor) => {
+    await renameUser(actor, data.userId ?? "", data.displayName ?? "");
+  }, "Name geändert.");
 }
 
 export async function createUserAccessAction(fd: FormData) {
