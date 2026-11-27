@@ -550,3 +550,29 @@ describe("e75 Bestellung zum Angebot mit gleicher Bestellnummer am Entwurf", () 
     expect(done.orderNumber).toBe(po);
   });
 });
+
+describe("e76 lange Rollen", () => {
+  it("kürzt den Namen der Moco-Leistung auf 100 Zeichen und die Rolle aus dem Formular auf 80", async () => {
+    const { taskName } = await import("@/modules/o2o/moco");
+    const { shortRole } = await import("@/modules/o2o/template");
+    const long = "Analyse bestehender Integrationsarchitekturen Entwicklung und Wartung von Flows und Services Unterstützung bei Migrationen und Modernisierungsvorhaben";
+    const n = taskName(long, "Dr. Lea Lang (fiktiv)");
+    expect(n.length).toBeLessThanOrEqual(100);
+    expect(n.endsWith(" – Dr. Lea Lang (fiktiv)")).toBe(true);
+    expect(taskName("Testmanager", "Pia Probe")).toBe("Testmanager – Pia Probe");
+    expect(shortRole(long).length).toBeLessThanOrEqual(81);
+    expect(shortRole("Scrum Master\nweitere Zeile")).toBe("Scrum Master");
+  });
+
+  it("Rolle am bestätigten Vorgang lässt sich ändern und zieht Chance und Einsatz mit", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const d = await uploadForCase(ops, file(`r-${uniq()}.txt`, `Bestellung Nr. RL-${uniq()}\nZeitraum: 01.01.2027 bis 30.06.2027\nTagessatz: 1000 €`));
+    const c = await confirmCase(ops, d.id, { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, role: "Sehr lange Rolle mit vielen Worten", personNewName: "Rita Rolle (fiktiv)", startDate: "2027-01-01", endDate: "2027-06-30", dailyRate: "1000", orderNumber: `RL-${uniq()}` });
+    const { renameCaseRole } = await import("@/modules/o2o/service");
+    const r = await renameCaseRole(ops, c.id, "Integrationsberatung");
+    expect(r.role).toBe("Integrationsberatung");
+    expect((await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, c.opportunityId!) }))!.title).toBe("Integrationsberatung");
+    expect((await db.query.engagements.findFirst({ where: eq(schema.engagements.id, c.engagementId!) }))!.title).toContain("Integrationsberatung");
+  });
+});

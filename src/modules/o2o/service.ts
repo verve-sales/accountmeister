@@ -899,6 +899,30 @@ export async function setEndCustomer(actor: Actor, caseId: string, raw: unknown)
   return refreshSystems((await db.query.orderCases.findFirst({ where: eq(schema.orderCases.id, c.id) }))!, sharepoint);
 }
 
+/**
+ * e76: Rolle am bestätigten Vorgang korrigieren (z. B. zu lang aus dem Angebotsformular gelesen). Zieht den Titel der
+ * Chance und des Einsatzes mit, wenn sie die alte Rolle tragen; Moco bleibt unberührt – offene Schritte nutzen die neue Rolle.
+ */
+export async function renameCaseRole(actor: Actor, caseId: string, roleRaw: string): Promise<CaseRow> {
+  await requireIntake(actor);
+  const role = roleRaw.replace(/\s+/g, " ").trim();
+  if (role.length < 2 || role.length > 200) throw new ValidationError("Bitte eine Rolle mit 2 bis 200 Zeichen angeben.");
+  const c = await requireCase(actor, caseId);
+  if (c.status === "ENTWURF") throw new TransitionError("Im Entwurf die Rolle bitte direkt im Formular ändern.");
+  const old = c.role ?? "";
+  if (c.opportunityId && !c.isRenewal) {
+    const o = await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, c.opportunityId), columns: { id: true, title: true } });
+    if (o && (!old || o.title === old)) await db.update(schema.opportunities).set({ title: role, updatedAt: new Date() }).where(eq(schema.opportunities.id, o.id));
+  }
+  if (c.engagementId && !c.isRenewal && old) {
+    const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, c.engagementId), columns: { id: true, title: true } });
+    if (e && e.title.includes(old)) await db.update(schema.engagements).set({ title: e.title.replace(old, role), updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
+  }
+  const [row] = await db.update(schema.orderCases).set({ role, version: c.version + 1, updatedAt: new Date() }).where(eq(schema.orderCases.id, c.id)).returning();
+  await recordAudit(db, actor, "order_case.role_renamed", "ORDER_CASE", c.id, { alt: old.slice(0, 200), neu: role });
+  return refreshSystems(row!);
+}
+
 /** Absage oder Rückzug (A12): Vorgang „abgesagt“ mit Grund, Chance zurückgestellt, Angebot abgelehnt, Datei bleibt. */
 export async function cancelCase(actor: Actor, caseId: string, reason: string): Promise<CaseRow> {
   await requireIntake(actor);

@@ -81,9 +81,17 @@ export async function readOfferTemplate(buf: Buffer): Promise<Partial<ParsedDoc>
       days: f(days && days > 0 && days <= 2000 ? days : null, CELLS.personDays, "PD"),
       start: f(from, CELLS.from, "Service period from"),
       end: f(until && (!from || until >= from) ? until : null, CELLS.until, "Service period until"),
-      role: summary ? f(summary.value.replace(/^verlängerung:\s*/i, "").slice(0, 160), summary.cell, "Brief summary") : null,
+      role: summary ? f(shortRole(summary.value.replace(/^verlängerung:\s*/i, "")), summary.cell, "Brief summary") : null,
     };
   } catch {
     return null;
   }
+}
+
+/** e76: Rolle aus der Kurzbeschreibung – erste Zeile, höchstens 80 Zeichen an einer Wortgrenze (Moco erlaubt 100 je Leistung). */
+export function shortRole(text: string, max = 80): string {
+  const first = text.split(/\r?\n|•|;/)[0]!.replace(/\s+/g, " ").trim();
+  if (first.length <= max) return first;
+  const cut = first.slice(0, max);
+  return (cut.lastIndexOf(" ") > max * 0.6 ? cut.slice(0, cut.lastIndexOf(" ")) : cut).replace(/[\s,.–-]+$/, "") + "…";
 }

@@ -189,7 +189,7 @@ export async function writeOrderToMoco(client: MocoFullClient, input: MocoInput,
       push("task", "Leistung mit Stundensatz", "OFFEN", "Tagessatz fehlt am Vorgang");
       return null;
     }
-    const t = await client.createProjectTask(ids.projectId!, { name: input.personName ? `${input.projectName} – ${input.personName}` : input.projectName, billable: true, hourly_rate: hourly, ...(budgetHours ? { budget: Math.round(budgetHours * hourly) } : {}) });
+    const t = await client.createProjectTask(ids.projectId!, { name: taskName(input.projectName, input.personName), billable: true, hourly_rate: hourly, ...(budgetHours ? { budget: Math.round(budgetHours * hourly) } : {}) });
     ids.taskId = t.id;
     return `${hourly.toFixed(2).replace(".", ",")} €/Std. (Tagessatz ÷ 8)${budgetHours ? `, ${budgetHours} Stunden` : ""}`;
   });
@@ -375,4 +375,12 @@ export async function renameLeadForEndCustomer(caseId: string, endCustomerName: 
   const name = [partner?.name, c.role, c.personName].filter(Boolean).join(" – ") + ` (Endkunde ${endCustomerName})`;
   await (client ?? getMocoClient()).updateDeal(dealId, { name });
   return true;
+}
+
+/** e76: Moco erlaubt für den Namen einer Leistung höchstens 100 Zeichen – die Rolle wird gekürzt, die Person bleibt. */
+export function taskName(projectName: string, personName: string | null | undefined, max = 100): string {
+  const tail = personName ? ` – ${personName}` : "";
+  const room = Math.max(10, max - tail.length);
+  const head = projectName.length <= room ? projectName : projectName.slice(0, room - 1).replace(/\s+\S*$/, "").replace(/[\s,.–-]+$/, "") + "…";
+  return (head + tail).slice(0, max);
 }

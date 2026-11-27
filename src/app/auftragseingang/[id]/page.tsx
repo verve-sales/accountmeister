@@ -9,7 +9,7 @@ import { canUseOrderIntake, caseChoices, caseStatusLabel, channelLabel, deviatio
 import type { PlanStep } from "@/modules/o2o/plan";
 import { NotFoundError } from "@/lib/errors";
 import { isoDe } from "@/lib/labels";
-import { confirmCollectionAction, refileCaseAction, cancelOrderCaseAction, confirmOrderCaseAction, writeCaseToMocoAction, setEndCustomerAction, uploadOrderCaseAction } from "../../actions";
+import { renameCaseRoleAction, confirmCollectionAction, refileCaseAction, cancelOrderCaseAction, confirmOrderCaseAction, writeCaseToMocoAction, setEndCustomerAction, uploadOrderCaseAction } from "../../actions";
 import { systemStates } from "../SystemDots";
 
 const Ev = ({ f }: { f: { evidence: string; by?: string } | null | undefined }) => (f ? <span className="field-ev" title={f.evidence}>{f.by === "KI" ? <span className="ev-by">KI</span> : null}„{f.evidence.length > 90 ? `${f.evidence.slice(0, 90)} …` : f.evidence}“</span> : <span className="field-ev field-ev-missing">nicht im Dokument gefunden</span>);
@@ -58,6 +58,16 @@ export default async function CasePage({ params, searchParams }: { params: Promi
         <span className="muted text-sm">{c.number} · {channelLabel[c.channel]}{c.isRenewal ? " · Verlängerung" : ""} · angelegt von {c.creatorName}</span>
       </div>
       <Feedback params={sp} />
+      {!draft && !["ABGESAGT", "STORNIERT"].includes(c.status) && (
+        <details className="text-sm" open={(c.role ?? "").length > 90}>
+          <summary className="muted">Rolle ändern{(c.role ?? "").length > 90 ? " – der Name ist sehr lang (Moco erlaubt 100 Zeichen je Leistung)" : ""}</summary>
+          <form action={renameCaseRoleAction} className="flex flex-wrap gap-2 items-end mt-2">
+            <input type="hidden" name="caseId" value={c.id} />
+            <div className="grow"><label className="label" htmlFor="case-role">Rolle (wird Name von Chance, Einsatz und Moco-Leistung)</label><input id="case-role" name="role" className="input" required minLength={2} maxLength={200} defaultValue={c.role ?? ""} /></div>
+            <button className="btn btn-secondary" type="submit">Speichern</button>
+          </form>
+        </details>
+      )}
       {syncItems.length > 0 && (
         <div className="callout" data-tone="warn" role="note">
           <div><strong>Nicht synchron:</strong>{syncItems.map((i) => <div key={i.key} className="text-sm">{syncKindLabel[i.kind]}: {i.detail}{i.external && <> · <a href={i.external} target="_blank" rel="noreferrer">öffnen</a></>}</div>)}</div>

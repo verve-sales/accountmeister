@@ -2463,6 +2463,14 @@ export async function setEndCustomerAction(fd: FormData) {
   }, "Endkunde eingetragen – Chance, Einsatz und Unterlagen sind umgezogen.");
 }
 
+export async function renameCaseRoleAction(fd: FormData) {
+  const id = String(fd.get("caseId") ?? "");
+  return run(`/auftragseingang/${id}`, async (actor) => {
+    const { renameCaseRole } = await import("@/modules/o2o/service");
+    await renameCaseRole(actor, id, String(fd.get("role") ?? ""));
+  }, "Rolle geändert. Offene Moco-Schritte verwenden den neuen Namen.");
+}
+
 export async function cancelOrderCaseAction(fd: FormData) {
   const id = String(fd.get("caseId") ?? "");
   return run(`/auftragseingang/${id}`, async (actor) => {
