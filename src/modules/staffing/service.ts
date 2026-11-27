@@ -206,7 +206,7 @@ export async function updatePosition(actor: Actor, positionId: string, raw: unkn
 export function openReadiness(p: PositionRow): string[] {
   const missing: string[] = [];
   if (!p.title || p.title.trim().length < 3) missing.push("Titel/Rolle");
-  if (!p.mustHave || p.mustHave.trim().length < 10) missing.push("Muss-Anforderungen (mindestens ein Satz)");
+  if (!p.mustHave || p.mustHave.trim().length < 10) missing.push(p.mustHave?.trim() ? "Muss-Anforderungen ausführlicher (mindestens ein Satz, 10 Zeichen)" : "Muss-Anforderungen (mindestens ein Satz)");
   if (!p.bdUserId) missing.push("verantwortlicher BD");
   return missing;
 }

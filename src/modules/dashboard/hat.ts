@@ -10,9 +10,9 @@ export const ALL_LINKS: Record<string, NavLink> = {
   einsaetze: { href: "/einsaetze", label: "Einsätze" },
   besetzung: { href: "/besetzung", label: "Besetzung" },
   ziele: { href: "/ziele", label: "Ziele & Portfolio" },
-  principals: { href: "/meine-principals", label: "Kundenverantwortliche" },
+  principals: { href: "/kundenverantwortliche", label: "Kundenverantwortliche" },
   runde: { href: "/kundenrunde", label: "Kundenrunde" },
-  salesops: { href: "/vertragsbuero", label: "Sales-Ops-Sicht" },
+  salesops: { href: "/sales-ops", label: "Sales-Ops-Sicht" },
   bereinigung: { href: "/bereinigung", label: "Bereinigung" },
 };
 

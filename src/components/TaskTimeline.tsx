@@ -84,7 +84,7 @@ function Lane({ p, cols, items, colOf, today }: { p: (typeof PRIO)[number]; cols
           <div key={c.key} style={{ minHeight: 44, padding: 3, borderRadius: 6, border: "1px dashed var(--border)", background: c.current ? "color-mix(in srgb, var(--accent-soft) 45%, transparent)" : undefined, display: "flex", flexDirection: "column", gap: 3 }}>
             {cell.slice(0, 6).map((x) => (
               <Link key={x.key} href={x.href} title={`${KIND[x.kind].label}: ${x.title}${x.context ? ` · ${x.context}` : ""}${x.due ? ` · ${dm(x.due)}` : ""}`} className="no-underline text-xs" style={{ display: "block", padding: "3px 6px", borderRadius: 5, background: "var(--surface)", border: "1px solid var(--border)", borderLeft: `4px solid ${KIND[x.kind].color}`, color: "var(--text)", lineHeight: 1.3 }}>
-                <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{x.title}</span>
+                <span style={{ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", fontWeight: 500 }}>{x.title}</span>
                 <span className="muted" style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: x.due && x.due < today ? "var(--danger)" : undefined }}>{x.due ? dm(x.due) : "–"}{x.context ? ` · ${x.context}` : ""}</span>
               </Link>
             ))}

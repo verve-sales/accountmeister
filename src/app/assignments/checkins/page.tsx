@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { asgCheckins, canUseAssignments } from "@/modules/assignments/service";
 import { checkinAction } from "@/app/actions";
@@ -10,7 +10,7 @@ export default async function AsgCheckinsPage({ searchParams }: { searchParams: 
   const params = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
-  if (!(await canUseAssignments(actor))) redirect("/start");
+  if (!(await canUseAssignments(actor))) notFound();
   const rows = await asgCheckins(actor);
   const groups: [string, typeof rows][] = [["Freelancer und Berater:innen", rows.filter((r) => r.side === "FREELANCER")], ["Kunden (führt der BD – hier zur Übersicht)", rows.filter((r) => r.side !== "FREELANCER")]];
   return (

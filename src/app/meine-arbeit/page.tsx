@@ -70,6 +70,9 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
   const back = "/meine-arbeit";
   const renewalCards = getConfig().FEATURE_BESETZUNG === "true" ? await listRenewalCards(actor).catch(() => []) : [];
 
+  // e65: gleiche Erläuterung bei vielen Standardaufgaben nur einmal aufklappbar statt in jeder Zeile
+  const agreementCount = new Map<string, number>();
+  for (const a of actions) if (a.agreement) agreementCount.set(a.agreement, (agreementCount.get(a.agreement) ?? 0) + 1);
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Meine Arbeit</h1>
@@ -128,10 +131,11 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         );
       })()}
 
-      <section className="card">
-        <h2 className="font-semibold mb-2">Offene Übernahmen an mich ({openIncoming.length})</h2>
-        {openIncoming.length === 0 ? (<p className="empty">Keine offenen Übergaben.</p>
+      <section className="card" id="uebernahmen">
+        {openIncoming.length === 0 ? (<p className="muted text-sm"><strong className="text-[var(--text)]">Offene Übernahmen an mich:</strong> keine.</p>
         ) : (
+          <>
+          <h2 className="font-semibold mb-2">Offene Übernahmen an mich ({openIncoming.length})</h2>
           <ul className="space-y-3">
             {openIncoming.map((h) => (
               <li key={h.id} className="border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
@@ -162,6 +166,7 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
               </li>
             ))}
           </ul>
+          </>
         )}
       </section>
 
@@ -189,36 +194,49 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
         </section>
       )}
 
-      <section className="card">
+      <section className="card" id="aktionen">
         <h2 className="font-semibold mb-2">Meine offenen Aktionen ({actions.length})</h2>
         {actions.length === 0 ? (<p className="empty">Keine offenen Aktionen.</p>
         ) : (
+          <>
+          {[...agreementCount.entries()].filter(([, n]) => n > 1).map(([text, n]) => (
+            <details key={text} className="callout text-sm mb-3">
+              <summary><strong>{n} Aktionen mit gleichem Hintergrund</strong> <span className="muted">– worum es geht</span></summary>
+              <p className="mt-1">{text}</p>
+            </details>
+          ))}
           <table className="list">
             <thead><tr><th>Aktion</th><th>Setup</th><th>Status</th><th>Fällig</th><th>Nächster Schritt</th></tr></thead>
             <tbody>
               {actions.map((a) => (
                 <tr key={a.id}>
-                  <td><div>{a.title}</div>{a.agreement && <div className="muted text-sm">{a.agreement}</div>}</td>
+                  <td><div>{a.title}</div>{a.agreement && agreementCount.get(a.agreement)! === 1 && <div className="muted text-sm">{a.agreement}</div>}</td>
                   <td>{a.setupId ? <Link href={`/setups/${a.setupId}`}>{a.setupName}</Link> : "–"}</td>
                   <td><Status label={actionStatusLabel[a.status] ?? a.status} /></td>
                   <td>{fmtDate(a.dueDate)}</td>
                   <td>
-                    <form action={changeActionStatusAction} className="flex flex-wrap gap-1 items-end">
+                    <form action={changeActionStatusAction} className="row-actions">
                       <input type="hidden" name="actionId" value={a.id} />
                       <input type="hidden" name="version" value={a.version} />
                       <input type="hidden" name="back" value={back} />
-                      <input name="result" className="input" style={{ width: "12rem" }} placeholder="Ergebnis / Blocker" aria-label="Ergebnis oder Blocker" />
-                      {a.status === "VORGESCHLAGEN" && <button className="btn btn-small" name="status" value="ANGENOMMEN">Annehmen</button>}
-                      {(a.status === "ANGENOMMEN" || a.status === "BLOCKIERT") && <button className="btn btn-secondary btn-small" name="status" value="IN_ARBEIT">In Arbeit</button>}
-                      {a.status !== "VORGESCHLAGEN" && <button className="btn btn-small" name="status" value="ERLEDIGT">Erledigt</button>}
-                      {(a.status === "ANGENOMMEN" || a.status === "IN_ARBEIT") && <button className="btn btn-secondary btn-small" name="status" value="BLOCKIERT">Blockiert</button>}
-                      <button className="btn btn-secondary btn-small" name="status" value="VERWORFEN">Verwerfen</button>
+                      {a.status === "VORGESCHLAGEN" ? <button className="btn btn-small" name="status" value="ANGENOMMEN">Annehmen</button> : <button className="btn btn-small" name="status" value="ERLEDIGT">Erledigt</button>}
+                      <details className="row-more">
+                        <summary className="btn btn-secondary btn-small" aria-label="Weitere Aktionen">Mehr</summary>
+                        <div className="row-more-menu">
+                          <input name="result" className="input" placeholder="Ergebnis / Blocker" aria-label="Ergebnis oder Blocker" />
+                          {(a.status === "ANGENOMMEN" || a.status === "BLOCKIERT") && <button className="btn btn-secondary btn-small" name="status" value="IN_ARBEIT">In Arbeit</button>}
+                          {(a.status === "ANGENOMMEN" || a.status === "IN_ARBEIT") && <button className="btn btn-secondary btn-small" name="status" value="BLOCKIERT">Blockiert</button>}
+                          {a.status !== "VORGESCHLAGEN" && <button className="btn btn-secondary btn-small" name="status" value="ERLEDIGT">Erledigt mit Ergebnis</button>}
+                          <button className="btn btn-secondary btn-small" name="status" value="VERWORFEN">Verwerfen</button>
+                        </div>
+                      </details>
                     </form>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </>
         )}
       </section>
 
@@ -233,11 +251,13 @@ export default async function MeineArbeitPage({ searchParams }: { searchParams: 
       )}
 
       <section className="card">
-        <h2 className="font-semibold mb-2">Nächste Weeklys ({nextReviews.length})</h2>
-        {nextReviews.length === 0 ? <p className="empty">Keine anstehenden Weeklys. <Link href="/weeklys">Weekly anlegen</Link>.</p> : (
+        {nextReviews.length === 0 ? <p className="muted text-sm"><strong className="text-[var(--text)]">Nächste Weeklys:</strong> keine anstehenden. <Link href="/weeklys">Weekly anlegen</Link></p> : (
+          <>
+          <h2 className="font-semibold mb-2">Nächste Weeklys ({nextReviews.length})</h2>
           <ul className="text-sm space-y-1">
             {nextReviews.map((r) => <li key={r.id}><Link href={`/weeklys/${r.id}`}>{r.title}</Link> · {fmtDate(r.scheduledFor)} · <Status label={reviewStatusLabel[r.status] ?? r.status} /></li>)}
           </ul>
+          </>
         )}
       </section>
 

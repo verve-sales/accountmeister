@@ -11,7 +11,7 @@ import { buildDashboard, loadHat, viewLabel } from "@/modules/dashboard/service"
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
 import { hasAnyContentRole, hasRole, isCoach, isReadOnlyActor, type Actor } from "@/modules/identity/actor";
 import { buildGfOverview } from "@/modules/overview/gf";
-import { GfCustomers, GfExpiring, GfKpis, GfPipeline, GfTeam } from "@/components/GfStart";
+import { GfCustomers, GfExpiring, GfHeadsTrend, GfKpis, GfPipeline, GfTeam } from "@/components/GfStart";
 import { canEditSetup, loadSetupContext } from "@/modules/identity/authz";
 import { MATURITY, maturityLabel } from "@/modules/strategy/chancen";
 import { CHANCE_STEPS } from "@/lib/chanceStages";
@@ -48,7 +48,7 @@ import { roundTeaser } from "@/modules/rounds/service";
 import { drillHref } from "@/modules/opportunities/drilldown";
 import { TargetProgress } from "@/components/TargetProgress";
 import { eq } from "drizzle-orm";
-import { Aufgaben, Entscheidungen, Vorschlaege } from "@/components/Arbeitsliste";
+import { Vorschlaege } from "@/components/Arbeitsliste";
 import { canUseAssignments } from "@/modules/assignments/service";
 
 const DASHBOARD_VIEW_COOKIE = "am_sicht";
@@ -129,6 +129,13 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       )}
     </div>
   );
+  const plus = (n: number) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+  const timelineTasks: TimelineTask[] = [
+    ...actions.filter((x) => x.status !== "VORGESCHLAGEN").map((x) => ({ key: `a-${x.id}`, kind: "AUFGABE" as const, title: x.title, context: x.setupName, due: x.dueDate, priority: (x.priority as TimelineTask["priority"]) ?? "NORMAL", href: x.setupId ? `/setups/${x.setupId}#aktionen` : "/start#aufgaben" })),
+    ...work.assigned.map((w) => ({ key: `w-${w.id}`, kind: "VORGANG" as const, title: w.title, context: w.accountName ?? "", due: w.dueDate, priority: (w.priority === "HOCH" ? "HOCH" : "NORMAL") as TimelineTask["priority"], href: `/vorgaenge/${w.id}` })),
+    ...checkins.map((c) => ({ key: `c-${c.id}`, kind: "CHECKIN" as const, title: `Check-in ${c.side === "KUNDE" ? "Kunde" : "Freelancer"}: ${c.personName}`, context: c.accountName, due: c.dueDate, priority: "NORMAL" as const, href: `/einsaetze/${c.engagementId}#checkins` })),
+    ...myRenewals.filter((r) => r.mode === "ANSTOSSEN").map((r) => ({ key: `r-${r.decisionId}`, kind: "VERLAENGERUNG" as const, title: `Verlängerung: ${r.person}`, context: r.accountName, due: r.currentEnd ? (plus(56) >= r.currentEnd ? today : new Date(Date.parse(`${r.currentEnd}T00:00:00Z`) - 56 * 86400000).toISOString().slice(0, 10)) : today, priority: (r.daysToEnd !== null && r.daysToEnd <= 28 ? "HOCH" : "NORMAL") as TimelineTask["priority"], href: `/einsaetze/${r.engagementId}#verlaengerung` })),
+  ];
   const arbeitsliste =
     nDecide + nTasks + nSuggest === 0 ? (
       <section className="card text-sm" id="arbeitsliste">
@@ -136,8 +143,19 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       </section>
     ) : (
       <>
-        {nDecide > 0 ? <Entscheidungen renewals={myRenewals} handovers={openIncoming} support={support} review={reviewItems} back={back} /> : null}
-        {nTasks > 0 ? <Aufgaben work={work.assigned} checkins={checkins} actions={actions} renewals={myRenewals} support={support} back={back} today={today} renewalSignalOnly={!asgUser} /> : null}
+        {nDecide + nTasks > 0 ? (
+          <ToDoSummary
+            today={today}
+            counts={[
+              { label: "zu entscheiden", n: renewalCards.filter((c) => c.forMe && c.mode === "ENTSCHEIDEN").length + openIncoming.length + support.filter((x) => x.isAddressee && x.status === "ANGEFRAGT").length + reviewItems.length, href: "/meine-arbeit#entscheidungen" },
+              { label: "Check-ins", n: checkins.length, href: "/meine-arbeit#checkins" },
+              { label: "Aktionen", n: actions.length, href: "/meine-arbeit#aktionen" },
+              { label: "Vorgänge", n: work.assigned.length, href: "/meine-arbeit#vorgaenge" },
+              { label: "Verlängerungen anzustoßen", n: myRenewals.filter((r) => r.mode === "ANSTOSSEN").length, href: "/meine-arbeit#entscheidungen" },
+            ]}
+            next={[...timelineTasks].sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999")).slice(0, 5)}
+          />
+        ) : null}
         {nSuggest > 0 ? <Vorschlaege suggestions={suggestions} hints={hints} userNames={userNames} users={users} back={back} aiEnabled={ai.enabled} status={eingangStatus || null} /> : null}
         {[nDecide ? null : "nichts zu entscheiden", nTasks ? null : "nichts fällig", nSuggest ? null : "keine offenen Vorschläge"].filter(Boolean).length > 0 && (
           <p className="muted text-sm">Außerdem: {[nDecide ? null : "nichts zu entscheiden", nTasks ? null : "nichts fällig", nSuggest ? null : "keine offenen Vorschläge"].filter(Boolean).join(" · ")}.</p>
@@ -146,13 +164,6 @@ export default async function StartPage({ searchParams }: { searchParams: Search
     );
   const readOnly = isReadOnlyActor(actor);
   // e50: Zeitleiste der eigenen Aufgaben (Wunsch der BDs) – ganz oben bei der Erfassung
-  const plus = (n: number) => new Date(Date.parse(`${today}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
-  const timelineTasks: TimelineTask[] = [
-    ...actions.filter((x) => x.status !== "VORGESCHLAGEN").map((x) => ({ key: `a-${x.id}`, kind: "AUFGABE" as const, title: x.title, context: x.setupName, due: x.dueDate, priority: (x.priority as TimelineTask["priority"]) ?? "NORMAL", href: x.setupId ? `/setups/${x.setupId}#aktionen` : "/start#aufgaben" })),
-    ...work.assigned.map((w) => ({ key: `w-${w.id}`, kind: "VORGANG" as const, title: w.title, context: w.accountName ?? "", due: w.dueDate, priority: (w.priority === "HOCH" ? "HOCH" : "NORMAL") as TimelineTask["priority"], href: `/vorgaenge/${w.id}` })),
-    ...checkins.map((c) => ({ key: `c-${c.id}`, kind: "CHECKIN" as const, title: `Check-in ${c.side === "KUNDE" ? "Kunde" : "Freelancer"}: ${c.personName}`, context: c.accountName, due: c.dueDate, priority: "NORMAL" as const, href: `/einsaetze/${c.engagementId}#checkins` })),
-    ...myRenewals.filter((r) => r.mode === "ANSTOSSEN").map((r) => ({ key: `r-${r.decisionId}`, kind: "VERLAENGERUNG" as const, title: `Verlängerung: ${r.person}`, context: r.accountName, due: r.currentEnd ? (plus(56) >= r.currentEnd ? today : new Date(Date.parse(`${r.currentEnd}T00:00:00Z`) - 56 * 86400000).toISOString().slice(0, 10)) : today, priority: (r.daysToEnd !== null && r.daysToEnd <= 28 ? "HOCH" : "NORMAL") as TimelineTask["priority"], href: `/einsaetze/${r.engagementId}#verlaengerung` })),
-  ];
   const taskEntry = !readOnly && quickSetups.length > 0 && (
     <form action={createActionAction} className="flex flex-wrap gap-2 items-end text-sm mb-3">
       <input type="hidden" name="back" value="/start#zeitleiste" />
@@ -222,6 +233,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
         <GfKpis o={o} />
         {timeline}
         {arbeitsliste}
+        <GfHeadsTrend o={o} />
         <GfExpiring o={o} />
         <GfCustomers o={o} />
         <GfPipeline o={o} />
@@ -774,6 +786,33 @@ function SalesOpsStart({ actor }: { actor: Actor }) {
         <Link href="/besetzung" className="btn btn-secondary btn-small">Besetzung</Link>
         <Link href="/meine-arbeit" className="btn btn-secondary btn-small">Meine Arbeit</Link>
       </div>
+    </section>
+  );
+}
+
+/** e65: Start zeigt die Lage – was ansteht, mit Zählern und den nächsten fünf Punkten; abgearbeitet wird in „Meine Arbeit“. */
+function ToDoSummary({ counts, next, today }: { counts: { label: string; n: number; href: string }[]; next: TimelineTask[]; today: string }) {
+  const total = counts.reduce((s, c) => s + c.n, 0);
+  return (
+    <section className="card" id="arbeitsliste">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h2 className="font-semibold">Zu erledigen ({total})</h2>
+        <Link href="/meine-arbeit" className="btn btn-small ml-auto">In Meine Arbeit abarbeiten</Link>
+      </div>
+      <div className="flex flex-wrap gap-2 mt-2">
+        {counts.filter((c) => c.n > 0).map((c) => <Link key={c.label} href={c.href} className="chip"><strong>{c.n}</strong> {c.label}</Link>)}
+      </div>
+      {next.length > 0 && (
+        <ul className="todo-next">
+          {next.map((t) => (
+            <li key={t.key}>
+              <Link href={t.href}>{t.title}</Link>
+              <span className="muted text-xs">{t.context}</span>
+              <span className={`text-xs todo-due${t.due && t.due < today ? " tone-danger" : ""}`}>{t.due ? (t.due < today ? `überfällig seit ${fmtDate(t.due)}` : `fällig ${fmtDate(t.due)}`) : "ohne Termin"}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

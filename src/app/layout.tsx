@@ -18,6 +18,7 @@ import { unreadCount } from "@/modules/notifications/service";
 import { CloseMenus } from "@/components/CloseMenus";
 import { AppShell, type NavItem, type NavSection } from "@/components/AppShell";
 import { Icon } from "@/components/Icon";
+import { SearchBox } from "@/components/SearchBox";
 import { canUseAssignments } from "@/modules/assignments/service";
 import type { Actor } from "@/modules/identity/actor";
 
@@ -69,7 +70,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         { label: "Kunden & Pipeline", items: [L("kunden", "building"), L("runde", "refresh"), { href: "/chancen", label: "Chancen", icon: "target" }, L("besetzung", "userplus")].filter((x): x is NavItem => !!x) },
         { label: "Einsätze", items: [...(asgAllowed ? [{ href: "/assignments", label: "Übersicht", icon: "layout" }] : []), L("einsaetze", "briefcase"), ...(asgAllowed ? [{ href: "/assignments/konditionen", label: "Laufzeiten & Konditionen", icon: "calendar" }, { href: "/assignments/checkins", label: "Check-ins", icon: "heart" }, { href: "/uebergaben", label: "Übergaben", icon: "swap" }] : [])].filter((x): x is NavItem => !!x) },
         { label: "Steuerung", items: [L("ziele", "chart"), L("principals", "users"), L("bds", "user"), { href: "/weeklys", label: "Weeklys", icon: "calendar" }].filter((x): x is NavItem => !!x) },
-        { label: "Operations", items: [L("salesops", "clipboard"), ...(asgAllowed ? [{ href: "/vertragsbuero#erfassen", label: "Assignment erfassen", icon: "plus" }] : []), L("bereinigung", "broom"), ...(mocoLink ? [{ href: "/moco", label: "Moco", icon: "link" }] : []), ...(asgAllowed && (actor.roles.has("CEO") || actor.roles.has("ADMIN")) ? [{ href: "/verwaltung/sharepoint", label: "SharePoint-Ablage", icon: "file" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung", icon: "settings" }] : [])].filter((x): x is NavItem => !!x) },
+        { label: "Operations", items: [L("salesops", "clipboard"), ...(asgAllowed ? [{ href: "/sales-ops#erfassen", label: "Einsatz erfassen", icon: "plus" }] : []), L("bereinigung", "broom"), ...(mocoLink ? [{ href: "/moco", label: "Moco", icon: "link" }] : []), ...(asgAllowed && (actor.roles.has("CEO") || actor.roles.has("ADMIN")) ? [{ href: "/verwaltung/sharepoint", label: "SharePoint-Ablage", icon: "file" }] : []), ...(actor.roles.has("ADMIN") ? [{ href: "/verwaltung", label: "Verwaltung", icon: "settings" }] : [])].filter((x): x is NavItem => !!x) },
         { label: "Wissen und Werkzeuge", items: [{ href: "/vorgehen", label: "Vorgehensmuster", icon: "route" }, ...(cfg.FEATURE_ARTEFAKTE === "true" ? [{ href: "/artefakte", label: "Artefakte", icon: "book" }] : []), ...(provisionAccess(actor).allowed ? [{ href: "/provision", label: "Provisionsrechner", icon: "calculator" }] : []), { href: "/hilfe", label: "Hilfe", icon: "help" }] },
       ].filter((s) => s.items.length > 0)
     : [];
@@ -83,10 +84,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   );
   const topbar = actor ? (
     <>
-      <form method="get" action="/suche" role="search" className="topbar-search">
-        <Icon name="search" size={16} />
-        <input name="q" placeholder="Suchen: Kunde, Person, Einsatz …" aria-label="Suchen" />
-      </form>
+      <SearchBox />
       <div className="topbar-actions">
         <AssistantButton />
         <Link href="/benachrichtigungen" className="icon-btn" aria-label={unread ? `Benachrichtigungen: ${unread} ungelesen` : "Benachrichtigungen"} title="Benachrichtigungen">

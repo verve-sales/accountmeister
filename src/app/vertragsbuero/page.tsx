@@ -41,7 +41,7 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
         <h1 className="text-2xl font-semibold">Sales-Ops-Sicht</h1>
         <span className="muted text-sm">Verlängerungen anstoßen, Ansprechpartner und Unterlagen pflegen, neue Assignments erfassen.</span>
         {canManageSharePoint(actor) && <Link href="/verwaltung/sharepoint" className="text-sm ml-auto">SharePoint-Ablage</Link>}
-        <a href="#erfassen" className={`btn btn-small${canManageSharePoint(actor) ? "" : " ml-auto"}`}>Neues Assignment erfassen</a>
+        <a href="#erfassen" className={`btn btn-small${canManageSharePoint(actor) ? "" : " ml-auto"}`}>Neuen Einsatz erfassen</a>
       </div>
       <Feedback params={sp} />
 
@@ -105,7 +105,7 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
       </section>
 
       <section className="card space-y-3" id="erfassen">
-        <h2 className="font-semibold">Neues Assignment erfassen</h2>
+        <h2 className="font-semibold">Neuen Einsatz erfassen</h2>
         <p className="muted text-sm">Legt Chance (beauftragt), Auftrag/Bestellung und Einsatzakte in einem Schritt an. Danach öffnet sich der Einsatz, um Vertrag oder Bestellung hochzuladen. Kommerzielle Entscheidungen bleiben beim BD.</p>
         <form method="get" action="/vertragsbuero#erfassen" className="flex flex-wrap gap-2 items-end text-sm">
           <label className="space-y-1"><span className="block muted text-xs">1. Kunde › Setup</span>

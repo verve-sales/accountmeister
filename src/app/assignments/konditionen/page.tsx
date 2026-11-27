@@ -1,6 +1,6 @@
 import { titleWithoutPerson } from "@/lib/labels";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { asgOverview, asgStateLabel, canUseAssignments } from "@/modules/assignments/service";
 import { ASG_COLOR } from "@/components/AsgTimeline";
@@ -13,7 +13,7 @@ export default async function KonditionenPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
-  if (!(await canUseAssignments(actor))) redirect("/start");
+  if (!(await canUseAssignments(actor))) notFound();
   const o = await asgOverview(actor);
   const q = (sp.q ?? "").trim().toLowerCase();
   const wer = sp.wer === "freelancer" || sp.wer === "intern" ? sp.wer : "alle";

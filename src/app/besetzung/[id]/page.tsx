@@ -70,10 +70,10 @@ export default async function PositionPage({ params, searchParams }: { params: P
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-sm">
-          <Link href="/besetzung">Besetzung</Link> · <Link href={`/bedarfe/${p.opportunityId}#besetzung`}>{v.accountName} · {v.opportunityTitle}</Link>
-          {p.copiedFromId && <> · <Link href={`/besetzung/${p.copiedFromId}`}>Kopie</Link></>}
-        </p>
+        <nav className="crumbs" aria-label="Pfad">
+          <Link href="/besetzung">Besetzung</Link><Link href={`/bedarfe/${p.opportunityId}#besetzung`}>{v.accountName} · {v.opportunityTitle}</Link>
+          {p.copiedFromId && <Link href={`/besetzung/${p.copiedFromId}`}>Kopie von</Link>}
+        </nav>
         <h1 className="text-2xl font-semibold mt-1">{filledName ? <>{filledName} <span className="muted font-normal">als</span> {p.title}</> : <>{p.title} <span className="muted font-normal">· noch offen</span></>} <span className="muted font-normal text-base">bei {v.accountName}</span></h1>
         <div className="flex flex-wrap gap-2 items-baseline mt-1">
           <span className="status">{positionStatusLabel[p.status] ?? p.status}</span>
@@ -175,6 +175,7 @@ export default async function PositionPage({ params, searchParams }: { params: P
             <form action={changePositionStatusAction}>
               <input type="hidden" name="positionId" value={p.id} /><input type="hidden" name="version" value={p.version} /><input type="hidden" name="back" value={back} /><input type="hidden" name="status" value="OFFEN" />
               <button className="btn btn-small" type="submit" disabled={d.readiness.length > 0} title={d.readiness.length ? `Fehlt: ${d.readiness.join(", ")}` : undefined}>Auf „offen“ setzen</button>
+              {d.readiness.length > 0 && <span className="muted text-xs" style={{ marginLeft: ".5rem" }}>Noch nötig: {d.readiness.join(", ")} – unter „Bearbeiten“ ergänzen.</span>}
             </form>
           )}
           {p.status === "PAUSIERT" && (

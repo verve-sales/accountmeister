@@ -7,6 +7,7 @@ import { fmtDate, opportunityStatusLabel } from "@/lib/labels";
 import { EXPIRY_WINDOW_LABEL } from "@/lib/window";
 import { KpiTile } from "@/components/Kpi";
 import { BarChart, CHART_COLORS } from "@/components/charts/BarChart";
+import { Sparkline, TrendChart } from "@/components/charts/TrendChart";
 import { CHANCE_STEPS } from "@/lib/chanceStages";
 
 const AMPEL: Record<string, string> = { ROT: "var(--danger)", GELB: "#b7791f", GRUEN: "#2f7d32" };
@@ -22,7 +23,7 @@ export function GfKpis({ o }: { o: GfOverview }) {
   const k = o.kpis;
   return (
     <section className="kpi-row" aria-label="Kennzahlen">
-      <Kpi value={k.heads} label="Köpfe im Einsatz" href="/einsaetze" />
+      <KpiTile value={k.persons} label={<>Köpfe im Einsatz<span className="muted"> · {k.heads} Einsätze</span><Sparkline values={o.headsTrend.map((p) => p.value)} futureFrom={13} /></>} href="#koepfe" />
       <Kpi value={k.endingUndecided} label={`enden in ${EXPIRY_WINDOW_LABEL}, offen`} href="#laeuft-aus" warn={k.endingUndecided > 0} />
       <Kpi value={k.pipelinePerDay ? eur(k.pipelinePerDay) : "–"} label={`Pipeline VK/Tag · ${k.pipelineCount} Chancen`} href="#pipeline" />
       <Kpi value={<>{k.red} <span className="text-base font-medium">rot</span><span className="muted text-base font-normal"> · {k.yellow} gelb</span></>} label="Kunden mit Handlungsbedarf" href="#kunden" warn={k.red > 0} />
@@ -154,6 +155,28 @@ export function GfTeam({ o }: { o: GfOverview }) {
         </table>
       )}
       <p className="muted text-xs mt-2">Gezählt: angenommene Aufgaben, Arbeitsaufträge und angefragte Übergaben je Person.</p>
+    </section>
+  );
+}
+
+/** e65: Köpfe im Einsatz – 12 Wochen Verlauf und 12 Wochen Ausblick (aus den geplanten Enden): zeigt die „Klippe“. */
+export function GfHeadsTrend({ o }: { o: GfOverview }) {
+  const t = o.headsTrend;
+  const now = t[12]?.value ?? 0;
+  const in12 = t.at(-1)?.value ?? 0;
+  const ago12 = t[0]?.value ?? 0;
+  const dm = (iso: string) => `${Number(iso.slice(8, 10))}.${Number(iso.slice(5, 7))}.`;
+  return (
+    <section className="card" id="koepfe">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h2 className="font-semibold">Köpfe im Einsatz – Verlauf und Ausblick</h2>
+        <span className="muted text-sm">vor 12 Wochen {ago12} · heute {now} · in 12 Wochen {in12} ohne Verlängerung{in12 < now ? <span style={{ color: "var(--danger)" }}> ({in12 - now})</span> : null}</span>
+        <Link href="/einsaetze?f=enden_8w" className="text-sm ml-auto">auslaufende Einsätze</Link>
+      </div>
+      <div className="mt-2">
+        <TrendChart title="Köpfe im Einsatz je Woche" points={t.map((p) => ({ label: dm(p.date), value: p.value, future: p.future }))} min={0} />
+      </div>
+      <p className="muted text-xs mt-1">Gestrichelt: Stand nach den heute geplanten Enden – jede bestätigte Verlängerung hebt die Linie.</p>
     </section>
   );
 }

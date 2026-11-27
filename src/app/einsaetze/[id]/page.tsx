@@ -18,6 +18,7 @@ import { Feedback, type SearchParams } from "@/components/Feedback";
 import { Comments } from "@/components/Work";
 import { MocoHintList } from "@/components/MocoHints";
 import { DeleteBlock } from "@/components/DeleteBlock";
+import { DetailTabsBar, TabPanel } from "@/components/DetailTabs";
 import { listHints } from "@/modules/moco/sync";
 import { fmtDate, fmtDateTime } from "@/lib/labels";
 import { approachLabel, approachValues, loadRenewalContacts } from "@/modules/engagements/contacts";
@@ -41,6 +42,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   if (getConfig().FEATURE_BESETZUNG !== "true") notFound();
   const { id } = await params;
   const sp = await searchParams;
+  const reiter = (sp as Record<string, string | undefined>).reiter;
+  const initialTab = ["ueberblick", "vertrag", "betreuung", "verlauf"].includes(reiter ?? "") ? reiter! : "ueberblick";
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
   await markSeen(actor, `/einsaetze/${id}`);
@@ -84,7 +87,10 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
   const offerFrom = lastRenewal?.proposedFrom ?? new Date(Date.parse(`${endBase}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
   const offerUntil = lastRenewal?.proposedTo ?? addMonthsIso(endBase, 6);
   const offerRate = lastPeriod?.vk ? (Number(lastPeriod.vk) * (lastPeriod.rateUnit === "STUNDE" ? 8 : 1)).toFixed(2).replace(".", ",") : "";
-  const nextDue = [e.nextCheckin, openRenewal ? e.pingDate : null, e.status === "PAUSIERT" ? e.reviewDate : null].filter((x): x is string => !!x).sort()[0] ?? null;
+  const dueRaw: Array<[string | null, string]> = [[e.nextCheckin, "Check-in"], [openRenewal ? e.pingDate : null, "Verlängerung anstoßen"], [e.status === "PAUSIERT" ? e.reviewDate : null, "Wiedervorlage Pause"]];
+  const dueList = dueRaw.flatMap(([d, k]) => (d ? [[d, k] as [string, string]] : [])).sort((a, b) => a[0].localeCompare(b[0]));
+  const nextDue = dueList[0]?.[0] ?? null;
+  const nextDueKind = dueList[0]?.[1] ?? "";
 
   return (
     <div className="space-y-5">
@@ -109,7 +115,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
               </form>
             </details>
           )}
-          {nextDue && (nextDue < today ? <span style={{ color: RED, fontWeight: 600 }}>Frist überfällig seit {fmtDate(nextDue)}</span> : <span>nächste Frist {fmtDate(nextDue)}</span>)}
+          {nextDue && (nextDue < today ? <span style={{ color: RED, fontWeight: 600 }}>{nextDueKind} überfällig seit {fmtDate(nextDue)}</span> : <span>nächste Frist ({nextDueKind}) {fmtDate(nextDue)}</span>)}
           <span className="muted text-xs ml-auto">{a.commercial ? "BD-Kontext" : a.ops ? "Sales Operations" : a.readOnly ? "Coach (nur lesen)" : `Betreuung (${a.careRoles.map((r) => careRoleLabel[r]).join(", ")})`}</span>
         </div>
         {!final && (a.manage || a.care) && (asgUser || !(openRenewal && openRenewal.proposedTo && openRenewal.status !== "MOEGLICH")) && (
@@ -124,6 +130,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
       </div>
       <Feedback params={sp} />
 
+      <DetailTabsBar initial={initialTab} tabs={[{ key: "ueberblick", label: "Überblick" }, { key: "vertrag", label: "Verträge & Konditionen", count: d.documents.length }, { key: "betreuung", label: "Check-ins & Verlängerung", count: d.checkins.filter((c) => c.status !== "ERLEDIGT").length || null }, { key: "verlauf", label: "Kommentare & Verlauf" }]} />
+      <TabPanel tab="ueberblick" initial={initialTab}>
       {/* Überblick */}
       <section className="card">
         <dl className="text-sm grid sm:grid-cols-3 gap-x-6 gap-y-2">
@@ -234,6 +242,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         )}
       </section>
 
+      </TabPanel>
+      <TabPanel tab="vertrag" initial={initialTab}>
       {/* Verträge */}
       <section className="card" id="vertraege">
         <div className="flex flex-wrap items-baseline gap-2 mb-2">
@@ -437,6 +447,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         )}
       </section>
 
+      </TabPanel>
+      <TabPanel tab="betreuung" initial={initialTab}>
       {/* Check-ins */}
       <section className="card" id="checkins">
         <h2 className="font-semibold mb-2">Check-ins</h2>
@@ -590,6 +602,8 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         )}
       </section>
 
+      </TabPanel>
+      <TabPanel tab="verlauf" initial={initialTab}>
       <Comments actor={actor} subjectType="CHANCE" subjectId={e.opportunityId} back={back} />
 
       <section className="card">
@@ -603,6 +617,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
         </details>
       </section>
       {a.manage && <DeleteBlock kind="EINSATZ" id={e.id} label={e.title} scope="samt Check-ins, Perioden, Betreuung, Unterlagen-Verknüpfungen, Kandidatur, Position (wenn leer) und Auftrag (wenn kein anderer Einsatz daran hängt); die Chance bleibt" back={back} />}
+      </TabPanel>
     </div>
   );
 }

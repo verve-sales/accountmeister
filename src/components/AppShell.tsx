@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "./Icon";
+import { TableTools } from "./TableTools";
 
 export type NavItem = { href: string; label: string; icon: string; badge?: number };
 export type NavSection = { label: string | null; items: NavItem[] };
@@ -82,6 +83,7 @@ export function AppShell({ sections, brand, topbar, children }: { sections: NavS
           {topbar}
         </header>
         <main className="page">{children}</main>
+        <TableTools />
       </div>
     </div>
   );

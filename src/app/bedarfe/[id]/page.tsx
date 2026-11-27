@@ -24,6 +24,8 @@ import { Feedback } from "@/components/Feedback";
 import { Status } from "@/components/Status";
 import { SuggestButton } from "@/components/SuggestButton";
 import { ProcessStepper } from "@/components/ProcessStepper";
+import { DetailTabsBar, TabPanel } from "@/components/DetailTabs";
+import { Icon } from "@/components/Icon";
 import { NEXT_CHANCE_STEP } from "@/lib/chanceStages";
 import { chanceKindLabel, chanceKindValues } from "@/modules/ai/schemas";
 import { groupByFamily } from "@/modules/roles/catalog";
@@ -55,7 +57,7 @@ function EvidenceFields({ prefix, sources, label = "Beleg" }: { prefix: string; 
   );
 }
 
-export default async function BedarfPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; berater?: string; bcberater?: string }> }) {
+export default async function BedarfPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; berater?: string; bcberater?: string; reiter?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
   const actor = await getCurrentActor();
@@ -147,7 +149,10 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   const staffedBy = (await topCandidatesForOpportunities([opp.id]).catch(() => new Map<string, { name: string; status: string }>())).get(opp.id);
   const staffedByText = staffedBy ? (staffedBy.status === "BESETZT" ? staffedBy.name : null) : null;
   const staffingOn = getConfig().FEATURE_BESETZUNG === "true";
-  const oppEngagements = staffingOn ? await db.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id), columns: { id: true } }) : [];
+  const oppEngagements = staffingOn ? await db.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id), columns: { id: true, status: true, title: true, plannedEnd: true } }) : [];
+  // e65: laufende Einsätze dieser Chance – für den Hinweis „Stufe nachziehen“ und den Abschnitt Auftrag und Einsatz
+  const runningEngs = oppEngagements.filter((x) => ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET"].includes(x.status));
+  const initialTab = ["ueberblick", "besetzung", "buying", "verlauf"].includes(sp.reiter ?? "") ? sp.reiter! : sp.bcberater ? "buying" : "ueberblick";
   const convs = staffingOn ? await listConversions(actor, opp.id).catch(() => []) : [];
   // Namen in den Kopf (e44): alle besetzten Positionen, nicht nur die erste
   const seatNames = convs.filter((x) => x.conversion.status !== "ABGEBROCHEN").map((x) => x.position?.personName).filter((x): x is string => !!x);
@@ -157,9 +162,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   const staffingFreelancers = staffingManage ? await freelancerOptions(actor).catch(() => []) : [];
   return (
     <div className="space-y-6">
-      <p className="text-sm">
-        <Link href="/kunden">Kunden</Link> › <Link href={`/kunden/${ctx.account.id}`}>{ctx.account.name}</Link> › <Link href={`/setups/${ctx.setup.id}`}>{ctx.setup.name}</Link> › Chance
-      </p>
+      <nav className="crumbs" aria-label="Pfad"><Link href="/kunden">Kunden</Link><Link href={`/kunden/${ctx.account.id}`}>{ctx.account.name}</Link><Link href={`/setups/${ctx.setup.id}`}>{ctx.setup.name}</Link><span>Chance</span></nav>
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold">{opp.title}</h1>
         <Status label={opportunityStatusLabel[opp.status] ?? opp.status} />
@@ -204,40 +207,123 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         )}
       </section>
 
-      {/* Chance */}
-      {staffingOn && (
-        <section className="card" id="konvertierung" style={{ borderLeft: "4px solid #1f4e79" }}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm" style={{ maxWidth: "46rem" }}>
-              <h2 className="font-semibold">Konvertierungsvorgang{convs.length > 1 ? ` – je Position einer (${convs.length})` : ""}</h2>
-              {convs.length === 0 && <p className="mt-1 muted">Führt in sechs Schritten bis zur Beauftragung: Anfrage, Klärung, Besetzung, Angebot, Freelancer-Vertrag, Übergabe ans Backoffice. Sucht die Chance mehrere Personen, läuft je Position ein eigener Vorgang. Bereits Erledigtes wird übernommen.</p>}
-            </div>
-            {convs.length === 0 && (canEdit || actor.roles.has("CEO") || actor.roles.has("SALES_OPS")) && !closed && opp.status !== "ZURUECKGESTELLT" ? (
-              <form action={startConversionAction.bind(null, opp.id, undefined)}><PendingButton busy="Starte …">Konvertierungsvorgang starten</PendingButton></form>
-            ) : null}
+      {staffingOn && runningEngs.length > 0 && ["ANTIZIPIERT", "IN_KLAERUNG", "BESTAETIGT", "PROFIL_ANGEBOT_VORGESTELLT", "AUSWAHL_BESTELLUNG"].includes(opp.status) && (
+        <div className="callout" data-tone="warn" role="note">
+          <Icon name="alert" size={18} />
+          <div>
+            <strong>Einsatz läuft bereits – die Chance steht noch auf „{opportunityStatusLabel[opp.status] ?? opp.status}“.</strong>{" "}
+            {runningEngs.map((x, i) => <span key={x.id}>{i ? ", " : ""}<Link href={`/einsaetze/${x.id}`}>{x.title}</Link></span>)}.{" "}
+            {canEdit ? <>Stufe nachziehen: <a href="#auftrag" className="btn btn-small" style={{ marginLeft: ".25rem" }}>Beauftragung erfassen</a></> : "Die Stufe zieht der BD über „Beauftragung bestätigen“ nach."}
           </div>
-          {convs.length > 0 && (
-            <table className="list text-sm mt-2">
-              <tbody>
-                {convs.map((x) => {
-                  const st = x.steps.find((y) => y.state === "AKTUELL");
-                  const cs = x.conversion.status;
-                  return (
-                    <tr key={x.conversion.id}>
-                      <td><Link href={`/bedarfe/${opp.id}/vorgang?v=${x.conversion.id}`}><strong>{x.label}</strong></Link></td>
-                      <td>{cs === "LAUFEND" ? (st ? `Schritt ${st.no} – ${st.title}` : "läuft") : cs === "RUHEND" ? "ruht" : cs === "ABGESCHLOSSEN" ? "abgeschlossen" : "abgebrochen"}</td>
-                      <td className="muted text-xs">{cs === "LAUFEND" ? st?.note : cs === "ABGESCHLOSSEN" ? "beauftragt und ans Backoffice übergeben" : cs === "ABGEBROCHEN" ? x.conversion.endedReason : "solange die Chance zurückgestellt ist"}</td>
-                      <td>{x.position && !x.position.engagementId && x.position.status !== "BESETZT" && (canEdit || actor.roles.has("CEO")) ? (
-                        <form action={removePositionAction}><input type="hidden" name="positionId" value={x.position.id} /><input type="hidden" name="opportunityId" value={opp.id} /><button className="btn btn-secondary btn-small" type="submit" title="Überzählige Position ohne Rückfrage entfernen">Entfernen</button></form>
-                      ) : null}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </section>
+        </div>
       )}
+      <DetailTabsBar initial={initialTab} tabs={[{ key: "ueberblick", label: "Überblick" }, ...(staffingOn ? [{ key: "besetzung", label: "Besetzung & Auftrag", count: d.orders.length + d.offers.length + runningEngs.length }] : [{ key: "besetzung", label: "Angebot & Auftrag", count: d.orders.length + d.offers.length }]), { key: "buying", label: "Buying Center", count: d.participations.length }, { key: "verlauf", label: "Kommentare & Verwaltung" }]} />
+      <TabPanel tab="ueberblick" initial={initialTab}>
+      {/* Persönlicher KI-Berater für diese Chance (Etappe 15, BD-Wunsch: „nächste Schritte zur Konvertierung“) */}
+      <section className="card">
+        <h2 className="font-semibold mb-2">Persönlicher KI-Berater für diese Chance</h2>
+        {adviceProposalError && <p className="error text-sm" role="alert">{adviceProposalError}</p>}
+        <p className="text-sm"><span className="muted">Nächster Schritt zur Konvertierung: </span>{advice.analysis.nextStep}</p>
+        <div className="grid sm:grid-cols-3 gap-4 mt-3 text-sm">
+          <div><div className="font-medium mb-1">Blockiert</div>{advice.analysis.blockers.length === 0 ? <p className="muted">Nichts Dokumentiertes.</p> : <ul className="space-y-1">{advice.analysis.blockers.map((b, i) => <li key={i} style={{ color: "#a12b1e" }}>{b}</li>)}</ul>}</div>
+          <div><div className="font-medium mb-1">Was fehlt</div>{advice.analysis.missing.length === 0 ? <p className="muted">Grundlagen vollständig.</p> : <ul className="space-y-1">{advice.analysis.missing.map((m, i) => <li key={i}>{m}</li>)}</ul>}</div>
+          <div><div className="font-medium mb-1">Naheliegende Züge</div>{advice.analysis.moves.length === 0 ? <p className="muted">Nichts vorbereitet.</p> : <ul className="space-y-1">{advice.analysis.moves.map((m, i) => <li key={i}>{m}</li>)}</ul>}</div>
+        </div>
+
+        {advice.latest && (
+          <div className="mt-4 border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
+            <div className="flex flex-wrap items-baseline gap-3">
+              <div className="font-medium">Aktuelle Fassung {advice.latest.versionNo}</div>
+              <span className="muted text-sm">vom {fmtDate(advice.latest.createdAt)}{advice.latest.aiJobId ? " · mit KI-Vorschlag" : ""}</span>
+            </div>
+            <p className="text-sm mt-2" style={{ whiteSpace: "pre-wrap" }}>{advice.latest.summary}</p>
+            <p className="text-sm mt-2"><span className="muted">Nächster Schritt: </span>{advice.latest.nextStep}</p>
+            {(advice.latest.moves as StrategyMove[]).length > 0 && (
+              <ol className="text-sm mt-2 space-y-1 list-decimal ml-5">
+                {(advice.latest.moves as StrategyMove[]).map((m, i) => (
+                  <li key={i}><strong>{m.title}</strong> <span className="status">{m.ownerRole}</span>{m.why && <span className="muted"> – {m.why}</span>}</li>
+                ))}
+              </ol>
+            )}
+            {advice.latest.note && <p className="muted text-xs mt-2">Notiz: {advice.latest.note}</p>}
+          </div>
+        )}
+
+        {advice.canEdit && (
+          <div className="mt-4">
+            <div className="flex flex-wrap items-baseline gap-3 mb-2">
+              <span className="muted text-sm">{adviceDraftNote}</span>
+              {!sp.berater && <Link href={`/bedarfe/${id}?berater=1`} className="btn btn-secondary btn-small ml-auto">Vorschlag der KI einholen</Link>}
+            </div>
+            <details>
+              <summary>Neue Fassung erfassen</summary>
+              <form action={saveOpportunityAdviceAction} className="mt-2 grid gap-4 text-sm">
+                <input type="hidden" name="opportunityId" value={id} />
+                {adviceAiJobId && <input type="hidden" name="aiJobId" value={adviceAiJobId} />}
+                <div>
+                  <label className="label" htmlFor="adSummary">Lage dieser Chance (belegt / vermutlich trennen)</label>
+                  <textarea id="adSummary" name="summary" className="textarea" required minLength={10} defaultValue={adviceDraft.summary} rows={4} />
+                </div>
+                <div>
+                  <label className="label" htmlFor="adNextStep">Nächster Schritt zur Konvertierung</label>
+                  <input id="adNextStep" name="nextStep" className="input" required minLength={5} defaultValue={adviceDraft.nextStep} />
+                </div>
+                <div>
+                  <div className="label">Züge (leer lassen = weglassen)</div>
+                  <div className="space-y-2">
+                    {adviceMoves.map((m, k) => (
+                      <div key={k} className="grid sm:grid-cols-12 gap-2 items-start">
+                        <input name={`moves.${k}.title`} className="input sm:col-span-5" placeholder={`Zug ${k + 1}`} defaultValue={m.title} maxLength={200} />
+                        <input name={`moves.${k}.why`} className="input sm:col-span-4" placeholder="Warum jetzt" defaultValue={m.why} maxLength={600} />
+                        <select name={`moves.${k}.ownerRole`} className="select sm:col-span-2" defaultValue={m.ownerRole}>
+                          <option value="BD">BD</option><option value="ANKER">Anker</option><option value="PRINCIPAL">Principal</option>
+                        </select>
+                        <input type="hidden" name={`moves.${k}.evidenceQuote`} value={m.evidenceQuote} />
+                        {m.evidenceQuote && <div className="muted text-xs sm:col-span-12">Textstelle: „{m.evidenceQuote.slice(0, 140)}“</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="label">Risiken (belegt)</div>
+                  <div className="space-y-2">
+                    {adviceRisks.map((r, k) => (
+                      <div key={k}>
+                        <input name={`risks.${k}.text`} className="input" placeholder={`Risiko ${k + 1}`} defaultValue={r.text} maxLength={400} />
+                        <input type="hidden" name={`risks.${k}.evidenceQuote`} value={r.evidenceQuote} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="label">Offene Fragen</div>
+                  <div className="space-y-2">{adviceQuestions.map((q, k) => <input key={k} name={`openQuestions.${k}.text`} className="input" placeholder={`Frage ${k + 1}`} defaultValue={q} maxLength={300} />)}</div>
+                </div>
+                <div>
+                  <label className="label" htmlFor="adNote">Notiz zur Fassung (optional)</label>
+                  <input id="adNote" name="note" className="input" maxLength={600} />
+                </div>
+                <div><button className="btn" type="submit">Fassung speichern</button> <span className="muted text-xs ml-2">Es entsteht immer eine neue Version; frühere bleiben nachlesbar.</span></div>
+              </form>
+            </details>
+          </div>
+        )}
+
+        {advice.versions.length > 1 && (
+          <details className="mt-3">
+            <summary>Frühere Fassungen ({advice.versions.length - 1})</summary>
+            <ul className="mt-2 space-y-3 text-sm">
+              {advice.versions.slice(1).map((v) => (
+                <li key={v.id}>
+                  <div className="font-medium">Fassung {v.versionNo} · {fmtDate(v.createdAt)}</div>
+                  <p style={{ whiteSpace: "pre-wrap" }}>{v.summary}</p>
+                  <p className="muted">Nächster Schritt damals: {v.nextStep}</p>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </section>
       <section className="card" id="chance">
         <h2 className="font-semibold mb-2">Chance</h2>
         <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
@@ -382,6 +468,253 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       <WorkBlock actor={actor} subjectType="CHANCE" subjectId={opp.id} back={`/bedarfe/${opp.id}`} canCreate={!closed} />
 
       {/* Buyingcenter (8.3) */}
+      {getConfig().FEATURE_ARTEFAKTE === "true" && (
+      <section className="card">
+        <h2 className="font-semibold mb-2">Passende Artefakte</h2>
+        <p className="text-sm">Klärung der Chance, Profilvorstellung und Auftrags-/Startunterlagen entstehen als Textentwürfe im Setup: <Link href={`/setups/${ctx.setup.id}/artefakte`}>Artefakte des Setups →</Link> (A7 Bedarfsbriefing, A8 Risiko-/Qualifizierungsnotiz, A9 Profilangebot, A10 Auswahl-/Entscheidungsstand, A11 Auftrags-/Startübergabe, A12 Verlängerung/Entwicklung). Kundentexte enthalten keine internen Einordnungen.</p>
+      </section>
+      )}
+
+      </TabPanel>
+      <TabPanel tab="besetzung" initial={initialTab}>
+      {/* Chance */}
+      {staffingOn && (
+        <section className="card" id="konvertierung" style={{ borderLeft: "4px solid #1f4e79" }}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm" style={{ maxWidth: "46rem" }}>
+              <h2 className="font-semibold">Konvertierungsvorgang{convs.length > 1 ? ` – je Position einer (${convs.length})` : ""}</h2>
+              {convs.length === 0 && <p className="mt-1 muted">Führt in sechs Schritten bis zur Beauftragung: Anfrage, Klärung, Besetzung, Angebot, Freelancer-Vertrag, Übergabe ans Backoffice. Sucht die Chance mehrere Personen, läuft je Position ein eigener Vorgang. Bereits Erledigtes wird übernommen.</p>}
+            </div>
+            {convs.length === 0 && (canEdit || actor.roles.has("CEO") || actor.roles.has("SALES_OPS")) && !closed && opp.status !== "ZURUECKGESTELLT" ? (
+              <form action={startConversionAction.bind(null, opp.id, undefined)}><PendingButton busy="Starte …">Konvertierungsvorgang starten</PendingButton></form>
+            ) : null}
+          </div>
+          {convs.length > 0 && (
+            <table className="list text-sm mt-2">
+              <tbody>
+                {convs.map((x) => {
+                  const st = x.steps.find((y) => y.state === "AKTUELL");
+                  const cs = x.conversion.status;
+                  return (
+                    <tr key={x.conversion.id}>
+                      <td><Link href={`/bedarfe/${opp.id}/vorgang?v=${x.conversion.id}`}><strong>{x.label}</strong></Link></td>
+                      <td>{cs === "LAUFEND" ? (st ? `Schritt ${st.no} – ${st.title}` : "läuft") : cs === "RUHEND" ? "ruht" : cs === "ABGESCHLOSSEN" ? "abgeschlossen" : "abgebrochen"}</td>
+                      <td className="muted text-xs">{cs === "LAUFEND" ? st?.note : cs === "ABGESCHLOSSEN" ? "beauftragt und ans Backoffice übergeben" : cs === "ABGEBROCHEN" ? x.conversion.endedReason : "solange die Chance zurückgestellt ist"}</td>
+                      <td>{x.position && !x.position.engagementId && x.position.status !== "BESETZT" && (canEdit || actor.roles.has("CEO")) ? (
+                        <form action={removePositionAction}><input type="hidden" name="positionId" value={x.position.id} /><input type="hidden" name="opportunityId" value={opp.id} /><button className="btn btn-secondary btn-small" type="submit" title="Überzählige Position ohne Rückfrage entfernen">Entfernen</button></form>
+                      ) : null}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
+      <section className="card" id="angebote">
+        <h2 className="font-semibold mb-2">Angebote / Profilvorstellungen ({d.offers.length})</h2>
+        {d.offers.length === 0 ? <p className="empty">Noch kein Angebot.</p> : (
+          <ul className="space-y-3">
+            {d.offers.map((o) => {
+              const refs = d.profileRefs.filter((r) => o.profileReferenceIds.includes(r.id));
+              const final = o.status === "AKZEPTIERT" || o.status === "ABGELEHNT" || o.status === "ZURUECKGEZOGEN";
+              return (
+                <li key={o.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex flex-wrap gap-2 items-baseline"><strong>{o.title}</strong><Status label={offerStatusLabel[o.status] ?? o.status} /><span className="muted">Fassung {o.versionNo} · {name(o.createdBy)} · {fmtDateTime(o.createdAt)}</span></div>
+                  {o.summary && <p className="mt-1 whitespace-pre-wrap">{o.summary}</p>}
+                  <p className="muted mt-1">Profilreferenzen: {refs.length ? refs.map((r) => r.label).join("; ") : "keine"}{o.artifactVersionId && <> · <Link href={`/artefakte/${o.artifactVersionId}`}>Kundentext</Link></>}</p>
+                  {o.presentedAt && <p className="mt-1">Vorgestellt am {fmtDateTime(o.presentedAt)} an {o.presentedTo}{o.presentedSourceId && <> · <Link href={`/quellen/${o.presentedSourceId}`}>Beleg</Link></>}</p>}
+                  {o.feedbackNote && <p className="mt-1">Rückmeldung: {o.feedbackNote}</p>}
+                  {o.statusReason && <p className="muted mt-1">Grund: {o.statusReason}</p>}
+                  {canEdit && !closed && !final && (
+                    <div className="mt-2 space-y-2">
+                      {o.status === "ENTWURF" && (
+                        <form action={changeOfferStatusAction} className="flex gap-2">
+                          <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="offerId" value={o.id} /><input type="hidden" name="version" value={o.version} />
+                          <button className="btn btn-small" name="status" value="GEPRUEFT">Als geprüft markieren</button>
+                          <input name="note" className="input" style={{ width: "16rem" }} placeholder="Grund (bei Zurückziehen)" aria-label="Grund" />
+                          <button className="btn btn-secondary btn-small" name="status" value="ZURUECKGEZOGEN">Zurückziehen</button>
+                        </form>
+                      )}
+                      {o.status === "GEPRUEFT" && (
+                        <details>
+                          <summary>Vorstellungsereignis bestätigen</summary>
+                          <form action={presentOfferAction} className="mt-2 grid sm:grid-cols-2 gap-3">
+                            <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="offerId" value={o.id} /><input type="hidden" name="version" value={o.version} />
+                            <div><label className="label" htmlFor={`pt-${o.id}`}>Vorgestellt an (Personen/Funktionen)</label><input id={`pt-${o.id}`} name="presentedTo" className="input" required minLength={3} /></div>
+                            <div><label className="label" htmlFor={`pa-${o.id}`}>Zeitpunkt</label><input id={`pa-${o.id}`} name="presentedAt" type="datetime-local" className="input" /></div>
+                            <EvidenceFields prefix={`pres-${o.id}`} sources={d.sources} label="Versand-/Vorstellungsbeleg" />
+                            <div className="sm:col-span-2"><button className="btn" type="submit">Als tatsächlich vorgestellt festhalten</button></div>
+                          </form>
+                        </details>
+                      )}
+                      {(o.status === "VORGESTELLT" || o.status === "RUECKMELDUNG_OFFEN") && (
+                        <form action={changeOfferStatusAction} className="flex flex-wrap gap-2 items-end">
+                          <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="offerId" value={o.id} /><input type="hidden" name="version" value={o.version} />
+                          <input name="note" className="input" style={{ width: "22rem" }} placeholder="Rückmeldung des Kunden / Grund" aria-label="Rückmeldung" />
+                          {o.status === "VORGESTELLT" && <button className="btn btn-secondary btn-small" name="status" value="RUECKMELDUNG_OFFEN">Rückmeldung offen</button>}
+                          <button className="btn btn-small" name="status" value="AKZEPTIERT">Akzeptiert</button>
+                          <button className="btn btn-secondary btn-small" name="status" value="ABGELEHNT">Abgelehnt</button>
+                          <button className="btn btn-secondary btn-small" name="status" value="ZURUECKGEZOGEN">Zurückgezogen</button>
+                        </form>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {canEdit && !closed && opp.status !== "BEAUFTRAGT" && (
+          <details className="mt-3">
+            <summary>Angebot anlegen (Entwurf)</summary>
+            <form action={createOfferAction} className="mt-2 grid sm:grid-cols-2 gap-3">
+              <input type="hidden" name="opportunityId" value={opp.id} />
+              <div className="sm:col-span-2"><label className="label" htmlFor="ofTitle">Titel</label><input id="ofTitle" name="title" className="input" required minLength={3} /></div>
+              <div className="sm:col-span-2"><label className="label" htmlFor="ofSummary">Kurzinhalt (intern)</label><textarea id="ofSummary" name="summary" className="textarea" rows={3} /></div>
+              <fieldset className="sm:col-span-2">
+                <legend className="label">Freigegebene Profilreferenzen</legend>
+                {d.profileRefs.length === 0 ? <p className="empty">Keine Profilreferenzen vorhanden – anlegen unter <Link href="/einstellungen">Einstellungen</Link> (BD/Principal/CEO).</p> : (
+                  <div className="flex flex-wrap gap-3 text-sm">{d.profileRefs.map((r) => <label key={r.id} className="flex items-center gap-1"><input type="checkbox" name="profileReferenceIds" value={r.id} /> {r.label}</label>)}</div>
+                )}
+              </fieldset>
+              <div className="sm:col-span-2"><button className="btn" type="submit">Angebot anlegen</button></div>
+            </form>
+          </details>
+        )}
+      </section>
+
+      {/* Aufträge und Startvoraussetzungen (9.3) */}
+      <section className="card" id="auftrag">
+        <h2 className="font-semibold mb-2">Auftrag und Einsatz ({d.orders.length}{runningEngs.length ? ` · ${runningEngs.length} laufend` : ""})</h2>
+        {runningEngs.length > 0 && (
+          <ul className="text-sm mb-3 space-y-1">
+            {runningEngs.map((x) => <li key={x.id} className="flex flex-wrap gap-2 items-baseline"><Status label={engagementStatusLabel[x.status] ?? x.status} /><Link href={`/einsaetze/${x.id}`}>{x.title}</Link>{x.plannedEnd && <span className="muted">bis {fmtDate(x.plannedEnd)}</span>}{!d.orders.length && <span className="muted">– noch ohne bestätigten Auftrag</span>}</li>)}
+          </ul>
+        )}
+        {d.orders.length === 0 ? <p className="empty">Noch kein Auftrag.</p> : (
+          <ul className="space-y-3">
+            {d.orders.map((o) => {
+              const cancelled = o.status === "BEENDET_STORNIERT";
+              const confirmed = o.status === "BEAUFTRAGUNG_BESTAETIGT";
+              return (
+                <li key={o.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
+                  <div className="flex flex-wrap gap-2 items-baseline"><strong>{o.consultantName ? `${o.consultantName} · ` : ""}Auftrag {o.orderReference ?? "(Referenz offen)"}</strong><Status label={orderStatusLabel[o.status] ?? o.status} /><Status label={engagementStatusLabel[o.engagementStatus] ?? o.engagementStatus} /><span className="muted">geplant {fmtDate(o.plannedStart)} – {fmtDate(o.plannedEnd)}{o.renewalDeadline ? ` · Verlängerungsfrist ${fmtDate(o.renewalDeadline)}` : ""}</span></div>
+                  {o.confirmedAt && <p className="mt-1">Beauftragung bestätigt am {fmtDateTime(o.confirmedAt)} durch {name(o.confirmedBy)}{o.evidenceSourceId && <> · <Link href={`/quellen/${o.evidenceSourceId}`}>Nachweis</Link></>}{o.evidenceNote && <> · {o.evidenceNote}</>}</p>}
+                  {o.startedAt && <p className="mt-1">Gestartet am {fmtDateTime(o.startedAt)}{o.statusReason && <> · {o.statusReason}</>}</p>}
+                  {!o.startedAt && o.statusReason && <p className="muted mt-1">{o.statusReason}</p>}
+
+                  <h3 className="font-semibold mt-3 mb-1">Startvoraussetzungen ({o.requirements.length})</h3>
+                  {o.requirements.length === 0 ? <p className="muted">Keine erfasst – ohne erfasste und bestätigte Voraussetzungen keine Startfreigabe.</p> : (
+                    <ul className="space-y-1">
+                      {o.requirements.map((r) => (
+                        <li key={r.id} className="flex flex-wrap gap-2 items-baseline">
+                          <span>{r.requirement}</span><Status label={requirementStatusLabel[r.status] ?? r.status} />
+                          <span className="muted">{r.checkedBy && `prüft: ${r.checkedBy}`}{r.policyRef && ` · Regel: ${r.policyRef}`}{r.evidenceSourceId && <> · <Link href={`/quellen/${r.evidenceSourceId}`}>Nachweis</Link></>}{r.evidenceNote && ` · ${r.evidenceNote}`}{r.confirmedAt && ` · bestätigt ${fmtDateTime(r.confirmedAt)} von ${name(r.confirmedBy)}`}</span>
+                          {canEdit && !cancelled && o.engagementStatus !== "GESTARTET" && o.engagementStatus !== "BEENDET" && r.status !== "BESTAETIGT" && (
+                            <details className="w-full">
+                              <summary className="muted">Nachweis / Stand setzen</summary>
+                              <form action={setRequirementStatusAction} className="mt-1 grid sm:grid-cols-2 gap-2">
+                                <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="requirementId" value={r.id} /><input type="hidden" name="version" value={r.version} />
+                                <div>
+                                  <label className="label" htmlFor={`rs-${r.id}`}>Stand</label>
+                                  <select id={`rs-${r.id}`} name="status" className="select" defaultValue="BESTAETIGT">
+                                    <option value="NACHWEIS_VORGELEGT">Nachweis vorgelegt (Quelle nötig)</option>
+                                    <option value="BESTAETIGT">Bestätigt (Quelle nötig)</option>
+                                    <option value="NICHT_ANWENDBAR">Nicht anwendbar (Begründung nötig)</option>
+                                  </select>
+                                </div>
+                                <div><label className="label" htmlFor={`rn-${r.id}`}>Anmerkung / Begründung</label><input id={`rn-${r.id}`} name="evidenceNote" className="input" /></div>
+                                <EvidenceFields prefix={`req-${r.id}`} sources={d.sources} label="Nachweis" />
+                                <div className="sm:col-span-2"><button className="btn btn-small" type="submit">Speichern</button></div>
+                              </form>
+                            </details>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {canEdit && !cancelled && (
+                    <div className="mt-3 space-y-2">
+                      {!confirmed && (
+                        <details>
+                          <summary>Beauftragung bestätigen (Nachweis optional)</summary>
+                          <form action={confirmOrderAction} className="mt-2 grid sm:grid-cols-2 gap-3">
+                            <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
+                            <div><label className="label" htmlFor={`or-${o.id}`}>Bestell-/Vertragsreferenz (optional)</label><input id={`or-${o.id}`} name="orderReference" className="input" defaultValue={o.orderReference ?? ""} /></div>
+                            <div><label className="label" htmlFor={`on-${o.id}`}>Anmerkung</label><input id={`on-${o.id}`} name="evidenceNote" className="input" /></div>
+                            <EvidenceFields prefix={`ord-${o.id}`} sources={d.sources} label="Bestell-/Vertragsnachweis" />
+                            <div className="sm:col-span-2"><button className="btn" type="submit">Beauftragung bestätigen</button></div>
+                          </form>
+                        </details>
+                      )}
+                      {!confirmed && (
+                        <form action={orderEvidenceIncompleteAction} className="flex flex-wrap gap-2 items-end">
+                          <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
+                          <input name="note" className="input" style={{ width: "22rem" }} placeholder="Welcher Nachweis fehlt?" aria-label="Fehlender Nachweis" />
+                          <button className="btn btn-secondary btn-small" type="submit">Nachweise unvollständig</button>
+                        </form>
+                      )}
+                      {o.engagementStatus !== "GESTARTET" && o.engagementStatus !== "BEENDET" && (
+                        <details>
+                          <summary>Startvoraussetzung erfassen</summary>
+                          <form action={addStartRequirementAction} className="mt-2 grid sm:grid-cols-3 gap-3">
+                            <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} />
+                            <div><label className="label" htmlFor={`rq-${o.id}`}>Anforderung</label><input id={`rq-${o.id}`} name="requirement" className="input" required minLength={3} /></div>
+                            <div><label className="label" htmlFor={`rc-${o.id}`}>Prüfende Stelle</label><input id={`rc-${o.id}`} name="checkedBy" className="input" /></div>
+                            <div><label className="label" htmlFor={`rp-${o.id}`}>Regelbezug (falls freigegeben)</label><input id={`rp-${o.id}`} name="policyRef" className="input" /></div>
+                            <div className="sm:col-span-3"><button className="btn btn-small" type="submit">Hinzufügen</button></div>
+                          </form>
+                        </details>
+                      )}
+                      {confirmed && o.engagementStatus === "GEPLANT" && (
+                        <form action={markReadyAction}>
+                          <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
+                          <button className="btn" type="submit">Startbereit setzen (prüft alle Startvoraussetzungen)</button>
+                        </form>
+                      )}
+                      {o.engagementStatus === "STARTBEREIT" && (
+                        <form action={markStartedAction} className="flex flex-wrap gap-2 items-end">
+                          <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
+                          <div><label className="label" htmlFor={`sa-${o.id}`}>Startzeitpunkt</label><input id={`sa-${o.id}`} name="startedAt" type="datetime-local" className="input" /></div>
+                          <div><label className="label" htmlFor={`sn-${o.id}`}>Bestätigung des Startereignisses</label><input id={`sn-${o.id}`} name="note" className="input" style={{ width: "22rem" }} placeholder="z. B. Kick-off mit … durchgeführt" /></div>
+                          <button className="btn" type="submit">Start bestätigen</button>
+                        </form>
+                      )}
+                      <form action={cancelOrderAction} className="flex flex-wrap gap-2 items-end">
+                        <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
+                        <input name="reason" className="input" style={{ width: "22rem" }} placeholder="Grund" aria-label="Grund für Beenden/Stornieren" />
+                        <button className="btn btn-secondary btn-small" type="submit">Auftrag beenden / stornieren</button>
+                      </form>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {canEdit && !closed && opp.status !== "ZURUECKGESTELLT" && (
+          <details className="mt-3">
+            <summary>Auftrag anlegen (in Vorbereitung)</summary>
+            <form action={createOrderAction} className="mt-2 grid sm:grid-cols-2 gap-3">
+              <input type="hidden" name="opportunityId" value={opp.id} />
+              <div>
+                <label className="label" htmlFor="odOffer">Bezug auf Angebot (optional)</label>
+                <select id="odOffer" name="offerId" className="select" defaultValue=""><option value="">–</option>{d.offers.map((o) => <option key={o.id} value={o.id}>{o.title} (Fassung {o.versionNo})</option>)}</select>
+              </div>
+              <div><label className="label" htmlFor="odRef">Bestell-/Vertragsreferenz (falls schon bekannt)</label><input id="odRef" name="orderReference" className="input" /></div>
+              <div><label className="label" htmlFor="odStart">Geplanter Start</label><input id="odStart" name="plannedStart" type="date" className="input" /></div>
+              <div><label className="label" htmlFor="odEnd">Geplantes Ende</label><input id="odEnd" name="plannedEnd" type="date" className="input" /></div>
+              <div><label className="label" htmlFor="odRenew">Frist für Verlängerungsentscheidung (optional, z. B. Kündigungsfrist)</label><input id="odRenew" name="renewalDeadline" type="date" className="input" /></div>
+              <div className="sm:col-span-2"><button className="btn" type="submit">Auftrag anlegen</button></div>
+            </form>
+          </details>
+        )}
+      </section>
+
+      </TabPanel>
+      <TabPanel tab="buying" initial={initialTab}>
       <section className="card">
         <h2 className="font-semibold mb-2">Buyingcenter für diese Chance ({d.participations.length})</h2>
         {d.participations.length === 0 ? <p className="empty">Noch keine Rollen erfasst.</p> : (
@@ -557,317 +890,11 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       </details>
 
       {/* Angebote (F09, F10) */}
-      <section className="card" id="angebote">
-        <h2 className="font-semibold mb-2">Angebote / Profilvorstellungen ({d.offers.length})</h2>
-        {d.offers.length === 0 ? <p className="empty">Noch kein Angebot.</p> : (
-          <ul className="space-y-3">
-            {d.offers.map((o) => {
-              const refs = d.profileRefs.filter((r) => o.profileReferenceIds.includes(r.id));
-              const final = o.status === "AKZEPTIERT" || o.status === "ABGELEHNT" || o.status === "ZURUECKGEZOGEN";
-              return (
-                <li key={o.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
-                  <div className="flex flex-wrap gap-2 items-baseline"><strong>{o.title}</strong><Status label={offerStatusLabel[o.status] ?? o.status} /><span className="muted">Fassung {o.versionNo} · {name(o.createdBy)} · {fmtDateTime(o.createdAt)}</span></div>
-                  {o.summary && <p className="mt-1 whitespace-pre-wrap">{o.summary}</p>}
-                  <p className="muted mt-1">Profilreferenzen: {refs.length ? refs.map((r) => r.label).join("; ") : "keine"}{o.artifactVersionId && <> · <Link href={`/artefakte/${o.artifactVersionId}`}>Kundentext</Link></>}</p>
-                  {o.presentedAt && <p className="mt-1">Vorgestellt am {fmtDateTime(o.presentedAt)} an {o.presentedTo}{o.presentedSourceId && <> · <Link href={`/quellen/${o.presentedSourceId}`}>Beleg</Link></>}</p>}
-                  {o.feedbackNote && <p className="mt-1">Rückmeldung: {o.feedbackNote}</p>}
-                  {o.statusReason && <p className="muted mt-1">Grund: {o.statusReason}</p>}
-                  {canEdit && !closed && !final && (
-                    <div className="mt-2 space-y-2">
-                      {o.status === "ENTWURF" && (
-                        <form action={changeOfferStatusAction} className="flex gap-2">
-                          <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="offerId" value={o.id} /><input type="hidden" name="version" value={o.version} />
-                          <button className="btn btn-small" name="status" value="GEPRUEFT">Als geprüft markieren</button>
-                          <input name="note" className="input" style={{ width: "16rem" }} placeholder="Grund (bei Zurückziehen)" aria-label="Grund" />
-                          <button className="btn btn-secondary btn-small" name="status" value="ZURUECKGEZOGEN">Zurückziehen</button>
-                        </form>
-                      )}
-                      {o.status === "GEPRUEFT" && (
-                        <details>
-                          <summary>Vorstellungsereignis bestätigen</summary>
-                          <form action={presentOfferAction} className="mt-2 grid sm:grid-cols-2 gap-3">
-                            <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="offerId" value={o.id} /><input type="hidden" name="version" value={o.version} />
-                            <div><label className="label" htmlFor={`pt-${o.id}`}>Vorgestellt an (Personen/Funktionen)</label><input id={`pt-${o.id}`} name="presentedTo" className="input" required minLength={3} /></div>
-                            <div><label className="label" htmlFor={`pa-${o.id}`}>Zeitpunkt</label><input id={`pa-${o.id}`} name="presentedAt" type="datetime-local" className="input" /></div>
-                            <EvidenceFields prefix={`pres-${o.id}`} sources={d.sources} label="Versand-/Vorstellungsbeleg" />
-                            <div className="sm:col-span-2"><button className="btn" type="submit">Als tatsächlich vorgestellt festhalten</button></div>
-                          </form>
-                        </details>
-                      )}
-                      {(o.status === "VORGESTELLT" || o.status === "RUECKMELDUNG_OFFEN") && (
-                        <form action={changeOfferStatusAction} className="flex flex-wrap gap-2 items-end">
-                          <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="offerId" value={o.id} /><input type="hidden" name="version" value={o.version} />
-                          <input name="note" className="input" style={{ width: "22rem" }} placeholder="Rückmeldung des Kunden / Grund" aria-label="Rückmeldung" />
-                          {o.status === "VORGESTELLT" && <button className="btn btn-secondary btn-small" name="status" value="RUECKMELDUNG_OFFEN">Rückmeldung offen</button>}
-                          <button className="btn btn-small" name="status" value="AKZEPTIERT">Akzeptiert</button>
-                          <button className="btn btn-secondary btn-small" name="status" value="ABGELEHNT">Abgelehnt</button>
-                          <button className="btn btn-secondary btn-small" name="status" value="ZURUECKGEZOGEN">Zurückgezogen</button>
-                        </form>
-                      )}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {canEdit && !closed && opp.status !== "BEAUFTRAGT" && (
-          <details className="mt-3">
-            <summary>Angebot anlegen (Entwurf)</summary>
-            <form action={createOfferAction} className="mt-2 grid sm:grid-cols-2 gap-3">
-              <input type="hidden" name="opportunityId" value={opp.id} />
-              <div className="sm:col-span-2"><label className="label" htmlFor="ofTitle">Titel</label><input id="ofTitle" name="title" className="input" required minLength={3} /></div>
-              <div className="sm:col-span-2"><label className="label" htmlFor="ofSummary">Kurzinhalt (intern)</label><textarea id="ofSummary" name="summary" className="textarea" rows={3} /></div>
-              <fieldset className="sm:col-span-2">
-                <legend className="label">Freigegebene Profilreferenzen</legend>
-                {d.profileRefs.length === 0 ? <p className="empty">Keine Profilreferenzen vorhanden – anlegen unter <Link href="/einstellungen">Einstellungen</Link> (BD/Principal/CEO).</p> : (
-                  <div className="flex flex-wrap gap-3 text-sm">{d.profileRefs.map((r) => <label key={r.id} className="flex items-center gap-1"><input type="checkbox" name="profileReferenceIds" value={r.id} /> {r.label}</label>)}</div>
-                )}
-              </fieldset>
-              <div className="sm:col-span-2"><button className="btn" type="submit">Angebot anlegen</button></div>
-            </form>
-          </details>
-        )}
-      </section>
-
-      {/* Aufträge und Startvoraussetzungen (9.3) */}
-      <section className="card" id="auftrag">
-        <h2 className="font-semibold mb-2">Auftrag und Einsatz ({d.orders.length})</h2>
-        {d.orders.length === 0 ? <p className="empty">Noch kein Auftrag.</p> : (
-          <ul className="space-y-3">
-            {d.orders.map((o) => {
-              const cancelled = o.status === "BEENDET_STORNIERT";
-              const confirmed = o.status === "BEAUFTRAGUNG_BESTAETIGT";
-              return (
-                <li key={o.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
-                  <div className="flex flex-wrap gap-2 items-baseline"><strong>{o.consultantName ? `${o.consultantName} · ` : ""}Auftrag {o.orderReference ?? "(Referenz offen)"}</strong><Status label={orderStatusLabel[o.status] ?? o.status} /><Status label={engagementStatusLabel[o.engagementStatus] ?? o.engagementStatus} /><span className="muted">geplant {fmtDate(o.plannedStart)} – {fmtDate(o.plannedEnd)}{o.renewalDeadline ? ` · Verlängerungsfrist ${fmtDate(o.renewalDeadline)}` : ""}</span></div>
-                  {o.confirmedAt && <p className="mt-1">Beauftragung bestätigt am {fmtDateTime(o.confirmedAt)} durch {name(o.confirmedBy)}{o.evidenceSourceId && <> · <Link href={`/quellen/${o.evidenceSourceId}`}>Nachweis</Link></>}{o.evidenceNote && <> · {o.evidenceNote}</>}</p>}
-                  {o.startedAt && <p className="mt-1">Gestartet am {fmtDateTime(o.startedAt)}{o.statusReason && <> · {o.statusReason}</>}</p>}
-                  {!o.startedAt && o.statusReason && <p className="muted mt-1">{o.statusReason}</p>}
-
-                  <h3 className="font-semibold mt-3 mb-1">Startvoraussetzungen ({o.requirements.length})</h3>
-                  {o.requirements.length === 0 ? <p className="muted">Keine erfasst – ohne erfasste und bestätigte Voraussetzungen keine Startfreigabe.</p> : (
-                    <ul className="space-y-1">
-                      {o.requirements.map((r) => (
-                        <li key={r.id} className="flex flex-wrap gap-2 items-baseline">
-                          <span>{r.requirement}</span><Status label={requirementStatusLabel[r.status] ?? r.status} />
-                          <span className="muted">{r.checkedBy && `prüft: ${r.checkedBy}`}{r.policyRef && ` · Regel: ${r.policyRef}`}{r.evidenceSourceId && <> · <Link href={`/quellen/${r.evidenceSourceId}`}>Nachweis</Link></>}{r.evidenceNote && ` · ${r.evidenceNote}`}{r.confirmedAt && ` · bestätigt ${fmtDateTime(r.confirmedAt)} von ${name(r.confirmedBy)}`}</span>
-                          {canEdit && !cancelled && o.engagementStatus !== "GESTARTET" && o.engagementStatus !== "BEENDET" && r.status !== "BESTAETIGT" && (
-                            <details className="w-full">
-                              <summary className="muted">Nachweis / Stand setzen</summary>
-                              <form action={setRequirementStatusAction} className="mt-1 grid sm:grid-cols-2 gap-2">
-                                <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="requirementId" value={r.id} /><input type="hidden" name="version" value={r.version} />
-                                <div>
-                                  <label className="label" htmlFor={`rs-${r.id}`}>Stand</label>
-                                  <select id={`rs-${r.id}`} name="status" className="select" defaultValue="BESTAETIGT">
-                                    <option value="NACHWEIS_VORGELEGT">Nachweis vorgelegt (Quelle nötig)</option>
-                                    <option value="BESTAETIGT">Bestätigt (Quelle nötig)</option>
-                                    <option value="NICHT_ANWENDBAR">Nicht anwendbar (Begründung nötig)</option>
-                                  </select>
-                                </div>
-                                <div><label className="label" htmlFor={`rn-${r.id}`}>Anmerkung / Begründung</label><input id={`rn-${r.id}`} name="evidenceNote" className="input" /></div>
-                                <EvidenceFields prefix={`req-${r.id}`} sources={d.sources} label="Nachweis" />
-                                <div className="sm:col-span-2"><button className="btn btn-small" type="submit">Speichern</button></div>
-                              </form>
-                            </details>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {canEdit && !cancelled && (
-                    <div className="mt-3 space-y-2">
-                      {!confirmed && (
-                        <details>
-                          <summary>Beauftragung bestätigen (Nachweis optional)</summary>
-                          <form action={confirmOrderAction} className="mt-2 grid sm:grid-cols-2 gap-3">
-                            <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
-                            <div><label className="label" htmlFor={`or-${o.id}`}>Bestell-/Vertragsreferenz (optional)</label><input id={`or-${o.id}`} name="orderReference" className="input" defaultValue={o.orderReference ?? ""} /></div>
-                            <div><label className="label" htmlFor={`on-${o.id}`}>Anmerkung</label><input id={`on-${o.id}`} name="evidenceNote" className="input" /></div>
-                            <EvidenceFields prefix={`ord-${o.id}`} sources={d.sources} label="Bestell-/Vertragsnachweis" />
-                            <div className="sm:col-span-2"><button className="btn" type="submit">Beauftragung bestätigen</button></div>
-                          </form>
-                        </details>
-                      )}
-                      {!confirmed && (
-                        <form action={orderEvidenceIncompleteAction} className="flex flex-wrap gap-2 items-end">
-                          <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
-                          <input name="note" className="input" style={{ width: "22rem" }} placeholder="Welcher Nachweis fehlt?" aria-label="Fehlender Nachweis" />
-                          <button className="btn btn-secondary btn-small" type="submit">Nachweise unvollständig</button>
-                        </form>
-                      )}
-                      {o.engagementStatus !== "GESTARTET" && o.engagementStatus !== "BEENDET" && (
-                        <details>
-                          <summary>Startvoraussetzung erfassen</summary>
-                          <form action={addStartRequirementAction} className="mt-2 grid sm:grid-cols-3 gap-3">
-                            <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} />
-                            <div><label className="label" htmlFor={`rq-${o.id}`}>Anforderung</label><input id={`rq-${o.id}`} name="requirement" className="input" required minLength={3} /></div>
-                            <div><label className="label" htmlFor={`rc-${o.id}`}>Prüfende Stelle</label><input id={`rc-${o.id}`} name="checkedBy" className="input" /></div>
-                            <div><label className="label" htmlFor={`rp-${o.id}`}>Regelbezug (falls freigegeben)</label><input id={`rp-${o.id}`} name="policyRef" className="input" /></div>
-                            <div className="sm:col-span-3"><button className="btn btn-small" type="submit">Hinzufügen</button></div>
-                          </form>
-                        </details>
-                      )}
-                      {confirmed && o.engagementStatus === "GEPLANT" && (
-                        <form action={markReadyAction}>
-                          <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
-                          <button className="btn" type="submit">Startbereit setzen (prüft alle Startvoraussetzungen)</button>
-                        </form>
-                      )}
-                      {o.engagementStatus === "STARTBEREIT" && (
-                        <form action={markStartedAction} className="flex flex-wrap gap-2 items-end">
-                          <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
-                          <div><label className="label" htmlFor={`sa-${o.id}`}>Startzeitpunkt</label><input id={`sa-${o.id}`} name="startedAt" type="datetime-local" className="input" /></div>
-                          <div><label className="label" htmlFor={`sn-${o.id}`}>Bestätigung des Startereignisses</label><input id={`sn-${o.id}`} name="note" className="input" style={{ width: "22rem" }} placeholder="z. B. Kick-off mit … durchgeführt" /></div>
-                          <button className="btn" type="submit">Start bestätigen</button>
-                        </form>
-                      )}
-                      <form action={cancelOrderAction} className="flex flex-wrap gap-2 items-end">
-                        <input type="hidden" name="opportunityId" value={opp.id} /><input type="hidden" name="orderId" value={o.id} /><input type="hidden" name="version" value={o.version} />
-                        <input name="reason" className="input" style={{ width: "22rem" }} placeholder="Grund" aria-label="Grund für Beenden/Stornieren" />
-                        <button className="btn btn-secondary btn-small" type="submit">Auftrag beenden / stornieren</button>
-                      </form>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {canEdit && !closed && opp.status !== "ZURUECKGESTELLT" && (
-          <details className="mt-3">
-            <summary>Auftrag anlegen (in Vorbereitung)</summary>
-            <form action={createOrderAction} className="mt-2 grid sm:grid-cols-2 gap-3">
-              <input type="hidden" name="opportunityId" value={opp.id} />
-              <div>
-                <label className="label" htmlFor="odOffer">Bezug auf Angebot (optional)</label>
-                <select id="odOffer" name="offerId" className="select" defaultValue=""><option value="">–</option>{d.offers.map((o) => <option key={o.id} value={o.id}>{o.title} (Fassung {o.versionNo})</option>)}</select>
-              </div>
-              <div><label className="label" htmlFor="odRef">Bestell-/Vertragsreferenz (falls schon bekannt)</label><input id="odRef" name="orderReference" className="input" /></div>
-              <div><label className="label" htmlFor="odStart">Geplanter Start</label><input id="odStart" name="plannedStart" type="date" className="input" /></div>
-              <div><label className="label" htmlFor="odEnd">Geplantes Ende</label><input id="odEnd" name="plannedEnd" type="date" className="input" /></div>
-              <div><label className="label" htmlFor="odRenew">Frist für Verlängerungsentscheidung (optional, z. B. Kündigungsfrist)</label><input id="odRenew" name="renewalDeadline" type="date" className="input" /></div>
-              <div className="sm:col-span-2"><button className="btn" type="submit">Auftrag anlegen</button></div>
-            </form>
-          </details>
-        )}
-      </section>
-
-      {getConfig().FEATURE_ARTEFAKTE === "true" && (
-      <section className="card">
-        <h2 className="font-semibold mb-2">Passende Artefakte</h2>
-        <p className="text-sm">Klärung der Chance, Profilvorstellung und Auftrags-/Startunterlagen entstehen als Textentwürfe im Setup: <Link href={`/setups/${ctx.setup.id}/artefakte`}>Artefakte des Setups →</Link> (A7 Bedarfsbriefing, A8 Risiko-/Qualifizierungsnotiz, A9 Profilangebot, A10 Auswahl-/Entscheidungsstand, A11 Auftrags-/Startübergabe, A12 Verlängerung/Entwicklung). Kundentexte enthalten keine internen Einordnungen.</p>
-      </section>
-      )}
-
-      {/* Persönlicher KI-Berater für diese Chance (Etappe 15, BD-Wunsch: „nächste Schritte zur Konvertierung“) */}
-      <section className="card">
-        <h2 className="font-semibold mb-2">Persönlicher KI-Berater für diese Chance</h2>
-        {adviceProposalError && <p className="error text-sm" role="alert">{adviceProposalError}</p>}
-        <p className="text-sm"><span className="muted">Nächster Schritt zur Konvertierung: </span>{advice.analysis.nextStep}</p>
-        <div className="grid sm:grid-cols-3 gap-4 mt-3 text-sm">
-          <div><div className="font-medium mb-1">Blockiert</div>{advice.analysis.blockers.length === 0 ? <p className="muted">Nichts Dokumentiertes.</p> : <ul className="space-y-1">{advice.analysis.blockers.map((b, i) => <li key={i} style={{ color: "#a12b1e" }}>{b}</li>)}</ul>}</div>
-          <div><div className="font-medium mb-1">Was fehlt</div>{advice.analysis.missing.length === 0 ? <p className="muted">Grundlagen vollständig.</p> : <ul className="space-y-1">{advice.analysis.missing.map((m, i) => <li key={i}>{m}</li>)}</ul>}</div>
-          <div><div className="font-medium mb-1">Naheliegende Züge</div>{advice.analysis.moves.length === 0 ? <p className="muted">Nichts vorbereitet.</p> : <ul className="space-y-1">{advice.analysis.moves.map((m, i) => <li key={i}>{m}</li>)}</ul>}</div>
-        </div>
-
-        {advice.latest && (
-          <div className="mt-4 border rounded-md p-3" style={{ borderColor: "var(--border)" }}>
-            <div className="flex flex-wrap items-baseline gap-3">
-              <div className="font-medium">Aktuelle Fassung {advice.latest.versionNo}</div>
-              <span className="muted text-sm">vom {fmtDate(advice.latest.createdAt)}{advice.latest.aiJobId ? " · mit KI-Vorschlag" : ""}</span>
-            </div>
-            <p className="text-sm mt-2" style={{ whiteSpace: "pre-wrap" }}>{advice.latest.summary}</p>
-            <p className="text-sm mt-2"><span className="muted">Nächster Schritt: </span>{advice.latest.nextStep}</p>
-            {(advice.latest.moves as StrategyMove[]).length > 0 && (
-              <ol className="text-sm mt-2 space-y-1 list-decimal ml-5">
-                {(advice.latest.moves as StrategyMove[]).map((m, i) => (
-                  <li key={i}><strong>{m.title}</strong> <span className="status">{m.ownerRole}</span>{m.why && <span className="muted"> – {m.why}</span>}</li>
-                ))}
-              </ol>
-            )}
-            {advice.latest.note && <p className="muted text-xs mt-2">Notiz: {advice.latest.note}</p>}
-          </div>
-        )}
-
-        {advice.canEdit && (
-          <div className="mt-4">
-            <div className="flex flex-wrap items-baseline gap-3 mb-2">
-              <span className="muted text-sm">{adviceDraftNote}</span>
-              {!sp.berater && <Link href={`/bedarfe/${id}?berater=1`} className="btn btn-secondary btn-small ml-auto">Vorschlag der KI einholen</Link>}
-            </div>
-            <details>
-              <summary>Neue Fassung erfassen</summary>
-              <form action={saveOpportunityAdviceAction} className="mt-2 grid gap-4 text-sm">
-                <input type="hidden" name="opportunityId" value={id} />
-                {adviceAiJobId && <input type="hidden" name="aiJobId" value={adviceAiJobId} />}
-                <div>
-                  <label className="label" htmlFor="adSummary">Lage dieser Chance (belegt / vermutlich trennen)</label>
-                  <textarea id="adSummary" name="summary" className="textarea" required minLength={10} defaultValue={adviceDraft.summary} rows={4} />
-                </div>
-                <div>
-                  <label className="label" htmlFor="adNextStep">Nächster Schritt zur Konvertierung</label>
-                  <input id="adNextStep" name="nextStep" className="input" required minLength={5} defaultValue={adviceDraft.nextStep} />
-                </div>
-                <div>
-                  <div className="label">Züge (leer lassen = weglassen)</div>
-                  <div className="space-y-2">
-                    {adviceMoves.map((m, k) => (
-                      <div key={k} className="grid sm:grid-cols-12 gap-2 items-start">
-                        <input name={`moves.${k}.title`} className="input sm:col-span-5" placeholder={`Zug ${k + 1}`} defaultValue={m.title} maxLength={200} />
-                        <input name={`moves.${k}.why`} className="input sm:col-span-4" placeholder="Warum jetzt" defaultValue={m.why} maxLength={600} />
-                        <select name={`moves.${k}.ownerRole`} className="select sm:col-span-2" defaultValue={m.ownerRole}>
-                          <option value="BD">BD</option><option value="ANKER">Anker</option><option value="PRINCIPAL">Principal</option>
-                        </select>
-                        <input type="hidden" name={`moves.${k}.evidenceQuote`} value={m.evidenceQuote} />
-                        {m.evidenceQuote && <div className="muted text-xs sm:col-span-12">Textstelle: „{m.evidenceQuote.slice(0, 140)}“</div>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="label">Risiken (belegt)</div>
-                  <div className="space-y-2">
-                    {adviceRisks.map((r, k) => (
-                      <div key={k}>
-                        <input name={`risks.${k}.text`} className="input" placeholder={`Risiko ${k + 1}`} defaultValue={r.text} maxLength={400} />
-                        <input type="hidden" name={`risks.${k}.evidenceQuote`} value={r.evidenceQuote} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="label">Offene Fragen</div>
-                  <div className="space-y-2">{adviceQuestions.map((q, k) => <input key={k} name={`openQuestions.${k}.text`} className="input" placeholder={`Frage ${k + 1}`} defaultValue={q} maxLength={300} />)}</div>
-                </div>
-                <div>
-                  <label className="label" htmlFor="adNote">Notiz zur Fassung (optional)</label>
-                  <input id="adNote" name="note" className="input" maxLength={600} />
-                </div>
-                <div><button className="btn" type="submit">Fassung speichern</button> <span className="muted text-xs ml-2">Es entsteht immer eine neue Version; frühere bleiben nachlesbar.</span></div>
-              </form>
-            </details>
-          </div>
-        )}
-
-        {advice.versions.length > 1 && (
-          <details className="mt-3">
-            <summary>Frühere Fassungen ({advice.versions.length - 1})</summary>
-            <ul className="mt-2 space-y-3 text-sm">
-              {advice.versions.slice(1).map((v) => (
-                <li key={v.id}>
-                  <div className="font-medium">Fassung {v.versionNo} · {fmtDate(v.createdAt)}</div>
-                  <p style={{ whiteSpace: "pre-wrap" }}>{v.summary}</p>
-                  <p className="muted">Nächster Schritt damals: {v.nextStep}</p>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </section>
+      </TabPanel>
+      <TabPanel tab="verlauf" initial={initialTab}>
       <Comments actor={actor} subjectType="CHANCE" subjectId={opp.id} back={`/bedarfe/${opp.id}`} />
       {canDeleteHere && <DeleteBlock kind="CHANCE" id={opp.id} label={opp.title} scope="samt Positionen, Kandidaturen, Einsätzen, Angeboten, Aufträgen und Vorgängen" back={`/bedarfe/${opp.id}`} />}
+      </TabPanel>
     </div>
   );
 }

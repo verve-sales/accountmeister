@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TrendChart } from "@/components/charts/TrendChart";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { isSalesOpsOnly } from "@/modules/identity/actor";
@@ -258,6 +259,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
 
       <section className="card">
         <h2 className="font-semibold mb-2">Verlauf</h2>
+        {snapshots.length > 1 && <div className="mb-3"><TrendChart title="Health-Score im Verlauf" min={0} points={[...snapshots].reverse().map((s) => ({ label: `${s.createdAt.getDate()}.${s.createdAt.getMonth() + 1}.`, value: s.score }))} /></div>}
         {snapshots.length === 0 ? <p className="empty">Noch kein Stand gespeichert.</p> : (
           <ul className="text-sm space-y-1">{snapshots.map((s) => <li key={s.id}>{fmtDateTime(s.createdAt)}: <strong>{s.score ?? "–"}</strong> <span className="muted">· Datenlage {s.coverage} %</span></li>)}</ul>
         )}

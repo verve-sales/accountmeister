@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 export function CloseMenus() {
   const path = usePathname();
   useEffect(() => {
-    const open = () => Array.from(document.querySelectorAll<HTMLDetailsElement>("details.nav-more[open]"));
+    const open = () => Array.from(document.querySelectorAll<HTMLDetailsElement>("details.nav-more[open], details.row-more[open]"));
     const onDown = (e: Event) => {
       for (const d of open()) if (!(e.target instanceof Node) || !d.contains(e.target)) d.open = false;
     };
@@ -21,7 +21,7 @@ export function CloseMenus() {
     };
   }, []);
   useEffect(() => {
-    for (const d of Array.from(document.querySelectorAll<HTMLDetailsElement>("details.nav-more[open]"))) d.open = false;
+    for (const d of Array.from(document.querySelectorAll<HTMLDetailsElement>("details.nav-more[open], details.row-more[open]"))) d.open = false;
   }, [path]);
   // e64: Sprungziel in einem eingeklappten Abschnitt (z. B. Hilfe-Kapitel) aufklappen
   useEffect(() => {

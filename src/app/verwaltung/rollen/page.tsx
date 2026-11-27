@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { hasRole } from "@/modules/identity/actor";
 import { groupByFamily, listRoles, roleFamilyLabel, roleFamilyValues } from "@/modules/roles/catalog";
@@ -11,7 +11,7 @@ export default async function RollenPage({ searchParams }: { searchParams: Searc
   const params = await searchParams;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
-  if (!hasRole(actor, "ADMIN")) redirect("/start");
+  if (!hasRole(actor, "ADMIN")) notFound();
   const roles = await listRoles(actor.workspaceId, { includeInactive: true });
   const groups = groupByFamily(roles);
   return (

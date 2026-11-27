@@ -26,7 +26,9 @@ export type GfPipeline = { opportunityId: string; title: string; accountId: stri
 export type GfTeam = { userId: string; name: string; open: number; overdue: number; oldestOverdue: string | null; lastActive: string | null };
 export type GfOverview = {
   windowDays: number;
-  kpis: { heads: number; endingUndecided: number; pipelinePerDay: number; pipelineCount: number; red: number; yellow: number; teamOverdue: number; openSuggestions: number };
+  /** e65: Köpfe je Woche – 12 Wochen zurück (aus Start/Ende der Einsätze) und 12 Wochen voraus (geplante Enden) */
+  headsTrend: { date: string; value: number; future: boolean }[];
+  kpis: { heads: number; persons: number; endingUndecided: number; pipelinePerDay: number; pipelineCount: number; red: number; yellow: number; teamOverdue: number; openSuggestions: number };
   expiring: GfExpiring[];
   customers: GfCustomer[];
   pipeline: GfPipeline[];
@@ -157,12 +159,24 @@ export async function buildGfOverview(actor: Actor, today = todayIso()): Promise
     .sort((a, b) => b.overdue - a.overdue || b.open - a.open || a.name.localeCompare(b.name, "de"));
 
   const openSuggestions = (await db.query.suggestions.findMany({ where: and(eq(schema.suggestions.workspaceId, ws), inArray(schema.suggestions.status, ["NEU", "GEPRUEFT"])), columns: { id: true } })).length;
-  const heads = engs.items.filter((e) => (RUNNING_STATUSES as readonly string[]).includes(e.status) && e.status !== "VORBEREITUNG").length;
+  const runningNow = engs.items.filter((e) => (RUNNING_STATUSES as readonly string[]).includes(e.status) && e.status !== "VORBEREITUNG");
+  const heads = runningNow.length;
+  const persons = new Set(runningNow.map((e) => e.freelancerId ?? e.internalUserId ?? e.id)).size;
+  // e65: Verlauf und Ausblick der Köpfe aus den Laufzeiten aller Einsätze (ohne abgebrochene und reine Vorbereitung)
+  const allEngs = await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, ws), notInArray(schema.engagements.status, ["ABGEBROCHEN", "VORBEREITUNG"])), columns: { freelancerId: true, internalUserId: true, id: true, actualStart: true, plannedStart: true, actualEnd: true, plannedEnd: true } });
+  const plusDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+  const headsTrend = Array.from({ length: 25 }, (_, k) => {
+    const date = plusDays(today, (k - 12) * 7);
+    const active = allEngs.filter((e) => { const st = e.actualStart ?? e.plannedStart; const en = e.actualEnd ?? e.plannedEnd; return !!st && st <= date && (!en || en >= date); });
+    return { date, value: new Set(active.map((e) => e.freelancerId ?? e.internalUserId ?? e.id)).size, future: k > 12 };
+  });
 
   return {
     windowDays: EXPIRY_WINDOW_DAYS,
+    headsTrend,
     kpis: {
       heads,
+      persons,
       endingUndecided: expiring.filter((e) => !e.decided).length,
       pipelinePerDay: pipeline.reduce((s, p) => s + (p.vkPerDay ?? 0), 0),
       pipelineCount: pipeline.length,

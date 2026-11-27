@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { KpiRow, KpiTile } from "@/components/Kpi";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { asgIntermediaryRequests, asgOppPhaseLabel, asgOpportunities, asgOverview, asgTaskLabel, canUseAssignments } from "@/modules/assignments/service";
 import { AsgTimeline } from "@/components/AsgTimeline";
@@ -18,7 +18,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
   const params = (await searchParams) as { wer?: string; chancen?: string } & Awaited<SearchParams>;
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
-  if (!(await canUseAssignments(actor))) redirect("/start");
+  if (!(await canUseAssignments(actor))) notFound();
   const o = await asgOverview(actor);
   const wer = params.wer === "freelancer" || params.wer === "intern" ? params.wer : "alle";
   const shown = o.engagements.filter((e) => wer === "alle" || (wer === "freelancer" ? e.kind === "FREELANCER" : e.kind === "INTERN"));
