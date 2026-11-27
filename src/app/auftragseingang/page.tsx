@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
 import { Feedback } from "@/components/Feedback";
 import { Icon } from "@/components/Icon";
-import { canUseOrderIntake, caseChoices, caseStatusLabel, channelLabel, listCases } from "@/modules/o2o/service";
+import { canUseOrderIntake, caseChoices, caseStatusLabel, channelLabel, listCases, reconcile } from "@/modules/o2o/service";
 import { isoDe } from "@/lib/labels";
 import { offerWithoutDocumentAction, uploadOrderCaseAction } from "../actions";
 import { SystemDots } from "./SystemDots";
@@ -18,7 +18,9 @@ export default async function AuftragseingangPage({ searchParams }: { searchPara
   if (!actor) redirect("/anmelden");
   if (!(await canUseOrderIntake(actor))) notFound();
   const filter = sp.ansicht === "alle" ? "alle" : "offen";
-  const [cases, choices] = await Promise.all([listCases(actor, filter), caseChoices(actor)]);
+  const [cases, choices, rec] = await Promise.all([listCases(actor, filter), caseChoices(actor), reconcile(actor)]);
+  const { mocoWriteOn } = await import("@/modules/o2o/moco");
+  const mocoOn = mocoWriteOn();
   const brokers = choices.accounts.filter((a) => a.broker);
   return (
     <div className="space-y-6">
@@ -101,6 +103,32 @@ export default async function AuftragseingangPage({ searchParams }: { searchPara
           </table>
         )}
       </section>
+      {(rec.followUp.length > 0 || rec.withoutCase.length > 0 || (mocoOn && rec.notInMoco.length > 0)) && (
+        <section className="card" id="abgleich">
+          <h2 className="font-semibold mb-2">Abgleich</h2>
+          <div className="grid md:grid-cols-3 gap-4 text-sm">
+            {rec.followUp.length > 0 && (
+              <div>
+                <div className="font-medium mb-1">Angebote ohne Antwort ({rec.followUp.length})</div>
+                <ul className="space-y-1">{rec.followUp.slice(0, 8).map((c) => <li key={c.id}><Link href={`/auftragseingang/${c.id}`}>{c.number}</Link> {c.label} <span className={c.expired ? "tone-warn" : "muted"}>· {c.days} Tage{c.expired ? " – absagen oder nachfassen" : " – nachfassen"}</span></li>)}</ul>
+              </div>
+            )}
+            {mocoOn && rec.notInMoco.length > 0 && (
+              <div>
+                <div className="font-medium mb-1">Beauftragt, noch nicht in Moco ({rec.notInMoco.length})</div>
+                <ul className="space-y-1">{rec.notInMoco.slice(0, 8).map((c) => <li key={c.id}><Link href={`/auftragseingang/${c.id}#moco`}>{c.number}</Link> {c.label}</li>)}</ul>
+              </div>
+            )}
+            {rec.withoutCase.length > 0 && (
+              <details>
+                <summary className="font-medium">Laufende Einsätze ohne Vorgang ({rec.withoutCase.length})</summary>
+                <p className="muted text-xs mt-1">Altbestand oder von Hand erfasst. Die nächste Bestellung oder Verlängerung per Upload holt sie in das Verfahren.</p>
+                <ul className="space-y-1 mt-1">{rec.withoutCase.slice(0, 30).map((e) => <li key={e.id}><Link href={`/einsaetze/${e.id}`}>{e.title}</Link> <span className="muted">· {e.accountName}</span></li>)}</ul>
+              </details>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

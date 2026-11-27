@@ -12,6 +12,8 @@ export function systemStates(c: Pick<CaseView, "systems" | "status">) {
     { key: "am", label: "Accountmeister", tone: am === "ERLEDIGT" ? "ok" : "warn", text: am === "ERLEDIGT" ? "erledigt" : "ausstehend" },
     s.moco?.mode === "GESCHRIEBEN"
       ? { key: "moco", label: "Moco", tone: "ok", text: "angelegt" }
+      : s.moco?.mode === "LEAD"
+        ? { key: "moco", label: "Moco", tone: c.status === "BEAUFTRAGT" ? "warn" : "ok", text: c.status === "BEAUFTRAGT" ? "Lead angelegt, Projekt offen" : "Lead angelegt" }
       : s.moco?.mode === "TEILWEISE"
         ? { key: "moco", label: "Moco", tone: s.moco.results?.some((x) => x.state === "FEHLER") ? "bad" : "warn", text: "teilweise angelegt" }
         : { key: "moco", label: "Moco", tone: c.status === "ENTWURF" ? "off" : mocoWaits ? "warn" : "plan", text: c.status === "ENTWURF" ? "–" : mocoWaits ? "wartet auf Angaben" : "geplant" },

@@ -78,13 +78,26 @@ async function extractXlsx(buf: Buffer): Promise<ExtractResult> {
   wb.eachSheet((ws) => {
     parts.push(`## Tabellenblatt: ${ws.name}`);
     let rows = 0;
+    // e71: verbundene Zellen nur einmal (exceljs liefert ihren Wert sonst für jede überdeckte Spalte und Zeile) und
+    // lange Texte, die sich wiederholen (Ausfüllhinweise), nur beim ersten Mal – sonst verdrängen sie die eigentlichen Angaben
+    const seenLong = new Set<string>();
     ws.eachRow({ includeEmpty: false }, (row) => {
       if (rows >= 5000) {
         truncated = true;
         return;
       }
-      const cells = (row.values as unknown[]).slice(1).map((v) => cellToString(v));
-      if (cells.some((c) => c.length > 0)) parts.push(cells.join(" | "));
+      const cells: string[] = [];
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        if (cell.isMerged && cell.master && cell.master.address !== cell.address) return;
+        const t = cellToString(cell.value);
+        if (!t) return;
+        if (t.length > 200) {
+          if (seenLong.has(t)) return;
+          seenLong.add(t);
+        }
+        cells.push(t);
+      });
+      if (cells.length) parts.push(cells.join(" | "));
       rows++;
     });
   });
@@ -93,7 +106,8 @@ async function extractXlsx(buf: Buffer): Promise<ExtractResult> {
 
 function cellToString(v: unknown): string {
   if (v === null || v === undefined) return "";
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (v instanceof Date) return `${String(v.getUTCDate()).padStart(2, "0")}.${String(v.getUTCMonth() + 1).padStart(2, "0")}.${v.getUTCFullYear()}`;
+  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100).replace(".", ",");
   if (typeof v === "object") {
     const o = v as { richText?: { text: string }[]; result?: unknown; text?: string; hyperlink?: string };
     if (o.richText) return o.richText.map((r) => r.text).join("");

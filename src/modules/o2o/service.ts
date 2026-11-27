@@ -105,7 +105,7 @@ async function storeUpload(actor: Actor, file: UploadedFile) {
   } catch (e) {
     await db.update(schema.documents).set({ storagePath: null, extractNote: `Datei konnte nicht abgelegt werden: ${e instanceof Error ? e.message.slice(0, 120) : "Fehler"}` }).where(eq(schema.documents.id, documentId));
   }
-  return { sourceId, documentId, text: extract.text, extractStatus: extract.status, fileName: file.name, title };
+  return { sourceId, documentId, text: extract.text, extractStatus: extract.status, fileName: file.name, title, buf, ext };
 }
 
 const personTokens = (n: string) => n.replace(/\(.*?\)/g, " ").replace(/,/g, " ").toLocaleLowerCase("de").split(/\s+/).filter((t) => t.length >= 2);
@@ -192,6 +192,12 @@ export async function uploadForCase(actor: Actor, file: UploadedFile, opts: { fo
   const { readDocument } = await import("./ai");
   const read = await readDocument(actor, { text: up.text, fileName: up.fileName, knownPersons: [...persons.freelancers.map((f) => f.displayName), ...persons.users.map((u) => u.displayName)], knownAccounts: accountNames });
   const parsed = read.parsed;
+  // e71: bekanntes Angebotsformular (Excel) – Werte direkt aus den Zellen schlagen KI und Texterkennung
+  if (up.ext === "xlsx") {
+    const { readOfferTemplate } = await import("./template");
+    const t = await readOfferTemplate(up.buf);
+    if (t) for (const [k, v] of Object.entries(t)) if (v) (parsed as Record<string, unknown>)[k] = v;
+  }
   // Vertragspartner: zuerst die Vertragspartei laut Dokument (bekannt → Kunde, unbekannt → als neuer Name vorbelegt);
   // nur wenn das Dokument keine nennt, die allgemeine Erkennung (Kennung, Domäne, Name) – ohne den genannten Endkunden
   let partnerAccountId: string | null = base?.partnerAccountId ?? null;
@@ -796,4 +802,27 @@ export async function intakeCounts(actor: Actor): Promise<{ drafts: number; open
   if (!rows.length) return { drafts: 0, open: 0 };
   const v = await listCases(actor, "offen");
   return { drafts: v.filter((c) => c.status === "ENTWURF" && c.createdBy === actor.userId).length, open: v.filter((c) => c.open.length > 0).length };
+}
+
+/**
+ * Abgleich (e71): was am Auftragseingang vorbeigelaufen oder noch nicht fertig ist – laufende Einsätze ohne Vorgang
+ * (Altbestand oder von Hand erfasst), beauftragte Vorgänge ohne Moco-Projekt, Angebote ohne Antwort seit 10 bzw. 60 Tagen.
+ */
+export async function reconcile(actor: Actor) {
+  await requireIntake(actor);
+  const all = await seesAll(actor);
+  const cases = (await db.query.orderCases.findMany({ where: eq(schema.orderCases.workspaceId, actor.workspaceId) })).filter((c) => c.status !== "ENTWURF");
+  const visible: CaseRow[] = [];
+  for (const c of cases) if (all || (await canSeeCase(actor, c))) visible.push(c);
+  const withCase = new Set(cases.map((c) => c.engagementId).filter((x): x is string => !!x));
+  const engs = all ? await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, actor.workspaceId), inArray(schema.engagements.status, ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET"])), columns: { id: true, title: true, accountId: true, mocoProjectId: true } }) : [];
+  const accs = engs.length ? await db.query.accounts.findMany({ where: inArray(schema.accounts.id, [...new Set(engs.map((e) => e.accountId))]), columns: { id: true, name: true } }) : [];
+  const an = new Map(accs.map((a) => [a.id, a.name]));
+  const now = Date.now();
+  const age = (c: CaseRow) => Math.floor((now - c.updatedAt.getTime()) / 86400000);
+  return {
+    withoutCase: engs.filter((e) => !withCase.has(e.id)).map((e) => ({ id: e.id, title: e.title, accountName: an.get(e.accountId) ?? "?" })),
+    notInMoco: visible.filter((c) => c.status === "BEAUFTRAGT" && !c.isRenewal && ((c.systems as { moco?: { mode?: string } } | null)?.moco?.mode ?? "") !== "GESCHRIEBEN").map((c) => ({ id: c.id, number: c.number, label: `${c.role ?? ""}${c.personName ? ` – ${c.personName}` : ""}` })),
+    followUp: visible.filter((c) => c.status === "ANGEBOT_VERSENDET" && age(c) >= 10).map((c) => ({ id: c.id, number: c.number, label: `${c.role ?? ""}${c.personName ? ` – ${c.personName}` : ""}`, days: age(c), expired: age(c) >= 60 })),
+  };
 }

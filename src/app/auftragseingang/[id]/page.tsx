@@ -234,12 +234,12 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                   {mocoState.projectUrl && <li><a href={mocoState.projectUrl} target="_blank" rel="noreferrer">Projekt in Moco öffnen</a></li>}
                 </ol>
               ) : null}
-              {mocoOn && mayWriteMoco && c.status === "BEAUFTRAGT" && !c.isRenewal && mocoState?.mode !== "GESCHRIEBEN" && (
+              {mocoOn && mayWriteMoco && !c.isRenewal && ((c.status === "BEAUFTRAGT" && mocoState?.mode !== "GESCHRIEBEN") || (c.status === "ANGEBOT_VERSENDET" && mocoState?.mode !== "LEAD")) && (
                 <form action={writeCaseToMocoAction} className="mt-3 space-y-2">
                   <input type="hidden" name="caseId" value={c.id} />
                   <label className="text-sm flex items-center gap-2"><input type="checkbox" name="createCustomer" /> Kunde in Moco neu anlegen, falls es ihn dort nicht gibt</label>
                   {c.channel === "VERMITTLER" && <label className="text-sm flex items-center gap-2"><input type="checkbox" name="createBroker" /> Vermittler in Moco neu anlegen, falls es ihn dort nicht gibt</label>}
-                  <button className="btn" type="submit">{mocoState?.results?.length ? "Offene Schritte wiederholen" : "In Moco anlegen"}</button>
+                  <button className="btn" type="submit">{c.status === "ANGEBOT_VERSENDET" ? "Lead in Moco anlegen" : mocoState?.results?.length && mocoState.mode !== "LEAD" ? "Offene Schritte wiederholen" : "Projekt in Moco anlegen"}</button>
                 </form>
               )}
             </section>

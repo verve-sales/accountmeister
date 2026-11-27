@@ -219,12 +219,41 @@ export function mocoWriteOn(): boolean {
 
 type MocoState = { mode: string; steps?: unknown[]; ids?: MocoIds; results?: StepResult[]; writtenAt?: string; projectUrl?: string | null };
 
+/**
+ * Angebot: nur Firma verknüpfen und Lead in der Angebotsphase anlegen (e71). Beim Vermittler liegt der Lead am Vermittler,
+ * solange der Endkunde offen ist – mit der Bestellung zieht er zum Endkunden um.
+ */
+export async function writeOfferLeadToMoco(client: MocoFullClient, input: { companyName: string; knownCompanyId?: number; allowCreate: boolean; leadName: string; money: number; leaderMocoUserId: number | null; note: string; tags: string[] }, dealId?: number): Promise<{ ids: MocoIds; steps: StepResult[]; done: boolean }> {
+  const steps: StepResult[] = [];
+  const ids: MocoIds = { dealId };
+  if (dealId) return { ids, steps: [{ key: "deal", title: "Lead", state: "ERLEDIGT", detail: "bereits angelegt" }], done: true };
+  if (!input.leaderMocoUserId) return { ids, steps: [{ key: "deal", title: "Lead", state: "OFFEN", detail: "Der verantwortliche BD ist keinem Moco-Nutzer zugeordnet" }], done: false };
+  try {
+    const comp = await ensureCompany(client, input.companyName, input.knownCompanyId, input.allowCreate);
+    if (comp.id === null) return { ids, steps: [{ key: "customer", title: `Firma ${input.companyName}`, state: "OFFEN", detail: comp.detail }], done: false };
+    ids.customerCompanyId = comp.id;
+    steps.push({ key: "customer", title: `Firma ${input.companyName}`, state: "ERLEDIGT", detail: comp.detail });
+    const cats = await client.dealCategories();
+    const want = getConfig().MOCO_OFFER_PHASE.toLowerCase();
+    const cat = cats.find((c) => c.name.toLowerCase() === want) ?? cats.find((c) => c.name.toLowerCase().includes(want.replace(/^\d+\s*%\s*-\s*/, ""))) ?? [...cats].sort((a, b) => b.probability - a.probability)[0];
+    if (!cat) throw new Error("In Moco ist keine Lead-Phase eingerichtet.");
+    const d = await client.createDeal({ name: input.leadName, currency: "EUR", money: input.money, reminder_date: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10), user_id: input.leaderMocoUserId, deal_category_id: cat.id, company_id: comp.id, info: input.note, status: "pending", tags: input.tags });
+    ids.dealId = d.id;
+    steps.push({ key: "deal", title: "Lead", state: "ERLEDIGT", detail: `angelegt in Phase „${cat.name}“, Wiedervorlage in 10 Tagen` });
+    return { ids, steps, done: true };
+  } catch (e) {
+    steps.push({ key: "deal", title: "Lead", state: "FEHLER", detail: errText(e) });
+    return { ids, steps, done: false };
+  }
+}
+
 /** Vorgang nach Moco schreiben (Knopf „In Moco anlegen“). Wiederholbar, bis alle Schritte erledigt sind. */
 export async function writeCaseToMoco(actor: Actor, caseId: string, opts: { allowCreateCustomer?: boolean; allowCreateBroker?: boolean } = {}, client?: MocoFullClient) {
   if (!canWriteMoco(actor)) throw new ForbiddenError("Nach Moco schreiben Sales Operations, Backoffice-Verwaltung und Geschäftsführung.");
   if (!client && !mocoWriteOn()) throw new TransitionError("Das Schreiben nach Moco ist nicht eingeschaltet (MOCO_WRITE=on).");
   const c = await requireCase(actor, caseId);
-  if (c.status !== "BEAUFTRAGT") throw new TransitionError("Nach Moco geht ein Vorgang, sobald die Bestellung bestätigt ist.");
+  if (c.status === "ANGEBOT_VERSENDET" && !c.isRenewal) return writeOfferCase(actor, c, opts, client ?? getMocoClient());
+  if (c.status !== "BEAUFTRAGT") throw new TransitionError("Nach Moco geht ein Vorgang, sobald das Angebot oder die Bestellung bestätigt ist.");
   if (c.isRenewal) throw new TransitionError("Bei einer Verlängerung wird das Projektende am Einsatz fortgeschrieben – ein neues Projekt entsteht nicht.");
   const broker = c.channel === "VERMITTLER";
   const customerAccId = broker ? c.endCustomerAccountId : c.partnerAccountId;
@@ -303,4 +332,31 @@ export async function mocoProbeRun(actor: Actor, client?: MocoFullClient) {
   });
   await recordAudit(db, actor, "moco.probe_run", "WORKSPACE", actor.workspaceId, { fertig: r.done, ids: r.ids, schritte: r.steps.map((s) => `${s.key}:${s.state}`) });
   return { ...r, projectUrl: r.ids.projectId ? mocoProjectUrl(r.ids.projectId) : null };
+}
+
+async function writeOfferCase(actor: Actor, c: Awaited<ReturnType<typeof requireCase>>, opts: { allowCreateCustomer?: boolean; allowCreateBroker?: boolean }, client: MocoFullClient) {
+  const accId = c.endCustomerAccountId ?? c.partnerAccountId;
+  if (!accId) throw new ValidationError("Am Vorgang fehlt der Vertragspartner.");
+  const acc = (await db.query.accounts.findFirst({ where: eq(schema.accounts.id, accId) }))!;
+  const opp = c.opportunityId ? await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, c.opportunityId) }) : null;
+  const leaderId = opp?.ownerUserId ?? acc.responsibleBdUserId;
+  const leader = leaderId ? await db.query.users.findFirst({ where: eq(schema.users.id, leaderId), columns: { mocoUserId: true } }) : null;
+  const partner = c.partnerAccountId && c.partnerAccountId !== accId ? await db.query.accounts.findFirst({ where: eq(schema.accounts.id, c.partnerAccountId), columns: { name: true } }) : null;
+  const prev = ((c.systems ?? {}) as { moco?: MocoState }).moco ?? { mode: "PROBELAUF" };
+  const r = await writeOfferLeadToMoco(client, {
+    companyName: acc.name,
+    knownCompanyId: acc.mocoCompanyId ?? undefined,
+    allowCreate: !!opts.allowCreateCustomer || !!opts.allowCreateBroker,
+    leadName: [acc.name, c.role, c.personName].filter(Boolean).join(" – "),
+    money: c.dailyRate && c.days ? Math.round(Number(c.dailyRate) * c.days) : 0,
+    leaderMocoUserId: leader?.mocoUserId ?? null,
+    note: `Accountmeister ${c.number}${c.offerNumber ? ` · Angebot ${c.offerNumber}` : ""}${c.brokerRef ? ` · Referenz ${c.brokerRef}` : ""}`,
+    tags: ["Accountmeister", ...(partner ? [partner.name] : [])],
+  }, prev.ids?.dealId ?? opp?.mocoDealId ?? undefined);
+  if (r.ids.customerCompanyId && !acc.mocoCompanyId) await db.update(schema.accounts).set({ mocoCompanyId: r.ids.customerCompanyId }).where(eq(schema.accounts.id, acc.id));
+  if (opp && r.ids.dealId && !opp.mocoDealId) await db.update(schema.opportunities).set({ mocoDealId: r.ids.dealId, updatedAt: new Date() }).where(eq(schema.opportunities.id, opp.id));
+  const moco: MocoState = { ...prev, mode: r.done ? "LEAD" : "TEILWEISE", ids: { ...(prev.ids ?? {}), dealId: r.ids.dealId }, results: r.steps, writtenAt: new Date().toISOString() };
+  await db.update(schema.orderCases).set({ systems: { ...((c.systems ?? {}) as Record<string, unknown>), moco }, updatedAt: new Date() }).where(eq(schema.orderCases.id, c.id));
+  await recordAudit(db, actor, "order_case.moco_lead", "ORDER_CASE", c.id, { fertig: r.done, dealId: r.ids.dealId ?? null });
+  return r;
 }

@@ -345,7 +345,11 @@ describe("e70 Auftragseingang: nach Moco schreiben", () => {
     const client = new FixtureMocoClient("./tests/fixtures/moco");
     await db.update(schema.users).set({ mocoUserId: 4711 }).where(eq(schema.users.id, s.users.david));
     const offer = await createOfferWithoutDocument(ops, { channel: "DIREKT", partnerAccountId: s.accountId, personNewName: `Nora Neu ${uniq()} (fiktiv)`, role: "Testerin", dailyRate: "800", startDate: "2027-02-01", endDate: "2027-04-30", offerNumber: `M-${uniq()}` });
-    await expect(writeCaseToMoco(ops, offer.id, {}, client)).rejects.toThrow(/sobald die Bestellung bestätigt ist/);
+    // Angebot: nur Firma und Lead in der Angebotsphase
+    const lead = await writeCaseToMoco(ops, offer.id, { allowCreateCustomer: true }, client);
+    expect(lead.done).toBe(true);
+    expect(FixtureMocoClient.written.some((x) => x.what === "project")).toBe(false);
+    expect(((await getCase(ops, offer.id)).systems as { moco: { mode: string } }).moco.mode).toBe("LEAD");
     const d = await uploadForCase(ops, file(`po-${uniq()}.txt`, `Bestellung ${uniq()}`), { forCaseId: offer.id });
     const po = `MO-${uniq()}`;
     const c = await confirmCase(ops, d.id, { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, personNewName: offer.personName!, role: "Testerin", dailyRate: "800", startDate: "2027-02-01", endDate: "2027-04-30", orderNumber: po, matchCaseId: offer.id });
@@ -353,9 +357,53 @@ describe("e70 Auftragseingang: nach Moco schreiben", () => {
     const r = await writeCaseToMoco(ops, c.id, { allowCreateCustomer: true }, client);
     expect(r.done).toBe(true);
     expect((await db.query.engagements.findFirst({ where: eq(schema.engagements.id, c.engagementId!) }))!.mocoProjectId).toBe(r.ids.projectId);
-    expect((await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, c.opportunityId!) }))!.mocoDealId).toBe(r.ids.dealId);
+    expect((await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, c.opportunityId!) }))!.mocoDealId).toBe(lead.ids.dealId);
+    expect(r.ids.dealId).toBe(lead.ids.dealId);
+    expect(FixtureMocoClient.written.some((x) => x.what === "deal.update" && (x.payload as { status: string }).status === "won")).toBe(true);
     expect((await db.query.accounts.findFirst({ where: eq(schema.accounts.id, s.accountId) }))!.mocoCompanyId).toBeTruthy();
     const after = await getCase(ops, c.id);
     expect((after.systems as { moco: { mode: string } }).moco.mode).toBe("GESCHRIEBEN");
+  });
+});
+
+describe("e71 Auftragseingang: Excel-Angebotsformular", () => {
+  it("liest Satz, Tage, Zeitraum und Nummer direkt aus den Zellen; verbundene Zellen blähen den Text nicht auf", async () => {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Offer overview");
+    ws.getCell("B5").value = "offer for";
+    ws.getCell("C5").value = "Beispielkonzern AG (fiktiv)";
+    ws.mergeCells("C5:R5");
+    ws.getCell("Z5").value = "Instructions for using the offer template. ".repeat(20);
+    ws.mergeCells("Z5:AH60");
+    ws.getCell("S9").value = "VCA-M27-01_0042";
+    ws.getCell("B22").value = "Brief summary of the service description";
+    ws.getCell("B23").value = "Verlängerung: Scrum Master Testprojekt";
+    ws.getCell("Q28").value = 100;
+    ws.getCell("U28").value = 1250;
+    ws.getCell("X28").value = 1180;
+    ws.getCell("M54").value = new Date(Date.UTC(2027, 0, 1));
+    ws.getCell("Q54").value = new Date(Date.UTC(2027, 5, 30));
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+    const { readOfferTemplate } = await import("@/modules/o2o/template");
+    const t = (await readOfferTemplate(buf))!;
+    expect(t.dailyRate?.value).toBe(1180);
+    expect(t.days?.value).toBe(100);
+    expect(t.start?.value).toBe("2027-01-01");
+    expect(t.end?.value).toBe("2027-06-30");
+    expect(t.offerNumber?.value).toBe("VCA-M27-01_0042");
+    expect(t.role?.value).toBe("Scrum Master Testprojekt");
+    const { extractDocumentText } = await import("@/modules/documents/extract");
+    const ex = await extractDocumentText(buf, "xlsx");
+    expect(ex.text.length).toBeLessThan(2000);
+    expect(ex.text.match(/Beispielkonzern/g)!.length).toBe(1);
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const c = await uploadForCase(ops, { name: `offer_${uniq()}.xlsx`, type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", size: buf.length, arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer });
+    expect(Number(c.dailyRate)).toBe(1180);
+    expect(c.days).toBe(100);
+    expect(c.startDate).toBe("2027-01-01");
+    expect(c.endDate).toBe("2027-06-30");
+    expect(c.partnerAccountId).toBe(s.accountId);
   });
 });

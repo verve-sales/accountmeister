@@ -87,6 +87,8 @@ export function detectPeriod(text: string): { start: Field; end: Field } {
   const patterns = [
     new RegExp(`(?:beginnt|startet)\\s+(?:am\\s+)?${D}[\\s\\S]{0,60}?(?:endet|läuft)\\s+(?:voraussichtlich\\s+|spätestens\\s+)?(?:am\\s+|bis\\s+(?:zum\\s+)?)?${D}`, "i"),
     new RegExp(`(?:vom|von|zeitraum|laufzeit|einsatzzeitraum|leistungszeitraum|projektlaufzeit|period)?\\s*:?\\s*${D}\\s*(?:bis|-|–|—|to)\\s*(?:zum\\s*|einschließlich\\s*)?${D}`, "i"),
+    // Tabellenzeile aus Excel: „from | until“ … „01.01.2026 | 30.06.2026“
+    new RegExp(`(?:from|von|beginn|start)[^\\n]{0,40}\\|\\s*(?:until|bis|ende|to)\\b[\\s\\S]{0,200}?${D}\\s*\\|\\s*${D}`, "i"),
   ];
   for (const re of patterns) {
     const m = re.exec(text);
@@ -150,6 +152,8 @@ export function detectDays(text: string): Field<number> {
     const v = num(m[1]!);
     if (v > 0 && v <= 2000) return { value: v, evidence: clip(text, m.index, m[0].length), by: "REGEL" };
   }
+  const total = hit(text, /total person days\s*\|?\s*:?\s*(\d{1,4})\b/i, (m) => Number(m[1]));
+  if (total && total.value > 0 && total.value <= 2000) return total;
   for (const m of hits(text, /(?:maximal|bis zu|insgesamt|umfang[^\n]{0,40}?|kontingent[^\n]{0,30}?|budget[^\n]{0,30}?)\s*(\d{1,5}(?:\.\d{3})?)\s*(?:stunden|std\.?)\b/i)) {
     const h = num(m[1]!);
     if (h >= 8 && h <= 16000) return { value: Math.round((h / 8) * 10) / 10, evidence: `${clip(text, m.index, m[0].length)} (Stunden ÷ 8)`, by: "REGEL" };
