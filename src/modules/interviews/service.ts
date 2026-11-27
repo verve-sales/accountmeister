@@ -48,10 +48,10 @@ export async function startInterview(actor: Actor, raw: unknown, deps: { provide
   const i = parsed.data;
   let ctx: SetupContext | null = null;
   if (i.kind === "SETUP_ERGAENZUNG") {
-    if (!i.setupId) throw new ValidationError("Für eine Setup-Ergänzung fehlt das Setup.");
+    if (!i.setupId) throw new ValidationError("Für eine Projekt-Ergänzung fehlt das Projekt.");
     ctx = await loadSetupContext(actor, i.setupId);
-    if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-    if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Nur Setup-Bearbeitende führen ein Interview zu diesem Setup.");
+    if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+    if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Nur Projekt-Bearbeitende führen ein Interview zu diesem Projekt.");
   } else if (!canCreateAccount(actor)) {
     throw new ForbiddenError("Nur BD oder Principal legen Kunden an.");
   }
@@ -81,7 +81,7 @@ export async function listMyInterviews(actor: Actor) {
   return db.query.interviews.findMany({ where: and(eq(schema.interviews.workspaceId, actor.workspaceId), eq(schema.interviews.actorUserId, actor.userId)), orderBy: desc(schema.interviews.createdAt), limit: 20 });
 }
 
-/** Berechtigter Kontext als Text: nur, was der Akteur im Setup ohnehin sieht (Namen, Funktionen, offene Bedarfe). */
+/** Berechtigter Kontext als Text: nur, was der Akteur im Projekt ohnehin sieht (Namen, Funktionen, offene Bedarfe). */
 async function buildKnownContext(actor: Actor, interview: typeof schema.interviews.$inferSelect): Promise<string> {
   if (!interview.setupId) return "";
   const ctx = await loadSetupContext(actor, interview.setupId);
@@ -91,7 +91,7 @@ async function buildKnownContext(actor: Actor, interview: typeof schema.intervie
     db.query.personFunctions.findMany({}),
     db.query.opportunities.findMany({ where: eq(schema.opportunities.setupId, ctx.setup.id) }),
   ]);
-  const lines = [`Kunde: ${ctx.account.name}`, `Setup: ${ctx.setup.name}${ctx.setup.contextNote ? ` – ${ctx.setup.contextNote}` : ""}`];
+  const lines = [`Kunde: ${ctx.account.name}`, `Projekt: ${ctx.setup.name}${ctx.setup.contextNote ? ` – ${ctx.setup.contextNote}` : ""}`];
   if (persons.length) lines.push(`Bekannte Personen: ${persons.map((p) => `${p.displayName}${fns.find((f) => f.personId === p.id && !f.validTo)?.functionTitle ? ` (${fns.find((f) => f.personId === p.id && !f.validTo)!.functionTitle})` : ""}`).join("; ")}`);
   if (opps.length) lines.push(`Bedarfe: ${opps.map((o) => `${o.title} [${o.status}]`).join("; ")}`);
   return lines.join("\n");

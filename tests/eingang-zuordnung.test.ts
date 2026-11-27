@@ -65,7 +65,7 @@ describe("Etappe 42: Kunden-Kennungen – Eingänge eindeutig zuordnen", () => {
     expect(r2.byKey).toBe(true);
   });
 
-  it("K03: Falsch zugeordnet → „Anderer Kunde“: neu ausgewertet im richtigen Setup, Domäne wandert als Kennung", async () => {
+  it("K03: Falsch zugeordnet → „Anderer Kunde“: neu ausgewertet im richtigen Projekt, Domäne wandert als Kennung", async () => {
     const { david, a, b, sb, tag } = await twoCustomers();
     // falsche Kennung bei A sorgt für Fehlzuordnung
     await learnDomain(db, david.workspaceId, a.id, `kbn-${tag}.example`);

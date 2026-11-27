@@ -7,9 +7,9 @@ import { hasRole, type Actor } from "@/modules/identity/actor";
 import { canEditSetup, canViewSetup, canViewSource, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 
 /**
- * Personenbewertung je Setup (Etappe 7B), an MEDDPICC angelehnt: Rolle in der Entscheidung, Haltung zu Verve, Einfluss.
+ * Personenbewertung je Projekt (Etappe 7B), an MEDDPICC angelehnt: Rolle in der Entscheidung, Haltung zu Verve, Einfluss.
  * Jede Bewertung ist eine Hypothese, bis sie mit Quelle bestätigt wird (E-040). Sichtbar für BD, Principal und den
- * Beziehungshalter (Anker) der Person – nicht pauschal für CEO (analog zur Quellenregel S02).
+ * Beziehungshalter (Kontaktpate) der Person – nicht pauschal für CEO (analog zur Quellenregel S02).
  */
 
 export type AssessmentRow = typeof schema.personAssessments.$inferSelect;
@@ -19,7 +19,7 @@ async function isRelationshipHolder(actor: Actor, personId: string, setupId: str
   return !!rel && (rel.setupId === null || rel.setupId === setupId);
 }
 
-/** Wer darf Bewertungen eines Setups sehen: BD/Principal mit Setup-Sicht, Setup-Bearbeitende; Anker nur für Personen, zu denen er die Beziehung hält. */
+/** Wer darf Bewertungen eines Projekts sehen: BD/Principal mit Projekt-Sicht, Projekt-Bearbeitende; Kontaktpate nur für Personen, zu denen er die Beziehung hält. */
 export async function canViewAssessment(actor: Actor, ctx: SetupContext, personId: string): Promise<boolean> {
   if (!canViewSetup(actor, ctx)) return false;
   if (hasRole(actor, "BD") || hasRole(actor, "PRINCIPAL") || hasRole(actor, "BD", ctx.account.id) || hasRole(actor, "PRINCIPAL", ctx.account.id)) return true;
@@ -45,9 +45,9 @@ export async function upsertAssessment(actor: Actor, raw: unknown) {
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const i = parsed.data;
   const ctx = await loadSetupContext(actor, i.setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
   const holder = await isRelationshipHolder(actor, i.personId, i.setupId);
-  if (!canEditSetup(actor, ctx) && !holder) throw new ForbiddenError("Bewertungen pflegen Setup-Bearbeitende oder der Beziehungshalter der Person.");
+  if (!canEditSetup(actor, ctx) && !holder) throw new ForbiddenError("Bewertungen pflegen Projekt-Bearbeitende oder der Beziehungshalter der Person.");
   const person = await db.query.persons.findFirst({ where: and(eq(schema.persons.id, i.personId), eq(schema.persons.accountId, ctx.account.id)) });
   if (!person) throw new NotFoundError("Person");
   const confirm = i.confirm === true || i.confirm === "on" || i.confirm === "true";
@@ -88,12 +88,12 @@ export async function upsertAssessment(actor: Actor, raw: unknown) {
 export const DECISION_ROLES_FOR_COVERAGE = ["BEDARFSTRAEGER", "FACHLICHE_BEWERTUNG", "BUDGETVERANTWORTUNG", "EINKAUF_VERTRAGSWEG"] as const;
 
 /**
- * Buyingcenter eines Setups: Personen mit Funktion, Beziehungsstand (bester Stand über alle Halter), Bewertung,
+ * Buyingcenter eines Projekts: Personen mit Funktion, Beziehungsstand (bester Stand über alle Halter), Bewertung,
  * und die Lücken – Entscheidungsrollen ohne Person, Personen ohne Kontakt, kritische Haltungen ohne Gegenüber.
  */
 export async function getBuyingCenter(actor: Actor, setupId: string) {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
   const people = await db.query.persons.findMany({ where: eq(schema.persons.accountId, ctx.account.id), orderBy: (p, { asc }) => [asc(p.displayName)] });
   const ids = people.map((p) => p.id);
   if (ids.length === 0) return { ctx, rows: [], gaps: coverageGaps([], []), canEdit: canEditSetup(actor, ctx) };

@@ -20,7 +20,7 @@ export default async function SuchePage({ searchParams }: { searchParams: Promis
         <button className="btn btn-small" type="submit">Suchen</button>
       </form>
       {q && q.length < 2 && <p className="muted text-sm">Mindestens zwei Zeichen.</p>}
-      {q.length >= 2 && total === 0 && <p className="muted text-sm">Nichts gefunden für „{q}“ – gesucht wird in Kunden, Freelancern, Einsätzen, Chancen, Setups und Zugängen, die du sehen darfst.</p>}
+      {q.length >= 2 && total === 0 && <p className="muted text-sm">Nichts gefunden für „{q}“ – gesucht wird in Kunden, Freelancern, Einsätzen, Chancen, Projekte und Zugängen, die du sehen darfst.</p>}
       {r.groups.map((g) => (
         <section key={g.kind} className="card">
           <h2 className="font-semibold mb-2">{g.label} ({g.hits.length})</h2>

@@ -98,12 +98,12 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
               );
             })()}
 
-            {q.key === "ENGAGEMENT_MISSING" && (canDecide ? <ExistingEngagementForm accountId={id} setups={activeSetups} open /> : <p className="text-sm">Laufende Einsätze trägt der BD nach. Tipp: per „Unterstützung anfragen“ im Setup einen BD darum bitten.</p>)}
+            {q.key === "ENGAGEMENT_MISSING" && (canDecide ? <ExistingEngagementForm accountId={id} setups={activeSetups} open /> : <p className="text-sm">Laufende Einsätze trägt der BD nach. Tipp: per „Unterstützung anfragen“ im Projekt einen BD darum bitten.</p>)}
 
             {(q.key === "FEEDBACK" || q.key === "LISTING" || q.key === "RISKS") && <AnswerForm k={q.key} h={h} id={id} prefix="q" submitLabel="Speichern und weiter" />}
 
             {q.key === "PEOPLE" && (
-              <p className="text-sm">Personen und Beziehungen werden je Setup gepflegt: {activeSetups.length ? activeSetups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/personen`}>{s.name}</Link></span>) : "zuerst ein Setup anlegen"}.</p>
+              <p className="text-sm">Personen und Beziehungen werden je Projekt gepflegt: {activeSetups.length ? activeSetups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/personen`}>{s.name}</Link></span>) : "zuerst ein Projekt anlegen"}.</p>
             )}
 
             {h.questions.length > 1 && <p className="text-sm mt-3"><Link href={`${back}?f=${(idx + 1) % h.questions.length}#interview`}>Später beantworten – nächste Frage</Link></p>}
@@ -119,7 +119,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
       {may && (
         <section className="card" id="antworten">
           <h2 className="font-semibold mb-1">Antworten ändern</h2>
-          <p className="muted text-sm mb-2">Kundenfeedback, Listung und Risiken lassen sich jederzeit korrigieren oder aktualisieren. Einsatzdaten (Ende, Frist, Berater) änderst du unten bei „Einsätze“, Personen im jeweiligen Setup.</p>
+          <p className="muted text-sm mb-2">Kundenfeedback, Listung und Risiken lassen sich jederzeit korrigieren oder aktualisieren. Einsatzdaten (Ende, Frist, Berater) änderst du unten bei „Einsätze“, Personen im jeweiligen Projekt.</p>
           {([
             ["FEEDBACK", "Kundenfeedback", h.answers.feedback ? `${feedbackToneLabel[h.answers.feedback.tone as keyof typeof feedbackToneLabel] ?? h.answers.feedback.tone}${h.answers.feedback.date ? ` · ${fmtDate(h.answers.feedback.date)}` : ""}${h.answers.feedback.note ? ` · ${h.answers.feedback.note}` : ""}` : null],
             ["LISTING", "Listung", h.answers.listing ? `${listingLabel[h.answers.listing.status as keyof typeof listingLabel] ?? h.answers.listing.status}${h.answers.listing.validUntil ? ` · gültig bis ${fmtDate(h.answers.listing.validUntil)}` : ""}${h.answers.listing.note ? ` · ${h.answers.listing.note}` : ""}` : null],
@@ -161,7 +161,7 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
                   <td><Link href={`/bedarfe/${e.opportunityId}`}>{e.title}</Link><div className="muted text-xs">{e.setupName}</div></td>
                   <td className="text-sm">
                     {e.consultantName ?? <span className="muted">–</span>}
-                    {isAnker(e.setupId, e.consultantUserId) && <div className="muted text-xs">zugleich Anker</div>}
+                    {isAnker(e.setupId, e.consultantUserId) && <div className="muted text-xs">zugleich Kontaktpate</div>}
                     {may && (
                       <details className="mt-1"><summary className="text-xs">ändern</summary>
                       <form action={setOrderConsultantAction} className="flex flex-wrap gap-1 mt-1">
@@ -270,13 +270,13 @@ export default async function HealthPage({ params, searchParams }: { params: Pro
 }
 
 function ExistingEngagementForm({ accountId, setups, open = false }: { accountId: string; setups: { id: string; name: string }[]; open?: boolean }) {
-  if (setups.length === 0) return <p className="muted text-sm mt-2">Zum Nachtragen braucht der Kunde mindestens ein Setup.</p>;
+  if (setups.length === 0) return <p className="muted text-sm mt-2">Zum Nachtragen braucht der Kunde mindestens ein Projekt.</p>;
   return (
     <details className="mt-3" open={open}>
       <summary className="text-sm">Laufenden Einsatz nachtragen (bisher nicht im Tool)</summary>
       <form action={recordExistingEngagementAction} className="mt-2 grid sm:grid-cols-3 gap-3">
         <input type="hidden" name="accountId" value={accountId} />
-        <div><label className="label" htmlFor="eeSetup">Setup</label><select id="eeSetup" name="setupId" className="select" required defaultValue={setups[0]!.id}>{setups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+        <div><label className="label" htmlFor="eeSetup">Projekt</label><select id="eeSetup" name="setupId" className="select" required defaultValue={setups[0]!.id}>{setups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
         <div className="sm:col-span-2"><label className="label" htmlFor="eeTitle">Bezeichnung</label><input id="eeTitle" name="title" className="input" required minLength={3} placeholder="z. B. Testmanagement Kernbanksystem" /></div>
         <div><label className="label" htmlFor="eeKind">Art</label><select id="eeKind" name="kind" className="select" defaultValue="VERVE_EXPERTE">{chanceKindValues.map((k) => <option key={k} value={k}>{chanceKindLabel[k]}</option>)}</select></div>
         <div><label className="label" htmlFor="eeHc">Anzahl Personen</label><input id="eeHc" name="headcount" type="number" min={1} max={999} className="input" /></div>

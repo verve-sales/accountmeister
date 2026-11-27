@@ -11,7 +11,7 @@ import { createHandover, type HandoverKind } from "./handover";
  * Konvertierungsvorgang (Etappe 51): sechs Schritte von der Anfrage bis zur Beauftragung.
  *   1 Anfrage · 2 Klärung · 3 Besetzung · 4 Angebot · 5 Freelancer-Vertrag · 6 Beauftragung
  * Der Stand jedes Schritts ergibt sich aus Chance, Positionen, Unterlagen und den Zeitpunkten am Vorgang.
- * Welche Schritte gelten, bestimmen der Angebotsweg am Setup, der Beschaffungsweg des Kunden und die Besetzungsart
+ * Welche Schritte gelten, bestimmen der Angebotsweg am Projekt, der Beschaffungsweg des Kunden und die Besetzungsart
  * der Position. Seit e43 läuft je Position ein eigener Vorgang. Der Vorgang endet von selbst, wenn die Chance geschlossen wird, und ruht, wenn sie zurückgestellt ist.
  */
 
@@ -420,14 +420,14 @@ export async function listRunningConversions(actor: Actor) {
   return out;
 }
 
-/** Angebotsweg am Setup pflegen: wer das Setup bearbeiten darf, Sales Operations, Geschäftsführung. */
+/** Angebotsweg am Projekt pflegen: wer das Projekt bearbeiten darf, Sales Operations, Geschäftsführung. */
 export async function setSetupOfferPath(actor: Actor, setupId: string, value: string) {
   if (!(offerPathValues as readonly string[]).includes(value)) throw new ValidationError("Unbekannter Angebotsweg.");
   const ctx = await loadSetupContext(actor, setupId);
   const wide = hasRole(actor, "CEO") || actor.roles.has("SALES_OPS");
-  if (!ctx && !wide) throw new NotFoundError("Setup");
-  if (!wide && !(ctx && canEditSetup(actor, ctx))) throw new ForbiddenError("Den Angebotsweg pflegt, wer das Setup bearbeiten darf, Sales Operations oder die Geschäftsführung.");
+  if (!ctx && !wide) throw new NotFoundError("Projekt");
+  if (!wide && !(ctx && canEditSetup(actor, ctx))) throw new ForbiddenError("Den Angebotsweg pflegt, wer das Projekt bearbeiten darf, Sales Operations oder die Geschäftsführung.");
   const [u] = await db.update(schema.projectSetups).set({ offerPath: value, updatedAt: new Date() }).where(and(eq(schema.projectSetups.id, setupId), eq(schema.projectSetups.workspaceId, actor.workspaceId))).returning({ id: schema.projectSetups.id });
-  if (!u) throw new NotFoundError("Setup");
+  if (!u) throw new NotFoundError("Projekt");
   await recordAudit(db, actor, "setup.offer_path", "SETUP", setupId, { angebotsweg: value });
 }

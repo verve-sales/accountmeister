@@ -563,7 +563,7 @@ export async function ensureOrdersEnded(workspaceId: string): Promise<number> {
  * (beauftragt) und Auftrag (Beauftragung bestätigt, gestartet) mit Belegnotiz an. Entscheidungsrecht nötig.
  */
 export const existingEngagementInput = z.object({
-  setupId: z.string().min(1, "Bitte ein Setup wählen."),
+  setupId: z.string().min(1, "Bitte ein Projekt wählen."),
   title: z.string().trim().min(3, "Bezeichnung fehlt").max(200),
   kind: z.enum(schema.chanceKindEnum.enumValues).default("VERVE_EXPERTE"),
   headcount: z.preprocess((v) => (v === "" || v == null ? undefined : v), z.coerce.number().int().min(1).max(999).optional()),
@@ -583,7 +583,7 @@ export async function recordExistingEngagement(actor: Actor, accountId: string, 
   const account = await getAccount(actor, accountId);
   if (!canMaintainHealth(actor, account)) throw new ForbiddenError("Einsätze nachtragen dürfen BD, Principal oder CEO.");
   const setup = await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.id, i.setupId), eq(schema.projectSetups.accountId, accountId)) });
-  if (!setup) throw new ValidationError("Das Setup gehört nicht zu diesem Kunden.");
+  if (!setup) throw new ValidationError("Das Projekt gehört nicht zu diesem Kunden.");
   const owner = setup.bdUserId ?? account.responsibleBdUserId ?? actor.userId;
   const consultant = i.consultantName ? await matchUserByName(actor.workspaceId, i.consultantName) : null;
   return db.transaction(async (tx) => {
@@ -601,7 +601,7 @@ export async function recordExistingEngagement(actor: Actor, accountId: string, 
   });
 }
 
-/** Verve-Nutzer unscharf nach Namen finden (eindeutig, sonst null) – z. B. „Ferdinand Henze“ ~ „Ferdinand Henze (Anker)“. */
+/** Verve-Nutzer unscharf nach Namen finden (eindeutig, sonst null) – z. B. „Ferdinand Henze“ ~ „Ferdinand Henze (Kontaktpate)“. */
 export async function matchUserByName(workspaceId: string, name: string) {
   const norm = (x: string) => x.toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-zäöüß ]/g, " ").replace(/\s+/g, " ").trim();
   const q = norm(name);

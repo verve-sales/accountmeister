@@ -10,7 +10,7 @@ import { listRoles } from "@/modules/roles/catalog";
 import { getFocus } from "@/modules/focus/service";
 
 /**
- * Regelbasierte Lageanalyse je Setup (Etappe 9): Wo stehen wir, was ist der nächste große Schritt, was blockiert,
+ * Regelbasierte Lageanalyse je Projekt (Etappe 9): Wo stehen wir, was ist der nächste große Schritt, was blockiert,
  * was fehlt, welche Züge liegen nahe. Grundlage für Dashboard-Karten und Strategiefaden. Zählt und benennt nur,
  * was im Tool dokumentiert ist – keine Umsatz- oder Wahrscheinlichkeitswerte (Briefing 7, 11.3).
  */
@@ -58,7 +58,7 @@ export type SetupAnalysis = {
   daysSinceActivity: number;
   counts: { openActions: number; overdueActions: number; blockedActions: number; openSuggestions: number; mySuggestions: number; openQuestions: number; persons: number; signalsNew: number; opportunities: number };
   opportunities: { id: string; title: string; status: string; statusKey: string; ageDays: number; kind: string; kindLabel: string; roleName: string | null; headcount: number | null; horizon: string | null }[];
-  /** Wofür in einem Satz: worauf die Arbeit in diesem Setup hinausläuft */
+  /** Wofür in einem Satz: worauf die Arbeit in diesem Projekt hinausläuft */
   purpose: string;
   weekly: { lastConfirmedAt: Date | null; daysSince: number | null };
 };
@@ -76,9 +76,9 @@ function stageFromOpportunities(opps: { status: string }[], offers: { status: st
   return "KONTAKT";
 }
 
-/** Analyse eines Setups, das der Akteur sehen darf. Rohquellen (Notizen, Dokumente) werden nicht wiedergegeben. */
+/** Analyse eines Projekts, das der Akteur sehen darf. Rohquellen (Notizen, Dokumente) werden nicht wiedergegeben. */
 export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<SetupAnalysis> {
-  if (!canViewSetup(actor, ctx)) throw new Error("Keine Sicht auf das Setup");
+  if (!canViewSetup(actor, ctx)) throw new Error("Keine Sicht auf das Projekt");
   const setupId = ctx.setup.id;
   const today = new Date().toISOString().slice(0, 10);
   const [opps, actions, suggestions, openQuestions, persons, signals, reviews] = await Promise.all([
@@ -118,7 +118,7 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
   const setupHref = `/setups/${setupId}`;
 
   // Grundlagen
-  if (ctx.setup.status === "ENTWURF") missing.push("Setup ist noch Entwurf – Kontext und Beteiligte festlegen.");
+  if (ctx.setup.status === "ENTWURF") missing.push("Projekt ist noch Entwurf – Kontext und Beteiligte festlegen.");
   if (!ctx.setup.contextNote?.trim()) missing.push("Kontextsatz fehlt: Was läuft hier beim Kunden?");
   if (!ctx.setup.bdUserId) missing.push("Zuständiger BD ist nicht zugeordnet.");
   if (persons.length === 0) missing.push("Keine Ansprechpartner erfasst.");
@@ -156,10 +156,10 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
   }
   for (const o of activeOpps) if (!o.roleId && o.kind !== "AUSSCHREIBUNG") missing.push(`Chance „${o.title}“: Standardrolle noch offen.`);
   if (activeOpps.length > 0 && activeOpps.every((o) => o.status === "ANTIZIPIERT")) moves.push({ text: "Alle Chancen sind nur antizipiert – im nächsten Gespräch prüfen, ob der Kunde den Bedarf ausspricht.", href: setupHref });
-  // Strategischer Fokus „Freelancer-Hebel“ (Etappe 21): noch keine Freelancer-Chance → Frage nach weiteren Rollen
+  // Strategischer Fokus „Ausbaupotenzial“ (Etappe 21): noch keine Freelancer-Chance → Frage nach weiteren Rollen
   if (ctx.setup.status !== "ARCHIVIERT" && !opps.some((o) => o.kind === "FREELANCER_EXPERTE" && o.status !== "BEENDET")) {
     const focus = await getFocus(ctx.setup.workspaceId);
-    if (focus.freelancerLever) moves.push({ text: "Freelancer-Hebel: im nächsten Gespräch fragen, welche weiteren Rollen im Team fehlen – daraus eine Chance der Art „Freelancer-Experte“ machen.", href: setupHref });
+    if (focus.freelancerLever) moves.push({ text: "Ausbaupotenzial: im nächsten Gespräch fragen, welche weiteren Rollen im Team fehlen – daraus eine Chance der Art „Freelancer-Experte“ machen.", href: setupHref });
   }
 
   // Aktionen
@@ -172,13 +172,13 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
   // Vorschläge und Fragen
   const mine = suggestions.filter((s) => s.proposedOwnerUserId === actor.userId);
   if (mine.length > 0) moves.push({ text: `${mine.length} Vorschlag/Vorschläge warten auf deine Entscheidung.`, href: "/meine-arbeit" });
-  else if (suggestions.length > 0) moves.push({ text: `${suggestions.length} offene Vorschläge im Setup.`, href: setupHref });
+  else if (suggestions.length > 0) moves.push({ text: `${suggestions.length} offene Vorschläge im Projekt.`, href: setupHref });
   if (openQuestions.length > 0) moves.push({ text: `${openQuestions.length} offene Frage(n) ins nächste Kundengespräch mitnehmen.`, href: setupHref });
 
   // Rhythmus
   const lastActivity = new Date(Math.max(ctx.setup.updatedAt.getTime(), ...actions.map((a) => a.updatedAt.getTime()), ...opps.map((o) => o.updatedAt.getTime())));
   const since = days(lastActivity) ?? 0;
-  if (since > 14 && ["ENTWURF", "AKTIV"].includes(ctx.setup.status)) blockers.push(`Seit ${since} Tagen keine Änderung im Setup.`);
+  if (since > 14 && ["ENTWURF", "AKTIV"].includes(ctx.setup.status)) blockers.push(`Seit ${since} Tagen keine Änderung im Projekt.`);
   const weeklyDays = days(lastWeekly);
   if (ctx.setup.status === "AKTIV" && (weeklyDays === null || weeklyDays > 14)) missing.push(weeklyDays === null ? "Noch kein bestätigtes Weekly." : `Letztes bestätigtes Weekly vor ${weeklyDays} Tagen.`);
 
@@ -206,7 +206,7 @@ export async function analyzeSetup(actor: Actor, ctx: SetupContext): Promise<Set
 /** Kompakte Textfassung für KI-Eingaben und den Strategiefaden – ohne Rohquellen. */
 export function analysisToText(a: SetupAnalysis): string {
   const lines = [
-    `Setup: ${a.setupName} (Kunde: ${a.accountName}, Status ${a.setupStatus})`,
+    `Projekt: ${a.setupName} (Kunde: ${a.accountName}, Status ${a.setupStatus})`,
     `Stufe: ${a.stageLabel}. Nächster großer Schritt: ${a.nextStep}`,
     a.opportunities.length ? `Chancen: ${a.opportunities.map((o) => `${o.title} [${o.status}, ${o.ageDays} Tage]`).join("; ")}` : "Chancen: keine",
     `Offene Aktionen: ${a.counts.openActions} (überfällig ${a.counts.overdueActions}, blockiert ${a.counts.blockedActions}); offene Vorschläge: ${a.counts.openSuggestions}; offene Fragen: ${a.counts.openQuestions}; Personen: ${a.counts.persons}; neue Beobachtungen: ${a.counts.signalsNew}`,
@@ -218,7 +218,7 @@ export function analysisToText(a: SetupAnalysis): string {
   return lines.filter(Boolean).join("\n");
 }
 
-/** Hilfsfunktion: Setups, die in einem Zeitraum still waren. */
+/** Hilfsfunktion: Projekte, die in einem Zeitraum still waren. */
 export async function staleSetupIds(setupIds: string[], daysBack = 14): Promise<string[]> {
   if (setupIds.length === 0) return [];
   const rows = await db.query.projectSetups.findMany({ where: and(inArray(schema.projectSetups.id, setupIds), lt(schema.projectSetups.updatedAt, new Date(Date.now() - daysBack * DAY))), columns: { id: true } });

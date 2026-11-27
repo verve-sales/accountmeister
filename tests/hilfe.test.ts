@@ -44,7 +44,7 @@ describe("Etappe 25: Hilfe-Wissen für den Assistenten", () => {
     expect(text).toMatch(/Inhaltsverzeichnis der Hilfe/);
     expect(text).toMatch(/Deine Rollen: .*Principal/);
     expect(text).toMatch(/den strategischen Fokus bearbeiten/);
-    expect(text).toMatch(/Freelancer-Hebel (an|aus)/);
+    expect(text).toMatch(/Ausbaupotenzial (an|aus)/);
     expect(text).toMatch(/Aktive Vorgehensmuster: .*Altkunden-Reaktivierung/);
   });
 

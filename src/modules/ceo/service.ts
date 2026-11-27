@@ -52,7 +52,7 @@ export type CeoDashboard = {
 
 /**
  * Gesamtbild für den CEO: Performance je Kunde gegenüber vereinbarten Accountzielen, Aktivität der letzten
- * Woche und wie Principal, BD und Anker dabei zusammenwirken (Koeffizient), sowie die aussichtsreichsten
+ * Woche und wie Principal, BD und Kontaktpate dabei zusammenwirken (Koeffizient), sowie die aussichtsreichsten
  * dokumentierten Chancen je Kunde. Baut ausschließlich auf bereits vorhandenen Bausteinen auf (buildPortfolio,
  * listGoals, buildChanceOverview, buildAccountActivity) – keine zweite Datenhaltung.
  */

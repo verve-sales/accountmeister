@@ -18,7 +18,7 @@ import { getFocus } from "@/modules/focus/service";
 /**
  * Persönlicher KI-Berater je Chance (Etappe 15, aus dem BD-Wunsch „ein persönlicher KI-Berater, der mir hilft,
  * die nächsten Schritte zur Konvertierung von Opportunities zu gehen“). Analog zum Strategiefaden (Etappe 9),
- * aber je Bedarf statt je Setup: eine versionierte Hypothese – Lage dieser einen Chance, nächster Schritt zur
+ * aber je Bedarf statt je Projekt: eine versionierte Hypothese – Lage dieser einen Chance, nächster Schritt zur
  * Konvertierung, Züge, Risiken, offene Fragen. Die KI schlägt vor (nur mit Textstelle), der BD prüft, ändert und
  * speichert eine Fassung. Ältere Fassungen bleiben nachlesbar.
  */
@@ -83,9 +83,9 @@ export async function analyzeOpportunity(actor: Actor, opportunityId: string): P
   if (d.linked.questions.length) moves.push(`${d.linked.questions.length} offene Frage(n) ins nächste Kundengespräch mitnehmen.`);
   if (d.linked.signals.length) moves.push(`${d.linked.signals.length} Beobachtung(en) mit Bezug auf diese Chance.`);
   if (opp.status === "ANTIZIPIERT") moves.push("Im nächsten Gespräch prüfen, ob der Kunde den Bedarf ausspricht.");
-  // Strategischer Fokus „Freelancer-Hebel“ (Etappe 21)
+  // Strategischer Fokus „Ausbaupotenzial“ (Etappe 21)
   if (opp.status !== "BEENDET" && (await getFocus(actor.workspaceId)).freelancerLever) {
-    moves.push(opp.kind === "FREELANCER_EXPERTE" ? "Freelancer-Hebel: prüfen, ob das Team neben dieser Rolle weitere Profile braucht." : "Freelancer-Hebel: fragen, welche weiteren Rollen im Team fehlen – Verve kann alle Spezialistenprofile stellen.");
+    moves.push(opp.kind === "FREELANCER_EXPERTE" ? "Ausbaupotenzial: prüfen, ob das Team neben dieser Rolle weitere Profile braucht." : "Ausbaupotenzial: fragen, welche weiteren Rollen im Team fehlen – Verve kann alle Spezialistenprofile stellen.");
   }
 
   return {
@@ -110,7 +110,7 @@ export async function analyzeOpportunity(actor: Actor, opportunityId: string): P
 /** Kompakte Textfassung für KI-Eingaben und den Berater-Faden – ohne Rohquellen. */
 export function opportunityAnalysisToText(a: OpportunityAnalysis): string {
   const lines = [
-    `Chance: ${a.title} (Kunde: ${a.accountName} · Setup: ${a.setupName} · Status ${a.statusLabel}, ${a.ageDays} Tage alt)`,
+    `Chance: ${a.title} (Kunde: ${a.accountName} · Projekt: ${a.setupName} · Status ${a.statusLabel}, ${a.ageDays} Tage alt)`,
     `Nächster Schritt: ${a.nextStep}`,
     a.blockers.length ? `Blocker: ${a.blockers.join(" | ")}` : "",
     a.missing.length ? `Fehlt: ${a.missing.join(" | ")}` : "",
@@ -130,7 +130,7 @@ export type OpportunityAdviceProposalResult = { proposal: StrategyProposal; reje
 /** KI-Vorschlag einholen – wird nicht gespeichert; der BD übernimmt ihn in das Formular. */
 export async function proposeOpportunityAdvice(actor: Actor, opportunityId: string, deps: { provider?: AIProvider } = {}): Promise<OpportunityAdviceProposalResult> {
   const { analysis, ctx, canEdit } = await analyzeOpportunity(actor, opportunityId);
-  if (!canEdit) throw new ForbiddenError("Den Chancen-Berater pflegen Beteiligte mit Bearbeitungsrecht am Setup.");
+  if (!canEdit) throw new ForbiddenError("Den Chancen-Berater pflegen Beteiligte mit Bearbeitungsrecht am Projekt.");
   const basis = opportunityAnalysisToText(analysis);
   const res = await resolveContext(actor, { type: "SETUP", id: ctx.setup.id });
   const contextText = await buildContextText(actor, res);
@@ -191,7 +191,7 @@ export async function saveOpportunityAdvice(actor: Actor, raw: unknown) {
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const i = parsed.data;
   const { analysis, canEdit } = await analyzeOpportunity(actor, i.opportunityId);
-  if (!canEdit) throw new ForbiddenError("Den Chancen-Berater pflegen Beteiligte mit Bearbeitungsrecht am Setup.");
+  if (!canEdit) throw new ForbiddenError("Den Chancen-Berater pflegen Beteiligte mit Bearbeitungsrecht am Projekt.");
   return db.transaction(async (tx) => {
     const last = await tx.query.opportunityAdvice.findFirst({ where: eq(schema.opportunityAdvice.opportunityId, i.opportunityId), orderBy: desc(schema.opportunityAdvice.versionNo) });
     const [row] = await tx
@@ -229,7 +229,7 @@ export function formToOpportunityAdviceInput(data: Record<string, string>): unkn
   };
 }
 
-/** Letzte Fassung je Chance (für Setup-/Chancen-Seite). */
+/** Letzte Fassung je Chance (für Projekt-/Chancen-Seite). */
 export async function latestOpportunityAdvice(opportunityId: string) {
   return db.query.opportunityAdvice.findFirst({ where: and(eq(schema.opportunityAdvice.opportunityId, opportunityId)), orderBy: desc(schema.opportunityAdvice.versionNo) });
 }

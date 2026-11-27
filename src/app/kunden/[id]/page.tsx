@@ -76,7 +76,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
     ? [...new Map((await db.select({ id: schema.users.id, displayName: schema.users.displayName }).from(schema.users).innerJoin(schema.roleAssignments, eq(schema.roleAssignments.userId, schema.users.id)).where(eq(schema.roleAssignments.role, "BD"))).map((u) => [u.id, u])).values()]
     : [];
 
-  // „Wo stehen wir?“ je Chance (Etappe 24): der Status gehört zur Chance, nicht zu Setup oder Kunde
+  // „Wo stehen wir?“ je Chance (Etappe 24): der Status gehört zur Chance, nicht zu Projekt oder Kunde
   const ownerIds = [...new Set(opportunities.map((o) => o.ownerUserId))];
   const ownerNames = new Map(ownerIds.length ? (await db.query.users.findMany({ where: inArray(schema.users.id, ownerIds) })).map((u) => [u.id, u.displayName]) : []);
   const topCandidates = await topCandidatesForOpportunities(opportunities.map((o) => o.id)).catch(() => new Map());
@@ -86,7 +86,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const chanceRows = opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: ownerNames.get(o.ownerUserId) ?? "?", setupName: o.setupName, version: ro ? undefined : o.version, candidate: topCandidates.get(o.id) ?? null }));
   const [runs, accountPlaybooks, salesOps, activeUsers] = await Promise.all([
     listRuns(actor, { accountId: id }),
-    // Kunden- und Setup-Muster lassen sich vom Kunden aus starten (Setup-Muster in bestehendem oder neuem Setup);
+    // Kunden- und Projekt-Muster lassen sich vom Kunden aus starten (Projekt-Muster in bestehendem oder neuem Projekt);
     // Chancen-Muster laufen an einer Chance und werden dort gestartet.
     Promise.all([listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true })]).then(([a, b]) => [...a, ...b]),
     listSalesOpsUsers(actor.workspaceId),
@@ -106,7 +106,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const bucket: Bucket = sp.b === "strategie" || sp.b === "operativ" ? sp.b : "grundlagen";
   // e44: wer ist hier im Einsatz, bis wann – Namen statt nur einer Zahl
   const deployed = getConfig().FEATURE_BESETZUNG === "true" ? (await listEngagements(actor, "laufend").catch(() => ({ items: [] }))).items.filter((e) => e.accountId === account.id) : [];
-  // e59: Aufräumen direkt beim Kunden – doppelte Einsätze und doppelte/Platzhalter-Setups
+  // e59: Aufräumen direkt beim Kunden – doppelte Einsätze und doppelte/Platzhalter-Projekte
   const engDups = canClean(actor) ? await findEngagementDuplicates(actor, undefined, account.id).catch(() => []) : [];
   const setupDups = (await canMergeSetupsAt(actor, account.id)) ? await findSetupDuplicates(actor, account.id).catch(() => []) : [];
   const back = `/kunden/${id}?b=${bucket}`;
@@ -125,7 +125,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
   const tabs: { key: Bucket; label: string; hint: string }[] = [
     { key: "grundlagen", label: "Grundlagen", hint: `Health-Check, Kundenagenda, laufende Vorgehen` },
     { key: "strategie", label: "Strategie", hint: `${pl(keyInitiatives.length, "Schlüssel-Initiative", "Schlüssel-Initiativen")}${iniCards + otherCards.length ? ` · ${iniCards + otherCards.length} KI-Vorschläge` : ""}` },
-    { key: "operativ", label: "Operativ", hint: `${people.length} Personen${openSos.length ? ` · ${openSos.length} SOS offen` : ""} · Beschaffung, Setups` },
+    { key: "operativ", label: "Operativ", hint: `${people.length} Personen${openSos.length ? ` · ${openSos.length} SOS offen` : ""} · Beschaffung, Projekte` },
   ];
 
   return (
@@ -192,7 +192,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       {(engDups.length > 0 || setupDups.length > 0) && (
         <section className="card space-y-2" id="aufraeumen" style={{ borderLeft: "4px solid #b7791f" }}>
           <h2 className="font-semibold">Aufräumen</h2>
-          <p className="muted text-sm">{[engDups.length ? `${engDups.length === 1 ? "Ein Einsatz ist" : `${engDups.length} Einsätze sind`} doppelt angelegt` : "", setupDups.length ? "ein Setup ist doppelt bzw. ein Platzhalter („Ohne Bereich“, „Allgemein“) neben einem echten Setup" : ""].filter(Boolean).join(", ")}. Zusammenführen verliert nichts: alles zieht in den behaltenen Eintrag. Am besten zuerst die Setups, dann die Einsätze.</p>
+          <p className="muted text-sm">{[engDups.length ? `${engDups.length === 1 ? "Ein Einsatz ist" : `${engDups.length} Einsätze sind`} doppelt angelegt` : "", setupDups.length ? "ein Projekt ist doppelt bzw. ein Platzhalter („Ohne Bereich“, „Allgemein“) neben einem echten Projekt" : ""].filter(Boolean).join(", ")}. Zusammenführen verliert nichts: alles zieht in den behaltenen Eintrag. Am besten zuerst die Projekte, dann die Einsätze.</p>
           {setupDups.map((g) => <SetupMergeForm key={g.keep.id} g={g} back={`/kunden/${account.id}#aufraeumen`} showAccount={false} />)}
           {engDups.map((g) => <EngagementMergeForm key={g.keep.id} g={g} back={`/kunden/${account.id}#aufraeumen`} showAccount={false} />)}
         </section>
@@ -320,7 +320,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
           <details className="card">
             <summary className="font-semibold">Alle Chancen im Überblick ({opportunities.length})<Term k="CHANCE" /></summary>
             <div className="mt-2">
-              <ChancenUebersicht chances={chanceRows} showSetup={setups.length > 1} emptyText="Noch keine Chance benannt. Chancen entstehen im Setup („Chance erfassen“), in einer Initiative oder über den Assistenten." back={back} />
+              <ChancenUebersicht chances={chanceRows} showSetup={setups.length > 1} emptyText="Noch keine Chance benannt. Chancen entstehen im Projekt („Chance erfassen“), in einer Initiative oder über den Assistenten." back={back} />
             </div>
           </details>
       <details className="card">
@@ -338,7 +338,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
                     <select id="prKind" name="kind" className="select" defaultValue="AUSWEITEN">{schema.priorityKindEnum.enumValues.map((v) => <option key={v} value={v}>{priorityKindLabel[v]}</option>)}</select>
                   </div>
                   <div>
-                    <label className="label" htmlFor="prSetup">Bezug zu Setup (optional)</label>
+                    <label className="label" htmlFor="prSetup">Bezug zu Projekt (optional)</label>
                     <select id="prSetup" name="setupId" className="select" defaultValue=""><option value="">–</option>{setups.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
                   </div>
                   <div><label className="label" htmlFor="prRank">Rang (1 = höchste)</label><input id="prRank" name="rank" type="number" min={1} max={999} defaultValue={plan.priorities.length + 1} className="input" /></div>
@@ -400,7 +400,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
         <>
       <section className="card">
         <h2 className="font-semibold mb-2">Personen & Zugang ({people.length})</h2>
-        {people.length === 0 ? <p className="empty">Noch keine Personen erfasst. Personen werden im jeweiligen Setup gepflegt.</p> : (
+        {people.length === 0 ? <p className="empty">Noch keine Personen erfasst. Personen werden im jeweiligen Projekt gepflegt.</p> : (
           <table className="list">
             <thead><tr><th>Person</th><th>Funktion</th><th>Beziehungen (Halter · Stand)</th></tr></thead>
             <tbody>
@@ -414,7 +414,7 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             </tbody>
           </table>
         )}
-        {setups.length > 0 && <p className="muted text-sm mt-2">Pflege je Setup: {setups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/personen`}>{s.name}</Link></span>)}</p>}
+        {setups.length > 0 && <p className="muted text-sm mt-2">Pflege je Projekt: {setups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/personen`}>{s.name}</Link></span>)}</p>}
       </section>
 
           <div id="sos">{(!ro && account.status !== "ARCHIVED") || openSos.length ? <SosPanel accountId={account.id} sos={sosList} back={back} canEdit={mayAgenda} setups={sosSetups} orders={sosOrders} /> : null}</div>
@@ -450,11 +450,11 @@ export default async function KundePage({ params, searchParams }: { params: Prom
       )}
 
       <section className="card">
-        <h2 className="font-semibold mb-2">Projektsetups ({setups.length})</h2>
-        {setups.length === 0 ? (<p className="empty">Noch kein Setup. Ein Setup braucht nur Kunde, Namen und einen Kontextsatz – oder bleibt bewusst Entwurf.</p>
+        <h2 className="font-semibold mb-2">Projekte ({setups.length})</h2>
+        {setups.length === 0 ? (<p className="empty">Noch kein Projekt. Ein Projekt braucht nur Kunde, Namen und einen Kontextsatz – oder bleibt bewusst Entwurf.</p>
         ) : (
           <table className="list">
-            <thead><tr><th>Setup</th><th>Status</th><th>Chancen</th><th>Sichtbarkeit</th><th>BD</th><th>Geändert</th></tr></thead>
+            <thead><tr><th>Projekt</th><th>Status</th><th>Chancen</th><th>Sichtbarkeit</th><th>BD</th><th>Geändert</th></tr></thead>
             <tbody>
               {setups.map((s) => (
                 <tr key={s.id}>
@@ -479,10 +479,10 @@ export default async function KundePage({ params, searchParams }: { params: Prom
 
       {mayCreate && (
         <details className="card" open={setups.length === 0}>
-          <summary>Setup anlegen<Term k="SETUP" /></summary>
+          <summary>Projekt anlegen<Term k="SETUP" /></summary>
           <form action={createSetupAction} className="mt-3 grid sm:grid-cols-2 gap-3">
             <input type="hidden" name="accountId" value={account.id} />
-            <div className="sm:col-span-2"><label className="label" htmlFor="name">Verständlicher Setup-Name</label><input id="name" name="name" className="input" required minLength={3} placeholder="z. B. Plattformteam" /></div>
+            <div className="sm:col-span-2"><label className="label" htmlFor="name">Verständlicher Projekt-Name</label><input id="name" name="name" className="input" required minLength={3} placeholder="z. B. Plattformteam" /></div>
             <div className="sm:col-span-2">
               <label className="label" htmlFor="contextNote">Kontextsatz (optional – leer lassen für bewussten Entwurf)</label>
               <textarea id="contextNote" name="contextNote" className="textarea" placeholder="Was läuft hier? Ein Satz genügt." />
@@ -508,8 +508,8 @@ export default async function KundePage({ params, searchParams }: { params: Prom
             </div>
             <div><label className="label" htmlFor="contributionNote">Erläuterung zum Beitrag (sachlich, optional)</label><input id="contributionNote" name="contributionNote" className="input" placeholder="z. B. Kontext beitragen, keine Ansprache neuer Personen" /></div>
             <div className="sm:col-span-2 flex flex-wrap items-start gap-3">
-              <button className="btn" type="submit">Setup anlegen</button>
-              <SuggestButton kind="SETUP" accountId={account.id} fields={[{ name: "name", label: "Verständlicher Setup-Name (Team, Bereich oder Vorhaben beim Kunden)" }, { name: "contextNote", label: "Kontextsatz: Was läuft hier beim Kunden?" }, { name: "visibility", label: "Sichtbarkeit", options: [...schema.setupVisibilityEnum.enumValues] }]} />
+              <button className="btn" type="submit">Projekt anlegen</button>
+              <SuggestButton kind="SETUP" accountId={account.id} fields={[{ name: "name", label: "Verständlicher Projekt-Name (Team, Bereich oder Vorhaben beim Kunden)" }, { name: "contextNote", label: "Kontextsatz: Was läuft hier beim Kunden?" }, { name: "visibility", label: "Sichtbarkeit", options: [...schema.setupVisibilityEnum.enumValues] }]} />
             </div>
           </form>
         </details>

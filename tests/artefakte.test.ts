@@ -7,7 +7,7 @@ import { ARTIFACT_TEMPLATES } from "@/modules/artifacts/templates";
 import { actorFor, ensureSeed } from "./helpers";
 
 describe("Artefakte (Briefing 12, F09)", () => {
-  it("Alle Artefakttypen sind registriert (A1–A16 + Setup, Weekly, Ziel) und in der Datenbank synchronisiert", async () => {
+  it("Alle Artefakttypen sind registriert (A1–A16 + Projekt, Weekly, Ziel) und in der Datenbank synchronisiert", async () => {
     await ensureSeed();
     const codes = listTemplates().map((t) => t.code);
     for (let i = 1; i <= 16; i++) expect(codes).toContain(`A${i}`);
@@ -68,7 +68,7 @@ describe("Artefakte (Briefing 12, F09)", () => {
     expect(rels.filter((r) => r.state === "VORGESTELLT" && r.contextNote?.includes("Artefakt"))).toHaveLength(0);
   });
 
-  it("Coaching-Notiz (A14) hat gesonderten Empfängerkreis; Zugriff auf Artefakte folgt Empfängerkreis und Setup", async () => {
+  it("Coaching-Notiz (A14) hat gesonderten Empfängerkreis; Zugriff auf Artefakte folgt Empfängerkreis und Projekt", async () => {
     const s = await ensureSeed();
     const david = await actorFor("david");
     const nina = await actorFor("nina");
@@ -76,7 +76,7 @@ describe("Artefakte (Briefing 12, F09)", () => {
     const petra = await actorFor("petra");
     await expect(createDraft(david, { templateCode: "A14", setupId: s.setupId, audience: "SETUP" })).rejects.toBeInstanceOf(ValidationError);
     const coaching = await createDraft(david, { templateCode: "A14", setupId: s.setupId, audience: "PERSOENLICH", title: "Coaching Fall Migrationsteam" });
-    // Nina (Setup-Mitglied) sieht die persönliche Coaching-Notiz nicht; David schon
+    // Nina (Projekt-Mitglied) sieht die persönliche Coaching-Notiz nicht; David schon
     await expect(requireArtifact(nina, coaching.id)).rejects.toBeInstanceOf(NotFoundError);
     expect((await listArtifactsForSetup(nina, s.setupId)).some((a) => a.artifactKey === coaching.artifactKey)).toBe(false);
     expect((await requireArtifact(david, coaching.id)).version.id).toBe(coaching.id);

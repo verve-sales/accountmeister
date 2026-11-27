@@ -15,7 +15,7 @@ import { MATURITY, maturityOf, type Maturity } from "@/modules/strategy/chancen"
  * Der „Aktivitätskoeffizient“ ist bewusst keine geschätzte Kennzahl, sondern eine nachvollziehbare Formel aus
  * gezählten, dokumentierten Ereignissen: Summe der Aktivitäten × (Anzahl der beitragenden Rollen / 3). Ein Kunde,
  * an dem nur eine Rolle aktiv ist, bekommt also einen niedrigeren Koeffizienten als einer mit vergleichbarer
- * Aktivität, an der BD, Anker und Principal zusammen mitwirken – das Ziel ist Zusammenarbeit, nicht bloß Menge.
+ * Aktivität, an der BD, Kontaktpate und Principal zusammen mitwirken – das Ziel ist Zusammenarbeit, nicht bloß Menge.
  */
 
 export const CONTRIBUTOR_ROLES = ["BD", "ANKER", "PRINCIPAL"] as const;
@@ -37,7 +37,7 @@ function totalOf(c: ActivityCounts): number {
 
 /**
  * Rolle je Nutzer für die Zuordnung von Aktivität: Workspace-Rollen (CEO/PRINCIPAL/BD/ANKER) gehen vor,
- * sonst entscheidet der vereinbarte Beitrag im Setup (setup_memberships.contribution). Ohne beides: OTHER.
+ * sonst entscheidet der vereinbarte Beitrag im Projekt (setup_memberships.contribution). Ohne beides: OTHER.
  * Bewusst grob – die Formel zählt dokumentierte Ereignisse, keine erfundene Genauigkeit über „wer eigentlich
  * zuständig ist“.
  */
@@ -83,7 +83,7 @@ export type AccountActivity = {
 };
 
 /**
- * Aktivität eines Kunden im Zeitraum (Standard: letzte 7 Tage = „diese Woche“). Nur Setups, die der Akteur
+ * Aktivität eines Kunden im Zeitraum (Standard: letzte 7 Tage = „diese Woche“). Nur Projekte, die der Akteur
  * sehen darf, gehen ein – wie beim Accountplan.
  */
 export async function buildAccountActivity(actor: Actor, accountId: string, opts: { days?: number } = {}): Promise<AccountActivity> {
@@ -101,7 +101,7 @@ export async function buildAccountActivity(actor: Actor, accountId: string, opts
   const setupIds = ctxs.map((c) => c.setup.id);
   const byRole: Record<(typeof CONTRIBUTOR_ROLES)[number], ActivityCounts> = { BD: emptyCounts(), ANKER: emptyCounts(), PRINCIPAL: emptyCounts() };
   if (setupIds.length === 0) {
-    return { accountId: account.id, accountName: account.name, sinceDays: days, since: since.toISOString(), byRole, totalActivities: 0, activeRoles: [], coefficient: 0, note: "Keine sichtbaren Setups bei diesem Kunden." };
+    return { accountId: account.id, accountName: account.name, sinceDays: days, since: since.toISOString(), byRole, totalActivities: 0, activeRoles: [], coefficient: 0, note: "Keine sichtbaren Projekte bei diesem Kunden." };
   }
 
   const [signals, actions, suggestions, reviewRows, reviewVersions, persons, relationships, assessments] = await Promise.all([

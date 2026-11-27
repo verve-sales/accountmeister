@@ -6,8 +6,8 @@ import type { Actor } from "@/modules/identity/actor";
 import { canEditAction, canEditSetup, canViewAction, loadSetupContext } from "@/modules/identity/authz";
 
 /**
- * Falsch zugeordnete Aufgaben und Beobachtungen umhängen (e47): Die KI hat sie manchmal dem falschen Setup oder
- * sogar dem falschen Kunden zugeordnet. Verschoben wird ohne Begründung; der Bezug zu einer Chance des alten Setups
+ * Falsch zugeordnete Aufgaben und Beobachtungen umhängen (e47): Die KI hat sie manchmal dem falschen Projekt oder
+ * sogar dem falschen Kunden zugeordnet. Verschoben wird ohne Begründung; der Bezug zu einer Chance des alten Projekte
  * fällt weg, weil er dort nicht mehr passt.
  */
 export const movableKinds = ["ACTION", "SIGNAL"] as const;
@@ -15,12 +15,12 @@ export type MovableKind = (typeof movableKinds)[number];
 
 async function target(actor: Actor, setupId: string) {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canEditSetup(actor, ctx)) throw new ValidationError("Ziel-Setup nicht gefunden oder nicht bearbeitbar.");
+  if (!ctx || !canEditSetup(actor, ctx)) throw new ValidationError("Ziel-Projekt nicht gefunden oder nicht bearbeitbar.");
   return ctx;
 }
 
 export async function moveToSetup(actor: Actor, kind: MovableKind, id: string, targetSetupId: string) {
-  if (!targetSetupId) throw new ValidationError("Bitte das richtige Setup wählen.");
+  if (!targetSetupId) throw new ValidationError("Bitte das richtige Projekt wählen.");
   if (kind === "ACTION") {
     const a = await db.query.actions.findFirst({ where: and(eq(schema.actions.id, id), eq(schema.actions.workspaceId, actor.workspaceId)) });
     if (!a) throw new NotFoundError("Aufgabe");

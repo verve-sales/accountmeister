@@ -9,7 +9,7 @@ import { getCompanyResearchAdapter, ResearchAdapterError } from "./index";
 import type { CompanyFact } from "./adapter";
 
 /**
- * Öffentliche Unternehmensrecherche je Kunde (Etappe 16, Anker-/BD-Wunsch: schneller Überblick über den Kunden
+ * Öffentliche Unternehmensrecherche je Kunde (Etappe 16, Kontaktpaten-/BD-Wunsch: schneller Überblick über den Kunden
  * aus öffentlichen Quellen). Eng begrenzte Ausnahme von „die KI recherchiert nicht im Internet“: ausschließlich
  * öffentliche Firmendaten zum Kunden selbst, nie zu benannten Einzelpersonen – strukturell erzwungen, weil die
  * einzige Eingabe der Firmenname aus dem Kundendatensatz ist. Reine Anzeige, kein Vorschlag in Domänenobjekte;

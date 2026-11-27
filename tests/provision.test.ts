@@ -26,7 +26,7 @@ describe("Provisionsrechner (Nachbau Verve_Freelancer_ProvisionV2.xlsx)", () => 
     expect(computeDeal(fl(800, 920, 150), "PRINCIPAL")!.total).toBe(1250);
   });
 
-  it("BDs und Anker erhalten höchstens 20 % – die 43 % ab 45 % Marge sind Principals vorbehalten", () => {
+  it("BDs und Kontaktpate erhalten höchstens 20 % – die 43 % ab 45 % Marge sind Principals vorbehalten", () => {
     const b = computeDeal(fl(720, 1026, 55.5), "BD")!; // 25,9 % → 20 % wie beim Principal
     expect(b.rate).toBe(0.2);
     expect(b.capped).toBe(false);
@@ -50,7 +50,7 @@ describe("Provisionsrechner (Nachbau Verve_Freelancer_ProvisionV2.xlsx)", () => 
     expect(costsFor(120)).toBe(4800);
   });
 
-  it("Zugang: Anker, BD, Principal (und CEO); Principal-Stufen nur für Principal/CEO", async () => {
+  it("Zugang: Kontaktpate, BD, Principal (und CEO); Principal-Stufen nur für Principal/CEO", async () => {
     await ensureSeed();
     expect(provisionAccess(await actorFor("nina"))).toEqual({ allowed: true, principal: false });
     expect(provisionAccess(await actorFor("david"))).toEqual({ allowed: true, principal: false });

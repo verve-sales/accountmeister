@@ -33,7 +33,7 @@ export const createPersonInput = z.object({
   orgUnitName: z.string().trim().max(200).optional().or(z.literal("")),
   knownResponsibility: z.string().trim().max(500).optional().or(z.literal("")),
   accessClass: z.enum(schema.accessClassEnum.enumValues).default("ACCOUNT_TEAM"),
-  setupId: z.string().optional().or(z.literal("")), // optional: sofort eine Beziehung „Name/Funktion bekannt“ im Setup anlegen
+  setupId: z.string().optional().or(z.literal("")), // optional: sofort eine Beziehung „Name/Funktion bekannt“ im Projekt anlegen
 });
 
 export async function createPerson(actor: Actor, raw: unknown) {
@@ -42,7 +42,7 @@ export async function createPerson(actor: Actor, raw: unknown) {
   const input = parsed.data;
   const account = await getAccount(actor, input.accountId);
   if (!hasRoleForAccountWrite(actor, account)) {
-    // Setup-Bearbeitende dürfen Personen für „ihren“ Kunden anlegen
+    // Projekt-Bearbeitende dürfen Personen für „ihren“ Kunden anlegen
     if (!input.setupId) throw new ForbiddenError("Für diesen Kunden darfst du keine Personen anlegen.");
     const ctx = await loadSetupContext(actor, input.setupId);
     if (!ctx || ctx.account.id !== account.id || !canEditSetup(actor, ctx)) throw new ForbiddenError("Für diesen Kunden darfst du keine Personen anlegen.");
@@ -79,7 +79,7 @@ export async function createPerson(actor: Actor, raw: unknown) {
         holderUserId: actor.userId,
         setupId: input.setupId,
         state: "NAME_FUNKTION_BEKANNT",
-        contextNote: "Angelegt aus dem Setup; noch kein persönlicher Kontakt dokumentiert.",
+        contextNote: "Angelegt aus dem Projekt; noch kein persönlicher Kontakt dokumentiert.",
         createdBy: actor.userId,
       });
     }
@@ -88,7 +88,7 @@ export async function createPerson(actor: Actor, raw: unknown) {
   });
 }
 
-/** Bestehende Person ergänzen: fehlende Kontaktdaten, neue Funktion (nur wenn anders), Beziehung im Setup (nur wenn keine). */
+/** Bestehende Person ergänzen: fehlende Kontaktdaten, neue Funktion (nur wenn anders), Beziehung im Projekt (nur wenn keine). */
 async function enrichExisting(actor: Actor, person: typeof schema.persons.$inferSelect, input: z.infer<typeof createPersonInput>) {
   return db.transaction(async (tx) => {
     const fill: Partial<typeof schema.persons.$inferInsert> = {};
@@ -107,7 +107,7 @@ async function enrichExisting(actor: Actor, person: typeof schema.persons.$infer
     }
     if (input.setupId) {
       const rel = await tx.query.relationships.findFirst({ where: and(eq(schema.relationships.personId, person.id), eq(schema.relationships.setupId, input.setupId)) });
-      if (!rel) await tx.insert(schema.relationships).values({ personId: person.id, holderUserId: actor.userId, setupId: input.setupId, state: "NAME_FUNKTION_BEKANNT", contextNote: "Angelegt aus dem Setup; noch kein persönlicher Kontakt dokumentiert.", createdBy: actor.userId });
+      if (!rel) await tx.insert(schema.relationships).values({ personId: person.id, holderUserId: actor.userId, setupId: input.setupId, state: "NAME_FUNKTION_BEKANNT", contextNote: "Angelegt aus dem Projekt; noch kein persönlicher Kontakt dokumentiert.", createdBy: actor.userId });
     }
     await recordAudit(tx, actor, "person.enriched", "PERSON", person.id, { accountId: person.accountId });
     return { ...person, ...fill, reused: true as const };
@@ -192,8 +192,8 @@ export async function setRelationship(actor: Actor, raw: unknown) {
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const ctx = await loadSetupContext(actor, input.setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst Beziehungen in diesem Setup nicht pflegen.");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst Beziehungen in diesem Projekt nicht pflegen.");
   const person = await requirePerson(actor, input.personId, "read");
   if (person.accountId && person.accountId !== ctx.account.id) throw new ValidationError("Die Person gehört zu einem anderen Kunden.");
   if (statesRequiringEvidence.includes(input.state) && !input.evidenceSourceId && !input.evidenceNote) {
@@ -260,7 +260,7 @@ export async function requirePerson(actor: Actor, personId: string, mode: "read"
     throw new NotFoundError("Person");
   }
   if (mode === "write" && !hasRoleForAccountWrite(actor, account)) {
-    // Bearbeitende eines Setups dieses Kunden dürfen ebenfalls pflegen
+    // Bearbeitende eines Projekts dieses Kunden dürfen ebenfalls pflegen
     const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, account.id) });
     let allowed = false;
     for (const s of setups) {
@@ -364,7 +364,7 @@ export async function mergePersons(actor: Actor, keepId: string, dropIds: string
       linkedinUrl: keep.linkedinUrl ?? drops.find((d) => d.linkedinUrl)?.linkedinUrl ?? null,
     };
     await tx.update(schema.persons).set({ ...fill, updatedAt: new Date(), version: keep.version + 1 }).where(eq(schema.persons.id, keep.id));
-    // Verlängerungs-/Bestell-Ansprechpartner an Setups und Einsätzen umhängen
+    // Verlängerungs-/Bestell-Ansprechpartner an Projekte und Einsätzen umhängen
     for (const t of [schema.projectSetups, schema.engagements] as const) {
       await tx.update(t).set({ renewalContactPersonId: keep.id }).where(inArray(t.renewalContactPersonId, ids));
       await tx.update(t).set({ orderContactPersonId: keep.id }).where(inArray(t.orderContactPersonId, ids));
@@ -380,7 +380,7 @@ export async function mergePersons(actor: Actor, keepId: string, dropIds: string
       else seenFn.set(k, f);
     }
     if (dropFn.length) await tx.delete(schema.personFunctions).where(inArray(schema.personFunctions.id, dropFn));
-    // Beziehungen: umhängen, gleiche (Halter, Setup, Stand) nur einmal; Kontaktweg-Schritte zeigen auf die bleibende
+    // Beziehungen: umhängen, gleiche (Halter, Projekt, Stand) nur einmal; Kontaktweg-Schritte zeigen auf die bleibende
     await tx.update(schema.relationships).set({ personId: keep.id }).where(inArray(schema.relationships.personId, ids));
     const rels = await tx.query.relationships.findMany({ where: eq(schema.relationships.personId, keep.id), orderBy: (r, { asc }) => [asc(r.createdAt)] });
     const seenRel = new Map<string, string>();
@@ -394,7 +394,7 @@ export async function mergePersons(actor: Actor, keepId: string, dropIds: string
       await tx.update(schema.accessPlanSteps).set({ relationshipId: first }).where(eq(schema.accessPlanSteps.relationshipId, r.id));
       await tx.delete(schema.relationships).where(eq(schema.relationships.id, r.id));
     }
-    // Buyingcenter-Einschätzung: je Setup eine – die bewertete bzw. zuletzt geänderte bleibt
+    // Buyingcenter-Einschätzung: je Projekt eine – die bewertete bzw. zuletzt geänderte bleibt
     const assessments = await tx.query.personAssessments.findMany({ where: inArray(schema.personAssessments.personId, [keep.id, ...ids]) });
     const bySetup = new Map<string, typeof assessments>();
     for (const a of assessments) bySetup.set(a.setupId, [...(bySetup.get(a.setupId) ?? []), a]);

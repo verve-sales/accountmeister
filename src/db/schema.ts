@@ -43,7 +43,7 @@ export const membershipContributionEnum = pgEnum("membership_contribution", [
   "ANKER_EINFUEHRUNG", // ist bereit, passende Vorstellungen zu vermitteln
   "BD_ZUSTAENDIG", // operativ zuständiger BD
   "BEOBACHTER", // lesend beteiligt (z. B. Principal-Sparring)
-  "PRINCIPAL_ZUSTAENDIG", // für dieses Setup zuständiger Principal (Zuständigkeit, keine Rechteänderung)
+  "PRINCIPAL_ZUSTAENDIG", // für dieses Projekt zuständiger Principal (Zuständigkeit, keine Rechteänderung)
 ]);
 
 export const relationshipStateEnum = pgEnum("relationship_state", [
@@ -58,8 +58,8 @@ export const relationshipStateEnum = pgEnum("relationship_state", [
 export const sourceTypeEnum = pgEnum("source_type", ["NOTIZ", "PROTOKOLL", "EMAIL", "TERMIN", "OEFFENTLICH", "DOKUMENT", "INTERVIEW", "CHAT"]);
 export const accessClassEnum = pgEnum("access_class", [
   "PERSOENLICH", // nur Quelleninhaber
-  "SETUP", // zugeordnete Setup-Beteiligte
-  "ACCOUNT_TEAM", // zuständiger BD, Principal, Setup-Beteiligte
+  "SETUP", // zugeordnete Projekt-Beteiligte
+  "ACCOUNT_TEAM", // zuständiger BD, Principal, Projekt-Beteiligte
   "WORKSPACE", // alle aktiven Nutzer des Arbeitsraums
 ]);
 
@@ -155,7 +155,7 @@ export const roleAssignments = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Accounts / Setups
+// Accounts / Projekte
 // ---------------------------------------------------------------------------
 
 export const accounts = pgTable("accounts", {
@@ -205,7 +205,7 @@ export const projectSetups = pgTable(
   {
     id: id(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
-    mocoProjectGroupId: integer("moco_project_group_id"), // Moco-Projektgruppe ↔ Setup
+    mocoProjectGroupId: integer("moco_project_group_id"), // Moco-Projektgruppe ↔ Projekt
     accountId: text("account_id").notNull().references(() => accounts.id),
     name: text("name").notNull(),
     contextNote: text("context_note"), // kurzer Kontextsatz; darf leer sein (bewusster Entwurf)
@@ -214,7 +214,7 @@ export const projectSetups = pgTable(
     bdUserId: text("bd_user_id").references(() => users.id), // null = „Zuordnung offen“
     /** Angebotsweg (Etappe 51): MOCO | MOCO_KUNDENVORLAGE | KEIN_ANGEBOT (Vermittler: nur Konditionen per Mail) */
     offerPath: text("offer_path").notNull().default("MOCO"),
-    /** Verlängerung (Etappe 48): Vorgabe für alle Einsätze dieses Setups – fachlich über, Bestellung/Vertrag über, wer spricht an */
+    /** Verlängerung (Etappe 48): Vorgabe für alle Einsätze dieses Projekts – fachlich über, Bestellung/Vertrag über, wer spricht an */
     renewalContactPersonId: text("renewal_contact_person_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => persons.id, { onDelete: "set null" }),
     orderContactPersonId: text("order_contact_person_id").references((): import("drizzle-orm/pg-core").AnyPgColumn => persons.id, { onDelete: "set null" }),
     renewalApproach: text("renewal_approach"), // SALES_OPS | BD | BERATER
@@ -497,7 +497,7 @@ export const reviews = pgTable(
     id: id(),
     workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
     type: reviewTypeEnum("type").notNull().default("BD_ANKER_WEEKLY"),
-    setupId: text("setup_id").references(() => projectSetups.id), // BD/Anker-Weekly ist setup-bezogen
+    setupId: text("setup_id").references(() => projectSetups.id), // BD/Kontaktpaten-Weekly ist setup-bezogen
     accountId: text("account_id").references(() => accounts.id),
     title: text("title").notNull(),
     scheduledFor: date("scheduled_for").notNull(),
@@ -747,7 +747,7 @@ export const intakeProposals = pgTable(
     payload: jsonb("payload").notNull(),
     resultAccountId: text("result_account_id").references(() => accounts.id),
     resultSetupId: text("result_setup_id").references(() => projectSetups.id),
-    /** Etappe 7: Herkunft (Dokument oder Interview) und Ziel-Setup bei Ergänzung eines bestehenden Setups */
+    /** Etappe 7: Herkunft (Dokument oder Interview) und Ziel-Projekt bei Ergänzung eines bestehenden Projekte */
     kind: text("kind").notNull().default("DOKUMENT"), // DOKUMENT | INTERVIEW
     interviewId: text("interview_id"),
     targetSetupId: text("target_setup_id").references(() => projectSetups.id),
@@ -763,7 +763,7 @@ export const intakeProposals = pgTable(
 export const interviewKindEnum = pgEnum("interview_kind", ["KUNDE_NEU", "SETUP_ERGAENZUNG"]);
 export const interviewStatusEnum = pgEnum("interview_status", ["LAUFEND", "ABGESCHLOSSEN", "VERWORFEN"]);
 
-/** Geführtes Interview (Initialisierung eines Kunden oder Ergänzung eines Setups). Der Verlauf ist die Quelle. */
+/** Geführtes Interview (Initialisierung eines Kunden oder Ergänzung eines Projekts). Der Verlauf ist die Quelle. */
 export const interviews = pgTable("interviews", {
   id: id(),
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
@@ -826,9 +826,9 @@ export const suggestions = pgTable(
     purpose: text("purpose"), // Wofür als Text, wenn (noch) keine Chance existiert
     title: text("title").notNull(),
     targetRole: text("target_role").notNull(), // adressierte Rolle (BD, ANKER, PRINCIPAL …)
-    /** Setup des Vorschlags; leer nur bei Eingangs-Karten ohne erkannten Kunden (sichtbar nur für die einspielende Person) */
+    /** Projekt des Vorschlags; leer nur bei Eingangs-Karten ohne erkannten Kunden (sichtbar nur für die einspielende Person) */
     setupId: text("setup_id").references(() => projectSetups.id),
-    /** Kunde (bei Eingangs-Karten, auch ohne Setup) */
+    /** Kunde (bei Eingangs-Karten, auch ohne Projekt) */
     accountId: text("account_id").references(() => accounts.id),
     reviewId: text("review_id").references(() => reviews.id),
     /** Eingangs-Karte (Typ KARTE): die vollständige Karte der Eingangs-Auswertung inkl. aufgelöster Kürzel */
@@ -1087,7 +1087,7 @@ export const goalVersions = pgTable(
   (t) => [uniqueIndex("goal_versions_no_uq").on(t.goalId, t.versionNo)],
 );
 
-/** Beitrag eines Kunden/Setups/Vorhabens zu einem Ziel – erwartet und belegt getrennt */
+/** Beitrag eines Kunden/Projekte/Vorhabens zu einem Ziel – erwartet und belegt getrennt */
 export const goalContributions = pgTable(
   "goal_contributions",
   {
@@ -1169,7 +1169,7 @@ export const orderStatusEnum = pgEnum("order_status", ["IN_VORBEREITUNG", "NACHW
 export const engagementStatusEnum = pgEnum("engagement_status", ["GEPLANT", "STARTBEREIT", "GESTARTET", "BEENDET"]);
 export const requirementStatusEnum = pgEnum("requirement_status", ["OFFEN", "NACHWEIS_VORGELEGT", "BESTAETIGT", "NICHT_ANWENDBAR"]);
 
-/** Bedarf/Chance (Opportunity): je Setup mehrere, unabhängige Zustände (F02); Fast-Track ohne vollständiges Setup (F08) */
+/** Bedarf/Chance (Opportunity): je Projekt mehrere, unabhängige Zustände (F02); Fast-Track ohne vollständiges Projekt (F08) */
 export const opportunities = pgTable(
   "opportunities",
   {
@@ -1350,9 +1350,9 @@ export const stanceEnum = pgEnum("stance", ["UNBEKANNT", "POSITIV", "NEUTRAL", "
 export const influenceEnum = pgEnum("influence", ["UNBEKANNT", "HOCH", "MITTEL", "NIEDRIG"]);
 
 /**
- * Bewertung einer Person im Kontext eines Setups (an MEDDPICC angelehnt): Rolle in der Entscheidung, Haltung zu Verve,
+ * Bewertung einer Person im Kontext eines Projekts (an MEDDPICC angelehnt): Rolle in der Entscheidung, Haltung zu Verve,
  * Einfluss. Jede Bewertung ist Hypothese, bis sie mit Quelle bestätigt wird. Sichtbar für BD, Principal und den
- * Beziehungshalter (Anker) – nicht pauschal für CEO.
+ * Beziehungshalter (Kontaktpate) – nicht pauschal für CEO.
  */
 export const personAssessments = pgTable(
   "person_assessments",
@@ -1420,7 +1420,7 @@ export const assistantMessages = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Etappe 9: Strategiefaden je Setup – versionierte Hypothese (E-044)
+// Etappe 9: Strategiefaden je Projekt – versionierte Hypothese (E-044)
 // ---------------------------------------------------------------------------
 
 export const strategyThreads = pgTable(
@@ -1451,7 +1451,7 @@ export const strategyThreads = pgTable(
 
 /**
  * Persönlicher KI-Berater je Chance (Etappe 15): analog zum Strategiefaden (Etappe 9), aber je Bedarf statt je
- * Setup – der nächste Schritt, um genau diese Chance zur Konvertierung zu bewegen. Versioniert, nie überschrieben.
+ * Projekt – der nächste Schritt, um genau diese Chance zur Konvertierung zu bewegen. Versioniert, nie überschrieben.
  */
 export const opportunityAdvice = pgTable(
   "opportunity_advice",
@@ -1480,7 +1480,7 @@ export const opportunityAdvice = pgTable(
 );
 
 /**
- * Buying-Center-Berater je Chance (Etappe 17, Anker-/BD-Wunsch „Assistent, der die Rollen durchgeht, berät und
+ * Buying-Center-Berater je Chance (Etappe 17, Kontaktpaten-/BD-Wunsch „Assistent, der die Rollen durchgeht, berät und
  * Hinweise zum Lückenfüllen gibt"): analog zum Chancen-Berater (Etappe 15) eine versionierte Fassung – geht die
  * sechs Entscheidungsrollen (decision_role) durch und gibt je Lücke einen Hinweis. Die KI schlägt nur mit
  * Textstelle vor; gespeichert wird erst durch den Menschen. Status je Rolle wird nicht hier gespeichert, sondern
@@ -1535,7 +1535,7 @@ export const companyResearch = pgTable(
 
 // ---------------------------------------------------------------------------
 // Vorgehensmuster / Playbooks (Etappe 20): Standard-Vorgehen als Gerüst, nie als Pflichtschleuse.
-// Ein Muster besteht aus Schritten; ein Lauf wendet es auf einen Kunden (über ein Setup) oder eine Chance an.
+// Ein Muster besteht aus Schritten; ein Lauf wendet es auf einen Kunden (über ein Projekt) oder eine Chance an.
 // Laufschritte sind eine Momentaufnahme der Musterschritte – spätere Änderungen am Muster verändern
 // laufende Vorgehen nicht. Jeder aktive Schritt ist eine normale Aktion (Meine Arbeit, Weekly).
 // ---------------------------------------------------------------------------
@@ -1641,7 +1641,7 @@ export const playbookRunSteps = pgTable(
 export const workspaceFocus = pgTable("workspace_focus", {
   workspaceId: text("workspace_id").primaryKey().references(() => workspaces.id),
   focusText: text("focus_text").notNull(),
-  /** Freelancer-Hebel: KI-Hinweise, Standardaufgaben und Kennzahlen zum Freelancer-Wachstum */
+  /** Ausbaupotenzial: KI-Hinweise, Standardaufgaben und Kennzahlen zum Freelancer-Wachstum */
   freelancerLever: boolean("freelancer_lever").notNull().default(true),
   weeklyQuestion: text("weekly_question"),
   updatedBy: text("updated_by").references(() => users.id),
@@ -1721,7 +1721,7 @@ export const accountInitiatives = pgTable(
   (t) => [index("account_initiatives_account_idx").on(t.accountId)],
 );
 
-/** SOS-Protokoll: auslaufender Einsatz ohne Anschluss, Anker kommt nicht weiter, Lage wird eng. */
+/** SOS-Protokoll: auslaufender Einsatz ohne Anschluss, Kontaktpate kommt nicht weiter, Lage wird eng. */
 export const sosReports = pgTable(
   "sos_reports",
   {
@@ -1806,7 +1806,7 @@ export const serviceTypes = pgTable(
 );
 
 /**
- * Vorgang: eigene Aufgabe, Anfrage an Person/Team, Prüfung oder Erinnerung – an Kunde, Setup, Chance, SOS oder ohne Bezug.
+ * Vorgang: eigene Aufgabe, Anfrage an Person/Team, Prüfung oder Erinnerung – an Kunde, Projekt, Chance, SOS oder ohne Bezug.
  * Auftraggeber:in (requester) und Bearbeiter:in (assignee) sind getrennt; Team-Vorgänge warten ohne Bearbeiter:in in der
  * Warteschlange, bis jemand übernimmt.
  */
@@ -1884,7 +1884,7 @@ export const absences = pgTable(
   (t) => [index("absences_user_idx").on(t.userId)],
 );
 
-/** Kommentar am Objekt (Vorgang, Kunde, Setup, Chance, SOS) mit @-Erwähnungen. */
+/** Kommentar am Objekt (Vorgang, Kunde, Projekt, Chance, SOS) mit @-Erwähnungen. */
 export const comments = pgTable(
   "comments",
   {
@@ -2174,7 +2174,7 @@ export const engagements = pgTable(
     externalRef: text("external_ref"), // z. B. Moco-Projekt-Link (nur Referenz)
     mocoProjectId: integer("moco_project_id"),
     mocoContractId: integer("moco_contract_id"),
-    /** Verlängerung (Etappe 48): weicht dieser Einsatz von der Setup-Vorgabe ab? null = Vorgabe des Setups */
+    /** Verlängerung (Etappe 48): weicht dieser Einsatz von der Projekt-Vorgabe ab? null = Vorgabe des Projekts */
     renewalContactPersonId: text("renewal_contact_person_id").references(() => persons.id, { onDelete: "set null" }),
     orderContactPersonId: text("order_contact_person_id").references(() => persons.id, { onDelete: "set null" }),
     renewalApproach: text("renewal_approach"),

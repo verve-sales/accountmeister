@@ -67,7 +67,7 @@ export default async function WeeklyPage({ params, searchParams }: { params: Pro
             <p className="muted">Damals offen: {p.lastConfirmed.snapshot.openSignalCount} Beobachtungen, {p.lastConfirmed.snapshot.openActionCount} Aktionen, {p.lastConfirmed.snapshot.openHandoverCount} Übergaben.</p>
           </div>
         ) : (
-          <p className="muted text-sm">Noch kein bestätigtes Weekly für dieses Setup – dies ist der erste dokumentierte Stand.</p>
+          <p className="muted text-sm">Noch kein bestätigtes Weekly für dieses Projekt – dies ist der erste dokumentierte Stand.</p>
         )}
         <div className="grid md:grid-cols-2 gap-4 mt-3 text-sm">
           <div>

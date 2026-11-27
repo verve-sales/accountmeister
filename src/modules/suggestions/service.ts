@@ -84,12 +84,12 @@ export function categorize(item: StructuredItem): PriorityCategory {
 const CATEGORY_ORDER: Record<PriorityCategory, number> = { KONKRETE_ANFRAGE: 0, BLOCKIERTE_AKTION: 1, NEUE_INFORMATION: 2, ZUGANGSLUECKE: 3, PLANUNGSANLASS: 4, VERBESSERUNGSIDEE: 5 };
 
 /**
- * Weekly-Notiz strukturieren. Rechte: Teilnehmende bzw. Setup-Bearbeitende. Die Notiz ist die einzige Rohquelle,
+ * Weekly-Notiz strukturieren. Rechte: Teilnehmende bzw. Projekt-Bearbeitende. Die Notiz ist die einzige Rohquelle,
  * die der Anbieter erhält; dazu kommen nur Anzeigenamen und bestätigte Aussagen als Text.
  */
 export async function structureReviewNote(actor: Actor, reviewId: string, deps: { provider?: AIProvider } = {}) {
   const { review, ctx, participants, canWork } = await requireReview(actor, reviewId);
-  if (!canWork) throw new ForbiddenError("Nur Teilnehmende oder Setup-Bearbeitende strukturieren die Notiz.");
+  if (!canWork) throw new ForbiddenError("Nur Teilnehmende oder Projekt-Bearbeitende strukturieren die Notiz.");
   if (review.status === "BESTAETIGT") throw new TransitionError("Ein bestätigtes Weekly wird nicht mehr strukturiert.");
   const noteText = (review.noteDraft ?? "").trim();
   if (noteText.length < 12) throw new ValidationError("Die Notiz ist leer oder zu kurz, um sie zu strukturieren.");
@@ -104,7 +104,7 @@ export async function structureReviewNote(actor: Actor, reviewId: string, deps: 
 }
 
 /**
- * Eine Quelle im Setup (z. B. hochgeladenes Dokument) strukturieren. Rechte: Setup-Bearbeitende mit Leserecht
+ * Eine Quelle im Projekt (z. B. hochgeladenes Dokument) strukturieren. Rechte: Projekt-Bearbeitende mit Leserecht
  * auf die Quelle. Der Anbieter erhält nur den Quellentext.
  */
 export async function structureSource(actor: Actor, sourceId: string, deps: { provider?: AIProvider } = {}) {
@@ -112,7 +112,7 @@ export async function structureSource(actor: Actor, sourceId: string, deps: { pr
   if (!source || !source.setupId) throw new NotFoundError("Quelle");
   const ctx = await loadSetupContext(actor, source.setupId);
   if (!ctx || !canViewSource(actor, source, ctx)) throw new NotFoundError("Quelle");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Nur Setup-Bearbeitende strukturieren Quellen.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Nur Projekt-Bearbeitende strukturieren Quellen.");
   if (source.isLocked) throw new TransitionError("Eine gesperrte Quelle wird nicht strukturiert.");
   const text = (source.body ?? "").trim();
   if (text.length < 12) throw new ValidationError("Die Quelle enthält keinen Text, der strukturiert werden könnte.");
@@ -127,24 +127,24 @@ export async function structureSource(actor: Actor, sourceId: string, deps: { pr
 }
 
 export const smartDumpInput = z.object({
-  setupId: z.string().min(1, "Setup fehlt"),
+  setupId: z.string().min(1, "Projekt fehlt"),
   text: z.string().trim().min(12, "Bitte mehr Text einfügen (mind. 12 Zeichen).").max(20000),
   title: z.string().trim().max(200).optional().or(z.literal("")),
 });
 
 /**
- * Smart-Dump (Etappe 16, Anker-Wunsch): beliebigen Text direkt einfügen – ohne den Umweg über eine eigene
+ * Smart-Dump (Etappe 16, Kontaktpaten-Wunsch): beliebigen Text direkt einfügen – ohne den Umweg über eine eigene
  * Quellen-Unterseite. Legt eine NOTIZ-Quelle an und strukturiert sie sofort (dieselbe Kette wie bei einem
  * hochgeladenen Dokument): die KI schlägt nur Karten mit wörtlicher Textstelle vor, gespeichert wird nichts
- * automatisch. Rechte wie bei jeder Quelle: nur Setup-Bearbeitende.
+ * automatisch. Rechte wie bei jeder Quelle: nur Projekt-Bearbeitende.
  */
 export async function smartDump(actor: Actor, raw: unknown, deps: { provider?: AIProvider } = {}) {
   const parsed = smartDumpInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const ctx = await loadSetupContext(actor, input.setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Nur Setup-Bearbeitende können einen Smart-Dump erfassen.");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Nur Projekt-Bearbeitende können einen Smart-Dump erfassen.");
   const title = input.title || `Smart-Dump ${new Date().toISOString().slice(0, 10)}`;
   const [source] = await db
     .insert(schema.sources)
@@ -278,7 +278,7 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
   }
 
   const nameToUser = new Map(users.map((u) => [u.displayName, u.id]));
-  // Wofür (E-045): aktive Chancen des Setups; eine einzige Chance ist das Wofür aller Vorschläge, sonst unscharf nach Titelwörtern
+  // Wofür (E-045): aktive Chancen des Projekts; eine einzige Chance ist das Wofür aller Vorschläge, sonst unscharf nach Titelwörtern
   const chances = (await db.query.opportunities.findMany({ where: eq(schema.opportunities.setupId, ctx.setup.id) })).filter((o) => !["ZURUECKGESTELLT", "BEENDET"].includes(o.status));
   const purposeFor = (text: string): { id: string | null; purpose: string | null } => {
     if (chances.length === 1) return { id: chances[0]!.id, purpose: chances[0]!.title };
@@ -327,7 +327,7 @@ export async function structureText(actor: Actor, ctx: SetupContext, input0: Str
         conditionsNote: item.conditionsNote || null,
         priorityCategory: categorize(item),
         dedupeKey,
-        recheckTrigger: "Neue Notiz oder neue Quelle im Setup",
+        recheckTrigger: "Neue Notiz oder neue Quelle im Projekt",
         provider: info.id,
         model: usage?.model || modelLabel,
         promptVersion: STRUCTURE_NOTE_PROMPT_VERSION,
@@ -437,7 +437,7 @@ export async function acceptSuggestion(actor: Actor, id: string, raw: unknown) {
     acceptedObjectType = "ACTION";
     acceptedObjectId = a.id;
   } else if (s.type === "KONTAKTAUFNAHME") {
-    // Kontaktaufnahme → Aktion für den Anker/BD mit dem Entwurf als Vereinbarungstext; Versand bleibt Handarbeit
+    // Kontaktaufnahme → Aktion für den Kontaktpaten/BD mit dem Entwurf als Vereinbarungstext; Versand bleibt Handarbeit
     const owner = input.ownerUserId || s.proposedOwnerUserId || actor.userId;
     const a = await createAction(actor, { setupId: s.setupId, title: `Kontaktaufnahme ${s.mentionedPersonName ?? ""}: ${text}`.slice(0, 300), agreement: (s.nextStep ?? "").slice(0, 2000), ownerUserId: owner, agreedInConversation: false, opportunityId: s.opportunityId ?? "" });
     acceptedObjectType = "ACTION";
@@ -504,10 +504,10 @@ export async function giveFeedback(actor: Actor, id: string, raw: unknown) {
   });
 }
 
-/** Offene Vorschläge eines Setups, nach Kategorie priorisiert; die ersten `prominent` werden hervorgehoben (max. 3). */
+/** Offene Vorschläge eines Projekts, nach Kategorie priorisiert; die ersten `prominent` werden hervorgehoben (max. 3). */
 export async function listSuggestionsForSetup(actor: Actor, setupId: string, opts: { reviewId?: string } = {}) {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
   const rows = await db.query.suggestions.findMany({
     where: and(eq(schema.suggestions.setupId, setupId), opts.reviewId ? eq(schema.suggestions.reviewId, opts.reviewId) : undefined),
     orderBy: desc(schema.suggestions.computedAt),
@@ -520,7 +520,7 @@ export async function listSuggestionsForSetup(actor: Actor, setupId: string, opt
   return { prominent: open.slice(0, 3), more: open.slice(3), decided, userNames: un, canDecide: canEditSetup(actor, ctx) };
 }
 
-/** Vorschläge für „Meine Arbeit“: offene Vorschläge in Setups, die der Akteur bearbeitet, bevorzugt an ihn adressiert. */
+/** Vorschläge für „Meine Arbeit“: offene Vorschläge in Projekte, die der Akteur bearbeitet, bevorzugt an ihn adressiert. */
 export async function listMySuggestions(actor: Actor) {
   const rows = await db.query.suggestions.findMany({
     where: and(eq(schema.suggestions.workspaceId, actor.workspaceId), or(eq(schema.suggestions.status, "NEU"), eq(schema.suggestions.status, "GEPRUEFT"))),

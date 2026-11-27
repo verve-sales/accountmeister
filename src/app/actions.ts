@@ -130,7 +130,7 @@ export async function logoutAction() {
   redirect("/anmelden");
 }
 
-// --- Kunden / Setups ------------------------------------------------------
+// --- Kunden / Projekte ------------------------------------------------------
 
 export async function createAccountAction(fd: FormData) {
   const data = formToObject(fd);
@@ -239,7 +239,7 @@ export async function deleteAccountAction(fd: FormData) {
   return run(`/kunden/${id}/loeschen`, async (actor) => {
     await deleteAccountPermanently(actor, data);
     return "/kunden";
-  }, "Kunde endgültig gelöscht – mit allen Setups, Ansprechpartnern, Quellen und Vorschlägen. Der Vorgang steht mit Begründung im Prüfprotokoll.");
+  }, "Kunde endgültig gelöscht – mit allen Projekten, Ansprechpartnern, Quellen und Vorschlägen. Der Vorgang steht mit Begründung im Prüfprotokoll.");
 }
 
 export async function createSetupAction(fd: FormData) {
@@ -247,7 +247,7 @@ export async function createSetupAction(fd: FormData) {
   return run(`/kunden/${data.accountId}`, async (actor) => {
     const s = await createSetup(actor, data);
     return `/setups/${s.id}`;
-  }, "Setup angelegt. Angaben dürfen schrittweise ergänzt werden.");
+  }, "Projekt angelegt. Angaben dürfen schrittweise ergänzt werden.");
 }
 
 export async function updateSetupAction(fd: FormData) {
@@ -255,7 +255,7 @@ export async function updateSetupAction(fd: FormData) {
   const id = data.setupId ?? "";
   return run(`/setups/${id}`, async (actor) => {
     await updateSetup(actor, id, data);
-  }, "Setup aktualisiert.");
+  }, "Projekt aktualisiert.");
 }
 
 export async function addMemberAction(fd: FormData) {
@@ -279,7 +279,7 @@ export async function reassignSetupBdAction(fd: FormData) {
   const id = data.setupId ?? "";
   return run(`/setups/${id}`, async (actor) => {
     await reassignSetupBd(actor, id, data);
-  }, "Setup-Zuständigkeit umgestellt.");
+  }, "Projekt-Zuständigkeit umgestellt.");
 }
 
 // --- Beobachtungen ---------------------------------------------------------------
@@ -539,7 +539,7 @@ export async function acceptSuggestionAsChanceAction(fd: FormData) {
   const data = formToObject(fd);
   return run(data.back ?? "/meine-arbeit", async (actor) => {
     await acceptSuggestionAsChance(actor, data.suggestionId ?? "", data);
-  }, "Als Chance übernommen – sie steht „in Klärung“ im Setup unter „Wo stehen wir?“.");
+  }, "Als Chance übernommen – sie steht „in Klärung“ im Projekt unter „Wo stehen wir?“.");
 }
 
 export async function suggestionFeedbackAction(fd: FormData) {
@@ -599,7 +599,7 @@ export async function importProtocolAction(fd: FormData) {
     if (r.repeated) throw new PendingInfo("Diese Quelle war bereits importiert – kein zweiter Import.");
     if (r.newVersion) throw new PendingInfo("Quelle war bekannt; geänderter Inhalt wurde als neue Version gespeichert.");
     const n = r.structured?.created ?? 0;
-    throw new PendingInfo(`Quelle übernommen${r.structured ? ` und ausgewertet: ${n} Vorschlag/Vorschläge zur Prüfung` : ""}. Bitte Prüfliste und Vorschläge im Setup ansehen.`);
+    throw new PendingInfo(`Quelle übernommen${r.structured ? ` und ausgewertet: ${n} Vorschlag/Vorschläge zur Prüfung` : ""}. Bitte Prüfliste und Vorschläge im Projekt ansehen.`);
   }, "");
 }
 
@@ -956,7 +956,7 @@ function eingangMessage(r: { created: number; rejected: number; accountName: str
   return `${head}${where}. ${r.created} Karte(n) unter „Vorschläge“ – je ein Klick zum Übernehmen.`;
 }
 
-/** „Was gibt es Neues?“ (Etappe 36): Kunde/Setup automatisch erkennen oder gewähltes Setup, Karten erzeugen. */
+/** „Was gibt es Neues?“ (Etappe 36): Kunde/Projekt automatisch erkennen oder gewähltes Projekt, Karten erzeugen. */
 
 /**
  * Eingangs-Auswertung mit Zeitbudget (Etappe 39): Antwortet die KI nicht innerhalb weniger Sekunden, läuft die Auswertung
@@ -986,7 +986,7 @@ export async function eingangAction(fd: FormData) {
   }, "");
 }
 
-/** Falsch zugeordneter Eingang: anderem Kunden/Setup zuordnen und neu auswerten (Etappe 42). */
+/** Falsch zugeordneter Eingang: anderem Kunden/Projekt zuordnen und neu auswerten (Etappe 42). */
 export async function reassignIntakeAction(fd: FormData) {
   const data = formToObject(fd);
   const back = backOf(data, "/start#vorschlaege");
@@ -1023,7 +1023,7 @@ export async function smartDumpAction(fd: FormData) {
     if (r.created === 0) throw new PendingInfo(r.noSuggestionReason ? `Gespeichert, aber keine Vorschläge: ${r.noSuggestionReason}` : `Gespeichert, aber keine neuen Vorschläge (${r.skipped} bereits vorhanden, ${r.rejected} zurückgewiesen).`);
     if (!data.back) return `/setups/${data.setupId ?? ""}`;
     throw new PendingInfo(`Eingespielt – ${r.created} Vorschlag/Vorschläge unter „Vorschläge“ zum Übernehmen.`);
-  }, "Text gespeichert und Vorschläge erzeugt – bitte im Setup prüfen.");
+  }, "Text gespeichert und Vorschläge erzeugt – bitte im Projekt prüfen.");
 }
 
 export async function structureSourceAction(fd: FormData) {
@@ -1034,7 +1034,7 @@ export async function structureSourceAction(fd: FormData) {
     if (r.repeated) throw new PendingInfo("Diese Quelle wurde mit diesem Stand bereits strukturiert; es wurden keine neuen Vorschläge erzeugt.");
     if (r.created === 0) throw new PendingInfo(r.noSuggestionReason ? `Keine Vorschläge: ${r.noSuggestionReason}` : `Keine neuen Vorschläge (${r.skipped} bereits vorhanden, ${r.rejected} zurückgewiesen).`);
     return `/setups/${data.setupId ?? ""}`;
-  }, "Vorschläge aus der Quelle erzeugt – bitte im Setup prüfen.");
+  }, "Vorschläge aus der Quelle erzeugt – bitte im Projekt prüfen.");
 }
 
 export async function startIntakeAction(fd: FormData) {
@@ -1133,7 +1133,7 @@ export async function startPlaybookRunAction(fd: FormData) {
   const back = backOf(data, "/vorgehen");
   return run(back, async (actor) => {
     const r = await startPlaybookRun(actor, data);
-    // Bei neuem Setup direkt dorthin, wo das Vorgehen läuft
+    // Bei neuem Projekt direkt dorthin, wo das Vorgehen läuft
     return data.newSetupName && !data.setupId ? `/setups/${r.setupId}` : back;
   }, "Vorgehen gestartet. Der erste Schritt liegt als Aktion bei der verantwortlichen Person.");
 }
@@ -1785,7 +1785,7 @@ export async function checkinAction(fd: FormData) {
   return run(backOf(data, "/meine-arbeit#checkins"), async (actor) => {
     requireStaffingFlag();
     const r = await actOnCheckin(actor, data.checkinId ?? "", data);
-    if (data.action === "ERLEDIGEN" && data.salesHint && !r.salesSignalId) throw new PendingInfo("Check-in erledigt. Der Sales-Hinweis konnte nicht als Signal angelegt werden (kein Bearbeitungsrecht am Setup) – der BD wurde benachrichtigt.");
+    if (data.action === "ERLEDIGEN" && data.salesHint && !r.salesSignalId) throw new PendingInfo("Check-in erledigt. Der Sales-Hinweis konnte nicht als Signal angelegt werden (kein Bearbeitungsrecht am Projekt) – der BD wurde benachrichtigt.");
   }, data.action === "ERLEDIGEN" ? "Check-in erledigt – der nächste Kunden-Check-in ist in 42 Tagen fällig." : "Check-in aktualisiert.");
 }
 
@@ -1897,7 +1897,7 @@ export async function mocoApplyImportAction(fd: FormData) {
   return run(backOf(data, `/moco/import/${data.importId ?? ""}`), async (actor) => {
     const { applyImport, decisionsFromForm } = await import("@/modules/moco/import");
     const r = await applyImport(actor, data.importId ?? "", decisionsFromForm(data));
-    if (r.errors.length) throw new PendingInfo(`Übernommen: ${r.created.einsaetze} Einsätze, ${r.created.setups} Setups, ${r.created.kunden} Kunden, ${r.created.nutzer} Zugänge, ${r.created.freelancer} Freelancer, ${r.created.verknuepft} Verknüpfungen – ${r.errors.length} Zeile(n) mit Fehler (siehe Ergebnis).`);
+    if (r.errors.length) throw new PendingInfo(`Übernommen: ${r.created.einsaetze} Einsätze, ${r.created.setups} Projekte, ${r.created.kunden} Kunden, ${r.created.nutzer} Zugänge, ${r.created.freelancer} Freelancer, ${r.created.verknuepft} Verknüpfungen – ${r.errors.length} Zeile(n) mit Fehler (siehe Ergebnis).`);
   }, "Import übernommen.");
 }
 
@@ -1970,7 +1970,7 @@ export async function mocoPushLeadsAction(fd: FormData) {
   }, "Leads übertragen.");
 }
 
-// --- Endgültiges Löschen unterhalb des Kunden (Setup, Chance, Einsatz) ----------
+// --- Endgültiges Löschen unterhalb des Kunden (Projekt, Chance, Einsatz) ----------
 
 export async function deleteEngagementAction(fd: FormData) {
   const data = formToObject(fd);
@@ -2002,8 +2002,8 @@ export async function deleteSetupAction(fd: FormData) {
     const { eq } = await import("drizzle-orm");
     const setup = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, data.setupId ?? ""), columns: { accountId: true } });
     const r = await deleteSetupPermanently(actor, data.setupId ?? "", data);
-    return setup ? `/kunden/${setup.accountId}?ok=${encodeURIComponent(`Setup „${r.name}“ mit allem Inhalt gelöscht.`)}` : "/kunden";
-  }, "Setup gelöscht.");
+    return setup ? `/kunden/${setup.accountId}?ok=${encodeURIComponent(`Projekt „${r.name}“ mit allem Inhalt gelöscht.`)}` : "/kunden";
+  }, "Projekt gelöscht.");
 }
 
 export async function mocoHintsBulkAction(fd: FormData) {
@@ -2101,7 +2101,7 @@ export async function setupContactsAction(setupId: string, fd: FormData) {
   return run(back, async (actor) => {
     const { setSetupContacts } = await import("@/modules/engagements/contacts");
     await setSetupContacts(actor, setupId, contactFields(fd));
-  }, "Vorgabe für die Verlängerung gespeichert – gilt für alle Einsätze des Setups ohne eigene Angabe.");
+  }, "Vorgabe für die Verlängerung gespeichert – gilt für alle Einsätze des Projekts ohne eigene Angabe.");
 }
 
 export async function cleanupCloseOverdueAction(fd: FormData) {
@@ -2131,7 +2131,7 @@ export async function cleanupMergeSetupsAction(fd: FormData) {
   return run(back, async (actor) => {
     const { mergeSetups } = await import("@/modules/cleanup/service");
     const r = await mergeSetups(actor, keep, all.filter((x) => x !== keep));
-    throw new PendingInfo(`Setups zusammengeführt (${r.removed} entfernt) – Chancen, Einsätze und alles Weitere hängen jetzt am behaltenen Setup.`);
+    throw new PendingInfo(`Projekte zusammengeführt (${r.removed} entfernt) – Chancen, Einsätze und alles Weitere hängen jetzt am behaltenen Projekt.`);
   }, "");
 }
 
@@ -2299,7 +2299,7 @@ export async function mergeIntoSetupAction(fd: FormData) {
     const { mergeSetups } = await import("@/modules/cleanup/service");
     await mergeSetups(actor, into, [from]);
     return `/setups/${into}`;
-  }, "Setups zusammengelegt.");
+  }, "Projekte zusammengelegt.");
 }
 
 export async function moveIntakeCardAction(fd: FormData) {
@@ -2320,7 +2320,7 @@ export async function discardIntakeCardsAction(fd: FormData) {
   }, "");
 }
 
-/** Rückfrage „welches Setup?“ einer Mail beantworten (e48). */
+/** Rückfrage „welches Projekt?“ einer Mail beantworten (e48). */
 export async function assignIntakeSetupAction(fd: FormData) {
   const data = formToObject(fd);
   return run(backOf(data, "/start#vorschlaege"), async (actor) => {
@@ -2440,4 +2440,37 @@ export async function bulkActionStatusAction(fd: FormData) {
       await changeActionStatus(actor, id ?? "", { status, version: version ?? "", result: status === "VERWORFEN" ? "Sammelweise verworfen." : "" });
     }
   }, status === "ANGENOMMEN" ? `${items.length} Aktionen angenommen.` : `${items.length} Aktionen verworfen.`);
+}
+
+/**
+ * e69 (E4): Stufe im Pipeline-Board per Ziehen ändern. Erlaubt sind die Schritte, die ohne weitere Angaben gehen
+ * (in Klärung, bestätigt ohne Beleg, Auswahl/Bestellung); „vorgestellt“ und „beauftragt“ entstehen weiter über Angebot bzw. Bestellung.
+ * Gibt einen Fehlertext zurück statt umzuleiten (das Board bleibt stehen).
+ */
+export async function moveOpportunityStageAction(id: string, version: number, to: string): Promise<{ ok: boolean; message: string }> {
+  const actor = await requireActor();
+  try {
+    if (to === "BESTAETIGT") {
+      const { confirmOpportunity } = await import("@/modules/opportunities/service");
+      await confirmOpportunity(actor, id, { version, confirmedNote: "Im Pipeline-Board bestätigt." });
+    } else if (to === "PROFIL_ANGEBOT_VORGESTELLT" || to === "BEAUFTRAGT") {
+      return { ok: false, message: to === "BEAUFTRAGT" ? "„Beauftragt“ entsteht über die Bestellung – unter Einsätze › Angebot & Bestellung hochladen." : "„Profil/Angebot vorgestellt“ entsteht über das Angebot – an der Chance oder unter Einsätze › Angebot & Bestellung." };
+    } else {
+      const { changeOpportunityStatus } = await import("@/modules/opportunities/service");
+      await changeOpportunityStatus(actor, id, { version, status: to as never });
+    }
+    revalidatePath("/chancen");
+    return { ok: true, message: "Stufe geändert." };
+  } catch (e) {
+    return { ok: false, message: e instanceof DomainError ? e.message : "Die Stufe konnte nicht geändert werden." };
+  }
+}
+
+export async function moveOpportunityProjectAction(fd: FormData) {
+  const data = formToObject(fd);
+  const id = data.opportunityId ?? "";
+  return run(`/bedarfe/${id}`, async (actor) => {
+    const { moveOpportunityToProject } = await import("@/modules/opportunities/service");
+    await moveOpportunityToProject(actor, id, { setupId: data.setupId, newName: data.newName });
+  }, "Projekt geändert.");
 }

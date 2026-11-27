@@ -13,17 +13,17 @@ import { buildChanceOverview, MATURITY, type ChanceRow } from "@/modules/strateg
 /**
  * Dashboard je Rolle (Etappe 9, E-043). Eine „Sicht“ ist eine Brille, keine Rechteerweiterung: Wählbar sind nur
  * Rollen, die der Person tatsächlich zugewiesen sind; jede Sicht zeigt den Zuordnungsbereich dieser Rolle
- * (BD: eigene Kunden/Setups als zuständiger BD; Anker: Setups mit Anker-Beitrag; Principal: Principal-Kunden;
+ * (BD: eigene Kunden/Projekte als zuständiger BD; Kontaktpate: Projekte mit Kontaktpaten-Beitrag; Principal: Principal-Kunden;
  * CEO: alle Kunden zusammenfassend, ohne Rohquellen). Rechteprüfungen bleiben die der Dienste.
  */
 
 export const DASHBOARD_VIEWS = ["BD", "ANKER", "PRINCIPAL", "CEO", "SALES_OPS", "COACH"] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
 
-export const viewLabel: Record<DashboardView, string> = { BD: "BD", ANKER: "Anker", PRINCIPAL: "Principal", CEO: "Geschäftsführung", SALES_OPS: "Sales Operations", COACH: "Coach" };
+export const viewLabel: Record<DashboardView, string> = { BD: "BD", ANKER: "Kontaktpate", PRINCIPAL: "Principal", CEO: "Geschäftsführung", SALES_OPS: "Sales Operations", COACH: "Coach" };
 export const viewDescription: Record<DashboardView, string> = {
-  BD: "Meine Kunden und Setups als zuständiger BD: was diese Woche dran ist, wo der nächste große Schritt hängt.",
-  ANKER: "Setups, in denen ich Kontext beitrage: Rückfragen an mich, Kontaktaufnahmen, die auf mich warten.",
+  BD: "Meine Kunden und Projekte als zuständiger BD: was diese Woche dran ist, wo der nächste große Schritt hängt.",
+  ANKER: "Projekte, in denen ich Kontext beitrage: Rückfragen an mich, Kontaktaufnahmen, die auf mich warten.",
   PRINCIPAL: "Mein Portfolio: Unterstützungsaufträge, Kunden mit Stillstand oder Lücken, Zielbezug.",
   CEO: "Gesamtbild ohne Rohquellen: Stand je Kunde, Ziele, wo es hakt.",
   SALES_OPS: "Für die BDs vorzubereiten: Vorbereitungsschritte und Unterstützungsaufträge an mich, Kunden mit Lücken (Personen, Buyingcenter, Recherche).",
@@ -120,7 +120,7 @@ export type Dashboard = {
   empty: string | null;
 };
 
-/** Setups im Zuordnungsbereich der Sicht – nur solche, die der Akteur sehen darf. */
+/** Projekte im Zuordnungsbereich der Sicht – nur solche, die der Akteur sehen darf. */
 async function scopedContexts(actor: Actor, view: DashboardView): Promise<SetupContext[]> {
   const accounts = (await listVisibleAccounts(actor)).filter((a) => a.status !== "ARCHIVED");
   let setups: (typeof schema.projectSetups.$inferSelect)[] = [];
@@ -222,7 +222,7 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
     try {
       analyses.push(await analyzeSetup(actor, ctx));
     } catch {
-      /* Setup ohne Sicht – überspringen */
+      /* Projekt ohne Sicht – überspringen */
     }
   }
   // Kundenkarten
@@ -282,7 +282,7 @@ export async function buildDashboard(actor: Actor, requested: string | null | un
     }
   }
 
-  const empty = ctxs.length === 0 ? (view === "BD" ? "Noch keine Kunden oder Setups, für die du als BD zuständig bist. Lege einen Kunden an oder lass dich einem Setup zuordnen." : view === "ANKER" ? "Du bist in keinem Setup als Anker eingetragen." : view === "PRINCIPAL" ? "Dir ist noch kein Kunde als Principal zugeordnet." : "Keine sichtbaren Kunden.") : null;
+  const empty = ctxs.length === 0 ? (view === "BD" ? "Noch keine Kunden oder Projekte, für die du als BD zuständig bist. Lege einen Kunden an oder lass dich einem Projekt zuordnen." : view === "ANKER" ? "Du bist in keinem Projekt als Kontaktpate eingetragen." : view === "PRINCIPAL" ? "Dir ist noch kein Kunde als Principal zugeordnet." : "Keine sichtbaren Kunden.") : null;
 
   // Principal-Start (Etappe 14): Zusammenarbeit der letzten Woche, Top-Chancen je Kunde, offene Hinweise auf mögliche neue Chancen.
   let activity: Dashboard["activity"] = [];

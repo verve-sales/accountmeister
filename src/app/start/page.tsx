@@ -92,7 +92,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   const userNames = new Map(users.map((u) => [u.id, u.displayName]));
   const openIncoming = handovers.filter((h) => h.receiverUserId === actor.userId && h.status === "ANGEFRAGT");
   const reviewItems = work.requested.filter((w) => w.status === "ZUR_PRUEFUNG");
-  // Schnelleingabe: alle Setups, die ich bearbeiten darf (auch ohne Dashboard-Sicht)
+  // Schnelleingabe: alle Projekte, die ich bearbeiten darf (auch ohne Dashboard-Sicht)
   // parallel statt nacheinander (e48: Start war langsam)
   const quickSetups: { id: string; label: string }[] = (
     await Promise.all(
@@ -151,8 +151,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             counts={[
               { label: "zu entscheiden", n: renewalCards.filter((c) => c.forMe && c.mode === "ENTSCHEIDEN").length + openIncoming.length + support.filter((x) => x.isAddressee && x.status === "ANGEFRAGT").length + reviewItems.length, href: "/meine-arbeit#entscheidungen" },
               { label: "Check-ins", n: checkins.length, href: "/meine-arbeit#checkins" },
-              { label: "Aktionen", n: actions.length, href: "/meine-arbeit#aktionen" },
-              { label: "Vorgänge", n: work.assigned.length, href: "/meine-arbeit#vorgaenge" },
+              { label: "Aufgaben", n: actions.length + work.assigned.length, href: "/meine-arbeit#aktionen" },
               { label: "Verlängerungen anzustoßen", n: myRenewals.filter((r) => r.mode === "ANSTOSSEN").length, href: "/meine-arbeit#entscheidungen" },
             ]}
             next={[...timelineTasks].sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999")).slice(0, 5)}
@@ -171,7 +170,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <input type="hidden" name="back" value="/start#zeitleiste" />
       <input type="hidden" name="ownerUserId" value={actor.userId} />
       <div style={{ flex: "2 1 16rem" }}><label className="label" htmlFor="tlTitle">Neue Aufgabe</label><input id="tlTitle" name="title" className="input" required minLength={3} maxLength={300} placeholder="z. B. Profil an Frau Keller schicken" /></div>
-      <div style={{ flex: "1 1 12rem" }}><label className="label" htmlFor="tlSetup">Kunde · Setup</label><select id="tlSetup" name="setupId" className="select" required defaultValue={quickSetups.length === 1 ? quickSetups[0]!.id : ""}><option value="" disabled>Bitte wählen …</option>{quickSetups.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}</select></div>
+      <div style={{ flex: "1 1 12rem" }}><label className="label" htmlFor="tlSetup">Kunde · Projekt</label><select id="tlSetup" name="setupId" className="select" required defaultValue={quickSetups.length === 1 ? quickSetups[0]!.id : ""}><option value="" disabled>Bitte wählen …</option>{quickSetups.map((q) => <option key={q.id} value={q.id}>{q.label}</option>)}</select></div>
       <div><label className="label" htmlFor="tlDue">Fällig</label><input id="tlDue" type="date" name="dueDate" className="input" required defaultValue={plus(7)} /></div>
       <div><label className="label" htmlFor="tlPrio">Priorität</label><select id="tlPrio" name="priority" className="select" defaultValue="NORMAL"><option value="HOCH">hoch</option><option value="NORMAL">normal</option><option value="NIEDRIG">niedrig</option></select></div>
       <PendingButton className="btn btn-small" busy="Speichere …">Eintragen</PendingButton>
@@ -401,7 +400,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <details className="overview-more" id="uebersichten">
         <summary>
           <span className="font-semibold">Weitere Übersichten</span>
-          <span className="muted text-sm"> · Health-Check, Verlängerungen, Freelancer-Hebel, Ideen, Performance und mehr · als {viewLabel[d.view]}: {d.accounts.length} Kunden</span>
+          <span className="muted text-sm"> · Health-Check, Verlängerungen, Ausbaupotenzial, Ideen, Performance und mehr · als {viewLabel[d.view]}: {d.accounts.length} Kunden</span>
         </summary>
         <div className="space-y-4 mt-3">
           {d.available.length > 1 && <p className="muted text-xs">Den Hut wechselst du oben rechts neben deinem Namen. Er bestimmt Navigation und Übersichten, nicht deine Rechte.</p>}
@@ -449,7 +448,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
 
       {fl && (
         <details className="card">
-          <summary className="font-semibold">Freelancer-Hebel <span className="muted text-xs font-normal">– strategischer Fokus, 90 Tage · <Link href="/vorgehen#fokus">Was ist der Fokus?</Link></span></summary>
+          <summary className="font-semibold">Ausbaupotenzial <span className="muted text-xs font-normal">– strategischer Fokus, 90 Tage · <Link href="/vorgehen#fokus">Was ist der Fokus?</Link></span></summary>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             {[
               { v: fl.openFreelancerChances, l: "offene Freelancer-Chancen", href: drillHref({ sicht: d.view, art: "FREELANCER_EXPERTE", stufe: "offen" }) },
@@ -489,13 +488,13 @@ export default async function StartPage({ searchParams }: { searchParams: Search
 
         <details className="card space-y-4">
           <summary className="font-semibold">Kunden – wo der nächste große Schritt hängt ({d.accounts.length})</summary>
-          {d.accounts.length === 0 && !d.empty && <p className="muted text-sm card">Keine aktiven Setups im Bereich dieser Sicht.</p>}
+          {d.accounts.length === 0 && !d.empty && <p className="muted text-sm card">Keine aktiven Projekte im Bereich dieser Sicht.</p>}
           {d.accounts.slice(0, FOCUS).map((c) => (
             <article key={c.accountId} className="card">
               <div className="flex flex-wrap items-baseline gap-3">
                 <h3 className="font-semibold text-lg"><Link href={`/kunden/${c.accountId}`}>{c.accountName}</Link></h3>
                 {healthBy.get(c.accountId) && <HealthBadge score={healthBy.get(c.accountId)!.score} level={healthBy.get(c.accountId)!.level} coverage={healthBy.get(c.accountId)!.coverage} />}
-                <span className="muted text-sm">{pl(c.chanceCount, "Chance", "Chancen")} · {pl(c.setups.length, "Setup", "Setups")}{c.responsibleBdName ? ` · BD ${c.responsibleBdName}` : " · BD offen"} · letzte Änderung {agoLabel(c.daysSinceActivity)}</span>
+                <span className="muted text-sm">{pl(c.chanceCount, "Chance", "Chancen")} · {pl(c.setups.length, "Projekt", "Projekte")}{c.responsibleBdName ? ` · BD ${c.responsibleBdName}` : " · BD offen"} · letzte Änderung {agoLabel(c.daysSinceActivity)}</span>
               </div>
               <p className="text-sm mt-2"><span className="muted">Wofür: </span>{c.chanceCount ? <strong>{c.purpose}</strong> : <span style={{ color: "#8a6d1f" }}>{c.purpose}</span>}</p>
               <p className="text-sm mt-1"><span className="muted">Nächster großer Schritt: </span>{c.nextStep}</p>
@@ -514,7 +513,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
                 </div>
               </div>
               <details className="mt-3 text-sm">
-                <summary className="muted">Setups im Detail</summary>
+                <summary className="muted">Projekte im Detail</summary>
                 <ul className="mt-2 space-y-1">
                   {c.setups.map((s) => (
                     <li key={s.setupId}>
@@ -592,7 +591,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               <thead>
                 <tr>
                   <th>Kunde</th>
-                  <th>Anker</th>
+                  <th>Kontaktpate</th>
                   <th>BD</th>
                   <th>Koeffizient</th>
                   <th>Top-Chancen</th>
@@ -616,7 +615,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
             </table>
             </>
           )}
-          <Hint>Aktivität der letzten 7 Tage, gezählt aus dokumentierten Objekten (Weeklys, Beobachtungen, Aktionen, Vorschläge, Kontakte). Aktivitätskoeffizient: Menge × Anzahl beteiligter Rollen (Principal, BD, Anker) ÷ 3.</Hint>
+          <Hint>Aktivität der letzten 7 Tage, gezählt aus dokumentierten Objekten (Weeklys, Beobachtungen, Aktionen, Vorschläge, Kontakte). Aktivitätskoeffizient: Menge × Anzahl beteiligter Rollen (Principal, BD, Kontaktpate) ÷ 3.</Hint>
         </details>
       )}
 
@@ -635,7 +634,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
               ))}
             </ul>
           )}
-          <Hint>Unentschiedene, von der KI abgeleitete Beobachtungen (Kategorie „Neue Information“) aus Weekly-Notizen und Dokumenten – ein Hinweis, keine Vorhersage; ob daraus eine Chance wird, entscheidest du im Setup.</Hint>
+          <Hint>Unentschiedene, von der KI abgeleitete Beobachtungen (Kategorie „Neue Information“) aus Weekly-Notizen und Dokumenten – ein Hinweis, keine Vorhersage; ob daraus eine Chance wird, entscheidest du im Projekt.</Hint>
         </details>
       )}
 
@@ -683,7 +682,7 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       {d.teamActivity.map((t) => (
         <details className="card" key={t.teamId}>
           <summary className="font-semibold">Mein Team: {t.teamName}</summary>
-          <Hint>Aktivitätsindex der letzten {t.days} Tage je Mitglied – Zählungen dokumentierter Ereignisse (Beobachtungen, Aktionen, Vorschläge, Weeklys, Kontakte, Check-ins). Nur Zahlen, keine Inhalte; die Sichtbarkeit von Kunden und Setups bleibt unverändert.</Hint>
+          <Hint>Aktivitätsindex der letzten {t.days} Tage je Mitglied – Zählungen dokumentierter Ereignisse (Beobachtungen, Aktionen, Vorschläge, Weeklys, Kontakte, Check-ins). Nur Zahlen, keine Inhalte; die Sichtbarkeit von Kunden und Projekte bleibt unverändert.</Hint>
           <table className="list text-sm">
             <thead><tr><th>Mitglied</th><th>Index</th><th>Vorperiode</th><th>Beobachtungen</th><th>Aktionen</th><th>Kontakte</th><th>Check-ins</th><th>Zuletzt aktiv</th></tr></thead>
             <tbody>
@@ -707,15 +706,15 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       {d.view === "BD" && (
         <details className="card">
           <summary className="font-semibold">Neue Idee zu einer Opportunity eintragen</summary>
-          <p className="muted text-sm mb-2">Wird als antizipierte Chance angelegt – vom Kunden noch nicht ausgesprochen; im Setup dann bestätigen, sobald der Kunde den Bedarf ausspricht.</p>
+          <p className="muted text-sm mb-2">Wird als antizipierte Chance angelegt – vom Kunden noch nicht ausgesprochen; im Projekt dann bestätigen, sobald der Kunde den Bedarf ausspricht.</p>
           {d.accounts.every((c) => c.setups.length === 0) ? (
-            <p className="muted text-sm">Noch kein Setup, dem eine Idee zugeordnet werden könnte.</p>
+            <p className="muted text-sm">Noch kein Projekt, dem eine Idee zugeordnet werden könnte.</p>
           ) : (
             <form action={createOpportunityAction} className="grid sm:grid-cols-2 gap-3 text-sm">
               <input type="hidden" name="anticipated" value="true" />
               <input type="hidden" name="back" value="/start" />
               <div className="sm:col-span-2">
-                <label className="label" htmlFor="ideaSetup">Setup</label>
+                <label className="label" htmlFor="ideaSetup">Projekt</label>
                 <select id="ideaSetup" name="setupId" className="select" required defaultValue="">
                   <option value="">– wählen –</option>
                   {d.accounts.map((c) => c.setups.map((s) => <option key={s.setupId} value={s.setupId}>{c.accountName} · {s.setupName}</option>))}

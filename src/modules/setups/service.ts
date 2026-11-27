@@ -9,12 +9,12 @@ import { getAccount } from "@/modules/accounts/service";
 import { getSinceForSetup, listReviewsForSetup } from "@/modules/reviews/service";
 
 /**
- * Anlage eines Projektsetups (Briefing 6.1): minimal Kunde, Name, Kontextsatz ODER bewusster Entwurf,
+ * Anlage eines Projekte (Briefing 6.1): minimal Kunde, Name, Kontextsatz ODER bewusster Entwurf,
  * Ersteller und Sichtbarkeit. BD-Zuordnung darf offen bleiben („Zuordnung offen“).
  */
 export const createSetupInput = z.object({
   accountId: z.string().min(1),
-  name: z.string().trim().min(3, "Setup-Name ist zu kurz").max(200),
+  name: z.string().trim().min(3, "Projekt-Name ist zu kurz").max(200),
   contextNote: z.string().trim().max(2000).optional().or(z.literal("")),
   visibility: z.enum(schema.setupVisibilityEnum.enumValues).default("MITGLIEDER"),
   bdUserId: z.string().optional().nullable().or(z.literal("")),
@@ -27,7 +27,7 @@ export async function createSetup(actor: Actor, raw: unknown) {
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const account = await getAccount(actor, input.accountId);
-  if (!canCreateSetup(actor, account)) throw new ForbiddenError("Für diesen Kunden darfst du kein Setup anlegen.");
+  if (!canCreateSetup(actor, account)) throw new ForbiddenError("Für diesen Kunden darfst du kein Projekt anlegen.");
   const bdUserId = input.bdUserId ? input.bdUserId : null;
 
   return db.transaction(async (tx) => {
@@ -65,13 +65,13 @@ export async function createSetup(actor: Actor, raw: unknown) {
 
 export async function requireSetupContext(actor: Actor, setupId: string): Promise<SetupContext> {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
   return ctx;
 }
 
 export async function requireEditableSetup(actor: Actor, setupId: string): Promise<SetupContext> {
   const ctx = await requireSetupContext(actor, setupId);
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst dieses Setup nicht bearbeiten.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst dieses Projekt nicht bearbeiten.");
   return ctx;
 }
 
@@ -107,7 +107,7 @@ export async function updateSetup(actor: Actor, setupId: string, raw: unknown) {
   });
 }
 
-/** Zusammenstellung für die Setup-Seite: vier Abschnitte (6.3) + Details. */
+/** Zusammenstellung für die Projekt-Seite: vier Abschnitte (6.3) + Details. */
 export async function getSetupDetail(actor: Actor, setupId: string) {
   const ctx = await requireSetupContext(actor, setupId);
   const [members, signals, actions, sources, handovers] = await Promise.all([
@@ -160,7 +160,7 @@ export async function getSetupDetail(actor: Actor, setupId: string) {
   };
 }
 
-/** Setups in der Eingangsliste: BD-Zuordnung offen, für den Akteur sichtbar (5. Eingang). */
+/** Projekte in der Eingangsliste: BD-Zuordnung offen, für den Akteur sichtbar (5. Eingang). */
 export async function listSetupsWithOpenAssignment(actor: Actor) {
   const rows = await db.query.projectSetups.findMany({
     where: and(eq(schema.projectSetups.workspaceId, actor.workspaceId), isNull(schema.projectSetups.bdUserId)),
@@ -174,7 +174,7 @@ export async function listSetupsWithOpenAssignment(actor: Actor) {
   return result;
 }
 
-/** Setups, an denen der Akteur beteiligt ist oder die er als BD verantwortet. */
+/** Projekte, an denen der Akteur beteiligt ist oder die er als BD verantwortet. */
 export async function listMySetups(actor: Actor) {
   const memberRows = await db
     .select({ setupId: schema.setupMemberships.setupId })
@@ -216,7 +216,7 @@ export const addMemberInput = z.object({
  *  Kunden Mitglieder umstellen (Delegation, Etappe 19), auch ohne selbst bearbeitendes Mitglied zu sein. */
 async function requireCanChangeMembers(actor: Actor, setupId: string): Promise<SetupContext> {
   const ctx = await requireSetupContext(actor, setupId);
-  if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Du darfst die Beteiligten dieses Setups nicht ändern.");
+  if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Du darfst die Beteiligten dieses Projekts nicht ändern.");
   return ctx;
 }
 
@@ -237,7 +237,7 @@ export async function addMember(actor: Actor, setupId: string, raw: unknown) {
   });
 }
 
-/** Beteiligung entfernen (z. B. bisherigen Anker ablösen, wenn eine andere Person übernimmt). */
+/** Beteiligung entfernen (z. B. bisherigen Kontaktpate ablösen, wenn eine andere Person übernimmt). */
 export async function removeMember(actor: Actor, setupId: string, memberUserId: string) {
   const ctx = await requireCanChangeMembers(actor, setupId);
   if (memberUserId === ctx.setup.bdUserId) throw new ValidationError("Der zuständige BD wird über die BD-Zuordnung gewechselt, nicht als Beteiligung entfernt.");
@@ -250,14 +250,14 @@ export const reassignSetupBdInput = z.object({
   bdUserId: z.string().min(1, "Bitte einen zuständigen BD wählen."),
 });
 
-/** Delegation (Etappe 19): Principal/CEO/aktueller BD stellen die Setup-Zuständigkeit jederzeit um – bisher
+/** Delegation (Etappe 19): Principal/CEO/aktueller BD stellen die Projekt-Zuständigkeit jederzeit um – bisher
  *  war bdUserId nur bei Anlage bzw. über Übergabe-Annahme setzbar. */
 export async function reassignSetupBd(actor: Actor, setupId: string, raw: unknown) {
   const parsed = reassignSetupBdInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const ctx = await requireSetupContext(actor, setupId);
-  if (!canReassignResponsibility(actor, ctx.account) && ctx.setup.bdUserId !== actor.userId) throw new ForbiddenError("Du darfst die Setup-Zuständigkeit hier nicht umstellen.");
+  if (!canReassignResponsibility(actor, ctx.account) && ctx.setup.bdUserId !== actor.userId) throw new ForbiddenError("Du darfst die Projekt-Zuständigkeit hier nicht umstellen.");
   const newBd = await db.query.users.findFirst({ where: and(eq(schema.users.id, input.bdUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });
   if (!newBd) throw new ValidationError("Person nicht gefunden oder inaktiv.");
   await assertCanCarryResponsibility(input.bdUserId);

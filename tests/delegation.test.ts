@@ -10,11 +10,11 @@ import { actorFor, ensureSeed } from "./helpers";
 
 /**
  * Delegation (Briefing-Nachtrag, Etappe 19): "als zugeordneter Principal möchte ich den BD-Manager und
- * Anker jederzeit in der Kunden/Setup/Chance-Seite umstellen können" – bislang unmöglich (responsibleBdUserId
- * und bdUserId waren nur bei Anlage setzbar, Anker-Umstellung war an canEditSetup gebunden, das Principal
+ * Kontaktpate jederzeit in der Kunden/Projekt/Chance-Seite umstellen können" – bislang unmöglich (responsibleBdUserId
+ * und bdUserId waren nur bei Anlage setzbar, Kontaktpaten-Umstellung war an canEditSetup gebunden, das Principal
  * grundsätzlich nicht erfüllt). Diese Tests decken die neue, schmale Umstellungsberechtigung ab.
  */
-describe("Etappe 19: Delegation – Principal stellt BD/Anker/Verantwortlichkeit um", () => {
+describe("Etappe 19: Delegation – Principal stellt BD/Kontaktpate/Verantwortlichkeit um", () => {
   it("Principal (workspace-weit) darf die Kundenzuständigkeit umstellen; der neue BD erhält automatisch die kundenbezogene Rolle", async () => {
     const s = await ensureSeed();
     const petra = await actorFor("petra");
@@ -44,7 +44,7 @@ describe("Etappe 19: Delegation – Principal stellt BD/Anker/Verantwortlichkeit
     await expect(reassignAccountBd(lars, s.accountId, { version: (await getAccount(petra, s.accountId)).version, responsibleBdUserId: s.users.lars })).rejects.toBeInstanceOf(ForbiddenError);
   });
 
-  it("Principal darf die Setup-Zuständigkeit (BD) sowie Anker-Beteiligungen jederzeit umstellen, ohne selbst Mitglied zu sein", async () => {
+  it("Principal darf die Projekt-Zuständigkeit (BD) sowie Kontaktpaten-Beteiligungen jederzeit umstellen, ohne selbst Mitglied zu sein", async () => {
     const s = await ensureSeed();
     const petra = await actorFor("petra");
     const nina = await actorFor("nina");
@@ -58,7 +58,7 @@ describe("Etappe 19: Delegation – Principal stellt BD/Anker/Verantwortlichkeit
     const memberships = await db.query.setupMemberships.findMany({ where: eq(schema.setupMemberships.setupId, s.setupId) });
     expect(memberships.some((m) => m.userId === s.users.lars && m.contribution === "BD_ZUSTAENDIG")).toBe(true);
 
-    // Anker umstellen: Nina wird auf einen anderen Beitrag umgestellt (Upsert über addMember, jetzt auch für Principal erlaubt)
+    // Kontaktpate umstellen: Nina wird auf einen anderen Beitrag umgestellt (Upsert über addMember, jetzt auch für Principal erlaubt)
     await addMember(petra, s.setupId, { userId: nina.userId, contribution: "ANKER_RUECKFRAGEN" });
     const afterAnker = await db.query.setupMemberships.findFirst({ where: and(eq(schema.setupMemberships.setupId, s.setupId), eq(schema.setupMemberships.userId, nina.userId)) });
     expect(afterAnker?.contribution).toBe("ANKER_RUECKFRAGEN");
@@ -68,7 +68,7 @@ describe("Etappe 19: Delegation – Principal stellt BD/Anker/Verantwortlichkeit
     const removed = await db.query.setupMemberships.findFirst({ where: and(eq(schema.setupMemberships.setupId, s.setupId), eq(schema.setupMemberships.userId, nina.userId)) });
     expect(removed).toBeUndefined();
 
-    // zurücksetzen: BD wieder David, Nina wieder Anker (Kontext)
+    // zurücksetzen: BD wieder David, Nina wieder Kontaktpate (Kontext)
     const afterReset = await getSetupDetail(petra, s.setupId);
     await reassignSetupBd(petra, s.setupId, { version: afterReset.setup.version, bdUserId: s.users.david });
     await addMember(petra, s.setupId, { userId: nina.userId, contribution: "ANKER_KONTEXT" });
@@ -95,7 +95,7 @@ describe("Etappe 19: Delegation – Principal stellt BD/Anker/Verantwortlichkeit
 
   it("Ohne Principal/CEO/zuständige BD-Rolle bleibt eine Umstellung verboten (kein pauschales Umstellungsrecht)", async () => {
     const s = await ensureSeed();
-    const nina = await actorFor("nina"); // Anker, keine Führungsrolle
+    const nina = await actorFor("nina"); // Kontaktpate, keine Führungsrolle
     const account = await getAccount(await actorFor("petra"), s.accountId);
     expect(canReassignResponsibility(nina, account)).toBe(false);
     await expect(reassignAccountBd(nina, s.accountId, { version: account.version, responsibleBdUserId: nina.userId })).rejects.toBeInstanceOf(ForbiddenError);

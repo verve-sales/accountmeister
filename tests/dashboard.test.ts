@@ -48,7 +48,7 @@ describe("Etappe 9A: Dashboard je Rolle mit Sichtwechsler", () => {
     // Lars’ Kunde (Musterwerke) taucht bei David nicht auf
     expect(d.accounts.some((c) => c.accountId === seed.otherAccountId)).toBe(false);
     expect(typeof d.note).toBe("string");
-    // Anker-Sicht: nur Setups mit Anker-Beitrag
+    // Kontaktpaten-Sicht: nur Projekte mit Kontaktpaten-Beitrag
     const nina = await actorFor("nina");
     const n = (await buildDashboard(nina, "ANKER"))!;
     expect(n.view).toBe("ANKER");
@@ -70,10 +70,10 @@ describe("Etappe 14: Principal-Start – Zusammenarbeit der letzten Woche, Top-C
     const nina = await actorFor("nina");
     const petra = await actorFor("petra");
     const account = await createAccount(david, { name: `Principal-Start-Test ${Date.now().toString(36)} (fiktiv)`, responsibleBdUserId: david.userId });
-    const setup = await createSetup(david, { accountId: account.id, name: "Principal-Start-Setup", contextNote: "Kontext", bdUserId: david.userId });
+    const setup = await createSetup(david, { accountId: account.id, name: "Principal-Start-Projekt", contextNote: "Kontext", bdUserId: david.userId });
     await db.insert(schema.setupMemberships).values({ setupId: setup.id, userId: nina.userId, contribution: "ANKER_KONTEXT", canEdit: true });
 
-    // Zusammenarbeit der letzten Woche: Anker erfasst eine Beobachtung
+    // Zusammenarbeit der letzten Woche: Kontaktpate erfasst eine Beobachtung
     await captureObservation(nina, { setupId: setup.id, observation: "Principal-Start-Test: Beobachtung von Nina." });
 
     // Top-Chance: eine aktive, dokumentierte Chance
@@ -125,7 +125,7 @@ describe("Etappe 9B: Lageanalyse und Strategiefaden", () => {
     expect(a.nextStep.length).toBeGreaterThan(10);
     expect(a.counts.persons).toBeGreaterThan(0);
 
-    // Neues Setup ohne alles: Lücken sind konkret
+    // Neues Projekt ohne alles: Lücken sind konkret
     const s = await createSetup(david, { accountId: seed.accountId, name: "Lagetest ohne Kontext", visibility: "MITGLIEDER", creatorContribution: "BD_ZUSTAENDIG" });
     const ctx2 = await requireSetupContext(david, s.id);
     const a2 = await analyzeSetup(david, ctx2);
@@ -144,7 +144,7 @@ describe("Etappe 9B: Lageanalyse und Strategiefaden", () => {
     expect(p.rejected).toBe(0);
     expect(p.aiJobId).toBeTruthy();
 
-    // Speichern → Version 1, erneut → Version 2; Anker ohne Bearbeitungsrecht (Nina ist hier kein Mitglied) darf nicht
+    // Speichern → Version 1, erneut → Version 2; Kontaktpate ohne Bearbeitungsrecht (Nina ist hier kein Mitglied) darf nicht
     const v1 = await saveStrategy(david, { ...p.proposal, setupId: s.id, aiJobId: p.aiJobId, note: "Erste Fassung" });
     expect(v1.versionNo).toBe(1);
     expect(v1.stage).toBe("BEDARF_IN_KLAERUNG");
@@ -155,7 +155,7 @@ describe("Etappe 9B: Lageanalyse und Strategiefaden", () => {
     expect(g.latest?.versionNo).toBe(2);
     expect(g.versions).toHaveLength(2);
     const nina = await actorFor("nina");
-    await expect(saveStrategy(nina, { ...p.proposal, setupId: s.id })).rejects.toBeInstanceOf(NotFoundError); // sieht das Setup (nur Mitglieder) gar nicht
+    await expect(saveStrategy(nina, { ...p.proposal, setupId: s.id })).rejects.toBeInstanceOf(NotFoundError); // sieht das Projekt (nur Mitglieder) gar nicht
     const clemens = await actorFor("clemens");
     expect((await getStrategy(clemens, s.id)).canEdit).toBe(false); // CEO: lesend
     await expect(saveStrategy(clemens, { ...p.proposal, setupId: s.id })).rejects.toBeInstanceOf(ForbiddenError);
@@ -183,7 +183,7 @@ describe("Etappe 9C: Formularvorschläge", () => {
     expect(["VERLAENGERN", "AUSWEITEN", "VERTIEFEN", "UEBERTRAGEN"]).toContain(v.suggestion!.fields.kind);
     const s = await suggestFormFields(david, { kind: "SETUP", accountId: seed.accountId, fields: [{ name: "name", label: "Name" }, { name: "contextNote", label: "Kontext" }, { name: "visibility", label: "Sichtbarkeit", options: ["MITGLIEDER", "ACCOUNT_TEAM", "WORKSPACE"] }] });
     expect(s.suggestion!.fields.name).toBeTruthy();
-    // Fremder BD: kein Zugriff auf das Setup; CEO darf keinen Bedarf erfassen
+    // Fremder BD: kein Zugriff auf das Projekt; CEO darf keinen Bedarf erfassen
     const lars = await actorFor("lars");
     await expect(suggestFormFields(lars, { kind: "CHANCE", setupId: seed.setupId, fields: [{ name: "title", label: "Titel" }] })).rejects.toBeInstanceOf(NotFoundError);
     const clemens = await actorFor("clemens");
@@ -203,8 +203,8 @@ describe("Etappe 15: Persönlicher KI-Berater je Chance", () => {
     resetConfigCacheForTests();
     const seed = await ensureSeed();
     const david = await actorFor("david");
-    // Eigenes Setup ohne Nina als Mitglied – wie beim Strategiefaden-Test, um "kein Zugriff" zu prüfen.
-    const s = await createSetup(david, { accountId: seed.accountId, name: "Chancen-Berater-Test-Setup", visibility: "MITGLIEDER", creatorContribution: "BD_ZUSTAENDIG" });
+    // Eigenes Projekt ohne Nina als Mitglied – wie beim Strategiefaden-Test, um "kein Zugriff" zu prüfen.
+    const s = await createSetup(david, { accountId: seed.accountId, name: "Chancen-Berater-Test-Projekt", visibility: "MITGLIEDER", creatorContribution: "BD_ZUSTAENDIG" });
     const opp = await createOpportunity(david, { setupId: s.id, title: "Chancen-Berater-Test", needDescription: "Der Kunde sucht Unterstützung im Testmanagement." });
 
     const a = await getOpportunityAdvice(david, opp.id);
@@ -244,7 +244,7 @@ describe("Etappe 15: Persönlicher KI-Berater je Chance", () => {
     expect(g.latest?.versionNo).toBe(2);
     expect(g.versions).toHaveLength(2);
 
-    // Rechte: Nina ist an diesem Setup kein Mitglied; CEO sieht lesend; fremder BD sieht gar nichts
+    // Rechte: Nina ist an diesem Projekt kein Mitglied; CEO sieht lesend; fremder BD sieht gar nichts
     const nina = await actorFor("nina");
     await expect(getOpportunityAdvice(nina, opp.id)).rejects.toBeInstanceOf(NotFoundError);
     const clemens = await actorFor("clemens");

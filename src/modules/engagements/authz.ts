@@ -7,7 +7,7 @@ import { isStaffingManager } from "@/modules/staffing/authz";
 
 /**
  * Rechte der Einsatzakte (Etappe 29, E2).
- *  - manage: BD-Kontext des Kunden (Einsatz-BD, zuständiger BD, Setup-BD), Principal am Kunden, CEO – alles inkl. Konditionen,
+ *  - manage: BD-Kontext des Kunden (Einsatz-BD, zuständiger BD, Projekt-BD), Principal am Kunden, CEO – alles inkl. Konditionen,
  *    Statuswechsel, Betreuung vergeben, Ausnahme vom Beschaffungscheck.
  *  - care: aktive Betreuungszuordnung (CUSTOMER_CARE/FREELANCER_CARE) – Einsatzkontext, Check-ins, Verlängerung
  *    vorbereiten, Unterlagen sehen/hochladen, Perioden lesen (Entwicklungsdefault, Abschnitt 5.2); keine
@@ -16,7 +16,7 @@ import { isStaffingManager } from "@/modules/staffing/authz";
  *    Einsätze des Arbeitsraums, pflegt Konditionen, Unterlagen, Betreuung, Status und stößt Verlängerungen an (zählt als
  *    `manage`), trifft aber keine kommerzielle Entscheidung: Verlängerung bestätigen/ablehnen bleibt `commercial`
  *    (BD-Kontext, Principal am Kunden, CEO).
- *  Anker ohne Zuordnung sehen nichts. Betreuung überlebt den Abschluss des Übergabe-Vorgangs.
+ *  Kontaktpate ohne Zuordnung sehen nichts. Betreuung überlebt den Abschluss des Übergabe-Vorgangs.
  */
 export type EngagementRow = typeof schema.engagements.$inferSelect;
 

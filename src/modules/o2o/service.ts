@@ -77,7 +77,7 @@ async function insertCase(actor: Actor, values: Omit<typeof schema.orderCases.$i
 
 export type UploadedFile = { name: string; type: string; size: number; arrayBuffer: () => Promise<ArrayBuffer> };
 
-/** Datei als persönliche Quelle ablegen; sie wird einem Setup zugeordnet, sobald der Vorgang bestätigt ist. */
+/** Datei als persönliche Quelle ablegen; sie wird einem Projekt zugeordnet, sobald der Vorgang bestätigt ist. */
 async function storeUpload(actor: Actor, file: UploadedFile) {
   const cfg = getConfig();
   if (!file || file.size === 0) throw new ValidationError("Bitte eine Datei auswählen.");
@@ -370,7 +370,7 @@ async function ownerFor(actor: Actor, target: typeof schema.accounts.$inferSelec
   return u.id;
 }
 
-/** Setup als Gruppierung: das jüngste offene Setup des Kunden, sonst „Allgemein“. */
+/** Projekt als Gruppierung: das jüngste offene Projekt des Kunden, sonst „Allgemein“. */
 async function ensureSetup(actor: Actor, account: typeof schema.accounts.$inferSelect): Promise<string> {
   const setups = (await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, account.id), orderBy: desc(schema.projectSetups.updatedAt) })).filter((s) => s.status !== "ARCHIVIERT");
   const general = setups.find((s) => s.name === "Allgemein") ?? setups[0];
@@ -394,7 +394,7 @@ async function resolvePersonFields(actor: Actor, i: ConfirmInput) {
   return { personName: i.personNewName || null, freelancerId: null, internalUserId: null };
 }
 
-/** Datei des Vorgangs als Unterlage beim richtigen Kunden; Quelle dem Setup zuordnen; SharePoint, falls eingerichtet. */
+/** Datei des Vorgangs als Unterlage beim richtigen Kunden; Quelle dem Projekt zuordnen; SharePoint, falls eingerichtet. */
 async function attachFile(actor: Actor, c: CaseRow, kind: "ANGEBOT" | "BESTELLUNG", accountId: string, setupId: string, engagementId: string | null, title: string): Promise<{ documentId: string; sharepoint: { state: string; note: string | null; link: string | null } } | null> {
   const sug = (c.parsed ?? {}) as Partial<Suggestion>;
   if (!sug.sourceId) return null;

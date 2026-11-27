@@ -65,7 +65,7 @@ export default async function IntakePage({ params, searchParams }: { params: Pro
         )}
       </form>
       <details className="card text-sm">
-        <summary>Eingefügter Text (Quelle am Setup)</summary>
+        <summary>Eingefügter Text (Quelle am Projekt)</summary>
         <pre className="mt-2" style={{ whiteSpace: "pre-wrap", fontFamily: "inherit" }}>{d.sourceBody}</pre>
       </details>
     </div>

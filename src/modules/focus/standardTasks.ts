@@ -5,7 +5,7 @@ import type { Actor } from "@/modules/identity/actor";
 import { getFocus } from "./service";
 
 /**
- * Standardaufgaben zum Fokus „Freelancer-Hebel“ (Etappe 21). Sie entstehen als VORGESCHLAGENE Aktionen für die
+ * Standardaufgaben zum Fokus „Ausbaupotenzial“ (Etappe 21). Sie entstehen als VORGESCHLAGENE Aktionen für die
  * zuständige Person – annehmen oder verwerfen wie jeden anderen Vorschlag. Jeder Anlass erzeugt höchstens eine
  * Aufgabe (Schlüssel in standard_tasks). Berechnet beim Öffnen von Start/Meine Arbeit – kein Hintergrunddienst.
  *
@@ -144,7 +144,7 @@ export async function ensureStandardTasksSafe(actor: Actor): Promise<number> {
 }
 
 // ---------------------------------------------------------------------------
-// Kennzahlen „Freelancer-Hebel“
+// Kennzahlen „Ausbaupotenzial“
 // ---------------------------------------------------------------------------
 
 export type FreelancerStats = {

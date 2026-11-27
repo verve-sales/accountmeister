@@ -113,7 +113,7 @@ export default async function InitiativePage({ params, searchParams }: { params:
                   <input type="hidden" name="back" value={back} />
                   <div className="sm:col-span-2"><label className="label" htmlFor="oTitle">Titel</label><input id="oTitle" name="title" className="input" required minLength={3} maxLength={200} /></div>
                   <div className="sm:col-span-2"><label className="label" htmlFor="oNeed">Bedarf in Kundensprache</label><textarea id="oNeed" name="needDescription" className="textarea" rows={2} required minLength={10} /></div>
-                  <div><label className="label" htmlFor="oSetup">Setup</label><select id="oSetup" name="setupId" className="select" required defaultValue={editableSetups.length === 1 ? editableSetups[0]!.id : ""}><option value="" disabled>Bitte wählen …</option>{editableSetups.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+                  <div><label className="label" htmlFor="oSetup">Projekt</label><select id="oSetup" name="setupId" className="select" required defaultValue={editableSetups.length === 1 ? editableSetups[0]!.id : ""}><option value="" disabled>Bitte wählen …</option>{editableSetups.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
                   <div><label className="label" htmlFor="oKind">Art</label><select id="oKind" name="kind" className="select" defaultValue="VERVE_EXPERTE">{chanceKindValues.map((k) => <option key={k} value={k}>{chanceKindLabel[k]}</option>)}</select></div>
                   <div className="sm:col-span-2"><button className="btn btn-small" type="submit">Chance anlegen</button></div>
                 </form>

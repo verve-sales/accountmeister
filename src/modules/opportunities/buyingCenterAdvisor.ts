@@ -15,7 +15,7 @@ import { analyzeOpportunity, opportunityAnalysisToText, type OpportunityAnalysis
 import { getOpportunityDetail } from "./service";
 
 /**
- * Buying-Center-Berater je Chance (Etappe 17, Anker-/BD-Wunsch: „ein Assistent, der die Buying-Center-Rollen
+ * Buying-Center-Berater je Chance (Etappe 17, Kontaktpaten-/BD-Wunsch: „ein Assistent, der die Buying-Center-Rollen
  * durchgeht, berät und Hinweise zum Lückenfüllen gibt“). Analog zum Chancen-Berater (Etappe 15): eine
  * versionierte Fassung, die KI schlägt vor (nur mit Textstelle, wo eine konkrete Angabe gemeint ist), der BD
  * prüft, ändert und speichert eine Fassung. Der Status je Rolle wird nicht gespeichert, sondern bei jedem
@@ -69,7 +69,7 @@ export type BuyingCenterAdviceProposalResult = { proposal: BuyingCenterProposal;
 /** KI-Vorschlag einholen – wird nicht gespeichert; der BD übernimmt ihn in das Formular. */
 export async function proposeBuyingCenterAdvice(actor: Actor, opportunityId: string, deps: { provider?: AIProvider } = {}): Promise<BuyingCenterAdviceProposalResult> {
   const { analysis, ctx, canEdit, roleStatus } = await requireEditableBuyingCenter(actor, opportunityId);
-  if (!canEdit) throw new ForbiddenError("Den Buying-Center-Berater pflegen Beteiligte mit Bearbeitungsrecht am Setup.");
+  if (!canEdit) throw new ForbiddenError("Den Buying-Center-Berater pflegen Beteiligte mit Bearbeitungsrecht am Projekt.");
   const basis = `${roleStatusToText(analysis, roleStatus)}\n${opportunityAnalysisToText(analysis)}`;
   const contextText = await buildContextText(actor, await resolveContext(actor, { type: "SETUP", id: ctx.setup.id }));
   const latest = await db.query.buyingCenterAdvice.findFirst({ where: eq(schema.buyingCenterAdvice.opportunityId, opportunityId), orderBy: desc(schema.buyingCenterAdvice.versionNo) });
@@ -143,7 +143,7 @@ export async function saveBuyingCenterAdvice(actor: Actor, raw: unknown) {
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const i = parsed.data;
   const { analysis, canEdit, roleStatus } = await requireEditableBuyingCenter(actor, i.opportunityId);
-  if (!canEdit) throw new ForbiddenError("Den Buying-Center-Berater pflegen Beteiligte mit Bearbeitungsrecht am Setup.");
+  if (!canEdit) throw new ForbiddenError("Den Buying-Center-Berater pflegen Beteiligte mit Bearbeitungsrecht am Projekt.");
   const roles = i.roles.filter((r) => r.hint.trim()).map(({ role, hint, proposedPersonName, evidenceQuote }) => ({ role, hint, proposedPersonName, evidenceQuote }));
   return db.transaction(async (tx) => {
     const last = await tx.query.buyingCenterAdvice.findFirst({ where: eq(schema.buyingCenterAdvice.opportunityId, i.opportunityId), orderBy: desc(schema.buyingCenterAdvice.versionNo) });

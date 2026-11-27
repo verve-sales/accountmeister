@@ -171,7 +171,7 @@ describe("KI-Vorschläge (Briefing 14, S05, S06, F15)", () => {
 });
 
 describe("Etappe 16: Smart-Dump (beliebigen Text einfügen, KI schlägt Karten vor)", () => {
-  it("legt eine Notiz-Quelle an und strukturiert sie sofort; nur Setup-Bearbeitende dürfen", async () => {
+  it("legt eine Notiz-Quelle an und strukturiert sie sofort; nur Projekt-Bearbeitende dürfen", async () => {
     process.env.AI_PROVIDER = "test";
     resetConfigCacheForTests();
     const s = await ensureSeed();
@@ -189,7 +189,7 @@ describe("Etappe 16: Smart-Dump (beliebigen Text einfügen, KI schlägt Karten v
     const list = await listSuggestionsForSetup(david, setup.id);
     expect([...list.prominent, ...list.more].every((x) => NOTE.includes(x.evidenceQuote))).toBe(true);
 
-    // Nina ist an diesem frischen Setup kein Mitglied – kein Zugriff
+    // Nina ist an diesem frischen Projekt kein Mitglied – kein Zugriff
     await expect(smartDump(nina, { setupId: setup.id, text: NOTE })).rejects.toBeInstanceOf(NotFoundError);
     // Zu kurzer Text wird abgelehnt, statt eine leere Quelle anzulegen
     await expect(smartDump(david, { setupId: setup.id, text: "kurz" })).rejects.toBeInstanceOf(ValidationError);

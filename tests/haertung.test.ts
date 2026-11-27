@@ -105,7 +105,7 @@ describe("Etappe 5 Teil B: Härtung (Briefing 16.2, 16.4, 17.4; S07, S08, S09)",
     for (const c of conns) expect(JSON.stringify(c)).not.toMatch(/eyJ|access_token/);
   });
 
-  it("Verwaltung: nur ADMIN sieht Rollen, Protokoll und Bestand – ohne Inhalte; ADMIN erhält keine Setup-Inhalte", async () => {
+  it("Verwaltung: nur ADMIN sieht Rollen, Protokoll und Bestand – ohne Inhalte; ADMIN erhält keine Projekt-Inhalte", async () => {
     const s = await ensureSeed();
     const admin = await actorFor("admin");
     const david = await actorFor("david");

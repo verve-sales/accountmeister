@@ -7,7 +7,7 @@ import { deleteEngagementAction, deleteOpportunityAction, deleteSetupAction } fr
 export function DeleteBlock({ kind, id, label, scope, back }: { kind: "SETUP" | "CHANCE" | "EINSATZ"; id: string; label: string; scope: string; back: string }) {
   const action = kind === "SETUP" ? deleteSetupAction : kind === "CHANCE" ? deleteOpportunityAction : deleteEngagementAction;
   const field = kind === "SETUP" ? "setupId" : kind === "CHANCE" ? "opportunityId" : "engagementId";
-  const noun = kind === "SETUP" ? "Setup" : kind === "CHANCE" ? "Chance" : "Einsatz";
+  const noun = kind === "SETUP" ? "Projekt" : kind === "CHANCE" ? "Chance" : "Einsatz";
   return (
     <section className="card danger-zone" aria-label="Gefahrenbereich">
       <details>

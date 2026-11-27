@@ -108,7 +108,7 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
         <h2 className="font-semibold">Neuen Einsatz erfassen</h2>
         <p className="muted text-sm">Legt Chance (beauftragt), Auftrag/Bestellung und Einsatzakte in einem Schritt an. Danach öffnet sich der Einsatz, um Vertrag oder Bestellung hochzuladen. Kommerzielle Entscheidungen bleiben beim BD.</p>
         <form method="get" action="/vertragsbuero#erfassen" className="flex flex-wrap gap-2 items-end text-sm">
-          <label className="space-y-1"><span className="block muted text-xs">1. Kunde › Setup</span>
+          <label className="space-y-1"><span className="block muted text-xs">1. Kunde › Projekt</span>
             <select name="setup" className="input" defaultValue={chosen?.id ?? ""} required style={{ minWidth: 320 }}>
               <option value="" disabled>– wählen –</option>
               {choices.setups.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -131,11 +131,11 @@ export default async function VertragsbueroPage({ searchParams }: { searchParams
             <label className="space-y-1"><span className="block muted text-xs">VK</span><input name="vkRate" className="input" inputMode="decimal" /></label>
             <label className="space-y-1"><span className="block muted text-xs">Satz je</span><select name="rateUnit" className="input" defaultValue="TAG"><option value="TAG">Tag</option><option value="STUNDE">Stunde</option></select></label>
             <label className="space-y-1"><span className="block muted text-xs">Bestell-/Vertragsnummer</span><input name="orderReference" className="input" /></label>
-            <label className="space-y-1"><span className="block muted text-xs">Verlängerung fachlich über</span><select name="renewalContactPersonId" className="input" defaultValue=""><option value="">– Vorgabe des Setups –</option>{persons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select></label>
+            <label className="space-y-1"><span className="block muted text-xs">Verlängerung fachlich über</span><select name="renewalContactPersonId" className="input" defaultValue=""><option value="">– Vorgabe des Projekts –</option>{persons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select></label>
             <label className="space-y-1"><span className="block muted text-xs">… oder neuer Ansprechpartner (Name)</span><input name="newRenewalName" className="input" placeholder="Vor- und Nachname" /></label>
             <label className="space-y-1"><span className="block muted text-xs">E-Mail des neuen Ansprechpartners</span><input name="newRenewalEmail" type="email" className="input" /></label>
-            <label className="space-y-1"><span className="block muted text-xs">Bestellung/Vertrag über</span><select name="orderContactPersonId" className="input" defaultValue=""><option value="">– Vorgabe des Setups –</option>{persons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select></label>
-            <label className="space-y-1"><span className="block muted text-xs">wer spricht an</span><select name="renewalApproach" className="input" defaultValue=""><option value="">– Vorgabe des Setups –</option>{approachValues.map((v) => <option key={v} value={v}>{approachLabel[v]}</option>)}</select></label>
+            <label className="space-y-1"><span className="block muted text-xs">Bestellung/Vertrag über</span><select name="orderContactPersonId" className="input" defaultValue=""><option value="">– Vorgabe des Projekts –</option>{persons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select></label>
+            <label className="space-y-1"><span className="block muted text-xs">wer spricht an</span><select name="renewalApproach" className="input" defaultValue=""><option value="">– Vorgabe des Projekts –</option>{approachValues.map((v) => <option key={v} value={v}>{approachLabel[v]}</option>)}</select></label>
             <label className="space-y-1" style={{ gridColumn: "1 / -1" }}><span className="block muted text-xs">Notiz (optional)</span><input name="note" className="input" maxLength={2000} /></label>
             <div style={{ gridColumn: "1 / -1" }}><PendingButton busy="Lege an …">Assignment anlegen</PendingButton></div>
           </form>

@@ -128,7 +128,7 @@ export type LeadPushResult = { created: { opportunityId: string; title: string; 
 function buildInfo(c: LeadCandidate, opp: typeof schema.opportunities.$inferSelect): string {
   const lines = [
     `Aus dem Accountmeister: ${baseUrl()}/bedarfe/${opp.id}`,
-    `Setup: ${c.setupTitle}`,
+    `Projekt: ${c.setupTitle}`,
     `Status im Accountmeister: ${opportunityStatusLabel[opp.status] ?? opp.status}`,
     `Verantwortlich: ${c.ownerName}`,
   ];

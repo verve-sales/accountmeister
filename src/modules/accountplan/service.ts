@@ -11,7 +11,7 @@ import { getAccount } from "@/modules/accounts/service";
 import { getLastConfirmedVersion } from "@/modules/reviews/service";
 
 /**
- * Accountplan (Briefing 7 / A1): verdichtete Kundenübersicht aus bestätigten Setups, Kundeninformationen
+ * Accountplan (Briefing 7 / A1): verdichtete Kundenübersicht aus bestätigten Projekte, Kundeninformationen
  * und bewusst gesetzten Prioritäten. Kein zweiter Datenbestand – alles wird live aus den Objekten gebaut.
  * Unbestätigte Potenzialzahlen werden nicht als Forecast dargestellt; es gibt hier gar keine Zahlenfelder.
  */
@@ -49,7 +49,7 @@ export async function buildAccountPlan(actor: Actor, accountId: string): Promise
   const users = await db.query.users.findMany({ where: eq(schema.users.workspaceId, actor.workspaceId) });
   const un = (id: string | null | undefined) => (id ? users.find((u) => u.id === id)?.displayName ?? "?" : null);
 
-  // Nur Setups im Berechtigungsbereich
+  // Nur Projekte im Berechtigungsbereich
   const setupRows = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, accountId), orderBy: asc(schema.projectSetups.name) });
   const ctxs: SetupContext[] = [];
   for (const s of setupRows) {
@@ -150,7 +150,7 @@ export async function createPriority(actor: Actor, raw: unknown) {
   if (!(await canEditAccountPlan(actor, input.accountId))) throw new ForbiddenError("Prioritäten pflegen der zuständige BD und der Principal.");
   if (input.setupId) {
     const s = await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.id, input.setupId), eq(schema.projectSetups.accountId, input.accountId)) });
-    if (!s) throw new ValidationError("Setup gehört nicht zu diesem Kunden.");
+    if (!s) throw new ValidationError("Projekt gehört nicht zu diesem Kunden.");
   }
   return db.transaction(async (tx) => {
     const [p] = await tx

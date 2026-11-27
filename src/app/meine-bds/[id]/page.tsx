@@ -43,7 +43,7 @@ export default async function MeineBdsKundePage({ params, searchParams }: { para
       <div className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-2xl font-semibold"><Link href={`/kunden/${id}`}>{row.accountName}</Link></h1>
         <HealthBadge score={row.health.score} level={row.health.level} coverage={row.health.coverage} />
-        <span className="muted text-sm">BD {row.bdName}{row.ankerNames.length ? ` · Anker ${row.ankerNames.join(", ")}` : " · kein Anker"}{row.principalNames.length ? ` · Principal ${row.principalNames.join(", ")}` : ""} · letzter Kontakt {agoLabel(row.daysSinceActivity)}</span>
+        <span className="muted text-sm">BD {row.bdName}{row.ankerNames.length ? ` · Kontaktpate ${row.ankerNames.join(", ")}` : " · kein Kontaktpate"}{row.principalNames.length ? ` · Principal ${row.principalNames.join(", ")}` : ""} · letzter Kontakt {agoLabel(row.daysSinceActivity)}</span>
       </div>
       <Feedback params={sp} />
 

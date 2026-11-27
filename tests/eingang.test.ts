@@ -29,7 +29,7 @@ async function setupFlags() {
 }
 
 describe("Etappe 36: Eingangs-Auswertung – Kunde erkennen, Karten mit Bezug auf den Bestand, ein Klick", () => {
-  it("E01: Mailverlauf ohne Setup-Wahl → Kunde über Name/Domäne/Einsatz erkannt; Verlängerung am richtigen Einsatz bestätigt; Personen mit Funktion, Bereich und Buyingcenter-Rolle; keine Verve-Person", async () => {
+  it("E01: Mailverlauf ohne Projekt-Wahl → Kunde über Name/Domäne/Einsatz erkannt; Verlängerung am richtigen Einsatz bestätigt; Personen mit Funktion, Bereich und Buyingcenter-Rolle; keine Verve-Person", async () => {
     await setupFlags();
     const s = await ensureSeed();
     const david = await actorFor("david");

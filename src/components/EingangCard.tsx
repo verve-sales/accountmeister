@@ -9,7 +9,7 @@ import { getCurrentActor } from "@/modules/identity/session";
 import { cache } from "react";
 import { PendingButton } from "./PendingButton";
 
-/** je Seitenaufruf einmal: bearbeitbare Setups für „Anderer Kunde“ */
+/** je Seitenaufruf einmal: bearbeitbare Projekte für „Anderer Kunde“ */
 const setupOptions = cache(async () => {
   const actor = await getCurrentActor();
   return actor ? editableSetupOptions(actor) : [];
@@ -48,7 +48,7 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
   const needsCustomer = !s.setupId && !["KUNDE", "EINSORTIERUNG"].includes(item.type) && !(s.accountId && ["PERSON", "INITIATIVE", "BESCHAFFUNG", "RISIKO", "HEBEL", "SOS", "TEAM", "VERLAENGERUNG", "STIMMUNG", "CHANCE_STATUS", "ERLEDIGT", "FREELANCER"].includes(item.type));
   const label = eingangTypeLabel[item.type] ?? item.type;
   const accept: Record<string, string> = {
-    KUNDE: "Kunde + Setup anlegen", EINSORTIERUNG: "Zuordnen", SETUP: "Setup anlegen", PERSON: resolved.personId ? "Person ergänzen" : "Person übernehmen", CHANCE: "Chance anlegen", CHANCE_STATUS: "Stand übernehmen",
+    KUNDE: "Kunde + Projekt anlegen", EINSORTIERUNG: "Zuordnen", SETUP: "Projekt anlegen", PERSON: resolved.personId ? "Person ergänzen" : "Person übernehmen", CHANCE: "Chance anlegen", CHANCE_STATUS: "Stand übernehmen",
     VERLAENGERUNG: item.type === "VERLAENGERUNG" && item.decision === "ENDET" ? "Ende festhalten" : "Verlängerung übernehmen", ERLEDIGT: "Abhaken", STIMMUNG: "Als Check-in festhalten", FREELANCER: resolved.opportunityId ? "Als Kandidat:in eintragen" : "In den Pool", BESETZUNG: "Position anlegen", AKTION: "Aufgabe anlegen", FRAGE: "Frage anlegen", KONTAKT: "Aufgabe anlegen", SIGNAL: "Beobachtung anlegen", EINSATZ: "Einsatz nachtragen",
   };
 
@@ -92,9 +92,9 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
         <form action={assignIntakeSetupAction} className="text-sm mt-2 flex flex-wrap items-center gap-2 p-2" style={{ background: "var(--surface-2)", borderRadius: 6, borderLeft: `3px solid ${AMBER}` }}>
           <input type="hidden" name="suggestionId" value={s.id} />
           <input type="hidden" name="back" value={back} />
-          <strong>Zu welchem Setup bei {account.name} gehört diese Mail?</strong>
-          <select name="setupId" className="select" required defaultValue="" aria-label="Setup wählen" style={{ width: "16rem" }}>
-            <option value="" disabled>Setup wählen …</option>
+          <strong>Zu welchem Projekt bei {account.name} gehört diese Mail?</strong>
+          <select name="setupId" className="select" required defaultValue="" aria-label="Projekt wählen" style={{ width: "16rem" }}>
+            <option value="" disabled>Projekt wählen …</option>
             {(await setupOptions()).filter((o) => o.accountId === account.id).map((o) => <option key={o.id} value={o.id}>{o.setupName}</option>)}
           </select>
           <PendingButton className="btn btn-small" busy="Ordne zu …">Zuordnen</PendingButton>
@@ -113,8 +113,8 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
             <form action={reassignIntakeAction} className="flex flex-wrap gap-2 items-end mt-1">
               <input type="hidden" name="suggestionId" value={s.id} />
               <input type="hidden" name="back" value={back} />
-              <select name="setupId" className="select" required defaultValue="" aria-label="Richtiger Kunde · Setup" style={{ width: "18rem" }}>
-                <option value="" disabled>Richtiger Kunde · Setup …</option>
+              <select name="setupId" className="select" required defaultValue="" aria-label="Richtiger Kunde · Projekt" style={{ width: "18rem" }}>
+                <option value="" disabled>Richtiger Kunde · Projekt …</option>
                 {(await setupOptions()).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
               {payload.route?.domains?.length ? <label className="flex items-center gap-1"><input type="checkbox" name="learn" value="true" defaultChecked /> Mails von {payload.route.domains.join(", ")} künftig diesem Kunden zuordnen</label> : null}
@@ -126,7 +126,7 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
       {canDecide && open && (
         <div className="mt-2 flex flex-wrap gap-4 items-end">
           {needsCustomer ? (
-            <p className="text-sm" style={{ color: AMBER }}>{account ? "Erst oben das Setup wählen – dann gehört diese Karte automatisch dazu." : "Erst die Karte „Neuer Kunde“ bzw. „Kunde zuordnen“ übernehmen – dann gehört diese Karte automatisch dazu."}</p>
+            <p className="text-sm" style={{ color: AMBER }}>{account ? "Erst oben das Projekt wählen – dann gehört diese Karte automatisch dazu." : "Erst die Karte „Neuer Kunde“ bzw. „Kunde zuordnen“ übernehmen – dann gehört diese Karte automatisch dazu."}</p>
           ) : (
             <form action={acceptSuggestionAction} className="flex flex-wrap gap-2 items-end text-sm">
               <input type="hidden" name="suggestionId" value={s.id} />
@@ -169,12 +169,12 @@ export async function EingangCard({ s, canDecide, back, routeLine }: { s: Sugges
             {s.aiJobId && <button className="btn btn-secondary btn-small" type="submit" name="all" value="1" title="Alle offenen Karten aus dieser Mail verwerfen">Ganze Mail verwerfen</button>}
           </form>
           <details className="text-xs">
-            <summary className="muted" style={{ cursor: "pointer" }}>Anderes Setup / anderer Kunde</summary>
+            <summary className="muted" style={{ cursor: "pointer" }}>Anderes Projekt / anderer Kunde</summary>
             <form action={moveIntakeCardAction} className="flex flex-wrap gap-1 items-center mt-1">
               <input type="hidden" name="suggestionId" value={s.id} />
               <input type="hidden" name="back" value={back} />
-              <select name="setupId" className="select" required defaultValue="" aria-label="Richtiger Kunde · Setup" style={{ width: "18rem" }}>
-                <option value="" disabled>Richtiger Kunde · Setup …</option>
+              <select name="setupId" className="select" required defaultValue="" aria-label="Richtiger Kunde · Projekt" style={{ width: "18rem" }}>
+                <option value="" disabled>Richtiger Kunde · Projekt …</option>
                 {(await setupOptions()).filter((o) => o.id !== s.setupId).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
               </select>
               <PendingButton className="btn btn-secondary btn-small" busy="Verschiebe …">Nur diese Karte verschieben</PendingButton>

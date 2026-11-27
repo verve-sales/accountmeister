@@ -13,7 +13,7 @@ import { buildContextText, resolveContext } from "@/modules/assistant/service";
 import { analysisToText, analyzeSetup, type SetupAnalysis } from "./analysis";
 
 /**
- * Strategiefaden je Setup (Etappe 9, E-044): eine versionierte Hypothese – Lage, nächster großer Schritt, Züge,
+ * Strategiefaden je Projekt (Etappe 9, E-044): eine versionierte Hypothese – Lage, nächster großer Schritt, Züge,
  * Risiken, offene Fragen. Die KI schlägt vor (nur mit Textstelle aus Lage/Kontext), der BD prüft, ändert und
  * speichert eine Fassung. Ältere Fassungen bleiben nachlesbar (was dachten wir wann, und warum).
  */
@@ -25,7 +25,7 @@ export type StrategyRow = typeof schema.strategyThreads.$inferSelect;
 
 async function requireViewable(actor: Actor, setupId: string) {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
   return ctx;
 }
 
@@ -142,7 +142,7 @@ export function formToStrategyInput(data: Record<string, string>): unknown {
   };
 }
 
-/** Letzte Fassung je Setup (für Dashboard/Setup-Seite). */
+/** Letzte Fassung je Projekt (für Dashboard/Projekt-Seite). */
 export async function latestStrategy(setupId: string) {
   return db.query.strategyThreads.findFirst({ where: and(eq(schema.strategyThreads.setupId, setupId)), orderBy: desc(schema.strategyThreads.versionNo) });
 }

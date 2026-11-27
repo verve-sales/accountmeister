@@ -10,8 +10,8 @@ import { requireEngagement, isSalesOps, type EngagementRow } from "./authz";
 
 /**
  * Verlängerungs-Ansprechpartner (e37): Über wen beim Kunden läuft die Verlängerung fachlich, über wen Bestellung/Vertrag,
- * und wer bei Verve spricht an (Sales Operations, BD, Berater:in selbst). Vorgabe am Setup, je Einsatz überschreibbar
- * (leer = Vorgabe des Setups). Pflegen dürfen BD-Kontext, Sales Operations und die Betreuung des Einsatzes.
+ * und wer bei Verve spricht an (Sales Operations, BD, Berater:in selbst). Vorgabe am Projekt, je Einsatz überschreibbar
+ * (leer = Vorgabe des Projekts). Pflegen dürfen BD-Kontext, Sales Operations und die Betreuung des Einsatzes.
  */
 
 export const approachValues = ["SALES_OPS", "BD", "BERATER"] as const;
@@ -23,13 +23,13 @@ export type RenewalContacts = {
   renewal: ContactPerson | null;
   order: ContactPerson | null;
   approach: Approach | null;
-  /** woher die Angaben stammen: am Einsatz gesetzt, Vorgabe des Setups oder nichts hinterlegt */
+  /** woher die Angaben stammen: am Einsatz gesetzt, Vorgabe des Projekts oder nichts hinterlegt */
   source: "EINSATZ" | "SETUP" | null;
 };
 
 type SetupDefaults = { id: string; renewalContactPersonId: string | null; orderContactPersonId: string | null; renewalApproach: string | null };
 
-/** Wirksame Angaben für mehrere Einsätze (Einsatz vor Setup-Vorgabe, je Feld). */
+/** Wirksame Angaben für mehrere Einsätze (Einsatz vor Projekt-Vorgabe, je Feld). */
 export async function loadRenewalContacts(rows: Pick<EngagementRow, "id" | "setupId" | "renewalContactPersonId" | "orderContactPersonId" | "renewalApproach">[]): Promise<Map<string, RenewalContacts>> {
   const out = new Map<string, RenewalContacts>();
   if (!rows.length) return out;
@@ -59,7 +59,7 @@ const contactsInput = z.object({
   renewalContactPersonId: z.string().trim().max(100).optional().default(""),
   orderContactPersonId: z.string().trim().max(100).optional().default(""),
   renewalApproach: z.union([z.enum(approachValues), z.literal("")]).optional().default(""),
-  /** zusätzlich als Vorgabe für alle Einsätze des Setups speichern */
+  /** zusätzlich als Vorgabe für alle Einsätze des Projekts speichern */
   asSetupDefault: z.union([z.literal("1"), z.literal("on"), z.literal(""), z.boolean()]).optional(),
   /** Ansprechpartner direkt neu anlegen (hat Vorrang vor der Auswahl) */
   newRenewalName: z.string().trim().max(200).optional().default(""),
@@ -105,7 +105,7 @@ async function assertPersonsOfAccount(accountId: string, ids: string[]) {
   if (rows.length !== new Set(want).size) throw new ValidationError("Ansprechpartner müssen Personen dieses Kunden sein.");
 }
 
-/** Am Einsatz setzen (leer = Vorgabe des Setups verwenden). Optional gleichzeitig als Setup-Vorgabe. */
+/** Am Einsatz setzen (leer = Vorgabe des Projekts verwenden). Optional gleichzeitig als Projekt-Vorgabe. */
 export async function setEngagementContacts(actor: Actor, engagementId: string, raw: unknown) {
   const p = contactsInput.safeParse(raw);
   if (!p.success) throw new ValidationError("Angaben zur Verlängerung ungültig.");
@@ -117,7 +117,7 @@ export async function setEngagementContacts(actor: Actor, engagementId: string, 
   const asDefault = i.asSetupDefault === true || i.asSetupDefault === "1" || i.asSetupDefault === "on";
   await db.transaction(async (tx) => {
     if (asDefault) {
-      if (!a.manage) throw new ForbiddenError("Die Vorgabe am Setup setzen BD, Principal, Sales Operations oder CEO.");
+      if (!a.manage) throw new ForbiddenError("Die Vorgabe am Projekt setzen BD, Principal, Sales Operations oder CEO.");
       await tx.update(schema.projectSetups).set({ ...vals, updatedAt: new Date() }).where(eq(schema.projectSetups.id, a.engagement.setupId));
       // Am Einsatz nichts Eigenes mehr – er folgt der Vorgabe
       await tx.update(schema.engagements).set({ renewalContactPersonId: null, orderContactPersonId: null, renewalApproach: null, updatedAt: new Date() }).where(eq(schema.engagements.id, engagementId));
@@ -130,12 +130,12 @@ export async function setEngagementContacts(actor: Actor, engagementId: string, 
   return vals;
 }
 
-/** Vorgabe am Setup. Dürfen: wer das Setup bearbeiten darf, Sales Operations, CEO. */
+/** Vorgabe am Projekt. Dürfen: wer das Projekt bearbeiten darf, Sales Operations, CEO. */
 export async function setSetupContacts(actor: Actor, setupId: string, raw: unknown) {
   const p = contactsInput.safeParse(raw);
   if (!p.success) throw new ValidationError("Angaben zur Verlängerung ungültig.");
   const setup = await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.id, setupId), eq(schema.projectSetups.workspaceId, actor.workspaceId)) });
-  if (!setup) throw new NotFoundError("Setup");
+  if (!setup) throw new NotFoundError("Projekt");
   if (!isSalesOps(actor) && !hasRole(actor, "CEO")) await requireEditableSetup(actor, setupId);
   const i = p.data;
   await assertPersonsOfAccount(setup.accountId, [i.renewalContactPersonId, i.orderContactPersonId]);

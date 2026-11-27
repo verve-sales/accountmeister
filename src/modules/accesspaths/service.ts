@@ -33,8 +33,8 @@ export async function createAccessPlan(actor: Actor, raw: unknown) {
   const input = parsed.data;
   if (!input.targetPersonId && !input.targetFunction) throw new ValidationError("Bitte Zielperson oder gesuchte Funktion angeben.");
   const ctx = await loadSetupContext(actor, input.setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst in diesem Setup keinen Kontaktweg anlegen.");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst in diesem Projekt keinen Kontaktweg anlegen.");
   if (input.targetPersonId) {
     const p = await db.query.persons.findFirst({ where: and(eq(schema.persons.id, input.targetPersonId), eq(schema.persons.accountId, ctx.account.id)) });
     if (!p) throw new ValidationError("Zielperson gehört nicht zu diesem Kunden.");
@@ -194,10 +194,10 @@ export async function requirePlan(actor: Actor, planId: string) {
   return { plan, ctx };
 }
 
-/** Kontaktwege eines Setups mit Schritten (tabellarische Darstellung; Karte folgt später). */
+/** Kontaktwege eines Projekts mit Schritten (tabellarische Darstellung; Karte folgt später). */
 export async function listAccessPlansForSetup(actor: Actor, setupId: string) {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
   const plans = await db.query.accessPlans.findMany({ where: eq(schema.accessPlans.setupId, setupId), orderBy: desc(schema.accessPlans.updatedAt) });
   const planIds = plans.map((p) => p.id);
   const steps = planIds.length ? await db.query.accessPlanSteps.findMany({ where: inArray(schema.accessPlanSteps.accessPlanId, planIds), orderBy: asc(schema.accessPlanSteps.position) }) : [];

@@ -88,7 +88,7 @@ export const planActionInput = z.object({
   priority: z.enum(priorityValues),
 });
 
-/** Datum und Priorität einer offenen Aufgabe ändern (e50) – für die verantwortliche Person und alle, die das Setup bearbeiten. */
+/** Datum und Priorität einer offenen Aufgabe ändern (e50) – für die verantwortliche Person und alle, die das Projekt bearbeiten. */
 export async function planAction(actor: Actor, actionId: string, raw: unknown) {
   const p = planActionInput.safeParse(raw);
   if (!p.success) throw new ValidationError(p.error.issues.map((i) => i.message).join("; "));

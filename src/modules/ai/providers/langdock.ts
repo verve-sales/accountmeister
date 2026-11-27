@@ -210,7 +210,7 @@ export class LangdockProvider implements AIProvider {
 
   async structureNote(input: StructureNoteInput, opts?: TaskOptions): Promise<unknown> {
     const user = [
-      `Setup: ${input.setupName}`,
+      `Projekt: ${input.setupName}`,
       `Beteiligte Verve-Personen: ${input.participantNames.join(", ") || "–"}`,
       `Bekannte Kundenpersonen: ${(input.knownPersons ?? input.knownPersonNames.map((n) => ({ name: n, functionTitle: null }))).map((p) => (p.functionTitle ? `${p.name} (${p.functionTitle})` : p.name)).join(", ") || "–"}`,
       `Laufende Einsätze bei diesem Kunden:\n${(input.engagements ?? []).map((e) => `- ${e.ref}: ${e.person} – ${e.title}${e.plannedEnd ? `, Ende ${e.plannedEnd}` : ", Ende offen"}${e.renewal ? `, Verlängerung: ${e.renewal}` : ""}`).join("\n") || "–"}`,
@@ -222,7 +222,7 @@ export class LangdockProvider implements AIProvider {
 
   async interviewNext(input: InterviewNextInput, opts?: TaskOptions): Promise<unknown> {
     const user = [
-      `Interviewart: ${input.kind === "KUNDE_NEU" ? "neuer Kunde" : "Ergänzung eines bestehenden Setups"}`,
+      `Interviewart: ${input.kind === "KUNDE_NEU" ? "neuer Kunde" : "Ergänzung eines bestehenden Projekte"}`,
       `Bisher gestellte Fragen: ${input.questionCount} von höchstens ${input.maxQuestions}`,
       `\n=== BEKANNTER KONTEXT (Daten) ===\n${clip(input.knownContext) || "–"}\n=== ENDE KONTEXT ===`,
       `\n=== BISHERIGER VERLAUF (Daten) ===\n${input.transcript.map((t) => `${t.role === "KI" ? "Frage" : "Antwort"}: ${t.text}`).join("\n") || "(noch keine Frage gestellt)"}\n=== ENDE VERLAUF ===`,

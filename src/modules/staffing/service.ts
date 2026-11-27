@@ -145,7 +145,7 @@ async function trustedOpportunity(actor: Actor, opportunityId: string) {
   return { opp, ctx: { account, setup } };
 }
 
-/** Darf der Akteur an dieser Chance Positionen anlegen/pflegen? (BD-Kontext, Principal, CEO – nicht Sales Operations, nicht Anker) */
+/** Darf der Akteur an dieser Chance Positionen anlegen/pflegen? (BD-Kontext, Principal, CEO – nicht Sales Operations, nicht Kontaktpate) */
 export async function canManageStaffingAt(actor: Actor, opportunityId: string): Promise<boolean> {
   try {
     const { opp, ctx } = await requireOpportunityForStaffing(actor, opportunityId);
@@ -160,7 +160,7 @@ export async function createPosition(actor: Actor, opportunityId: string, raw: u
   if (!p.success) throw new ValidationError(issues(p.error));
   const { opp, ctx } = extra.trusted ? await trustedOpportunity(actor, opportunityId) : await requireOpportunityForStaffing(actor, opportunityId);
   const manager = extra.trusted || isStaffingManager(actor, ctx.account, ctx.setup.bdUserId, opp.ownerUserId === actor.userId ? actor.userId : null);
-  if (!manager) throw new ForbiddenError("Positionen legt der zuständige BD, der Setup-BD, Principal oder CEO an.");
+  if (!manager) throw new ForbiddenError("Positionen legt der zuständige BD, der Projekt-BD, Principal oder CEO an.");
   if (opp.status === "BEENDET") throw new TransitionError("An einer beendeten Chance werden keine Positionen angelegt.");
   const bdUserId = p.data.bdUserId || (opp.ownerUserId ?? ctx.setup.bdUserId ?? ctx.account.responsibleBdUserId ?? actor.userId);
   const bd = await db.query.users.findFirst({ where: and(eq(schema.users.id, bdUserId), eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")) });

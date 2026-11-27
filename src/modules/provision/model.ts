@@ -13,7 +13,7 @@
  *   Signing Fee     = Signing Fee je Deal × eigener Anteil
  *   Provision ges.  = Basisprovision + Finding Fee + Signing Fee
  *
- * Rollenregel: Die Premium-Stufe (43 % ab 45 % Nettomarge) ist Principals vorbehalten; BDs und Anker erhalten
+ * Rollenregel: Die Premium-Stufe (43 % ab 45 % Nettomarge) ist Principals vorbehalten; BDs und Kontaktpate erhalten
  * höchstens 20 %.
  */
 
@@ -34,7 +34,7 @@ export const PROVISION_CONFIG = {
     { key: "PREMIUM", label: "Premium", from: 0.2, rate: 0.2, color: "Grün", principalOnly: false },
     { key: "PRINCIPAL", label: "Principal", from: 0.45, rate: 0.43, color: "Blau", principalOnly: true },
   ],
-  /** Höchstsatz für BDs und Anker */
+  /** Höchstsatz für BDs und Kontaktpate */
   nonPrincipalMaxRate: 0.2,
 } as const;
 
@@ -141,7 +141,7 @@ export function computeDeal(input: DealInput, recipient: Recipient, cfg = PROVIS
   const signingFee = cfg.signingFee * clampPct(input.signingShare);
   const warnings: string[] = [];
   if (netMargin < 0) warnings.push("Negative Nettomarge – der VK liegt unter EK plus Kostenpauschale.");
-  if (t.capped) warnings.push(`Für Principals ergäbe diese Marge ${Math.round(t.uncappedRate * 100)} %; BDs und Anker erhalten höchstens ${Math.round(cfg.nonPrincipalMaxRate * 100)} %.`);
+  if (t.capped) warnings.push(`Für Principals ergäbe diese Marge ${Math.round(t.uncappedRate * 100)} %; BDs und Kontaktpate erhalten höchstens ${Math.round(cfg.nonPrincipalMaxRate * 100)} %.`);
   return {
     ek,
     revenue,

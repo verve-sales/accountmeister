@@ -41,7 +41,7 @@ export function SosPanel({ accountId, sos, back, canEdit, setups, orders }: { ac
     <section className="card" id="sos" style={open.length ? { background: SOS_BG, borderColor: SOS_BORDER } : undefined}>
       <div className="flex flex-wrap items-baseline gap-2 mb-1">
         <h2 className="font-semibold">SOS-Protokolle{open.length ? ` – ${open.length} offen` : ""}</h2>
-        <span className="muted text-xs">Wenn es eng wird: Einsatz läuft ohne Anschluss aus, der Anker kommt nicht weiter, die Lage spitzt sich zu.</span>
+        <span className="muted text-xs">Wenn es eng wird: Einsatz läuft ohne Anschluss aus, der Kontaktpate kommt nicht weiter, die Lage spitzt sich zu.</span>
       </div>
       {open.length > 0 && <ul className="space-y-3 mb-2">{open.map((s) => <SosItem key={s.id} s={s} back={back} canEdit={canEdit} />)}</ul>}
       {open.length === 0 && <p className="muted text-sm">Kein offenes SOS.</p>}
@@ -67,7 +67,7 @@ export function SosPanel({ accountId, sos, back, canEdit, setups, orders }: { ac
           <div className="sm:col-span-2"><label className="label" htmlFor="sosNeed">Was brauchst du? Wer soll helfen?</label><input id="sosNeed" name="need" className="input" /></div>
           {setups.length > 0 && (
             <div>
-              <label className="label" htmlFor="sosSetup">Setup (optional)</label>
+              <label className="label" htmlFor="sosSetup">Projekt (optional)</label>
               <select id="sosSetup" name="setupId" className="select" defaultValue="">
                 <option value="">–</option>
                 {setups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

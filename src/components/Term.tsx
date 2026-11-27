@@ -2,10 +2,10 @@ import Link from "next/link";
 
 /** Begriffe im Accountmeister (Etappe 41) – eine Quelle für Tooltips und die Hilfe „Begriffe“. */
 export const TERMS = {
-  KUNDE: "Kunde: die Organisation (z. B. eine Bank). Unter ihr liegen Setups, Personen und Einsätze.",
-  SETUP: "Setup: ein Arbeitszusammenhang beim Kunden – ein Team, Bereich oder Vorhaben, in dem wir unterwegs sind. Ein Kunde hat meist mehrere Setups. Nicht für einzelne Bedarfe: die sind Chancen.",
-  CHANCE: "Chance: eine mögliche Vermittlung im Setup – Verve-Experte, Freelancer oder Ausschreibung. Sie läuft von „antizipiert“ bis „beauftragt“. Nicht für Aufgaben: die sind Aktionen oder Vorgänge.",
-  AKTION: "Aktion: ein vereinbarter nächster Schritt gegenüber dem Kunden (Profile schicken, Termin vereinbaren), mit Frist, im Setup oder an der Chance.",
+  KUNDE: "Kunde: die Organisation (z. B. eine Bank). Unter ihr liegen Projekte, Personen und Einsätze.",
+  SETUP: "Projekt: ein Arbeitszusammenhang beim Kunden – ein Team, Bereich oder Vorhaben, in dem wir unterwegs sind. Ein Kunde hat meist mehrere Projekte. Nicht für einzelne Bedarfe: die sind Chancen.",
+  CHANCE: "Chance: eine mögliche Vermittlung im Projekt – Verve-Experte, Freelancer oder Ausschreibung. Sie läuft von „antizipiert“ bis „beauftragt“. Nicht für Aufgaben: die sind Aktionen oder Vorgänge.",
+  AKTION: "Aktion: ein vereinbarter nächster Schritt gegenüber dem Kunden (Profile schicken, Termin vereinbaren), mit Frist, im Projekt oder an der Chance.",
   VORGANG: "Vorgang: ein interner Auftrag an dich selbst, eine Kollegin oder ein Team (z. B. Sales Operations), mit Annahme, Frist und Rückmeldung.",
 } as const;
 export type TermKey = keyof typeof TERMS;

@@ -149,7 +149,7 @@ export default async function ZielPage({ params, searchParams }: { params: Promi
             <tbody>
               {goal.contributions.map((c) => (
                 <tr key={c.id}>
-                  <td className="text-sm">{c.setupId ? <Link href={`/setups/${c.setupId}`}>{setups.find((s) => s.id === c.setupId)?.name ?? "Setup"}</Link> : accountName(c.accountId)}</td>
+                  <td className="text-sm">{c.setupId ? <Link href={`/setups/${c.setupId}`}>{setups.find((s) => s.id === c.setupId)?.name ?? "Projekt"}</Link> : accountName(c.accountId)}</td>
                   <td className="text-sm">{c.expectedContribution ?? "–"}</td>
                   <td className="text-sm">{c.evidencedContribution ?? "–"}{c.evidenceSourceId && <> · <Link href={`/quellen/${c.evidenceSourceId}`}>Quelle</Link></>}</td>
                   <td className="text-sm">{un.get(c.createdBy) ?? "?"} · {fmtDateTime(c.createdAt)}</td>
@@ -164,7 +164,7 @@ export default async function ZielPage({ params, searchParams }: { params: Promi
             <form action={addGoalContributionAction} className="mt-2 grid sm:grid-cols-2 gap-3">
               <input type="hidden" name="goalId" value={goal.id} />
               <div>
-                <label className="label" htmlFor="cSetup">Setup{!isLeader && " (Pflicht)"}</label>
+                <label className="label" htmlFor="cSetup">Projekt{!isLeader && " (Pflicht)"}</label>
                 <select id="cSetup" name="setupId" className="select" defaultValue="" required={!isLeader}><option value="">–</option>{setups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
               </div>
               <div>

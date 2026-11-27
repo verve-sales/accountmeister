@@ -52,9 +52,9 @@ const envSchema = z.object({
    * die Karte am Einsatz (anstoßen, bestätigen); das Vorgehen bleibt als Checkliste von Hand startbar.
    */
   RENEWAL_AUTOMATION: z.enum(["on", "off"]).default("off"),
-  /** Vorlagenkatalog „Artefakte“ in Menü, Setup und Chance zeigen (e44: Standard aus) */
+  /** Vorlagenkatalog „Artefakte“ in Menü, Projekt und Chance zeigen (e44: Standard aus) */
   FEATURE_ARTEFAKTE: z.enum(["true", "false"]).default("false"),
-  /** e68: Weeklys (Termin-Protokolle je Setup) – laut Nutzung abgeschaltet; Daten bleiben gespeichert */
+  /** e68: Weeklys (Termin-Protokolle je Projekt) – laut Nutzung abgeschaltet; Daten bleiben gespeichert */
   FEATURE_WEEKLYS: z.enum(["true", "false"]).default("false"),
   /** e68: Vorgehensmuster (Playbooks) – laut Nutzung abgeschaltet; laufende Vorgehen bleiben sichtbar */
   FEATURE_VORGEHEN: z.enum(["true", "false"]).default("false"),

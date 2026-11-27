@@ -127,7 +127,7 @@ export function extractAccountPage(text: string, opts: { hasCustomer: boolean })
       continue;
     }
 
-    // Team-Eigenschaften (Notion-Properties): „Account-Anker  Ferdinand Henze“, „Bussiness Development: …“
+    // Team-Eigenschaften (Notion-Properties): „Account-Kontaktpate  Ferdinand Henze“, „Bussiness Development: …“
     const tm = /^(principal[\w .…-]*|bus+iness develop[\w .…-]*|business development|account[- ]anker|anker|operative[\w .…-]*berater[\w .…-]*)\s*[:\t]\s*(.+)$/i.exec(t) ?? /^(principal[\w.…-]*|bus+iness develo[\w.…-]*|account-anker|operative berater[\w.…-]*)\s{2,}(.+)$/i.exec(t);
     if (tm && !isPlaceholder(tm[2]!.trim())) {
       const role = tm[1]!.toLowerCase();

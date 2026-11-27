@@ -86,7 +86,7 @@ function HandoverCard({ h, back }: { h: HandoverItem; back: string }) {
       <div className="flex flex-wrap gap-2 items-baseline">
         <strong>Übernahme: {h.responsibility}</strong>
         <Status label={handoverStatusLabel[h.status] ?? h.status} />
-        <span className="muted">von {h.senderName} · Termin {fmtDate(h.dueDate)}{h.setupId && <> · <Link href={`/setups/${h.setupId}`}>Setup</Link></>}</span>
+        <span className="muted">von {h.senderName} · Termin {fmtDate(h.dueDate)}{h.setupId && <> · <Link href={`/setups/${h.setupId}`}>Projekt</Link></>}</span>
       </div>
       <p className="mt-1">{h.context}</p>
       <form action={respondHandoverAction} className="mt-2 flex flex-wrap gap-2 items-end">

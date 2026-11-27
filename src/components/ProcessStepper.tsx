@@ -1,6 +1,6 @@
 /**
  * Visuelle Prozessleiste ("Wo stehen wir gerade?") – macht eine bestehende, geordnete Zustandskette (z. B.
- * Chance-Reifegrad, Setup-Stufe) auf einen Blick lesbar, statt als Fließtext mit Pfeilen. Reine Anzeige: es werden
+ * Chance-Reifegrad, Projekt-Stufe) auf einen Blick lesbar, statt als Fließtext mit Pfeilen. Reine Anzeige: es werden
  * keine neuen Zustände erfunden, nur vorhandene (aus VERLAUF/STAGES) visualisiert. Erfüllte Schritte: gefüllter
  * Kreis mit Häkchen; aktueller Schritt: Ring + fetter Text (aria-current="step"); künftige Schritte: schwach.
  * Ein Seitenzweig (zurückgestellt/beendet) wird als eigenes Element danach gezeigt, nicht in die Kette gemischt.

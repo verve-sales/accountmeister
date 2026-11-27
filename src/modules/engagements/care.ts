@@ -160,7 +160,7 @@ export const moodLabel: Record<string, string> = { POSITIV: "positiv", MITTEL: "
 /**
  * Check-in führen. ERLEDIGEN verlangt tatsächlichen Termin und Ergebnis, aktualisiert den letzten Kontakt und erzeugt den
  * nächsten fälligen Kunden-Check-in (+42 Tage). VERSCHIEBEN ändert nur die Fälligkeit, nie den letzten Kontakt.
- * Ein Sales-Hinweis wird als Signal (Beobachtung) im Setup vorgeschlagen – der BD prüft wie gewohnt.
+ * Ein Sales-Hinweis wird als Signal (Beobachtung) im Projekt vorgeschlagen – der BD prüft wie gewohnt.
  */
 export async function actOnCheckin(actor: Actor, checkinId: string, raw: unknown) {
   const p = checkinUpdateInput.safeParse(raw);
@@ -214,12 +214,12 @@ export async function actOnCheckin(actor: Actor, checkinId: string, raw: unknown
   }
   if (i.action === "ERLEDIGEN" && i.heldAt && i.salesHint && i.salesHint.length >= 5) {
     const heldDay = i.heldAt.slice(0, 10);
-    // Sales-Rückkopplung: Signalvorschlag im Setup, erlaubte Verwendung = internes Gespräch; BD prüft Bezug und Dublette
+    // Sales-Rückkopplung: Signalvorschlag im Projekt, erlaubte Verwendung = internes Gespräch; BD prüft Bezug und Dublette
     try {
       const sig = await captureObservation(actor, { setupId: a.engagement.setupId, observation: i.salesHint, relevanceHypothesis: `Aus Check-in (${c.side === "KUNDE" ? "Kunde" : "Freelancer"}) am ${heldDay} zum Einsatz „${a.engagement.title}“.`, usageLimit: "Intern aus Betreuungsgespräch – vor Verwendung beim Kunden mit der Betreuungsperson abstimmen.", sourceTitle: `Check-in ${a.engagement.title} ${heldDay}`, sourceAccessClass: "ACCOUNT_TEAM" });
       signalId = sig.signal.id;
     } catch {
-      signalId = null; // z. B. Betreuungsperson ohne Setup-Bearbeitungsrecht: Hinweis bleibt am Check-in, BD legt das Signal an
+      signalId = null; // z. B. Betreuungsperson ohne Projekt-Bearbeitungsrecht: Hinweis bleibt am Check-in, BD legt das Signal an
     }
   }
   return db.transaction(async (tx) => {

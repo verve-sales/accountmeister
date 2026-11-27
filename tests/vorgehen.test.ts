@@ -50,7 +50,7 @@ describe("Etappe 20: Vorgehensmuster (Altkunden-Reaktivierung u. a.)", () => {
     expect(alt.steps[1]!.title).toMatch(/Ergebnisrückblick/);
   });
 
-  it("Reaktivierung: ruhender Kunde → Vorgehen mit neuem Setup, Vorhaben „Reaktivieren“, Schritt für Schritt als Aktion", async () => {
+  it("Reaktivierung: ruhender Kunde → Vorgehen mit neuem Projekt, Vorhaben „Reaktivieren“, Schritt für Schritt als Aktion", async () => {
     const s = await ensureSeed();
     const petra = await actorFor("petra");
     const david = await actorFor("david");
@@ -63,7 +63,7 @@ describe("Etappe 20: Vorgehensmuster (Altkunden-Reaktivierung u. a.)", () => {
 
     // Betriebsverwaltung ohne fachliche Rolle darf kein Vorgehen starten
     await expect(startPlaybookRun(admin, { playbookId: alt.id, accountId: s.accountId, newSetupName: "Reaktivierung Test" })).rejects.toBeInstanceOf(ForbiddenError);
-    // Ohne Setup-Wahl und ohne Namen geht es nicht
+    // Ohne Projekt-Wahl und ohne Namen geht es nicht
     await expect(startPlaybookRun(petra, { playbookId: alt.id, accountId: s.accountId })).rejects.toBeInstanceOf(ValidationError);
 
     const run = await startPlaybookRun(petra, { playbookId: alt.id, accountId: s.accountId, newSetupName: "Reaktivierung 2026" });
@@ -76,7 +76,7 @@ describe("Etappe 20: Vorgehensmuster (Altkunden-Reaktivierung u. a.)", () => {
     const prio = await db.query.accountPriorities.findFirst({ where: and(eq(schema.accountPriorities.accountId, s.accountId), eq(schema.accountPriorities.kind, "REAKTIVIEREN")) });
     expect(prio?.setupId).toBe(run.setupId);
 
-    // Doppelstart am selben Setup wird verhindert
+    // Doppelstart am selben Projekt wird verhindert
     await expect(startPlaybookRun(petra, { playbookId: alt.id, accountId: s.accountId, setupId: run.setupId })).rejects.toBeInstanceOf(ValidationError);
 
     let steps = await runSteps(run.id);
@@ -154,11 +154,11 @@ describe("Etappe 20: Vorgehensmuster (Altkunden-Reaktivierung u. a.)", () => {
     expect(mine.steps.map((x) => [x.position, x.id])).toEqual([[1, s1.id]]);
   });
 
-  it("Kunden-Muster auf bestehendes Setup; Schritt-Assistent erstellt Entwürfe (mit und ohne KI)", async () => {
+  it("Kunden-Muster auf bestehendes Projekt; Schritt-Assistent erstellt Entwürfe (mit und ohne KI)", async () => {
     const s = await ensureSeed();
     const petra = await actorFor("petra");
     const alt = (await listPlaybooks(petra)).find((p) => p.code === ALTKUNDEN_CODE)!;
-    // Bestehendes Setup (z. B. vom Assistenten angelegtes „Strategic Re-Entry“) direkt verwenden
+    // Bestehendes Projekt (z. B. vom Assistenten angelegtes „Strategic Re-Entry“) direkt verwenden
     const run = await startPlaybookRun(petra, { playbookId: alt.id, accountId: s.accountId, setupId: s.setupId });
     expect(run.setupId).toBe(s.setupId);
     let steps = await runSteps(run.id);
@@ -199,7 +199,7 @@ describe("Etappe 20: Vorgehensmuster (Altkunden-Reaktivierung u. a.)", () => {
     expect(d.drafts.some((x) => x.kind === "GESPRAECHSLEITFADEN")).toBe(true);
   });
 
-  it("Setup-Muster lassen sich vom Kunden aus starten – in einem neuen oder bestehenden Setup", async () => {
+  it("Projekt-Muster lassen sich vom Kunden aus starten – in einem neuen oder bestehenden Projekt", async () => {
     const s = await ensureSeed();
     const petra = await actorFor("petra");
     const setupScoped = (await listPlaybooks(petra)).filter((p) => p.scope === "SETUP" && p.active);

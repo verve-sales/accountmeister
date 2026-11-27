@@ -15,7 +15,7 @@ import { canRunMocoImport } from "./import";
 /**
  * Laufender Abgleich Moco → Accountmeister (Einbahnstraße). Abweichungen werden nie still übernommen, sondern als
  * Hinweis (moco_hints) an den betroffenen Einsatz gehängt; die zuständige Person bestätigt mit einem Klick.
- * Neue Nutzer kommen automatisch als Anker, neue Freelancer in den Pool (Entscheidung vom Oktober 2026).
+ * Neue Nutzer kommen automatisch als Kontaktpate, neue Freelancer in den Pool (Entscheidung vom Oktober 2026).
  */
 
 export type HintKind = "ENDE_GEAENDERT" | "PROJEKT_BEENDET" | "CONTRACT_INAKTIV" | "NEUER_CONTRACT" | "NEUES_PROJEKT" | "GRUPPE_GEWECHSELT" | "NUTZER_INAKTIV" | "ENDE_UEBERSCHRITTEN";
@@ -154,7 +154,7 @@ export async function runMocoSync(opts: { since?: string; full?: boolean; client
       }
       const setup = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, e.setupId), columns: { id: true, name: true, mocoProjectGroupId: true } });
       if (setup && p.project_group && setup.mocoProjectGroupId && setup.mocoProjectGroupId !== p.project_group.id) {
-        counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "GRUPPE_GEWECHSELT", title: `${await engagementLabel(db, e)}: Projekt liegt in Moco jetzt in „${p.project_group.name}“ (AM-Setup: ${setup.name})`, payload: { mocoProjectId: p.id, groupId: p.project_group.id, groupName: p.project_group.name }, dedupeKey: `group-moved:${p.id}:${p.project_group.id}`, notifyUserIds: who, link });
+        counts.hinweise += await upsertHint(ws, { subjectType: "ENGAGEMENT", subjectId: e.id, kind: "GRUPPE_GEWECHSELT", title: `${await engagementLabel(db, e)}: Projekt liegt in Moco jetzt in „${p.project_group.name}“ (AM-Projekt: ${setup.name})`, payload: { mocoProjectId: p.id, groupId: p.project_group.id, groupName: p.project_group.name }, dedupeKey: `group-moved:${p.id}:${p.project_group.id}`, notifyUserIds: who, link });
       }
       // Neue aktive Zuweisung an bekanntem Projekt ohne Einsatz
       for (const c of p.contracts.filter((x) => x.active && !engagements.some((y) => y.mocoContractId === x.id))) {
@@ -231,7 +231,7 @@ export async function resolveHint(actor: Actor, hintId: string, decision: "UEBER
         await recordAudit(db, actor, "engagement.status", "ENGAGEMENT", e.id, { von: e.status, nach: to, quelle: "Moco" });
       } else if (h.kind === "GRUPPE_GEWECHSELT") {
         const target = await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.accountId, e.accountId), eq(schema.projectSetups.mocoProjectGroupId, Number(payload.groupId))) });
-        if (!target) throw new ValidationError("Die Ziel-Projektgruppe ist noch keinem Setup zugeordnet – zuerst einen Importlauf machen.");
+        if (!target) throw new ValidationError("Die Ziel-Projektgruppe ist noch keinem Projekt zugeordnet – zuerst einen Importlauf machen.");
         await db.update(schema.engagements).set({ setupId: target.id, version: e.version + 1, updatedAt: new Date() }).where(eq(schema.engagements.id, e.id));
         await db.update(schema.opportunities).set({ setupId: target.id, updatedAt: new Date() }).where(eq(schema.opportunities.id, e.opportunityId));
         await db.update(schema.staffingPositions).set({ setupId: target.id, updatedAt: new Date() }).where(eq(schema.staffingPositions.id, e.positionId));

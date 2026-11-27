@@ -32,8 +32,8 @@ Moco wird im Probelauf nur geplant (Schritte am Vorgang: Lead, Firma, Kontakt �
     title: "Was gibt es Neues? – Mails und Notizen von der KI auswerten lassen",
     where: "Start → „Was gibt es Neues?“ · Eingang (Postfach) · Quelle → „Mit KI (neu) auswerten“",
     keywords: ["was gibt es neues", "mail", "e-mail", "einspielen", "auswerten", "eingang", "ki", "karte", "vorschlag", "neuer kunde", "verlängerung", "signatur", "funktion", "erledigt", "abhaken", "postfach", "neu auswerten"],
-    body: `Mail, Mailverlauf, Notiz oder Protokoll einfügen (oder im Eingang aus dem Postfach übernehmen) – Kunde/Setup steht standardmäßig auf „automatisch erkennen“. Erkannt wird über Absender- und Mailadressen, Domänen, Kunden-, Personen- und Einsatznamen; ist kein Kunde bekannt, schlägt die KI „Neuer Kunde“ vor.
-Die KI bekommt das Lagebild des Kunden mit (Chancen, laufende Einsätze mit Verlängerungsstand, offene Aktionen und Fragen, Personen mit Funktion) und macht daraus Karten: neuer Kunde/Setup, Person mit Funktion, Bereich, E-Mail und Buyingcenter-Rolle (bestehende Person wird ergänzt), neue Chance, neuer Stand einer bestehenden Chance (bestätigt, abgesagt, zurückgestellt), Verlängerung oder Ende eines Einsatzes, Stimmung zu einem Einsatz (wird Check-in), Besetzung, Freelancer (Pool oder Kandidatur), Aufgabe mit echtem Datum („bis Ende des Monats“ → Datum), „Erledigt“ (offene Aktion/Frage wird abgehakt), offene Frage, Beobachtung.
+    body: `Mail, Mailverlauf, Notiz oder Protokoll einfügen (oder im Eingang aus dem Postfach übernehmen) – Kunde/Projekt steht standardmäßig auf „automatisch erkennen“. Erkannt wird über Absender- und Mailadressen, Domänen, Kunden-, Personen- und Einsatznamen; ist kein Kunde bekannt, schlägt die KI „Neuer Kunde“ vor.
+Die KI bekommt das Lagebild des Kunden mit (Chancen, laufende Einsätze mit Verlängerungsstand, offene Aktionen und Fragen, Personen mit Funktion) und macht daraus Karten: neuer Kunde/Projekt, Person mit Funktion, Bereich, E-Mail und Buyingcenter-Rolle (bestehende Person wird ergänzt), neue Chance, neuer Stand einer bestehenden Chance (bestätigt, abgesagt, zurückgestellt), Verlängerung oder Ende eines Einsatzes, Stimmung zu einem Einsatz (wird Check-in), Besetzung, Freelancer (Pool oder Kandidatur), Aufgabe mit echtem Datum („bis Ende des Monats“ → Datum), „Erledigt“ (offene Aktion/Frage wird abgehakt), offene Frage, Beobachtung.
 Jede Karte zeigt die Textstelle als Beleg und wird mit einem Klick übernommen. Verlängerung: als BD/Principal direkt bestätigt (Einsatzende, Moco, offene Klärung erledigt), sonst als Anstoß an den BD; steht kein Datum im Text, ist „heutiges Ende + 12 Monate“ vorbelegt. Nach „Neuer Kunde“ gehören die übrigen Karten desselben Eingangs automatisch zu diesem Kunden.
 Ablehnen mit Grund lohnt sich: die zuletzt abgelehnten Vorschläge gehen als Hinweis an die KI. Eine schon importierte Mail wird beim erneuten Übernehmen neu ausgewertet; jede Quelle lässt sich über „Mit KI (neu) auswerten“ noch einmal durchlaufen.`,
   },
@@ -67,9 +67,9 @@ Vier-Augen bei Account Leads: Eine Verlängerung mit geänderten Konditionen geh
   {
     id: "sales-ops",
     title: "Sales-Ops-Sicht und Verlängerungs-Ansprechpartner",
-    where: "Hut „Sales Operations“ → Sales-Ops-Sicht · Einsatz → „Verlängerung läuft über“ · Setup → „Verlängerung läuft über“",
+    where: "Hut „Sales Operations“ → Sales-Ops-Sicht · Einsatz → „Verlängerung läuft über“ · Projekt → „Verlängerung läuft über“",
     keywords: ["sales operations", "sales ops", "verlaengerung", "ansprechpartner", "bestellung", "vertrag", "assignment", "erfassen", "anstossen", "einkauf", "wer spricht an"],
-    body: `Je Einsatz steht, über wen die Verlängerung beim Kunden fachlich läuft, über wen Bestellung/Vertrag laufen und wer bei Verve anspricht (Sales Operations, BD oder Berater:in selbst). Die Vorgabe steht am Setup und gilt für alle seine Einsätze; am Einsatz lässt sie sich je Feld abweichend setzen (leer = Vorgabe). Pflegen dürfen BD, Principal, Sales Operations und die Betreuung des Einsatzes.
+    body: `Je Einsatz steht, über wen die Verlängerung beim Kunden fachlich läuft, über wen Bestellung/Vertrag laufen und wer bei Verve anspricht (Sales Operations, BD oder Berater:in selbst). Die Vorgabe steht am Projekt und gilt für alle seine Einsätze; am Einsatz lässt sie sich je Feld abweichend setzen (leer = Vorgabe). Pflegen dürfen BD, Principal, Sales Operations und die Betreuung des Einsatzes.
 Die Sales-Ops-Sicht zeigt: Verlängerungen zum Anstoßen, Einsätze ohne Ansprechpartner, offene Unterlagen, Einsätze mit überschrittenem Ende und offene Moco-Hinweise – dazu alle Einsätze mit Ende in den nächsten 120 Tagen samt Ansprechpartner. Mit „Neues Assignment erfassen“ legt Sales Operations in einem Schritt Chance (beauftragt), Auftrag/Bestellung und Einsatzakte an und lädt danach Vertrag oder Bestellung am Einsatz hoch. Die Verlängerung bestätigt weiter der BD-Kontext.`,
   },
   {
@@ -77,7 +77,7 @@ Die Sales-Ops-Sicht zeigt: Verlängerungen zum Anstoßen, Einsätze ohne Ansprec
     title: "Bereinigung: Dubletten und Altlasten aufräumen",
     where: "Mehr → Bereinigung (Geschäftsführung, Sales Operations, Administration)",
     keywords: ["bereinigung", "aufraeumen", "dublette", "doppelt", "zusammenfuehren", "beendet", "ende ueberschritten", "intern", "verve consulting", "moco", "setup doppelt", "person doppelt"],
-    body: `Die Bereinigung sammelt Unstimmigkeiten; geändert wird nur, was du freigibst. Ende überschritten: Einsätze, deren Ende zurückliegt, werden zum Enddatum abgeschlossen (bei offener Verlängerung nur „endet“). Doppelte Einsätze: gleiche Person beim gleichen Kunden mit überlappender Laufzeit (z. B. aus Moco und zusätzlich von Hand) – der gewählte bleibt, Moco-Verknüpfung, Check-ins, Unterlagen und Verlängerung ziehen um. Interne Moco-Projekte (Kunde „Verve Consulting“): Einsätze werden entfernt, der Kunde archiviert. Doppelte Setups und Personen je Kunde werden zusammengeführt.
+    body: `Die Bereinigung sammelt Unstimmigkeiten; geändert wird nur, was du freigibst. Ende überschritten: Einsätze, deren Ende zurückliegt, werden zum Enddatum abgeschlossen (bei offener Verlängerung nur „endet“). Doppelte Einsätze: gleiche Person beim gleichen Kunden mit überlappender Laufzeit (z. B. aus Moco und zusätzlich von Hand) – der gewählte bleibt, Moco-Verknüpfung, Check-ins, Unterlagen und Verlängerung ziehen um. Interne Moco-Projekte (Kunde „Verve Consulting“): Einsätze werden entfernt, der Kunde archiviert. Doppelte Projekte und Personen je Kunde werden zusammengeführt.
 Die Einsatzliste zeigt standardmäßig nur laufende Einsätze; Einsätze mit überschrittenem Ende stehen im eigenen Filter, mögliche Dubletten sind markiert. Der Moco-Abgleich zeigt nur noch Änderungen; was dort übersprungen wird, kommt nicht wieder, bis es unter Moco → „Beim Import übersprungen“ zurückgeholt wird.`,
   },
   {
@@ -92,10 +92,10 @@ In beiden Fällen: Anhänge werden nicht übernommen, Bewerbungen nicht ausgewer
   {
     id: "konvertierung",
     title: "Konvertierungsvorgang: von der Anfrage bis zur Beauftragung",
-    where: "Chance → „Konvertierungsvorgang“ · Sales-Ops-Sicht → laufende Vorgänge · Setup → Angebotsweg",
+    where: "Chance → „Konvertierungsvorgang“ · Sales-Ops-Sicht → laufende Vorgänge · Projekt → Angebotsweg",
     keywords: ["konvertierung", "vorgang", "angebot", "angebotsnummer", "zusage", "bestellung", "bestellnummer", "beauftragung", "freelancer vertrag", "projekteinzelvertrag", "vorlage", "abbrechen", "angebotsweg", "vermittler"],
     body: `Der Vorgang führt eine Chance in sechs Schritten: 1 Anfrage, 2 Klärung, 3 Besetzung, 4 Angebot, 5 Freelancer-Vertrag, 6 Beauftragung. Der Stand jedes Schritts ergibt sich aus Chance, Positionen und Unterlagen; es gibt keinen zweiten Status. Sucht eine Chance mehrere Personen, läuft je Position ein eigener Vorgang: Anfrage und Klärung gelten für alle, Besetzung, Angebot, Vertrag, Bestellung und Übergabe für die einzelne Person. Die Chance zeigt alle Vorgänge mit ihrem Schritt. Der Vorgang lässt sich jederzeit abbrechen und endet von selbst, wenn die Chance geschlossen wird.
-Angebot: Der Angebotsweg steht am Setup. Das Angebot entsteht in Moco; die Moco-Angebotsnummer trägst du im Vorgang ein. Hat der Kunde eine eigene Vorlage, geht nur sie an den Kunden. Im Vermittlergeschäft gibt es kein Angebot, nur Konditionen per Mail. Nach der Abgabe hältst du die Zusage des Kunden fest (wer, wann, was). Ändert sich Person oder Satz, legst du eine neue Fassung an.
+Angebot: Der Angebotsweg steht am Projekt. Das Angebot entsteht in Moco; die Moco-Angebotsnummer trägst du im Vorgang ein. Hat der Kunde eine eigene Vorlage, geht nur sie an den Kunden. Im Vermittlergeschäft gibt es kein Angebot, nur Konditionen per Mail. Nach der Abgabe hältst du die Zusage des Kunden fest (wer, wann, was). Ändert sich Person oder Satz, legst du eine neue Fassung an.
 Freelancer-Vertrag: Sobald der Kunde zugesagt hat, erzeugst du am Einsatz unter „Verträge und Bestellungen“ den Projekteinzelvertrag aus der Vorlage (Einzelperson oder Gesellschaft, je nach Freelancer-Profil). Er liegt als Entwurf am Einsatz, enthält keine Unterschrift und steht unter dem Vorbehalt, dass der Endkunde beauftragt. Mit „versendet“ geht der Vorgang weiter.
 Beauftragung: Mit der Bestellnummer geht die Übergabe ans Backoffice raus. Ist der Start mit Zusage per Mail vereinbart, geht eine vorläufige Übergabe raus und „Bestellung offen“ bleibt vermerkt, bis die Nummer nachgereicht ist. Freelancer bei einem Kunden mit Vermittler: Der Vorgang zeigt einen Prüfhinweis, den du mit Begründung bestätigst.`,
   },
@@ -120,28 +120,28 @@ Konditionen (Einkaufssatz, Zahlungsziel) sehen nur Geschäftsführung, Sales Ope
     title: "Kundenansicht: Grundlagen, Strategie, Operativ",
     where: "Kunden → Kunde → Reiter 1 Grundlagen · 2 Strategie · 3 Operativ",
     keywords: ["kunde", "kundenansicht", "bucket", "grundlagen", "strategie", "operativ", "initiative", "schluesselinitiative", "health", "agenda", "sos", "beschaffung"],
-    body: `Die Kundenansicht hat drei Reiter. 1 Grundlagen: Health-Check (Ampel), Kundenagenda mit Prioritäten und Herausforderungen, laufende Standard-Vorgehen. 2 Strategie: die Schlüssel-Initiativen des Kunden – je Initiative die Zahl der Chancen, offenen Vorgänge und KI-Vorschläge; Chancen ohne Initiative lassen sich dort zuordnen, KI-Vorschläge ohne Initiativen-Bezug stehen darunter. 3 Operativ: Ansprechpartner, SOS-Protokolle, Einkauf und Beschaffung, Vorgänge am Kunden, Zuständigkeit, Setups, Kennungen für den Eingang, öffentliche Informationen.
+    body: `Die Kundenansicht hat drei Reiter. 1 Grundlagen: Health-Check (Ampel), Kundenagenda mit Prioritäten und Herausforderungen, laufende Standard-Vorgehen. 2 Strategie: die Schlüssel-Initiativen des Kunden – je Initiative die Zahl der Chancen, offenen Vorgänge und KI-Vorschläge; Chancen ohne Initiative lassen sich dort zuordnen, KI-Vorschläge ohne Initiativen-Bezug stehen darunter. 3 Operativ: Ansprechpartner, SOS-Protokolle, Einkauf und Beschaffung, Vorgänge am Kunden, Zuständigkeit, Projekte, Kennungen für den Eingang, öffentliche Informationen.
 Ein Klick auf eine Schlüssel-Initiative öffnet sie: KI-Vorschläge dazu, die Chancen, die darauf einzahlen (bestehende zuordnen oder neue anlegen), offene Vorgänge an diesen Chancen und Vorgänge zur Initiative selbst. Ein offenes SOS wird auf jedem Reiter oben angezeigt.`,
   },
   {
     id: "begriffe",
-    title: "Begriffe: Kunde, Setup, Chance, Aktion, Vorgang",
+    title: "Begriffe: Kunde, Projekt, Chance, Aktion, Vorgang",
     where: "überall – das „?“ neben einem Begriff erklärt ihn",
     keywords: ["begriff", "setup", "chance", "vorgang", "aktion", "aufgabe", "unterschied", "definition", "was ist", "anlegen"],
-    body: `Kunde: die Organisation (z. B. eine Bank). Unter ihr liegen Setups, Personen und Einsätze.
-Setup: ein Arbeitszusammenhang beim Kunden – Team, Bereich oder Vorhaben. Ein Kunde hat meist mehrere Setups. Ein einzelner Bedarf ist kein Setup, sondern eine Chance.
-Chance: eine mögliche Vermittlung im Setup – Verve-Experte, Freelancer oder Ausschreibung –, von „antizipiert“ bis „beauftragt“. Eine Aufgabe ist keine Chance.
-Aktion: ein vereinbarter nächster Schritt gegenüber dem Kunden (Profile schicken, Termin vereinbaren), mit Frist, im Setup oder an der Chance.
+    body: `Kunde: die Organisation (z. B. eine Bank). Unter ihr liegen Projekte, Personen und Einsätze.
+Projekt: ein Arbeitszusammenhang beim Kunden – Team, Bereich oder Vorhaben. Ein Kunde hat meist mehrere Projekte. Ein einzelner Bedarf ist kein Projekt, sondern eine Chance.
+Chance: eine mögliche Vermittlung im Projekt – Verve-Experte, Freelancer oder Ausschreibung –, von „antizipiert“ bis „beauftragt“. Eine Aufgabe ist keine Chance.
+Aktion: ein vereinbarter nächster Schritt gegenüber dem Kunden (Profile schicken, Termin vereinbaren), mit Frist, im Projekt oder an der Chance.
 Vorgang: ein interner Auftrag an dich selbst, eine Kollegin oder ein Team (z. B. Sales Operations), mit Annahme, Frist und Rückmeldung.
-Faustregel: Wer muss etwas tun? Kunde gegenüber → Aktion; jemand bei Verve → Vorgang. Worum geht es? Eine mögliche Besetzung → Chance; ein Team oder Vorhaben beim Kunden → Setup.`,
+Faustregel: Wer muss etwas tun? Kunde gegenüber → Aktion; jemand bei Verve → Vorgang. Worum geht es? Eine mögliche Besetzung → Chance; ein Team oder Vorhaben beim Kunden → Projekt.`,
   },
   {
     id: "grundidee",
-    title: "Worum es geht: Kunde, Setup, Chance, Wofür",
-    where: "Kunden → Kunde → Setup → Chance",
+    title: "Worum es geht: Kunde, Projekt, Chance, Wofür",
+    where: "Kunden → Kunde → Projekt → Chance",
     keywords: ["begriff", "kunde", "setup", "chance", "wofuer", "grundidee", "vermittlung", "struktur", "aufbau"],
     body: `Das Ergebnis unserer Vertriebsarbeit ist eine Vermittlung. Im Tool heißt sie „Chance“ – mit drei Arten: Verve-Experte in einer Standardrolle, Freelancer-Experte auf einer Spezialistenrolle oder Ausschreibung/Rahmenvertrag.
-Ein Kunde ist die Organisation. Ein Setup ist ein Arbeitszusammenhang beim Kunden (Team, Bereich, Vorhaben); ein Kunde hat meist mehrere Setups, ein Setup mehrere Chancen.
+Ein Kunde ist die Organisation. Ein Projekt ist ein Arbeitszusammenhang beim Kunden (Team, Bereich, Vorhaben); ein Kunde hat meist mehrere Projekte, ein Projekt mehrere Chancen.
 Beobachtungen, Personen, Aktionen und offene Fragen tragen immer ein „Wofür“: die Chance, auf die sie einzahlen. Auf der Chance-Seite zeigt der Block „Was auf diese Chance einzahlt“ genau das.
 Das Tool rechnet keine Umsätze, Wahrscheinlichkeiten oder Forecasts; es zählt, was dokumentiert ist, und sagt, was fehlt.`,
   },
@@ -150,7 +150,7 @@ Das Tool rechnet keine Umsätze, Wahrscheinlichkeiten oder Forecasts; es zählt,
     title: "Chancen-Status und wie man weiterkommt",
     where: "Kunden → Kunde → Chance öffnen (oder Start → „Wo stehen wir? – je Chance“ → Button „Nächster Schritt“)",
     keywords: ["status", "stufe", "antizipiert", "in klaerung", "klaerung", "bestaetigt", "bestaetigen", "beleg", "angebot", "vorgestellt", "auswahl", "bestellung", "beauftragt", "auftrag", "zurueckstellen", "beenden", "konvertiert", "konvertieren", "besetzt", "weiterklicken", "naechster schritt", "fortschritt", "stepper"],
-    body: `Der Status hängt immer an der einzelnen Chance – nicht am Setup und nicht am Kunden. Kunden- und Setup-Seite zeigen deshalb unter „Wo stehen wir? – je Chance“ eine Zeile je offener Chance mit eigenem Fortschrittsbalken und dem Button „Nächster Schritt“.
+    body: `Der Status hängt immer an der einzelnen Chance – nicht am Projekt und nicht am Kunden. Kunden- und Projekt-Seite zeigen deshalb unter „Wo stehen wir? – je Chance“ eine Zeile je offener Chance mit eigenem Fortschrittsbalken und dem Button „Nächster Schritt“.
 Stufen: Antizipiert → In Klärung → Bestätigt → Profil/Angebot vorgestellt → Auswahl/Bestellung → Konvertiert (beauftragt und besetzt; die Arbeit läuft dann im Einsatz weiter). Daneben: Zurückgestellt und Beendet.
 So kommt man weiter (alles auf der Chance-Seite, Block „Chance“):
 - Antizipiert → In Klärung: Button „In Klärung nehmen“.
@@ -158,28 +158,28 @@ So kommt man weiter (alles auf der Chance-Seite, Block „Chance“):
 - → Profil/Angebot vorgestellt: im Block „Angebote / Profilvorstellungen“ ein Angebot anlegen (Entwurf), auf „Geprüft“ setzen und dann „Vorstellungsereignis bestätigen“. Ein Entwurf gilt nie als vorgestellt.
 - → Konvertiert: im Block „Auftrag und Einsatz“ einen Auftrag anlegen und „Beauftragung bestätigen (Nachweis optional)“.
 - Zurückstellen oder Beenden: Aufklapper „Zurückstellen / Beenden (mit Begründung)“; von dort auch „Wieder in Klärung“.
-Wer darf: die verantwortliche Person der Chance, Setup-Beteiligte, der zuständige BD, Principals und Sales Operations (Sales Operations bereitet vor, bestätigen/entscheiden bleibt beim BD). Fehlt ein Button, fehlt meist die Bearbeitungsberechtigung – oder die Chance ist beendet.`,
+Wer darf: die verantwortliche Person der Chance, Projekt-Beteiligte, der zuständige BD, Principals und Sales Operations (Sales Operations bereitet vor, bestätigen/entscheiden bleibt beim BD). Fehlt ein Button, fehlt meist die Bearbeitungsberechtigung – oder die Chance ist beendet.`,
   },
   {
     id: "chance-seite",
     title: "Die Chance-Seite: Aufbau",
-    where: "Chance öffnen (Link aus Kunde, Setup, Start oder Meine Arbeit)",
+    where: "Chance öffnen (Link aus Kunde, Projekt, Start oder Meine Arbeit)",
     keywords: ["chance seite", "buyingcenter", "meddpicc", "berater", "angebote", "auftrag", "einsatz", "startvoraussetzung", "startbereit", "gestartet", "einzahlt", "rolle hinzufuegen"],
     body: `Reihenfolge: Fortschrittsbalken mit „Nächster Schritt“ → Block „Chance“ (Status, Bestätigen, Bearbeiten, Zurückstellen) → „Was auf diese Chance einzahlt“ → „Vorgehen“ (Vorgehensmuster; das Startformular ist zugeklappt) → Buyingcenter für diese Chance mit Buying-Center-Berater → Qualifizierungshilfe (MEDDPICC, optional) → Angebote / Profilvorstellungen → Auftrag und Einsatz.
 Im Auftrag: Startvoraussetzungen erfassen und nachweisen, dann „Startbereit“ und „Gestartet“. Geplantes Ende und Verlängerungsfrist eintragen – daraus entsteht die Verlängerungsregel (siehe Health-Check).`,
   },
   {
     id: "anlegen",
-    title: "Kunde, Setup und Chance anlegen",
+    title: "Kunde, Projekt und Chance anlegen",
     where: "Kunden → „Kunde aus Dialog, Dokument oder Interview anlegen“; im Assistenten über Karten",
     keywords: ["anlegen", "lege", "neu", "neuen", "neuer kunde", "kunde anlegen", "setup anlegen", "chance anlegen", "dokument", "import", "interview", "karte", "karten", "uebernehmen"],
-    body: `Drei Wege: (1) Im Assistenten „lege Kunde X an“ schreiben – er legt Kunde und Setup direkt an; oder Text einfügen – er schlägt Karten vor, die du übernimmst. (2) Kunden → „Kunde aus Dokument anlegen“: Dokument hochladen, Vorschläge prüfen. (3) Geführtes Interview.
-Eine Chance legst du auch direkt im Setup an (Abschnitt „Chancen“). Chancen sind in Kundensprache formuliert und bleiben „antizipiert“, bis der Kunde den Bedarf ausgesprochen hat.`,
+    body: `Drei Wege: (1) Im Assistenten „lege Kunde X an“ schreiben – er legt Kunde und Projekt direkt an; oder Text einfügen – er schlägt Karten vor, die du übernimmst. (2) Kunden → „Kunde aus Dokument anlegen“: Dokument hochladen, Vorschläge prüfen. (3) Geführtes Interview.
+Eine Chance legst du auch direkt im Projekt an (Abschnitt „Chancen“). Chancen sind in Kundensprache formuliert und bleiben „antizipiert“, bis der Kunde den Bedarf ausgesprochen hat.`,
   },
   {
     id: "assistent",
     title: "Der Assistent",
-    where: "Rechts unten auf jeder Seite (Panel „Assistent“); Kontext = aktuelle Kunden-/Setup-Seite oder „Allgemein“",
+    where: "Rechts unten auf jeder Seite (Panel „Assistent“); Kontext = aktuelle Kunden-/Projekt-Seite oder „Allgemein“",
     keywords: ["assistent", "ki", "karten", "interview modus", "interviewmodus", "einsortierung", "email einfuegen", "mail", "vorschlag", "gespraech"],
     body: `Der Assistent kann vier Dinge: (1) Klare Aufträge direkt erledigen – „lege Kunde Westnetz GmbH an“, „erinner mich Freitag, das Angebot nachzufassen“, „Sales Ops soll die Ausschreibung aufbereiten“, „trag Frau Keller als Ansprechpartnerin für Kevins Verlängerung ein“; er meldet „Erledigt: …“ mit Link. Gibt es den Kunden schon, nimmt er den bestehenden. (2) Fragen beantworten – zum Bestand („wann endet Kevin bei ITERGO?“, „was steht bei mir diese Woche an?“) und zur Bedienung. (3) Eingefügte Notizen und Mails auswerten – daraus schlägt er Karten vor (Person, Beobachtung, Chance, Besetzung, Aufgabe), die du mit „Übernehmen“ anlegst. (4) Aufgaben mit Datum und Priorität anlegen („dringend“ = hoch); sie erscheinen in der Zeitleiste auf der Startseite.
 Er verschickt nichts und recherchiert nicht im Internet. Im Interview-Modus führt er aktiv durch die Themen.`,
@@ -196,32 +196,32 @@ Er verschickt nichts und recherchiert nicht im Internet. Im Interview-Modus füh
     title: "Rollen und Rechte",
     where: "Verwaltung → „Zugänge und Rollen“ (nur Betriebsverwaltung)",
     keywords: ["rolle", "rollen", "rechte", "berechtigung", "darf", "principal", "bd", "anker", "ceo", "sales ops", "sales operations", "admin", "verwaltung", "sehen", "zugriff", "kein button", "fehlt button"],
-    body: `BD: verantwortet Kunden, Setups und Chancen, trifft Vertriebsentscheidungen.
-Anker: Verve-Kolleg:in im Kundenteam; bringt Kontext, fachliche Rückfragen oder Einführungen ein (Beteiligung je Setup).
-Principal: Führungsrolle, arbeitsraumweit oder je Kunde. Hat volle Rechte auf seinen Kunden: sieht und pflegt Setups und Chancen, stellt BD, Anker und Verantwortliche um. Arbeitsraumweite Principals pflegen außerdem Vorgehensmuster und den strategischen Fokus. Persönliche Notizen anderer bleiben privat.
-Sales Operations: unterstützt alle BDs – sieht und pflegt Kunden, Setups, Chancen und Personen, bereitet Angebote und Ausschreibungen vor. Entscheidungen (z. B. Chance bestätigen) und Verantwortung (Zuständigkeit) bleiben beim BD.
-CEO: CEO-Dashboard (Aktivität, Ist/Ziel, Health-Check, Freelancer-Hebel je BD); Zusammenfassungen, keine Rohquellen.
+    body: `BD: verantwortet Kunden, Projekte und Chancen, trifft Vertriebsentscheidungen.
+Kontaktpate: Verve-Kolleg:in im Kundenteam; bringt Kontext, fachliche Rückfragen oder Einführungen ein (Beteiligung je Projekt).
+Principal: Führungsrolle, arbeitsraumweit oder je Kunde. Hat volle Rechte auf seinen Kunden: sieht und pflegt Projekte und Chancen, stellt BD, Kontaktpate und Verantwortliche um. Arbeitsraumweite Principals pflegen außerdem Vorgehensmuster und den strategischen Fokus. Persönliche Notizen anderer bleiben privat.
+Sales Operations: unterstützt alle BDs – sieht und pflegt Kunden, Projekte, Chancen und Personen, bereitet Angebote und Ausschreibungen vor. Entscheidungen (z. B. Chance bestätigen) und Verantwortung (Zuständigkeit) bleiben beim BD.
+CEO: CEO-Dashboard (Aktivität, Ist/Ziel, Health-Check, Ausbaupotenzial je BD); Zusammenfassungen, keine Rohquellen.
 Betriebsverwaltung (Admin): Zugänge, Rollen, KI-Konfiguration, Fristenprüfung – ohne inhaltliche Vertriebsrechte.
 Rollen vergibt die Betriebsverwaltung unter Verwaltung → „Rolle zuweisen“ (arbeitsraumweit oder für einen Kunden).`,
   },
   {
     id: "delegation",
     title: "Zuständigkeit umstellen (Delegation)",
-    where: "Kunde → „Zuständigkeit“; Setup → Beteiligte; Chance → „Chance bearbeiten“ → Verantwortlich",
+    where: "Kunde → „Zuständigkeit“; Projekt → Beteiligte; Chance → „Chance bearbeiten“ → Verantwortlich",
     keywords: ["zustaendig", "zustaendigkeit", "umstellen", "stelle", "bd", "delegation", "delegieren", "verantwortlich", "owner", "bd wechseln", "anker", "uebergabe", "uebergeben", "beteiligung"],
-    body: `Principal, CEO und der zuständige BD können jederzeit umstellen: auf der Kundenseite unter „Zuständigkeit“ den zuständigen BD, im Setup den Setup-BD und die Anker-Beteiligungen (Beitrag: Kontext, fachliche Rückfragen, Einführung möglich), in der Chance die verantwortliche Person. Der neue BD erhält automatisch die kundenbezogene Rolle.
+    body: `Principal, CEO und der zuständige BD können jederzeit umstellen: auf der Kundenseite unter „Zuständigkeit“ den zuständigen BD, im Projekt den Projekt-BD und die Kontaktpaten-Beteiligungen (Beitrag: Kontext, fachliche Rückfragen, Einführung möglich), in der Chance die verantwortliche Person. Der neue BD erhält automatisch die kundenbezogene Rolle.
 Sales-Operations-Zugänge können keine Verantwortung tragen. Für einzelne Beobachtungen gibt es zusätzlich „Übergabe an eine andere Person“ – die Empfängerin nimmt sie unter Meine Arbeit an.
-Einzelne Aufgaben gibst du als Vorgang weiter (Block „Vorgänge“ am Kunden, Setup oder an der Chance): an eine Person oder an ein Team wie Sales Operations – mit Annahme, Frist und Rückmeldung.`,
+Einzelne Aufgaben gibst du als Vorgang weiter (Block „Vorgänge“ am Kunden, Projekt oder an der Chance): an eine Person oder an ein Team wie Sales Operations – mit Annahme, Frist und Rückmeldung.`,
   },
   {
     id: "vorgaenge",
     title: "Vorgänge: Aufgaben und Anfragen an Kolleg:innen",
-    where: "Meine Arbeit → Vorgänge; Block „Vorgänge“ auf Kunden-, Setup- und Chance-Seite; Vorgangsseite",
+    where: "Meine Arbeit → Vorgänge; Block „Vorgänge“ auf Kunden-, Projekt- und Chance-Seite; Vorgangsseite",
     keywords: ["vorgang", "vorgaenge", "aufgabe", "aufgaben", "anfrage", "anfragen", "delegieren", "delegation", "beauftragen", "zuweisen", "annehmen", "ablehnen", "pruefen", "abnehmen", "nacharbeit", "unteraufgabe", "checkliste", "beobachten", "frist", "ueberfaellig", "erinnerung", "todo"],
-    body: `Ein Vorgang ist eine eigene Aufgabe oder eine Anfrage an eine Person oder ein Team. Anlegen: im Block „Vorgänge“ am Kunden, Setup oder an der Chance (dann hängt er dort) oder unter Meine Arbeit → „Neuer Vorgang“. Wähle „Ich selbst“, eine Person oder ein Team; bei Teams eine Anfrageart (Pflichtangaben mit *, Frist in Werktagen).
+    body: `Ein Vorgang ist eine eigene Aufgabe oder eine Anfrage an eine Person oder ein Team. Anlegen: im Block „Vorgänge“ am Kunden, Projekt oder an der Chance (dann hängt er dort) oder unter Meine Arbeit → „Neuer Vorgang“. Wähle „Ich selbst“, eine Person oder ein Team; bei Teams eine Anfrageart (Pflichtangaben mit *, Frist in Werktagen).
 Ablauf einer Anfrage: angefragt → angenommen (oder abgelehnt mit Begründung) → in Arbeit / blockiert → Ergebnis zur Prüfung → abgenommen oder zur Nacharbeit zurück. Ohne vereinbarte Prüfung ist der Vorgang mit „Abschließen“ erledigt. Abgelehnte Anfragen kannst du erneut an jemand anderen richten.
 Meine Arbeit zeigt: Mir zugewiesen, Von mir beauftragt (inklusive „zur Prüfung“), Team-Eingang, Beobachtet – filterbar nach heute fällig, überfällig, diese Woche. Unteraufgaben müssen erledigt sein, bevor der Vorgang abgeschlossen wird; Checklisten haken Bearbeiter:in oder Auftraggeber:in ab. „Beobachten“ hält dich ohne Verantwortung auf dem Laufenden.
-Sehen dürfen einen Vorgang die Beteiligten und alle, die das Bezugsobjekt (Kunde, Setup, Chance) sehen. Der Assistent legt Vorgänge an, wenn du z. B. schreibst „Sales Ops soll die Ausschreibung aufbereiten bis Freitag“ oder „Erinnere mich, …“.`,
+Sehen dürfen einen Vorgang die Beteiligten und alle, die das Bezugsobjekt (Kunde, Projekt, Chance) sehen. Der Assistent legt Vorgänge an, wenn du z. B. schreibst „Sales Ops soll die Ausschreibung aufbereiten bis Freitag“ oder „Erinnere mich, …“.`,
   },
   {
     id: "teams",
@@ -235,7 +235,7 @@ Teams, Mitglieder, Leitung und Anfragearten pflegen Betriebsverwaltung, Principa
   {
     id: "kommentare",
     title: "Kommentare und @-Erwähnungen",
-    where: "Block „Kommentare“ auf Kunden-, Setup-, Chance- und Vorgangsseite",
+    where: "Block „Kommentare“ auf Kunden-, Projekt-, Chance- und Vorgangsseite",
     keywords: ["kommentar", "kommentare", "kommentieren", "erwaehnen", "erwaehnung", "mention", "at", "rueckfrage", "nachricht", "diskussion", "absprache"],
     body: `Rückfragen und Absprachen schreibst du direkt an das Objekt. Mit „@Vorname Nachname“ erwähnst du eine Person; sie wird benachrichtigt – aber nur, wenn sie das Objekt auch sehen darf (sonst erscheint ein Hinweis und die Erwähnung entfällt). Wer an einem Objekt schon kommentiert hat oder verantwortlich ist, erfährt von neuen Kommentaren. Eigene Kommentare lassen sich bearbeiten und löschen.`,
   },
@@ -247,11 +247,11 @@ Teams, Mitglieder, Leitung und Anfragearten pflegen Betriebsverwaltung, Principa
     body: `Eine Position ist ein zu besetzender Platz an einer Chance (drei Plätze = drei Positionen, „Kopieren“ hilft). Anlegen im Block „Besetzung“ auf der Chance-Seite oder aus einem eingefügten Text (E-Mail, Notiz): daraus entstehen Vorschläge mit Belegstellen, die du vor der Übernahme prüfst.
 Schnellbesetzung: Steht die Person fest (interne Kolleg:in oder ein Freelancer), nutzt du im Block „Besetzung“ auf der Chance bzw. auf der Positionsseite den Abschnitt „Schnellbesetzung“ – Person wählen, Start/Ende, bei Freelancern EK (Pflicht) und VK, „Besetzen und Einsatz anlegen“. Die Position ist dann besetzt, ein offener Suchauftrag erledigt und die Einsatzakte angelegt; die Kandidaturen-Schritte entfallen. Ressourcenart: Jede Position ist „Freelancer“ oder „intern“; intern gibt es keine Einkaufskonditionen (EK), VK ist optional – Abrechnung bleibt in Moco.
 Suchauftrag selbst erledigen: Als Auftraggeber:in setzt du einen laufenden Suchauftrag auf der Positionsseite („Suchauftrag selbst als erledigt setzen“) oder im Vorgang („Selbst als erledigt setzen“) auf erledigt – die Bearbeiter:in bei Sales Operations wird informiert.
-Assistent: Fügst du im Kunden- oder Setup-Kontext eine Kundenmail oder Notiz mit einer zu besetzenden Rolle ein, schlägt der Assistent Karten „Besetzung (Position)“ vor – vorausgefüllt mit Rolle, Start, Umfang, Ort, Muss-/Kann-Anforderungen. „Übernehmen“ legt die Position (und bei Bedarf die Chance) an; steht eine interne Person im Text, entsteht direkt der Einsatz.
+Assistent: Fügst du im Kunden- oder Projekt-Kontext eine Kundenmail oder Notiz mit einer zu besetzenden Rolle ein, schlägt der Assistent Karten „Besetzung (Position)“ vor – vorausgefüllt mit Rolle, Start, Umfang, Ort, Muss-/Kann-Anforderungen. „Übernehmen“ legt die Position (und bei Bedarf die Chance) an; steht eine interne Person im Text, entsteht direkt der Einsatz.
 Status: Entwurf → offen (braucht Titel, Muss-Anforderungen, verantwortlichen BD) → besetzt; außerdem pausiert (Grund, Prüftermin) und abgebrochen (Grund). Offene Positionen bekommen einen Suchauftrag an Sales Operations (erwartetes Ergebnis, Fälligkeit). Sales Operations sieht bis zur Übernahme nur eine Vorschau, danach die Position mit Konditionen und pflegt Kandidaturen.
 Kandidatur: identifiziert → in Kontakt → qualifiziert → dem BD vorgeschlagen (EK-Stand nötig) → zur Vorstellung freigegeben (nur BD) → vorgestellt (Datum, Empfänger, Profilstand und erlaubte Weitergabe sind Pflicht; der Stand wird festgehalten) → Interview → ausgewählt. Absage, Rückzug und „nicht verfügbar“ brauchen einen Grund; Wiederaufnahme Grund und aktualisierte Verfügbarkeit. Schritte überspringen geht mit Grund, aber nie an Freigabe oder Auswahl vorbei.
 Auswahl bestätigt der verantwortliche BD ausdrücklich; die Position wird besetzt, andere Kandidaturen bleiben mit Verlauf. Die Chance wird dadurch nicht automatisch beauftragt – der Abschluss läuft wie bisher über Angebot und Auftrag. Keine Stundenzettel, keine CV-Erstellung, kein Ranking im Accountmeister.
-Rechte: Positionen und Kandidaturen sehen der verantwortliche BD bzw. der BD-Kontext des Kunden, Principal, CEO und die Person, die den Suchauftrag übernommen hat. Anker sehen keine Kandidaturen. BDs sehen von einem Freelancer nur die Kandidaturen an eigenen Positionen; den Pool sehen Sales Operations, Principal und CEO.`,
+Rechte: Positionen und Kandidaturen sehen der verantwortliche BD bzw. der BD-Kontext des Kunden, Principal, CEO und die Person, die den Suchauftrag übernommen hat. Kontaktpate sehen keine Kandidaturen. BDs sehen von einem Freelancer nur die Kandidaturen an eigenen Positionen; den Pool sehen Sales Operations, Principal und CEO.`,
   },
   {
     id: "ausschreibung",
@@ -259,7 +259,7 @@ Rechte: Positionen und Kandidaturen sehen der verantwortliche BD bzw. der BD-Kon
     where: "Positionsseite → „Ausschreibungsentwurf“; Chance → Besetzung → „Aus Text übernehmen“",
     keywords: ["ausschreibung", "ausschreibungstext", "stellenanzeige", "anzeige", "entwurf", "entwerfen", "texteingang", "text einfuegen", "e mail einfuegen", "bedarf aus text", "freigeben", "veroeffentlichen"],
     body: `Der Ausschreibungsentwurf entsteht nur aus den freigegebenen Bedarfsfeldern (Titel, Aufgaben, Muss/Kann, Ort, Sprache, Start, Ende, Umfang) – nie aus EK, internen Hinweisen oder dem Kundennamen, außer du gibst Zusatzinformationen ausdrücklich frei. Fehlende Angaben stehen unter „Offen“. Du kannst den Entwurf bearbeiten; der BD gibt ihn frei. Veröffentlichen bleibt ein manueller Schritt (Text kopieren). Ohne KI entsteht ein regelbasierter Entwurf; der Prompt ist als vorläufig gekennzeichnet.
-Texteingang: E-Mail oder Notiz einfügen → Vorschläge je Position mit wörtlicher Belegstelle → auswählen, Titel anpassen, als Entwürfe übernehmen. Der Text bleibt als Quelle am Setup. Hinweise zu Sätzen oder Budget landen nur als Notiz, nie als EK/VK-Zahl. Anweisungen im Text werden nicht befolgt.`,
+Texteingang: E-Mail oder Notiz einfügen → Vorschläge je Position mit wörtlicher Belegstelle → auswählen, Titel anpassen, als Entwürfe übernehmen. Der Text bleibt als Quelle am Projekt. Hinweise zu Sätzen oder Budget landen nur als Notiz, nie als EK/VK-Zahl. Anweisungen im Text werden nicht befolgt.`,
   },
   {
     id: "einsatz",
@@ -269,8 +269,8 @@ Texteingang: E-Mail oder Notiz einfügen → Vorschläge je Position mit wörtli
     body: `Einen Einsatz legst du nicht direkt an – er entsteht an einer Position: per „Schnellbesetzung“ (Person steht fest, intern oder Freelancer; Chance → Block „Besetzung“ oder Positionsseite) oder mit der bestätigten Auswahl aus der Kandidaturen-Pipeline. Bei interner Besetzung entfallen Freelancer-Unterlagen und EK. Mit der bestätigten Auswahl entsteht genau ein Einsatz (Einsatzakte) mit Plan-Periode aus Kandidatur und Position; der verantwortliche BD ist zunächst Kundenbetreuung. Status: in Vorbereitung → aktiv („Start bestätigen“ mit tatsächlichem Startdatum – auch direkt, wenn der Einsatz schon läuft; nie durch Datumsablauf) → endet → abgeschlossen; „geplant“ nur für Einsätze, die noch nicht begonnen haben; außerdem pausiert (Grund, Prüftermin) und abgebrochen. Einzige Mindestbedingung ist die Kundenbetreuung (steht standardmäßig beim BD). Die Vertragslage blockiert keinen Status: Fehlt laut Beschaffungsprofil eine Unterlage, steht das als gelber Hinweis am Einsatz und in der Einsatzliste, bis sie nachgetragen ist. Verlängerung ist kein Status.
 Betreuung ist eine eigene Zuordnung je Funktion (Kunde, Freelancer). Übergabe als Vorgang an Person oder Team: die Annahme aktiviert die Zuordnung; der Abschluss des Vorgangs beendet sie nicht. Betreuende sehen Einsatz, Check-ins, Unterlagen, Konditionen und Verlängerung, aber keine Account-Rechte. Direkt umstellen kann der BD-Kontext.
 Sales Operations (seit Etappe 33): sieht alle Einsätze des Arbeitsraums ohne Betreuungszuordnung, pflegt Unterlagen, Perioden (EK und VK), Betreuung und Status und stößt Verlängerungen an; kommerziell entscheiden (Verlängerung bestätigen/ablehnen) bleibt beim BD-Kontext, Principal am Kunden oder CEO.
-Beendete Einsätze loswerden: Auf der Health-Seite des Kunden hat jeder Einsatz den Knopf „Beendet zum …“ – er setzt Auftrag und Einsatzakte auf beendet, schließt Check-ins und Verlängerung, und der Einsatz verschwindet aus allen Übersichten. Zusätzlich räumt eine Regel täglich auf: Aufträge, deren Ende mehr als 14 Tage zurückliegt (ohne laufende Einsatzakte) oder deren Einsatzakte beendet ist, gelten als beendet (protokolliert als order.auto_ended). Endgültig löschen kannst du Einsatz, Chance oder Setup auf der jeweiligen Seite unten („Löschen“).
-Finden: Die Suche in der Kopfzeile findet Kunden, Freelancer, Einsätze (nach Person, Kunde oder Titel), Chancen und Setups – nur was du sehen darfst; ein eindeutiger Treffer öffnet sich direkt. Die Einsatzliste zeigt je Zeile Person · Kunde, Einsatz (Moco-Code), Ende, letzte Stimmung Kunde/Freelancer aus den Check-ins, Verlängerungsstand und Betreuung; oben ein Suchfeld nach Kunde, Person oder Einsatz. Der Einsatzkopf heißt „Person bei Kunde“, der Moco-Projektname steht darunter.
+Beendete Einsätze loswerden: Auf der Health-Seite des Kunden hat jeder Einsatz den Knopf „Beendet zum …“ – er setzt Auftrag und Einsatzakte auf beendet, schließt Check-ins und Verlängerung, und der Einsatz verschwindet aus allen Übersichten. Zusätzlich räumt eine Regel täglich auf: Aufträge, deren Ende mehr als 14 Tage zurückliegt (ohne laufende Einsatzakte) oder deren Einsatzakte beendet ist, gelten als beendet (protokolliert als order.auto_ended). Endgültig löschen kannst du Einsatz, Chance oder Projekt auf der jeweiligen Seite unten („Löschen“).
+Finden: Die Suche in der Kopfzeile findet Kunden, Freelancer, Einsätze (nach Person, Kunde oder Titel), Chancen und Projekte – nur was du sehen darfst; ein eindeutiger Treffer öffnet sich direkt. Die Einsatzliste zeigt je Zeile Person · Kunde, Einsatz (Moco-Code), Ende, letzte Stimmung Kunde/Freelancer aus den Check-ins, Verlängerungsstand und Betreuung; oben ein Suchfeld nach Kunde, Person oder Einsatz. Der Einsatzkopf heißt „Person bei Kunde“, der Moco-Projektname steht darunter.
 Verträge: zwei Seiten (Kunde ↔ Verve, Verve ↔ Freelancer), Typen Rahmenvertrag, Einzelbeauftragung, Bestellung, Nachtrag, NDA, Kündigung, Sonstiges; Status Entwurf → versendet → unterschrieben (braucht Datei oder Link). Welche Unterlagen Pflicht sind, bestimmt das Beschaffungsprofil auf der Kundenseite (freigeben!) – die Vertragslage wird nur „vollständig“, wenn je Pflichteintrag eine Unterlage mit genau dieser Seite und diesem Typ unterschrieben ist (eine „Bestellung“ zählt nicht als „Einzelbeauftragung“). Seite, Typ und Status einer vorhandenen Unterlage korrigierst du direkt in der Zeile („Korrigieren“); beim Hinzufügen ist die nächste fehlende Pflichtunterlage vorbelegt. Ohne Profil ist die Vertragslage unbestimmt – nie automatisch grün. Hochgeladene Dateien bekommen einen Typ-Vorschlag mit Belegstelle; Scans werden erkannt, aber nicht ausgewertet.
 Konditionen als Perioden: Plan oder bestätigt, mit Gültigkeit, EK/VK, Umfang, Quelle. Eine Satzänderung oder Verlängerung legt eine neue Periode an und löst die alte ab; Überlappungen bestätigter Perioden nur als ausdrückliche Korrektur. Keine Umsatzhochrechnung. Stundenzettel und Abrechnung bleiben in Moco (nur Referenzlink).`,
   },
@@ -280,7 +280,7 @@ Konditionen als Perioden: Plan oder bestätigt, mit Gültigkeit, EK/VK, Umfang, 
     where: "Einsatzseite → Check-ins / Verlängerung; Meine Arbeit → Meine Check-ins",
     keywords: ["check in", "checkin", "checkins", "catch up", "catchup", "42 tage", "kundengespraech", "gespraech", "verlaengerung", "verlaengern", "verlaengerung anstossen", "verlaengerung bestaetigen", "entscheidung", "karte", "kuendigungsfrist", "frist", "optionsfrist", "sales hinweis", "signal aus betreuung", "verschieben", "stimmung"],
     body: `Kunden-Catch-up: alle 42 Tage nach dem letzten tatsächlich geführten Gespräch (ohne Gespräch: Start + 42); die Betreuungsperson kann früher terminieren. Freelancer-Check-ins legst du separat an. Erledigen braucht den tatsächlichen Termin und ein kurzes Ergebnis und setzt den nächsten Kunden-Check-in; Verschieben ändert nur die Fälligkeit. Pause oder Ende des Einsatzes beenden offene Routine-Check-ins, Fristen bleiben.
-Ein Sales-Hinweis im Check-in wird als Beobachtung (Signal) im Setup zur Prüfung an den BD gegeben – mit erlaubter Verwendung „intern aus Betreuungsgespräch“. Erst der BD macht daraus eine Chance oder ergänzt eine bestehende.
+Ein Sales-Hinweis im Check-in wird als Beobachtung (Signal) im Projekt zur Prüfung an den BD gegeben – mit erlaubter Verwendung „intern aus Betreuungsgespräch“. Erst der BD macht daraus eine Chance oder ergänzt eine bestehende.
 Verlängerung (seit Etappe 33 ein Anstoß und eine Karte): 90 Tage vor Ende entsteht automatisch der Stand „zu klären“ – als Karte „Verlängerungen klären“ auf Start bei Sales Operations und Betreuung. „Verlängerung anstoßen“ (Knopf im Einsatzkopf oder auf der Karte) braucht nur das neue Ende (vorbelegt +6 Monate), Konditionen stehen auf „unverändert“, eine Notiz ist optional. Daraus wird „in Abstimmung“ und beim BD des Kunden (Principal sieht sie auch) erscheint oben auf Start und in Meine Arbeit eine Entscheidungskarte: Person, Kunde, Ende heute, Ende neu, Konditionen, Notiz – Knöpfe Bestätigen, Ablehnen, Weitergeben. Bestätigen (BD reicht; Sales Operations darf anstoßen, nicht bestätigen) schreibt die bestätigte Periode, das neue Einsatz- und Auftragsende, schließt die Entscheidung und setzt bei Moco-Projekten das Projektende in Moco (protokolliert; schlägt das fehl, bekommt Sales Operations die Aufgabe, es von Hand zu setzen). Ablehnen geht mit Notiz an die anstoßende Person zurück. Die Einsatzakte führt den Stand; Startseite („Auslaufende Einsätze“), Einsatzliste und Kundenblatt zeigen denselben. „Erweitert: Stand von Hand fortschreiben“ bleibt für Sonderfälle (angeboten, erledigt, abweichende Konditionen)`,
   },
   {
@@ -295,10 +295,10 @@ Abwesenheit (Einstellungen → Abwesenheit und Vertretung): Im Zeitraum gehen ne
   {
     id: "vorgehen",
     title: "Vorgehensmuster und Schritt-Assistent",
-    where: "Mehr → Vorgehen (Muster pflegen); Chance/Setup/Kunde → Block „Vorgehen“ (starten)",
+    where: "Mehr → Vorgehen (Muster pflegen); Chance/Projekt/Kunde → Block „Vorgehen“ (starten)",
     keywords: ["vorgehen", "vorgehensmuster", "playbook", "muster", "schritt", "schritt assistent", "entwurf", "reaktivierung", "altkunde", "verlaengerung", "ausschreibung", "erstgespraech", "starten", "pausieren"],
-    body: `Ein Vorgehensmuster ist eine bewährte Schrittfolge (Ziel, MEDDPICC-Bezug, empfohlene Aktion, Erledigt-Kriterium, Frist). Standardmuster: Altkunden-Reaktivierung, Verlängerung vor Einsatzende, Ausschreibung bearbeiten (einige Schritte an Sales Operations), Neues Setup: Erstgespräch.
-Starten: auf der Chance-, Setup- oder Kundenseite im Block „Vorgehen“ den Aufklapper „Vorgehen starten“ öffnen und ein passendes Muster wählen; die Chance-Seite schlägt passende Muster vor. Jeder Schritt wird als Aktion angelegt; erledigte Aktionen schließen den Schritt. Läufe lassen sich zurückstellen, fortsetzen und einer anderen Person geben.
+    body: `Ein Vorgehensmuster ist eine bewährte Schrittfolge (Ziel, MEDDPICC-Bezug, empfohlene Aktion, Erledigt-Kriterium, Frist). Standardmuster: Altkunden-Reaktivierung, Verlängerung vor Einsatzende, Ausschreibung bearbeiten (einige Schritte an Sales Operations), Neues Projekt: Erstgespräch.
+Starten: auf der Chance-, Projekt- oder Kundenseite im Block „Vorgehen“ den Aufklapper „Vorgehen starten“ öffnen und ein passendes Muster wählen; die Chance-Seite schlägt passende Muster vor. Jeder Schritt wird als Aktion angelegt; erledigte Aktionen schließen den Schritt. Läufe lassen sich zurückstellen, fortsetzen und einer anderen Person geben.
 Schritt-Assistent: Zu einem Schritt entwirft die KI passende Texte (z. B. Mail mit Referenzbitte, Gesprächsleitfaden) – als Entwurf, nie versendet.
 Muster pflegen (Mehr → Vorgehen) dürfen arbeitsraumweite Principals, CEO und Betriebsverwaltung. Dort liegt auch „Reaktivierung prüfen – ruhende Kunden“.`,
   },
@@ -311,12 +311,12 @@ Muster pflegen (Mehr → Vorgehen) dürfen arbeitsraumweite Principals, CEO und 
   },
   {
     id: "fokus",
-    title: "Strategischer Fokus und Freelancer-Hebel",
+    title: "Strategischer Fokus und Ausbaupotenzial",
     where: "Mehr → Vorgehen → „Strategischer Fokus“ → „Fokus bearbeiten“",
     keywords: ["fokus", "strategisch", "freelancer", "freelancer hebel", "hebel", "standardaufgabe", "standardaufgaben", "wachstum", "kachel", "spezialist"],
-    body: `Der strategische Fokus (derzeit „Wachstum über Freelancer“) ist ein Text, den alle KI-Agenten berücksichtigen, ohne ihre Regeln zu lockern. Der Schalter „Freelancer-Hebel“ aktiviert zusätzlich:
+    body: `Der strategische Fokus (derzeit „Wachstum über Freelancer“) ist ein Text, den alle KI-Agenten berücksichtigen, ohne ihre Regeln zu lockern. Der Schalter „Ausbaupotenzial“ aktiviert zusätzlich:
 - Standardaufgaben als Vorschläge für die zuständige Person: Freelancer-Check bei neuer/bestätigter Chance („Braucht das Team weitere Rollen?“), Ausweitung zwei Wochen nach Einsatzstart („Weitere Profile anbieten“), Freelancer-Potenzial bei Kunden seit 90 Tagen ohne Freelancer-Chance (je Quartal). Sie entstehen beim Öffnen von Start/Meine Arbeit und werden wie jeder Vorschlag angenommen oder verworfen.
-- die Kachel „Freelancer-Hebel“ auf Start und die Auswertung je BD im CEO-Dashboard.
+- die Kachel „Ausbaupotenzial“ auf Start und die Auswertung je BD im CEO-Dashboard.
 - eine Weekly-Frage („Welche Rollen könnten wir zusätzlich besetzen …?“).
 Bearbeiten dürfen arbeitsraumweite Principals, CEO und Betriebsverwaltung; lesen alle.`,
   },
@@ -335,11 +335,11 @@ Vertrag oder Bestellung hinterlegst du im Health-Check bei „Einsätze“ → �
     title: "Startseite und Meine Arbeit",
     where: "Start; Meine Arbeit",
     keywords: ["start", "startseite", "dashboard", "meine arbeit", "diese woche", "uebersicht", "aufgaben", "offene aktionen", "entscheidungen", "vorschlaege", "was gibt es neues", "schnelleingabe", "einspielen", "mehr menue", "navigation", "meine bds", "durch kunden gehen", "surfen", "sicht", "umschalter", "entscheidung fuer den bd"],
-    body: `Start ist eine Arbeitsliste (seit Etappe 33): Oben „Was gibt es Neues?“ – Notiz, Mail-Ausschnitt oder Gesprächsergebnis eintippen, Kunde · Setup wählen, Einspielen; die KI macht daraus Vorschläge (Beobachtung, Kontakt, Chance, Aktion), die du unter „Vorschläge“ mit einem Klick übernimmst oder verwirfst. Darunter drei Gruppen: Entscheidungen (Verlängerungen bestätigen, Übernahmen annehmen, Unterstützungsaufträge, Vorgänge zur Prüfung), Aufgaben (Vorgänge bei dir, fällige Check-ins mit Stimmungsknopf, Verlängerungen klären, Aktionen) und Vorschläge (KI-Vorschläge, Moco-Hinweise). Je Gruppe sind fünf Karten sichtbar, der Rest ist eingeklappt; Überfälliges steht oben und ist rot. Jede Karte trägt Person, Kunde und Datum.
-Alles Weitere steht eingeklappt unter „Übersichten“: Chancen je Stufe, Health-Check-Lücken, auslaufende Einsätze, Freelancer-Hebel, Diese Woche dran, Kunden mit nächstem Schritt, Ideen aus Quellen, Ziele, Aktivität, Performance, Mein Team.
-Meine BDs (Principal, CEO): eine Zeile je Kunde, gruppiert nach BD – Team (Anker), laufende Einsätze, nächstes Ende mit Person, Chancen in Arbeit, letzter Kontakt, offene Verlängerungen, Ampel. Klick öffnet die Kurzfassung (Lage, laufendes und neues Geschäft) mit Blättern zum nächsten Kunden und dem Feld „Entscheidung oder Hinweis für den BD“: Text, Frist, Priorität – wird ein Vorgang beim BD, oben auf seiner Startseite; unten siehst du, ob er erledigt ist. Der Sicht-Umschalter (BD/Anker/Principal) steht bei den Übersichten und zählt nur, welche Kunden dort einfließen – die Arbeitsliste oben hängt an dir als Person.
+    body: `Start ist eine Arbeitsliste (seit Etappe 33): Oben „Was gibt es Neues?“ – Notiz, Mail-Ausschnitt oder Gesprächsergebnis eintippen, Kunde · Projekt wählen, Einspielen; die KI macht daraus Vorschläge (Beobachtung, Kontakt, Chance, Aktion), die du unter „Vorschläge“ mit einem Klick übernimmst oder verwirfst. Darunter drei Gruppen: Entscheidungen (Verlängerungen bestätigen, Übernahmen annehmen, Unterstützungsaufträge, Vorgänge zur Prüfung), Aufgaben (Vorgänge bei dir, fällige Check-ins mit Stimmungsknopf, Verlängerungen klären, Aktionen) und Vorschläge (KI-Vorschläge, Moco-Hinweise). Je Gruppe sind fünf Karten sichtbar, der Rest ist eingeklappt; Überfälliges steht oben und ist rot. Jede Karte trägt Person, Kunde und Datum.
+Alles Weitere steht eingeklappt unter „Übersichten“: Chancen je Stufe, Health-Check-Lücken, auslaufende Einsätze, Ausbaupotenzial, Diese Woche dran, Kunden mit nächstem Schritt, Ideen aus Quellen, Ziele, Aktivität, Performance, Mein Team.
+Meine BDs (Principal, CEO): eine Zeile je Kunde, gruppiert nach BD – Team (Kontaktpate), laufende Einsätze, nächstes Ende mit Person, Chancen in Arbeit, letzter Kontakt, offene Verlängerungen, Ampel. Klick öffnet die Kurzfassung (Lage, laufendes und neues Geschäft) mit Blättern zum nächsten Kunden und dem Feld „Entscheidung oder Hinweis für den BD“: Text, Frist, Priorität – wird ein Vorgang beim BD, oben auf seiner Startseite; unten siehst du, ob er erledigt ist. Der Sicht-Umschalter (BD/Kontaktpate/Principal) steht bei den Übersichten und zählt nur, welche Kunden dort einfließen – die Arbeitsliste oben hängt an dir als Person.
 Navigation: Start, Meine Arbeit, Kunden, Meine BDs (Principal/CEO), Einsätze, Besetzung – alles andere (Weeklys, Ziele & Portfolio, Eingang, Vorgehen, Artefakte, Moco, Provisionsrechner, Verwaltung, Einstellungen, Hilfe) unter „Mehr ▾“ oben; die Suche steht daneben.
-Meine Arbeit zeigt dieselben Dinge als vollständige Listen (Vorgänge mit Filtern, Check-ins, Übernahmen, Unterstützung, Aktionen, Chancen in Arbeit, Setups).`,
+Meine Arbeit zeigt dieselben Dinge als vollständige Listen (Vorgänge mit Filtern, Check-ins, Übernahmen, Unterstützung, Aktionen, Chancen in Arbeit, Projekte).`,
   },
   {
     id: "agenda",
@@ -348,7 +348,7 @@ Meine Arbeit zeigt dieselben Dinge als vollständige Listen (Vorgänge mit Filte
     keywords: ["kundenagenda", "agenda", "prioritaeten", "prioritaet", "initiative", "initiativen", "schluessel initiative", "herausforderung", "herausforderungen", "problembereich", "beschaffung", "beschaffungsweg", "vermittler", "einkauf", "berater", "operativer berater", "kurzangebot", "hebel", "ausweiten", "vertiefen"],
     body: `Die Kundenagenda hält fest, was den Kunden treibt – in seinen Worten und getrennt von unseren Chancen: Prioritäten des Kunden, Schlüssel-Initiativen (z. B. „Toolvertrag läuft Ende 2026 aus“) und Herausforderungen. Einträge mit Datum oder ungefährem Termin („Ende 2026“, „Q2 2027“) erinnern 120 Tage vorher: Der zuständige BD bekommt eine vorgeschlagene Aktion „Kundeninitiative steht an – Chance prüfen“. Auf der Chance-Seite ordnest du unter „Zahlt ein auf (Kundenagenda)“ zu, auf welche Initiative eine Chance einzahlt.
 Unter „Einkauf & Beschaffung“ steht, ob wir direkt, über einen Vermittler (mit Namen) oder über einen Rahmenvertrag arbeiten; der Health-Check zeigt das bei „Vertrag & Listung“.
-Je Einsatz trägst du im Health-Check den operativen Berater ein (Verve-Kolleg:in oder, z. B. bei Freelancern, nur der Name); ist er zugleich Anker, steht das dabei.
+Je Einsatz trägst du im Health-Check den operativen Berater ein (Verve-Kolleg:in oder, z. B. bei Freelancern, nur der Name); ist er zugleich Kontaktpate, steht das dabei.
 Ideen für Kurzangebote werden als Vorhaben mit Hebel (Verlängern, Ausweiten, Vertiefen, Übertragen) im Accountplan und als antizipierte Chance erfasst; für den Text gibt es die Artefakt-Vorlage „Kurzangebot“ (A17). Umsatzschätzungen führt der Accountmeister bewusst nicht.`,
   },
   {
@@ -356,19 +356,19 @@ Ideen für Kurzangebote werden als Vorhaben mit Hebel (Verlängern, Ausweiten, V
     title: "SOS-Protokolle",
     where: "Kunde → „SOS-Protokolle“ → „SOS auslösen“; Startseite (rotes SOS-Feld)",
     keywords: ["sos", "ausloesen", "sos protokoll", "notfall", "eskalation", "eng", "wird eng", "anker kommt nicht weiter", "blockiert", "hilfe anfordern", "auslaufend", "auslaufende assignments", "kein anschluss"],
-    body: `Ein SOS löst jeder aus dem Kundenteam aus – auch der Anker –, wenn es eng wird: ein Einsatz läuft aus und kein Anschluss ist in Sicht, der Anker kommt beim Kunden nicht mehr weiter, oder die Lage spitzt sich zu (Budget, Zufriedenheit, Konflikt). Du beschreibst kurz die Lage und was helfen würde. Das SOS erscheint sofort unübersehbar auf der Startseite von BD und Principal und zählt im Health-Check als akutes Risiko (je −5, höchstens −10), bis jemand „Gelöst“ mit einer kurzen Lösung dokumentiert. Mit „Ich kümmere mich“ übernimmt jemand die Bearbeitung. Auch der Assistent kann aus deinem Text eine SOS-Karte vorschlagen.`,
+    body: `Ein SOS löst jeder aus dem Kundenteam aus – auch der Kontaktpate –, wenn es eng wird: ein Einsatz läuft aus und kein Anschluss ist in Sicht, der Kontaktpate kommt beim Kunden nicht mehr weiter, oder die Lage spitzt sich zu (Budget, Zufriedenheit, Konflikt). Du beschreibst kurz die Lage und was helfen würde. Das SOS erscheint sofort unübersehbar auf der Startseite von BD und Principal und zählt im Health-Check als akutes Risiko (je −5, höchstens −10), bis jemand „Gelöst“ mit einer kurzen Lösung dokumentiert. Mit „Ich kümmere mich“ übernimmt jemand die Bearbeitung. Auch der Assistent kann aus deinem Text eine SOS-Karte vorschlagen.`,
   },
   {
     id: "accountseite",
     title: "Bestehende Account-Seite übernehmen (z. B. aus Notion)",
     where: "Assistent (auf der Kundenseite oder allgemein) → Seite einfügen → „Alle übernehmen“",
     keywords: ["notion", "account seite", "accountseite", "einfuegen", "importieren", "uebernehmen", "alle uebernehmen", "migration", "bestehende seite", "kundenanlage"],
-    body: `Füge eine bestehende Account-Seite (z. B. aus Notion) einfach in den Assistenten ein – bei einem neuen Kunden am besten mit dem Namen in der ersten Zeile („Kunde: …“). Der Assistent schlägt dann Karten vor: Kunde, Verve-Team (BD, Anker, Berater), jeden Punkt der Kundenagenda, die Stakeholder als Personen (mit Rolle im Buyingcenter, E-Mail und Telefon), den Beschaffungsweg, laufende Einsätze mit Ende (damit greift die Verlängerungsregel), Risiken wie ein Nachbarteam, das sich querstellt, Ideen für Kurzangebote als Hebel und Chance sowie SOS-Fälle. Leere Vorlagenfelder und Umsatzschätzungen übernimmt er nicht. Mit „Alle übernehmen“ legst du alles in der richtigen Reihenfolge an (Kunde zuerst); einzelne Karten kannst du vorher verwerfen.`,
+    body: `Füge eine bestehende Account-Seite (z. B. aus Notion) einfach in den Assistenten ein – bei einem neuen Kunden am besten mit dem Namen in der ersten Zeile („Kunde: …“). Der Assistent schlägt dann Karten vor: Kunde, Verve-Team (BD, Kontaktpate, Berater), jeden Punkt der Kundenagenda, die Stakeholder als Personen (mit Rolle im Buyingcenter, E-Mail und Telefon), den Beschaffungsweg, laufende Einsätze mit Ende (damit greift die Verlängerungsregel), Risiken wie ein Nachbarteam, das sich querstellt, Ideen für Kurzangebote als Hebel und Chance sowie SOS-Fälle. Leere Vorlagenfelder und Umsatzschätzungen übernimmt er nicht. Mit „Alle übernehmen“ legst du alles in der richtigen Reihenfolge an (Kunde zuerst); einzelne Karten kannst du vorher verwerfen.`,
   },
   {
     id: "provision",
     title: "Provisionsrechner",
-    where: "Mehr → Provisionsrechner (Anker, BD, Principal, CEO)",
+    where: "Mehr → Provisionsrechner (Kontaktpate, BD, Principal, CEO)",
     keywords: ["provision", "provisionsrechner", "marge", "nettomarge", "finding fee", "signing fee", "provisionssatz", "basisprovision", "ek", "vk", "einkauf", "verkauf", "vermittlung"],
     body: `Der Provisionsrechner zeigt, welche Provision eine Vermittlung bringt. Je Deal wählst du das Profil – eine interne Rolle mit festem EK (Associate 500, Analyst Consultant 576, Consultant 672, Consultant Lvl 2 736, Specialist 828, Senior Specialist 874, Senior Consultant 880, Executive Consultant 1.012, Director 1.320 €/Tag) oder „Freelancer“ mit frei eingetragenem EK – und trägst VK, Einsatztage und deinen Anteil an Finding und Signing Fee ein.
 Rechnung: Nettomarge = Tage × (VK − EK) − Kostenpauschale (40 € je Einsatztag); Nettomarge % = Nettomarge / Umsatz. Provisionssatz nach Stufe der Nettomarge – die für dich geltenden Stufen zeigt die Legende im Rechner. Basisprovision = Nettomarge × Satz; dazu Finding Fee (250 €) und Signing Fee (1.000 €) je Deal, jeweils mit deinem Anteil. Der Rechner speichert nichts; verbindlich ist die Abrechnung.`,
@@ -379,34 +379,34 @@ Rechnung: Nettomarge = Tage × (VK − EK) − Kostenpauschale (40 € je Einsat
     where: "Hauptmenü → CEO-Dashboard (nur CEO)",
     keywords: ["ceo", "ceo dashboard", "aktivitaetskoeffizient", "koeffizient", "zielbild", "ist vs ziel", "sattelfestigkeit", "gesamtbild", "fuehrung", "management"],
     body: `Das CEO-Dashboard zeigt das Gesamtbild ohne Rohquellen (keine Mails, keine persönlichen Notizen):
-- Aktivitätskoeffizient je Kunde: dokumentierte Aktivitäten der letzten 7 Tage × Anzahl beteiligter Rollen (Principal, BD, Anker) ÷ 3 – hoch, wenn viel passiert und die Rollen zusammenarbeiten.
+- Aktivitätskoeffizient je Kunde: dokumentierte Aktivitäten der letzten 7 Tage × Anzahl beteiligter Rollen (Principal, BD, Kontaktpate) ÷ 3 – hoch, wenn viel passiert und die Rollen zusammenarbeiten.
 - Ist- vs. Zielbild: Positionen je vereinbartem Accountziel (Ist aus den dokumentierten Chancen, Ziel aus dem Accountziel).
 - Health-Check je Kunde, sortiert nach Handlungsbedarf (viele Einsätze bei niedrigem Health-Check zuerst); ein Klick auf den Kunden öffnet die Begründung.
-- Freelancer-Hebel je BD: offene und neue Freelancer-Chancen, vorgestellte Profile, Kunden ohne Freelancer-Chance.
+- Ausbaupotenzial je BD: offene und neue Freelancer-Chancen, vorgestellte Profile, Kunden ohne Freelancer-Chance.
 - Je Kunde eine Karte mit Zielen vs. Ist-Stand, Top-Chancen und der Zusammenarbeit dieser Woche.
 Alles sind Zählungen dokumentierter Objekte – keine Umsatz-, Forecast- oder Wahrscheinlichkeitswerte. Accountziele gelten erst als vereinbart, wenn Principal und CEO zugestimmt haben; das Zielgespräch CEO/Principal liegt unter Ziele & Portfolio → „Führungs-Reviews“.`,
   },
   {
     id: "weekly",
     title: "Weeklys und Führungs-Reviews",
-    where: "Hauptmenü → Weeklys → „Weekly anlegen“ (je Setup); Ziele & Portfolio → „Führungs-Reviews“ → „Review anlegen“ (Principal-/BD-Weekly, Zielgespräch)",
+    where: "Hauptmenü → Weeklys → „Weekly anlegen“ (je Projekt); Ziele & Portfolio → „Führungs-Reviews“ → „Review anlegen“ (Principal-/BD-Weekly, Zielgespräch)",
     keywords: ["weekly", "weeklys", "wochenstand", "review", "reviews", "fuehrungs review", "principal bd weekly", "zielgespraech", "entscheidung", "notiz"],
-    body: `Ein BD-/Anker-Weekly ist der bestätigte Wochenstand je Setup: unter Weeklys anlegen → vorbereiten (das Tool zeigt, was sich seit dem letzten bestätigten Weekly geändert hat) → Entscheidungen erfassen → bestätigen. Bestätigte Stände lassen sich nur über eine Korrektur ändern. Die Setup-Seite ist entlang der Weekly-Fragen aufgebaut (Was läuft? Was hat sich geändert? Was ist vereinbart? Welche Anregungen helfen?).
-Principal-/BD-Weeklys und CEO-/Principal-Zielgespräche sind Führungs-Reviews ohne festes Setup; sie werden unter Ziele & Portfolio → „Führungs-Reviews“ → „Review anlegen“ angelegt und haben Vorbereitung, Notizen, Entscheidungen und vertrauliche Notizen.`,
+    body: `Ein BD-/Kontaktpaten-Weekly ist der bestätigte Wochenstand je Projekt: unter Weeklys anlegen → vorbereiten (das Tool zeigt, was sich seit dem letzten bestätigten Weekly geändert hat) → Entscheidungen erfassen → bestätigen. Bestätigte Stände lassen sich nur über eine Korrektur ändern. Die Projekt-Seite ist entlang der Weekly-Fragen aufgebaut (Was läuft? Was hat sich geändert? Was ist vereinbart? Welche Anregungen helfen?).
+Principal-/BD-Weeklys und CEO-/Principal-Zielgespräche sind Führungs-Reviews ohne festes Projekt; sie werden unter Ziele & Portfolio → „Führungs-Reviews“ → „Review anlegen“ angelegt und haben Vorbereitung, Notizen, Entscheidungen und vertrauliche Notizen.`,
   },
   {
     id: "personen",
     title: "Personen, Buyingcenter und Kontaktwege",
-    where: "Setup → „Personen & Zugang“; Chance → „Buyingcenter für diese Chance“",
+    where: "Projekt → „Personen & Zugang“; Chance → „Buyingcenter für diese Chance“",
     keywords: ["person", "personen", "ansprechpartner", "buyingcenter", "buying center", "entscheider", "budget", "haltung", "einfluss", "kontaktweg", "kontakt", "zugang"],
-    body: `Personen gehören zum Kunden; ihre Einschätzung (Entscheidungsrolle, Haltung, Einfluss) gilt je Setup bzw. je Chance. Unter „Personen & Zugang“ pflegst du Personen, Kontaktwege (wer bei Verve kennt wen) und das Buyingcenter; der Buying-Center-Berater auf der Chance-Seite zeigt Lücken (z. B. keine Budgetverantwortung benannt).`,
+    body: `Personen gehören zum Kunden; ihre Einschätzung (Entscheidungsrolle, Haltung, Einfluss) gilt je Projekt bzw. je Chance. Unter „Personen & Zugang“ pflegst du Personen, Kontaktwege (wer bei Verve kennt wen) und das Buyingcenter; der Buying-Center-Berater auf der Chance-Seite zeigt Lücken (z. B. keine Budgetverantwortung benannt).`,
   },
   {
     id: "strategie",
     title: "Strategiefaden und Chancen-Berater",
-    where: "Setup → Strategiefaden; Chance → Buying-Center-Berater",
+    where: "Projekt → Strategiefaden; Chance → Buying-Center-Berater",
     keywords: ["strategie", "strategiefaden", "lage", "berater", "naechster grosser schritt", "analyse"],
-    body: `Der Strategiefaden fasst je Setup die Lage zusammen: eine regelbasierte Lageanalyse (was dokumentiert ist, was fehlt) plus eine KI-Fassung als Vorschlag, die du speicherst oder verwirfst. Der „nächste große Schritt im Setup“ steht auch auf der Setup-Seite.`,
+    body: `Der Strategiefaden fasst je Projekt die Lage zusammen: eine regelbasierte Lageanalyse (was dokumentiert ist, was fehlt) plus eine KI-Fassung als Vorschlag, die du speicherst oder verwirfst. Der „nächste große Schritt im Projekt“ steht auch auf der Projekt-Seite.`,
   },
   {
     id: "ziele",
@@ -420,12 +420,12 @@ Principal-/BD-Weeklys und CEO-/Principal-Zielgespräche sind Führungs-Reviews o
     title: "Eingang, Importe und Outlook",
     where: "Mehr → Eingang; Mehr → Einstellungen → „Mein Postfach (Microsoft 365 / Outlook)“",
     keywords: ["eingang", "import", "importe", "protokoll", "outlook", "postfach", "mail importieren", "e-mail", "microsoft", "zuordnung"],
-    body: `Im Eingang liegen Setups mit offener BD-Zuordnung und zu prüfende Importe; dort importierst du Gesprächsprotokolle oder einzelne Mails aus dem eigenen Postfach. Das Postfach verbindest du unter Einstellungen → „Mein Postfach“ – lesend, mit minimalen Berechtigungen; es wird nie ein ganzes Postfach eingelesen, du wählst einzelne Nachrichten.`,
+    body: `Im Eingang liegen Projekte mit offener BD-Zuordnung und zu prüfende Importe; dort importierst du Gesprächsprotokolle oder einzelne Mails aus dem eigenen Postfach. Das Postfach verbindest du unter Einstellungen → „Mein Postfach“ – lesend, mit minimalen Berechtigungen; es wird nie ein ganzes Postfach eingelesen, du wählst einzelne Nachrichten.`,
   },
   {
     id: "artefakte",
     title: "Artefakte (Textentwürfe)",
-    where: "Mehr → Artefakte; Setup → Artefakte",
+    where: "Mehr → Artefakte; Projekt → Artefakte",
     keywords: ["artefakt", "artefakte", "textentwurf", "profilangebot", "freigabe", "entwurf", "vorlage"],
     body: `Artefakte sind Textentwürfe für Kunden (z. B. Profilangebot, Einseiter). Sie durchlaufen Prüfung und Freigabe mit Versionen; nichts wird automatisch versendet.`,
   },
@@ -444,9 +444,9 @@ Einen Kunden löschst du in zwei Schritten: erst archivieren, dann endgültig l�
     title: "Moco-Anbindung: Startimport, Abgleich, Hinweise, Teams",
     where: "Mehr → Moco (CEO, Principal); Hinweise auch am Einsatz; Start → „Mein Team“ (Teamleiter)",
     keywords: ["moco", "import", "startimport", "pruefliste", "sync", "abgleich", "synchronisieren", "projektgruppe", "projektgruppen", "contract", "zuweisung", "webhook", "hinweis aus moco", "team", "teams", "teamleiter", "lead", "leads", "deal", "akquise", "lead push", "chance nach moco", "mein team", "aktivitaetsindex", "stundensatz", "einheit stunde"],
-    body: `Moco führt Stammdaten: Kunden (Companies), Bereiche (Projektgruppen = Setups), Projekte, Zuweisungen (Contracts), Personen und Teams. Der Accountmeister führt Vertrieb, Besetzung, Betreuung, EK und Vertragslage. Der Abgleich läuft nur Moco → Accountmeister und nie stillschweigend.
-Startimport: Mehr → Moco → „Vorschau aus Moco laden“ erzeugt eine Prüfliste. Je Zeile steht ein Vorschlag (verknüpfen mit einem bestehenden Kunden/Setup/Einsatz, neu anlegen, überspringen), den du änderst oder bestätigst. Verknüpfte Kunden und Setups bekommen den Moco-Namen. BD und Principal setzt du je Setup in der Prüfliste – Sales-Rollen kommen nie aus Moco (der Moco-Projektleiter wird ignoriert). Laufende Zuweisungen werden Einsätze im Status „aktiv“ (Start = Projektstart, Ende = Projektende, Moco-Stundensatz als VK in €/Stunde, EK leer). Freelancer (Moco-Team „Freelancer“) landen im Freelancer-Pool und bekommen Check-ins mit Kunde und Freelancer alle sechs Wochen; interne Einsätze bekommen keine automatischen Check-ins. Alle anderen Moco-Nutzer werden Zugänge mit Rolle Anker; Personen mit Moco-Rolle „Teamleiter“ werden Leitung ihres Teams.
-Abgleich: stündlich und per Webhook (/api/moco/webhook). Abweichungen erscheinen als Hinweis am Einsatz und unter Mehr → Moco: Projektende geändert, Projekt beendet, Zuweisung inaktiv, Projekt in andere Gruppe verschoben, neues Projekt/neue Zuweisung (per Importlauf übernehmen), Nutzer in Moco deaktiviert. „Übernehmen“ führt die Änderung aus (z. B. Einsatz beendet, Check-ins entfallen), „Verwerfen“ lässt den Stand im Accountmeister. Neue Moco-Nutzer werden automatisch als Anker angelegt.
+    body: `Moco führt Stammdaten: Kunden (Companies), Bereiche (Projektgruppen = Projekte), Projekte, Zuweisungen (Contracts), Personen und Teams. Der Accountmeister führt Vertrieb, Besetzung, Betreuung, EK und Vertragslage. Der Abgleich läuft nur Moco → Accountmeister und nie stillschweigend.
+Startimport: Mehr → Moco → „Vorschau aus Moco laden“ erzeugt eine Prüfliste. Je Zeile steht ein Vorschlag (verknüpfen mit einem bestehenden Kunden/Projekt/Einsatz, neu anlegen, überspringen), den du änderst oder bestätigst. Verknüpfte Kunden und Projekte bekommen den Moco-Namen. BD und Principal setzt du je Projekt in der Prüfliste – Sales-Rollen kommen nie aus Moco (der Moco-Projektleiter wird ignoriert). Laufende Zuweisungen werden Einsätze im Status „aktiv“ (Start = Projektstart, Ende = Projektende, Moco-Stundensatz als VK in €/Stunde, EK leer). Freelancer (Moco-Team „Freelancer“) landen im Freelancer-Pool und bekommen Check-ins mit Kunde und Freelancer alle sechs Wochen; interne Einsätze bekommen keine automatischen Check-ins. Alle anderen Moco-Nutzer werden Zugänge mit Rolle Kontaktpate; Personen mit Moco-Rolle „Teamleiter“ werden Leitung ihres Teams.
+Abgleich: stündlich und per Webhook (/api/moco/webhook). Abweichungen erscheinen als Hinweis am Einsatz und unter Mehr → Moco: Projektende geändert, Projekt beendet, Zuweisung inaktiv, Projekt in andere Gruppe verschoben, neues Projekt/neue Zuweisung (per Importlauf übernehmen), Nutzer in Moco deaktiviert. „Übernehmen“ führt die Änderung aus (z. B. Einsatz beendet, Check-ins entfallen), „Verwerfen“ lässt den Stand im Accountmeister. Neue Moco-Nutzer werden automatisch als Kontaktpate angelegt.
 Mein Team: Teamleiter sehen auf der Startseite den Aktivitätsindex ihrer Teammitglieder (Beobachtungen, Aktionen, Kontakte, Weeklys, Check-ins der letzten 28 Tage, Vergleich zur Vorperiode, zuletzt aktiv) – nur Zahlen, keine Inhalte; Kundensichtbarkeit bleibt unverändert.
 Leads nach Moco: Unter Mehr → Moco → „Chancen als Leads nach Moco übertragen“ legst du offene Chancen (antizipiert bis Auswahl/Bestellung, zurückgestellt) einmalig als Lead in der Moco-Akquise an – mit Firma, Verantwortlicher/m als Lead-Inhaber, vorgeschlagener Phase (nach Status) und Rückverweis auf die Chance. Beträge werden nicht erfunden (0 €, in Moco nachtragen). Gibt es bei der Firma schon einen Lead gleichen Namens, wird nur verknüpft. Voraussetzung: Kunde ist mit einer Moco-Firma verknüpft (oder heißt gleich) und Verantwortliche/r bzw. du selbst hat einen Moco-Nutzer. Die Chance bleibt im Accountmeister führend; der Lead ist am Kopf der Chance verlinkt.
 Einrichtung (Betrieb): MOCO_MODE=http, MOCO_SUBDOMAIN, MOCO_API_KEY (technischer Nutzer; schreibt in Moco nur Leads), MOCO_WEBHOOK_SECRET; Webhooks in Moco für Project, Company, User anlegen.`,
@@ -456,16 +456,16 @@ Einrichtung (Betrieb): MOCO_MODE=http, MOCO_SUBDOMAIN, MOCO_API_KEY (technischer
     title: "Rolle Coach (nur lesen)",
     where: "Verwaltung → Zugänge → Rolle „Coach (nur lesen)“",
     keywords: ["coach", "sales coach", "nur lesen", "lesezugriff", "lesend", "extern", "gast", "beobachter"],
-    body: `Die Rolle Coach liest mit und ändert nichts. Kundenbezogen vergeben sieht der Coach nur diese Kunden (mit allen Setups, Chancen, Einsätzen, Personen und Weeklys), arbeitsraumweit alle Kunden. Der Coach hat die Startsicht „Coach“ mit den Übersichten, „Meine BDs“ zum Durchgehen der Kunden je BD (ohne das Feld für Entscheidungen) und die Einsatzliste – aber keine Besetzungs-Pipeline, keinen Freelancer-Pool, keine Schnelleingabe, keine Verlängerung, keine Entscheidungen und keine Bearbeitung. Persönliche und gesperrte Quellen bleiben unsichtbar. Für Externe (z. B. Sales-Coach) vorher Vertraulichkeitsvereinbarung und Gastzugang in Microsoft Entra.
-Zum Ausprobieren (z. B. der KI): einen Testkunden anlegen (fiktive Daten, Name mit „(Test)“) und dem Coach dort kundenbezogen BD und Principal geben. Dann kann er im Testkunden Setups anlegen, Text einspielen, Vorschläge übernehmen und Chancen weiterschieben; auf den echten Kunden bleibt er Coach (nur lesen). Die Schnelleingabe auf Start bietet nur Setups an, die man bearbeiten darf; Hinweise an BDs („Meine BDs“) gehen nur bei Kunden, für die man Principal ist.`,
+    body: `Die Rolle Coach liest mit und ändert nichts. Kundenbezogen vergeben sieht der Coach nur diese Kunden (mit allen Projekten, Chancen, Einsätzen, Personen und Weeklys), arbeitsraumweit alle Kunden. Der Coach hat die Startsicht „Coach“ mit den Übersichten, „Meine BDs“ zum Durchgehen der Kunden je BD (ohne das Feld für Entscheidungen) und die Einsatzliste – aber keine Besetzungs-Pipeline, keinen Freelancer-Pool, keine Schnelleingabe, keine Verlängerung, keine Entscheidungen und keine Bearbeitung. Persönliche und gesperrte Quellen bleiben unsichtbar. Für Externe (z. B. Sales-Coach) vorher Vertraulichkeitsvereinbarung und Gastzugang in Microsoft Entra.
+Zum Ausprobieren (z. B. der KI): einen Testkunden anlegen (fiktive Daten, Name mit „(Test)“) und dem Coach dort kundenbezogen BD und Principal geben. Dann kann er im Testkunden Projekte anlegen, Text einspielen, Vorschläge übernehmen und Chancen weiterschieben; auf den echten Kunden bleibt er Coach (nur lesen). Die Schnelleingabe auf Start bietet nur Projekte an, die man bearbeiten darf; Hinweise an BDs („Meine BDs“) gehen nur bei Kunden, für die man Principal ist.`,
   },
   {
     id: "personen-begriffe",
     title: "Personen beim Kunden: Bereich, Beziehungsstand, Kontaktweg",
-    where: "Setup → Personen & Zugang",
+    where: "Projekt → Personen & Zugang",
     keywords: ["bereich", "org unit", "abteilung", "unbekannt", "beziehungsstand", "im austausch", "aktiver austausch", "kontaktweg", "zugang", "buyingcenter", "person anlegen", "funktion"],
     body: `Bereich: die Organisationseinheit des Kunden, zu der eine Person gehört (Abteilung, Team, Programm – z. B. „ELBE Build & Deliver“). Bereiche sind je Kunde frei; beim Anlegen einer Person oder beim Setzen einer Funktion wählst du einen vorhandenen oder tippst einen neuen ein („… oder neuen Bereich eintippen“) – er wird am Kunden angelegt und steht danach allen zur Auswahl. „– unbekannt –“ heißt nur: noch nicht erfasst.
-Beziehungsstand (je Person und Setup, mit Halter auf Verve-Seite): Name/Funktion bekannt → Vorstellung angefragt → Vorgestellt → Im Austausch → Konkrete Zusammenarbeit; außerdem „Derzeit nicht aktiv“. Ab „Vorgestellt“ braucht ein Stand einen Beleg (Quelle). „Im aktiven Austausch“ im Health-Check zählt die Personen mit Stand „Im Austausch“ oder „Konkrete Zusammenarbeit“ – also die, mit denen tatsächlich gesprochen wird, nicht die nur bekannten Namen. Hängt alles an einer Person, ist die Position verwundbar.
+Beziehungsstand (je Person und Projekt, mit Halter auf Verve-Seite): Name/Funktion bekannt → Vorstellung angefragt → Vorgestellt → Im Austausch → Konkrete Zusammenarbeit; außerdem „Derzeit nicht aktiv“. Ab „Vorgestellt“ braucht ein Stand einen Beleg (Quelle). „Im aktiven Austausch“ im Health-Check zählt die Personen mit Stand „Im Austausch“ oder „Konkrete Zusammenarbeit“ – also die, mit denen tatsächlich gesprochen wird, nicht die nur bekannten Namen. Hängt alles an einer Person, ist die Position verwundbar.
 Kontaktweg: ein geplanter Weg zu einer Zielperson, die wir noch nicht kennen – über welche belegte Beziehung (wer von uns kennt wen) soll die Vorstellung legitim zustande kommen. Ein Kontaktweg hat Zielperson, Vermittler, nächsten Schritt und Status (Entwurf, offen, erledigt) und trennt belegte, geplante und bloß hypothetische Verbindungen. Er ist kein Kanal (Telefon, Mail) – der steht an der einzelnen Aktion.`,
   },
   {
@@ -473,7 +473,7 @@ Kontaktweg: ein geplanter Weg zu einer Zielperson, die wir noch nicht kennen –
     title: "Regeln, die das Tool durchsetzt",
     where: "überall",
     keywords: ["loeschen", "entfernen", "setup loeschen", "chance loeschen", "einsatz loeschen", "regel", "regeln", "warum", "geht nicht", "nicht moeglich", "fehler", "beleg", "nachweis", "version", "konflikt", "gleichzeitig"],
-    body: `Löschen: Kunden werden archiviert und dann endgültig gelöscht (Kundenseite). Setups, Chancen und Einsätze löschst du am Seitenende des jeweiligen Objekts („… endgültig löschen“) mit Begründung und Bestätigung – rekursiv mit allem, was daran hängt (Setup: Chancen, Positionen, Einsätze, Beobachtungen, Aktionen, Weeklys, Quellen; Chance: Positionen, Kandidaturen, Einsätze, Angebote, Aufträge; Einsatz: Check-ins, Perioden, Betreuung, Kandidatur, leere Position, Auftrag). Beobachtungen, die nur auf eine gelöschte Chance verweisen, bleiben erhalten. Dürfen: zuständiger BD, Principal, CEO, Betriebsverwaltung (bei Chancen auch die verantwortliche Person).
+    body: `Löschen: Kunden werden archiviert und dann endgültig gelöscht (Kundenseite). Projekte, Chancen und Einsätze löschst du am Seitenende des jeweiligen Objekts („… endgültig löschen“) mit Begründung und Bestätigung – rekursiv mit allem, was daran hängt (Projekt: Chancen, Positionen, Einsätze, Beobachtungen, Aktionen, Weeklys, Quellen; Chance: Positionen, Kandidaturen, Einsätze, Angebote, Aufträge; Einsatz: Check-ins, Perioden, Betreuung, Kandidatur, leere Position, Auftrag). Beobachtungen, die nur auf eine gelöschte Chance verweisen, bleiben erhalten. Dürfen: zuständiger BD, Principal, CEO, Betriebsverwaltung (bei Chancen auch die verantwortliche Person).
 Bestätigen, Vorstellen und Beauftragen sind eigene, bewusste Schritte; Belege und Nachweise sind optional (ohne Beleg steht „ohne Beleg“ dabei). KI-Ergebnisse sind immer Vorschläge; jede Karte braucht eine wörtliche Textstelle. Beendete Chancen werden nicht mehr geändert. Hat jemand anderes denselben Datensatz gerade gespeichert, meldet das Tool einen Konflikt – Seite neu laden und erneut speichern. Persönliche Notizen und vertrauliche Führungsnotizen bleiben privat.`,
   },
 ];

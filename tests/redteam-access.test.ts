@@ -43,7 +43,7 @@ describe("e63 Red Team: Einkaufssatz nur für den berechtigten Kreis", () => {
     expect(asCeo.ek).toBe("640.00");
   });
 
-  it("RT02: Anker und BD eines anderen Kunden kommen nicht an den Einsatz", async () => {
+  it("RT02: Kontaktpate und BD eines anderen Kunden kommen nicht an den Einsatz", async () => {
     env();
     const e = await einsatz("Fritz Fremd");
     const row = (await db.query.engagements.findFirst({ where: eq(schema.engagements.id, e.id) }))!;
@@ -59,7 +59,7 @@ describe("e63 Red Team: Einkaufssatz nur für den berechtigten Kreis", () => {
     expect(await engagementAccess(await actorFor("clemens"), { ...row, workspaceId: "00000000-0000-0000-0000-000000000000" })).toBeNull();
   });
 
-  it("RT04: BD und Anker haben keinen Zugang zum Assignmentmanager", async () => {
+  it("RT04: BD und Kontaktpate haben keinen Zugang zum Assignmentmanager", async () => {
     env();
     expect(await canUseAssignments(await actorFor("david"))).toBe(false);
     expect(await canUseAssignments(await actorFor("nina"))).toBe(false);

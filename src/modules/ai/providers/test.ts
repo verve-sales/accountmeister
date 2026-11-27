@@ -19,7 +19,7 @@ import { ASSISTANT_CARDS_MARKER, decisionRoleValues, interviewTopicValues } from
  * Aufforderungen im Text („ignoriere …“, „markiere als bestätigt“) sind für ihn gewöhnliche Sätze – er führt nichts aus.
  */
 
-/** Hinweise auf zusätzliche Rollen/Kapazität (Freelancer-Hebel, Etappe 21) */
+/** Hinweise auf zusätzliche Rollen/Kapazität (Ausbaupotenzial, Etappe 21) */
 const FREELANCER_HINT = /weitere(n)? (profile|rollen|spezialist|kapazit|unterstützung)|zusätzliche(n|r)? (profile|rollen|kapazit|unterstützung|ressourcen|aufwand)|skill-paket|engpass|unterbesetzt|fehlende(n)? kapazit|externe(r|n)? unterstützung|vendor|lieferantenlist/i;
 
 /** Standardrolle im Satz erkennen (Verve-Katalog, grob). */
@@ -215,7 +215,7 @@ export class TestProvider implements AIProvider {
         });
       }
 
-      // Strategischer Fokus „Freelancer-Hebel“ (Etappe 21): Hinweise auf zusätzliche Rollen/Kapazität als eigene Beobachtung
+      // Strategischer Fokus „Ausbaupotenzial“ (Etappe 21): Hinweise auf zusätzliche Rollen/Kapazität als eigene Beobachtung
       if (opts?.focus?.freelancerLever && FREELANCER_HINT.test(s) && items.length < 30) {
         items.push({
           type: "BEOBACHTUNG",
@@ -223,7 +223,7 @@ export class TestProvider implements AIProvider {
           observation: s,
           hypothesis: "Möglicher Bedarf an zusätzlichen Profilen – prüfen, ob Verve (auch über Freelancer) weitere Rollen besetzen kann.",
           evidenceQuote: s,
-          uncertainty: "Vermutung aus dem Fokus „Freelancer-Hebel“; kein bestätigter Bedarf.",
+          uncertainty: "Vermutung aus dem Fokus „Ausbaupotenzial“; kein bestätigter Bedarf.",
           whyNow: "Strategischer Fokus: Wachstum über Freelancer.",
           nextStep: "Im nächsten Gespräch fragen, welche weiteren Rollen im Team fehlen.",
           proposedQuestion: "Welche weiteren Rollen fehlen im Team?",
@@ -471,7 +471,7 @@ export class TestProvider implements AIProvider {
       moves: [
         ...moves.slice(0, 2).map((m) => ({ title: m.replace(/\.$/, ""), why: "Bereits im Tool vorbereitet – geringster Aufwand.", ownerRole: "BD" as const, evidenceQuote: quoteFor(m) })),
         ...blockers.slice(0, 2).map((b) => ({ title: `Blocker lösen: ${b.split(" – ")[0]!.replace(/\.$/, "").slice(0, 120)}`, why: "Blockiert den nächsten großen Schritt.", ownerRole: "BD" as const, evidenceQuote: quoteFor(b) })),
-        ...missing.slice(0, 1).map((m) => ({ title: `Lücke schließen: ${m.replace(/\.$/, "").slice(0, 120)}`, why: "Ohne diese Grundlage bleibt der Schritt Hypothese.", ownerRole: (/Anker|Kontext/i.test(m) ? "ANKER" : "BD") as "ANKER" | "BD", evidenceQuote: quoteFor(m) })),
+        ...missing.slice(0, 1).map((m) => ({ title: `Lücke schließen: ${m.replace(/\.$/, "").slice(0, 120)}`, why: "Ohne diese Grundlage bleibt der Schritt Hypothese.", ownerRole: (/Kontaktpate|Kontext/i.test(m) ? "ANKER" : "BD") as "ANKER" | "BD", evidenceQuote: quoteFor(m) })),
       ].slice(0, 5),
       risks: blockers.filter((b) => /Tagen|überfällig|Blockiert/i.test(b)).slice(0, 2).map((b) => ({ text: `Vermutlich: Stillstand – ${b.replace(/\.$/, "")}.`, evidenceQuote: quoteFor(b) })),
       openQuestions: missing.filter((m) => m.endsWith("?")).slice(0, 3),
@@ -496,7 +496,7 @@ export class TestProvider implements AIProvider {
       moves: [
         ...moves.slice(0, 2).map((m) => ({ title: m.replace(/\.$/, ""), why: "Bereits im Tool vorbereitet – geringster Aufwand.", ownerRole: "BD" as const, evidenceQuote: quoteFor(m) })),
         ...blockers.slice(0, 2).map((b) => ({ title: `Blocker lösen: ${b.split(" – ")[0]!.replace(/\.$/, "").slice(0, 120)}`, why: "Blockiert die Konvertierung dieser Chance.", ownerRole: "BD" as const, evidenceQuote: quoteFor(b) })),
-        ...missing.slice(0, 1).map((m) => ({ title: `Lücke schließen: ${m.replace(/\.$/, "").slice(0, 120)}`, why: "Ohne diese Grundlage bleibt der nächste Schritt Hypothese.", ownerRole: (/Anker|Kontext/i.test(m) ? "ANKER" : "BD") as "ANKER" | "BD", evidenceQuote: quoteFor(m) })),
+        ...missing.slice(0, 1).map((m) => ({ title: `Lücke schließen: ${m.replace(/\.$/, "").slice(0, 120)}`, why: "Ohne diese Grundlage bleibt der nächste Schritt Hypothese.", ownerRole: (/Kontaktpate|Kontext/i.test(m) ? "ANKER" : "BD") as "ANKER" | "BD", evidenceQuote: quoteFor(m) })),
       ].slice(0, 5),
       risks: blockers.filter((b) => /Tagen|überfällig|unvollständig/i.test(b)).slice(0, 2).map((b) => ({ text: `Vermutlich: Stillstand – ${b.replace(/\.$/, "")}.`, evidenceQuote: quoteFor(b) })),
       openQuestions: missing.filter((m) => m.endsWith("?")).slice(0, 3),
@@ -586,7 +586,7 @@ export class TestProvider implements AIProvider {
     const ctx = input.contextText;
     const line = (prefix: string) => ctx.split("\n").find((l) => l.startsWith(prefix))?.slice(prefix.length).trim() ?? "";
     const kunde = line("Kunde:").split(" (")[0] ?? "";
-    const setup = line("Setup:");
+    const setup = line("Projekt:");
     const bedarfe = line("Chancen:");
     const beobachtungen = line("Letzte Beobachtungen:");
     const fields: Record<string, string> = {};
@@ -617,7 +617,7 @@ export class TestProvider implements AIProvider {
       const role = detectRole(obs) ?? detectRole(ctx);
       if (has("title")) fields.title = role ? `${role} für ${kunde || "den Kunden"}` : obs ? obs.split(/[,.;]/)[0]!.slice(0, 80) : `Unterstützung für ${kunde || "den Kunden"}`;
       if (has("needDescription")) fields.needDescription = obs || "";
-      if (has("trigger")) fields.trigger = obs ? "Aus Beobachtung im Setup." : "";
+      if (has("trigger")) fields.trigger = obs ? "Aus Beobachtung im Projekt." : "";
       if (has("kind")) fields.kind = firstOption("kind", [/ausschreib/i.test(ctx) ? "AUSSCHREIBUNG" : "VERVE_EXPERTE"]) ?? "";
       if (has("roleName") && role) fields.roleName = role;
       evidence = obs || kunde;
@@ -662,7 +662,7 @@ export class TestProvider implements AIProvider {
     // Verlängerungs-Ansprechpartner (e37): „die Verlängerung von X läuft über Y“ – X steht in „Laufende Einsätze“
     const ap = /verl[aä]ngerung von (.+?) l[aä]uft (?:jetzt |künftig )?über (?:einen neuen ansprechpartner:?\s*|den einkauf:?\s*)?([A-ZÄÖÜ][^.,\n]+)/i.exec(lastUser);
     if (ap) {
-      const engLines = input.contextText.split("\n").filter((l) => /^- .+ – Kunde .+, Setup „/.test(l));
+      const engLines = input.contextText.split("\n").filter((l) => /^- .+ – Kunde .+, Projekt „/.test(l));
       const last = ap[1]!.trim().toLowerCase().split(/\s+/).pop()!;
       const line = engLines.find((l) => l.toLowerCase().split(" – kunde ")[0]!.includes(last));
       if (line) {
@@ -684,7 +684,7 @@ export class TestProvider implements AIProvider {
       onDelta?.(out);
       return out;
     }
-    // Besetzung (Etappe 30): eingefügte Mail/Notiz mit zu besetzender Rolle → Karten BESETZUNG (im Kunden-/Setup-Kontext)
+    // Besetzung (Etappe 30): eingefügte Mail/Notiz mit zu besetzender Rolle → Karten BESETZUNG (im Kunden-/Projekt-Kontext)
     if (/Kunde:/.test(input.contextText) && lastUser.length > 40 && /\b(such(?:en|t|e)|benötig\w*|brauch\w*|besetz\w*|position|bedarf)\b/i.test(lastUser)) {
       const prop = ruleBasedStaffingText({ text: lastUser, opportunityTitle: "", accountName: "" });
       if (prop.positions.length) {

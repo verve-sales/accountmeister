@@ -10,8 +10,8 @@ import { getAccount, listVisibleAccounts } from "@/modules/accounts/service";
 import { canMaintainAgenda } from "@/modules/agenda/service";
 
 /**
- * SOS-Protokolle (Etappe 26): Wenn es eng wird – ein Einsatz läuft ohne Anschluss aus, der Anker kommt beim Kunden
- * nicht mehr weiter, Budget/Zufriedenheit/Konflikt spitzen sich zu. Jeder aus dem Kundenteam (auch der Anker) kann ein
+ * SOS-Protokolle (Etappe 26): Wenn es eng wird – ein Einsatz läuft ohne Anschluss aus, der Kontaktpate kommt beim Kunden
+ * nicht mehr weiter, Budget/Zufriedenheit/Konflikt spitzen sich zu. Jeder aus dem Kundenteam (auch der Kontaktpate) kann ein
  * SOS auslösen; es landet unübersehbar bei BD und Principal, zählt im Health-Check als Risiko und bleibt offen, bis
  * jemand die Lösung dokumentiert.
  */
@@ -20,7 +20,7 @@ export const sosKindValues = ["EINSATZ_LAEUFT_AUS", "ANKER_BLOCKIERT", "LAGE_ENG
 export type SosKind = (typeof sosKindValues)[number];
 export const sosKindLabel: Record<SosKind, string> = {
   EINSATZ_LAEUFT_AUS: "Einsatz läuft aus – kein Anschluss in Sicht",
-  ANKER_BLOCKIERT: "Anker kommt nicht weiter",
+  ANKER_BLOCKIERT: "Kontaktpate kommt nicht weiter",
   LAGE_ENG: "Lage wird eng (Budget, Zufriedenheit, Konflikt)",
   SONSTIGES: "Sonstiges",
 };
@@ -42,11 +42,11 @@ export async function createSos(actor: Actor, raw: unknown) {
   const parsed = createSosInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const i = parsed.data;
-  const account = await getAccount(actor, i.accountId); // Kundenteam inkl. Anker über ihre Setup-Beteiligung
+  const account = await getAccount(actor, i.accountId); // Kundenteam inkl. Kontaktpate über ihre Projekt-Beteiligung
   if (isReadOnlyFor(actor, account.id)) throw new ForbiddenError("Der Coach-Zugang ist nur lesend.");
   if (i.setupId) {
     const s = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, i.setupId) });
-    if (!s || s.accountId !== account.id) throw new ValidationError("Das Setup gehört nicht zu diesem Kunden.");
+    if (!s || s.accountId !== account.id) throw new ValidationError("Das Projekt gehört nicht zu diesem Kunden.");
   }
   if (i.orderId) {
     const o = await db.query.orders.findFirst({ where: eq(schema.orders.id, i.orderId) });

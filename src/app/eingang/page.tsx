@@ -60,10 +60,10 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
       )}
 
       <section className="card">
-        <h2 className="font-semibold mb-2">Setups mit offener BD-Zuordnung ({open.length})</h2>
+        <h2 className="font-semibold mb-2">Projekte mit offener BD-Zuordnung ({open.length})</h2>
         {open.length === 0 ? <p className="empty">Keine offenen Zuordnungen in deinem Berechtigungsbereich.</p> : (
           <table className="list">
-            <thead><tr><th>Setup</th><th>Kunde</th><th>Angelegt</th></tr></thead>
+            <thead><tr><th>Projekt</th><th>Kunde</th><th>Angelegt</th></tr></thead>
             <tbody>{open.map(({ setup, account }) => <tr key={setup.id}><td><Link href={`/setups/${setup.id}`}>{setup.name}</Link></td><td><Link href={`/kunden/${account.id}`}>{account.name}</Link></td><td>{fmtDate(setup.createdAt)}</td></tr>)}</tbody>
           </table>
         )}
@@ -80,11 +80,11 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
                   <strong>{j.title}</strong>
                   <Status label={importKindLabel[j.kind] ?? j.kind} />
                   <Status label={importStatusLabel[j.status] ?? j.status} />
-                  <span className="muted text-sm">→ {j.setupId ? <Link href={`/setups/${j.setupId}`}>{j.setupName}</Link> : "kein Setup"} · Empfängerkreis {accessClassLabel[j.accessClass]} · {j.scopeSummary}</span>
+                  <span className="muted text-sm">→ {j.setupId ? <Link href={`/setups/${j.setupId}`}>{j.setupName}</Link> : "kein Projekt"} · Empfängerkreis {accessClassLabel[j.accessClass]} · {j.scopeSummary}</span>
                 </div>
                 {j.warnings.length > 0 && <ul className="text-sm mt-1 list-disc ml-5" style={{ color: "var(--warn)" }}>{j.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
                 {j.error && <p className="text-sm error mt-1">{j.error}</p>}
-                <p className="text-sm mt-1">{j.sourceId && <Link href={`/quellen/${j.sourceId}`}>Quelle ansehen</Link>}{j.setupId && <> · <Link href={`/setups/${j.setupId}`}>Vorschläge im Setup prüfen</Link></>}</p>
+                <p className="text-sm mt-1">{j.sourceId && <Link href={`/quellen/${j.sourceId}`}>Quelle ansehen</Link>}{j.setupId && <> · <Link href={`/setups/${j.setupId}`}>Vorschläge im Projekt prüfen</Link></>}</p>
                 {j.mergeItems.filter((m) => m.status === "OFFEN").length > 0 && (
                   <div className="mt-2 text-sm">
                     <h3 className="font-medium">Unklare Personenzuordnung – bitte entscheiden (gleicher Name ist kein Identitätsbeweis)</h3>
@@ -113,7 +113,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
                   <input type="hidden" name="importJobId" value={j.id} />
                   <input type="hidden" name="version" value={j.version} />
                   <button className="btn btn-small" type="submit">Import bestätigen</button>
-                  <span className="muted text-sm ml-2">Bestätigt Quellenbezug und Prüfung; offene Vorschläge bleiben zur Entscheidung im Setup.</span>
+                  <span className="muted text-sm ml-2">Bestätigt Quellenbezug und Prüfung; offene Vorschläge bleiben zur Entscheidung im Projekt.</span>
                 </form>
               </li>
             ))}
@@ -125,7 +125,7 @@ export default async function EingangPage({ searchParams }: { searchParams: Prom
       {/* Protokoll importieren */}
       <section className="card">
         <h2 className="font-semibold mb-2">Gesprächsprotokoll importieren</h2>
-        {editableSetups.length === 0 ? <p className="empty">Du bearbeitest kein Setup; Import ist nicht möglich.</p> : (
+        {editableSetups.length === 0 ? <p className="empty">Du bearbeitest kein Projekt; Import ist nicht möglich.</p> : (
           <form action={importProtocolAction} className="grid sm:grid-cols-2 gap-3" encType="multipart/form-data">
             <div><label className="label" htmlFor="impTitle">Titel</label><input id="impTitle" name="title" className="input" required minLength={3} placeholder="z. B. Protokoll Kundentermin 18.09." /></div>
             <div>

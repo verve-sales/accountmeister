@@ -50,14 +50,14 @@ describe("e47: Aufräumen – ohne Begründung beenden, umhängen, zusammenlegen
     expect(rest[0]!.position?.personName).toMatch(/Eva Eins/);
   });
 
-  it("A02: Aufgabe und Beobachtung in ein anderes Setup (auch anderen Kunden) umhängen; Chancenbezug fällt weg", async () => {
+  it("A02: Aufgabe und Beobachtung in ein anderes Projekt (auch anderen Kunden) umhängen; Chancenbezug fällt weg", async () => {
     env();
     const s = await ensureSeed();
     const david = await actorFor("david");
     const acc = await createAccount(david, { name: `Umhang AG ${Date.now().toString(36)} (fiktiv)`, orgType: "KONZERN", responsibleBdUserId: david.userId });
     const d2 = (await loadActor(david.userId))!;
     const other = await createSetup(d2, { accountId: acc.id, name: "Richtiges Team", bdUserId: david.userId, creatorContribution: "BD_ZUSTAENDIG" });
-    const opp = await createOpportunity(d2, { setupId: s.setupId, title: `E47 Bezug ${Date.now()}`, needDescription: "Chance im alten Setup.", kind: "FREELANCER_EXPERTE" });
+    const opp = await createOpportunity(d2, { setupId: s.setupId, title: `E47 Bezug ${Date.now()}`, needDescription: "Chance im alten Projekt.", kind: "FREELANCER_EXPERTE" });
     const a = await createAction(d2, { setupId: s.setupId, opportunityId: opp.id, title: "Falsch zugeordnete Aufgabe", ownerUserId: david.userId });
     const r = await moveToSetup(d2, "ACTION", a.id, other.id);
     expect(r.changed).toBe(true);

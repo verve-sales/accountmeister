@@ -47,7 +47,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
     scopeType: "ACCOUNT",
     implementation: "ANSICHT",
     viewPath: "/kunden/{id}",
-    qualityCriterion: "Setups, eigene Aufträge, bestätigte Gespräche; Überblick ohne erfundene Potenzialzahlen",
+    qualityCriterion: "Projekte, eigene Aufträge, bestätigte Gespräche; Überblick ohne erfundene Potenzialzahlen",
     externalVariantAllowed: false,
     sections: [],
   },
@@ -66,7 +66,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   {
     code: "A3",
     name: "Signalnotiz",
-    responsible: "Anker oder BD",
+    responsible: "Kontaktpate oder BD",
     trigger: "Neue Beobachtung",
     scopeType: "SIGNAL",
     implementation: "ANSICHT",
@@ -206,7 +206,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   {
     code: "A12",
     name: "Verlängerung / Entwicklung",
-    responsible: "BD mit Anker",
+    responsible: "BD mit Kontaktpate",
     trigger: "Laufender Einsatz",
     scopeType: "SETUP",
     implementation: "TEXTENTWURF",
@@ -283,7 +283,7 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   {
     code: "A17",
     name: "Kurzangebot",
-    responsible: "BD mit Anker",
+    responsible: "BD mit Kontaktpate",
     trigger: "Idee aus der Kundenagenda (Verlängern, Ausweiten, Vertiefen, Übertragen)",
     scopeType: "SETUP",
     implementation: "TEXTENTWURF",
@@ -300,8 +300,8 @@ export const ARTIFACT_TEMPLATES: ArtifactTemplate[] = [
   },
   {
     code: "SETUP",
-    name: "Projektsetup",
-    responsible: "Anker und BD",
+    name: "Projekt",
+    responsible: "Kontaktpate und BD",
     trigger: "Neuer Einsatz-/Entwicklungskontext",
     scopeType: "SETUP",
     implementation: "ANSICHT",

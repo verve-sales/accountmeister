@@ -11,7 +11,7 @@ import { createSetup } from "@/modules/setups/service";
 import { actorFor, ensureSeed } from "./helpers";
 
 describe("Etappe 5: Bedarfe, Angebote, Aufträge (Briefing 8.3, 9.2–9.4, F02, F08, F09, F10, F16)", () => {
-  it("F08: Bedarf direkt erfassen – ohne vollständiges Setup, ohne MEDDPICC; Fast-Track mit Messstart", async () => {
+  it("F08: Bedarf direkt erfassen – ohne vollständiges Projekt, ohne MEDDPICC; Fast-Track mit Messstart", async () => {
     const s = await ensureSeed();
     const david = await actorFor("david");
     const setup = await createSetup(david, { accountId: s.accountId, name: "Direkte Anfrage Einkauf", contextNote: "", bdUserId: david.userId });

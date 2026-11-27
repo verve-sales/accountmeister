@@ -517,26 +517,26 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
           <dt className="muted">bei Verve spricht an</dt>
           <dd>{e.contacts.approach ? approachLabel[e.contacts.approach] : <span className="muted">offen</span>}</dd>
         </dl>
-        <p className="muted text-xs">{e.contacts.source === "EINSATZ" ? "Am Einsatz abweichend festgelegt; leere Felder folgen der Vorgabe des Setups." : e.contacts.source === "SETUP" ? "Vorgabe des Setups." : "Weder am Einsatz noch am Setup hinterlegt."}{" "}<Link href={`/setups/${e.setupId}#verlaengerung`}>Vorgabe im Setup</Link></p>
+        <p className="muted text-xs">{e.contacts.source === "EINSATZ" ? "Am Einsatz abweichend festgelegt; leere Felder folgen der Vorgabe des Projekts." : e.contacts.source === "SETUP" ? "Vorgabe des Projekts." : "Weder am Einsatz noch am Projekt hinterlegt."}{" "}<Link href={`/setups/${e.setupId}#verlaengerung`}>Vorgabe im Projekt</Link></p>
         {canContacts && (
           <details>
             <summary className="text-sm cursor-pointer">Ändern</summary>
             <form action={engagementContactsAction.bind(null, e.id)} className="flex flex-wrap gap-3 items-end text-sm mt-2">
               <label className="space-y-1"><span className="block muted text-xs">fachlich über</span>
                 <select name="renewalContactPersonId" className="input" defaultValue={e.renewalContactPersonId ?? ""}>
-                  <option value="">{setupDefault.renewal ? `Vorgabe: ${setupDefault.renewal.name}` : "– Vorgabe des Setups (leer) –"}</option>
+                  <option value="">{setupDefault.renewal ? `Vorgabe: ${setupDefault.renewal.name}` : "– Vorgabe des Projekts (leer) –"}</option>
                   {d.persons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
                 </select>
               </label>
               <label className="space-y-1"><span className="block muted text-xs">Bestellung/Vertrag über</span>
                 <select name="orderContactPersonId" className="input" defaultValue={e.orderContactPersonId ?? ""}>
-                  <option value="">{setupDefault.order ? `Vorgabe: ${setupDefault.order.name}` : "– Vorgabe des Setups (leer) –"}</option>
+                  <option value="">{setupDefault.order ? `Vorgabe: ${setupDefault.order.name}` : "– Vorgabe des Projekts (leer) –"}</option>
                   {d.persons.map((p) => <option key={p.id} value={p.id}>{p.displayName}</option>)}
                 </select>
               </label>
               <label className="space-y-1"><span className="block muted text-xs">wer spricht an</span>
                 <select name="renewalApproach" className="input" defaultValue={e.renewalApproach ?? ""}>
-                  <option value="">{setupDefault.approach ? `Vorgabe: ${approachLabel[setupDefault.approach]}` : "– Vorgabe des Setups (leer) –"}</option>
+                  <option value="">{setupDefault.approach ? `Vorgabe: ${approachLabel[setupDefault.approach]}` : "– Vorgabe des Projekts (leer) –"}</option>
                   {approachValues.map((v) => <option key={v} value={v}>{approachLabel[v]}</option>)}
                 </select>
               </label>
@@ -552,7 +552,7 @@ export default async function EinsatzPage({ params, searchParams }: { params: Pr
                 <input name="newOrderFunction" className="input" placeholder="Funktion (optional)" aria-label="Funktion" />
                 <input name="newOrderEmail" className="input" type="email" placeholder="E-Mail (optional)" aria-label="E-Mail" />
               </fieldset>
-              {a.manage && <label className="flex gap-1 items-center"><input type="checkbox" name="asSetupDefault" value="1" /> als Vorgabe für alle Einsätze des Setups</label>}
+              {a.manage && <label className="flex gap-1 items-center"><input type="checkbox" name="asSetupDefault" value="1" /> als Vorgabe für alle Einsätze des Projekts</label>}
               <button className="btn btn-small" type="submit">Speichern</button>
             </form>
           </details>

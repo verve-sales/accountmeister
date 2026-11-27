@@ -38,7 +38,7 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
         <a href="#freelancer">Doppelte Freelancer <Count n={r.freelancerDuplicates.length} /></a>
         <a href="#einsaetze">Doppelte Einsätze <Count n={r.engagementDuplicates.length} /></a>
         <a href="#intern">Interne Moco-Projekte <Count n={r.internal.length} /></a>
-        <a href="#setups">Doppelte Setups <Count n={r.setupDuplicates.length} /></a>
+        <a href="#setups">Doppelte Projekte <Count n={r.setupDuplicates.length} /></a>
         <a href="#personen">Doppelte Personen <Count n={r.personDuplicates.length} /></a>
       </nav>
 
@@ -118,8 +118,8 @@ export default async function BereinigungPage({ searchParams }: { searchParams: 
       </section>
 
       <section className="card space-y-3" id="setups">
-        <h2 className="font-semibold">Doppelte Setups ({r.setupDuplicates.length})</h2>
-        <p className="muted text-sm">Gleicher Name beim gleichen Kunden (ohne Groß-/Kleinschreibung und Klammerzusätze). Alles am entfernten Setup – Chancen, Einsätze, Mitglieder, Signale, Aktionen – zieht ins behaltene.</p>
+        <h2 className="font-semibold">Doppelte Projekte ({r.setupDuplicates.length})</h2>
+        <p className="muted text-sm">Gleicher Name beim gleichen Kunden (ohne Groß-/Kleinschreibung und Klammerzusätze). Alles am entfernten Projekt – Chancen, Einsätze, Mitglieder, Signale, Aktionen – zieht ins behaltene.</p>
         {r.setupDuplicates.map((g) => <SetupMergeForm key={g.keep.id} g={g} />)}
       </section>
 

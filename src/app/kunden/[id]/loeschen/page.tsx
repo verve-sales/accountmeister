@@ -34,7 +34,7 @@ export default async function KundeLoeschenPage({ params, searchParams }: { para
         <p className="text-sm mb-2">Mit dem Kunden werden endgültig entfernt:</p>
         <table className="list text-sm">
           <tbody>
-            <tr><td>Setups</td><td>{p.setups.length}{p.setups.length > 0 && <span className="muted"> – {p.setups.map((s) => s.name).join(", ")}</span>}</td></tr>
+            <tr><td>Projekte</td><td>{p.setups.length}{p.setups.length > 0 && <span className="muted"> – {p.setups.map((s) => s.name).join(", ")}</span>}</td></tr>
             <tr><td>Ansprechpartner (mit Beziehungen und Einschätzungen)</td><td>{p.persons}</td></tr>
             <tr><td>Quellen (Notizen, Dokumente samt Dateien, Interview- und Assistentenverläufe)</td><td>{p.sources}</td></tr>
             <tr><td>Beobachtungen</td><td>{p.signals}</td></tr>

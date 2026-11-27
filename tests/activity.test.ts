@@ -10,12 +10,12 @@ import { buildAccountActivity, buildActivityOverview, buildBdPerformance } from 
 import { createOpportunity } from "@/modules/opportunities/service";
 import { actorFor, ensureSeed } from "./helpers";
 
-/** Eigener Kunde je Test: buildAccountActivity zählt über den ganzen Kunden (alle Setups), nicht nur ein Setup. */
+/** Eigener Kunde je Test: buildAccountActivity zählt über den ganzen Kunden (alle Projekte), nicht nur ein Projekt. */
 async function freshAccount(name: string) {
   const david = await actorFor("david");
   const nina = await actorFor("nina");
   const account = await createAccount(david, { name: `${name} ${Date.now().toString(36)} (fiktiv)`, responsibleBdUserId: david.userId });
-  const setup = await createSetup(david, { accountId: account.id, name: `${name}-Setup`, contextNote: "Kontext", bdUserId: david.userId });
+  const setup = await createSetup(david, { accountId: account.id, name: `${name}-Projekt`, contextNote: "Kontext", bdUserId: david.userId });
   await db.insert(schema.setupMemberships).values({ setupId: setup.id, userId: nina.userId, contribution: "ANKER_KONTEXT", canEdit: true });
   return { david, nina, account, setup };
 }
@@ -38,7 +38,7 @@ describe("Etappe 12: Aktivitäts-Tracking und Zusammenarbeits-Score", () => {
     const draft = await saveReviewDraft(nina, review.id, { version: review.version, noteDraft: "Aktivitäts-Test Weekly-Notiz." });
     await confirmReview(nina, review.id, { version: draft.version });
 
-    // ANKER: Kontakt gepflegt (Nina legt Person im Setup an; das Anlegen dokumentiert zugleich den Beziehungsstand)
+    // ANKER: Kontakt gepflegt (Nina legt Person im Projekt an; das Anlegen dokumentiert zugleich den Beziehungsstand)
     const person = await createPerson(nina, { accountId: account.id, setupId: setup.id, displayName: "Herr Aktivitäts-Test (fiktiv)" });
     expect(person).toBeTruthy();
 
@@ -91,7 +91,7 @@ describe("Etappe 12: Aktivitäts-Tracking und Zusammenarbeits-Score", () => {
     // Koeffizient wird auf eine Nachkommastelle gerundet: 2 × 1 / 3 ≈ 0,67 → 0,7
     expect(onlyOne.coefficient).toBeCloseTo(0.7, 5);
 
-    // Zusätzlich Anker aktiv (eine weitere Aktivität, aber jetzt zwei statt einer beitragenden Rolle)
+    // Zusätzlich Kontaktpate aktiv (eine weitere Aktivität, aber jetzt zwei statt einer beitragenden Rolle)
     await captureObservation(nina, { setupId: setup.id, observation: "Koeffizient-Test: Beobachtung von Nina." });
     const twoRoles = await buildAccountActivity(david, account.id, { days: 7 });
     expect(twoRoles.activeRoles.slice().sort()).toEqual(["ANKER", "BD"]);
@@ -133,7 +133,7 @@ describe("Etappe 15: Meine Performance (BD) – personenbezogen, nicht rollengeb
   it("zählt nur eigene dokumentierte Aktivität und eigene Chancen, getrennt je Kunde", async () => {
     const { david, nina, account, setup } = await freshAccount("Performance-Test");
 
-    // David (BD) und Nina (Anker) erfassen je eine eigene Beobachtung – nur Davids eigene soll für ihn zählen
+    // David (BD) und Nina (Kontaktpate) erfassen je eine eigene Beobachtung – nur Davids eigene soll für ihn zählen
     await captureObservation(david, { setupId: setup.id, observation: "Performance-Test: Davids eigene Beobachtung." });
     await captureObservation(nina, { setupId: setup.id, observation: "Performance-Test: Ninas Beobachtung." });
 

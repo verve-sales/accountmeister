@@ -78,7 +78,7 @@ export default async function MocoImportPage({ params, searchParams }: { params:
       {result && (
         <section className="card text-sm">
           <h2 className="font-semibold mb-1">Ergebnis</h2>
-          <p>Angelegt: {result.created?.einsaetze ?? 0} Einsätze, {result.created?.setups ?? 0} Setups, {result.created?.kunden ?? 0} Kunden, {result.created?.nutzer ?? 0} Zugänge, {result.created?.freelancer ?? 0} Freelancer, {result.created?.teams ?? 0} Teams; {result.created?.verknuepft ?? 0} Verknüpfungen; {result.skipped?.length ?? 0} übersprungen.</p>
+          <p>Angelegt: {result.created?.einsaetze ?? 0} Einsätze, {result.created?.setups ?? 0} Projekte, {result.created?.kunden ?? 0} Kunden, {result.created?.nutzer ?? 0} Zugänge, {result.created?.freelancer ?? 0} Freelancer, {result.created?.teams ?? 0} Teams; {result.created?.verknuepft ?? 0} Verknüpfungen; {result.skipped?.length ?? 0} übersprungen.</p>
           {!!result.errors?.length && (
             <ul className="mt-2" style={{ color: "var(--danger)" }}>
               {result.errors.map((e) => <li key={e.key}>{e.key}: {e.message}</li>)}
@@ -90,10 +90,10 @@ export default async function MocoImportPage({ params, searchParams }: { params:
         <input type="hidden" name="importId" value={id} />
         <input type="hidden" name="back" value={back} />
         <section className="card text-sm">
-          {nothing ? <p><strong>Keine Änderungen seit dem letzten Import.</strong> Alles aus Moco ist bereits verknüpft oder bewusst übersprungen.</p> : <p><strong>Nur Änderungen:</strong> neue oder geänderte Kunden, Setups, Einsätze und Personen.</p>}
+          {nothing ? <p><strong>Keine Änderungen seit dem letzten Import.</strong> Alles aus Moco ist bereits verknüpft oder bewusst übersprungen.</p> : <p><strong>Nur Änderungen:</strong> neue oder geänderte Kunden, Projekte, Einsätze und Personen.</p>}
           <p className="muted text-xs mt-1">{unchangedN} bereits verknüpfte und {ignoredN} früher übersprungene Objekte sind ausgeblendet{showAll ? " – hier gerade eingeblendet" : ""}. Interne Projekte (Kunde Verve) werden nie übernommen. Was du jetzt überspringst, erscheint künftig nicht wieder (auf der Moco-Seite wieder aufnehmbar). <Link href={showAll ? back : `${back}?alle=1`}>{showAll ? "Nur Änderungen zeigen" : "Alles zeigen"}</Link></p>
         </section>
-        <p className="text-sm muted">Regel: Moco führt Namen und Stammdaten (verknüpfte Kunden und Setups bekommen den Moco-Namen). Sales-Rollen kommen nicht aus Moco – BD und Principal setzt du je Setup. Einsätze aus laufenden Zuweisungen werden sofort „aktiv“; Freelancer-Einsätze bekommen Check-ins mit Kunde und Freelancer alle sechs Wochen, interne nicht.</p>
+        <p className="text-sm muted">Regel: Moco führt Namen und Stammdaten (verknüpfte Kunden und Projekte bekommen den Moco-Namen). Sales-Rollen kommen nicht aus Moco – BD und Principal setzt du je Projekt. Einsätze aus laufenden Zuweisungen werden sofort „aktiv“; Freelancer-Einsätze bekommen Check-ins mit Kunde und Freelancer alle sechs Wochen, interne nicht.</p>
 
         {kunden.length > 0 && <section className="card">
           <h2 className="font-semibold mb-2">Kunden ({kunden.length})</h2>
@@ -105,7 +105,7 @@ export default async function MocoImportPage({ params, searchParams }: { params:
         </section>}
 
         {setups.length > 0 && <section className="card">
-          <h2 className="font-semibold mb-2">Setups aus Projektgruppen ({setups.length})</h2>
+          <h2 className="font-semibold mb-2">Projekte aus Projektgruppen ({setups.length})</h2>
           <ul className="space-y-2 text-sm">
             {setups.map((s) => {
               const d = decisions[s.key] ?? {};
@@ -132,7 +132,7 @@ export default async function MocoImportPage({ params, searchParams }: { params:
             {einsaetze.map((e) => (
               <li key={e.key} className="flex flex-wrap items-center gap-2">
                 <strong>{e.projectName}</strong> – {e.personName} <span className="status">{e.personKind === "FREELANCER" ? "Freelancer" : "intern"}</span>
-                <span className="muted text-xs">{kundeName(e.companyMocoId)} · Setup {setupName(e.setupKey)} · {e.start ? fmtDate(e.start) : "Start ?"} – {e.end ? fmtDate(e.end) : "offen"}{e.hourlyRate ? ` · ${e.hourlyRate} €/h` : ""} · {e.note}</span>
+                <span className="muted text-xs">{kundeName(e.companyMocoId)} · Projekt {setupName(e.setupKey)} · {e.start ? fmtDate(e.start) : "Start ?"} – {e.end ? fmtDate(e.end) : "offen"}{e.hourlyRate ? ` · ${e.hourlyRate} €/h` : ""} · {e.note}</span>
                 {editable ? <ActionSelect item={e} decisions={decisions} /> : <span className="status">{ACTION_LABEL[(decisions[e.key]?.action ?? e.proposal) as keyof typeof ACTION_LABEL]}{e.targetLabel ? ` → ${e.targetLabel}` : ""}</span>}
               </li>
             ))}
@@ -147,10 +147,10 @@ export default async function MocoImportPage({ params, searchParams }: { params:
                 <strong>{p.name}</strong>
                 {editable ? (
                   <select name={`d.${p.key}.personKind`} className="input" style={{ width: "auto" }} defaultValue={decisions[p.key]?.personKind ?? p.personKind} aria-label="Personenart">
-                    <option value="NUTZER">{p.teamlead ? "Teamleiter → Anker" : "intern (Anker)"}</option>
+                    <option value="NUTZER">{p.teamlead ? "Teamleiter → Kontaktpate" : "intern (Kontaktpate)"}</option>
                     <option value="FREELANCER">Freelancer</option>
                   </select>
-                ) : <span className="status">{(decisions[p.key]?.personKind ?? p.personKind) === "FREELANCER" ? "Freelancer" : p.teamlead ? "Teamleiter → Anker" : "Anker"}</span>}
+                ) : <span className="status">{(decisions[p.key]?.personKind ?? p.personKind) === "FREELANCER" ? "Freelancer" : p.teamlead ? "Teamleiter → Kontaktpate" : "Kontaktpate"}</span>}
                 <span className="muted text-xs">{p.email ?? "ohne E-Mail"}{p.unit ? ` · Moco-Team ${p.unit}` : " · ohne Moco-Team"} · {p.note}</span>
                 {editable ? <ActionSelect item={p} decisions={decisions} /> : <span className="status">{ACTION_LABEL[(decisions[p.key]?.action ?? p.proposal) as keyof typeof ACTION_LABEL]}</span>}
               </li>
@@ -159,7 +159,7 @@ export default async function MocoImportPage({ params, searchParams }: { params:
               <li key={t.key} className="flex flex-wrap items-center gap-2"><strong>{/^team\b/i.test(t.name) ? t.name : `Team ${t.name}`}</strong><span className="muted text-xs">{t.note}</span>{editable ? <ActionSelect item={t} decisions={decisions} /> : <span className="status">{ACTION_LABEL[(decisions[t.key]?.action ?? t.proposal) as keyof typeof ACTION_LABEL]}</span>}</li>
             ))}
           </ul>
-          <p className="muted text-xs mt-2">Freelancer erkennt der Import am Moco-Team (Standard „Freelancer“, sonst alles mit „Freelancer/Extern/Freiberufler“ im Namen) oder am Extern-Kennzeichen in Moco – hier je Person korrigierbar; die Einsätze dieser Person folgen der Auswahl. Neue Zugänge erhalten die Rolle Anker; BD, Principal und Sales Operations vergibt die Verwaltung. Teamleiter werden Leitung ihres Teams (Dashboard „Mein Team“), bleiben fachlich Anker.</p>
+          <p className="muted text-xs mt-2">Freelancer erkennt der Import am Moco-Team (Standard „Freelancer“, sonst alles mit „Freelancer/Extern/Freiberufler“ im Namen) oder am Extern-Kennzeichen in Moco – hier je Person korrigierbar; die Einsätze dieser Person folgen der Auswahl. Neue Zugänge erhalten die Rolle Kontaktpate; BD, Principal und Sales Operations vergibt die Verwaltung. Teamleiter werden Leitung ihres Teams (Dashboard „Mein Team“), bleiben fachlich Kontaktpate.</p>
         </section>}
 
         {editable && (

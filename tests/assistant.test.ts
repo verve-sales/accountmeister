@@ -40,7 +40,7 @@ describe("Etappe 8: Assistent (Dialog mit Vorschlagskarten)", () => {
     expect(setupView.context.canWrite).toBe(true);
     expect(setupView.openPoints.length).toBeGreaterThan(0);
 
-    // Fremder BD sieht das Setup nicht – der Assistent fällt auf „Allgemein“ zurück statt etwas preiszugeben
+    // Fremder BD sieht das Projekt nicht – der Assistent fällt auf „Allgemein“ zurück statt etwas preiszugeben
     const larsView = await getThreadView(lars, { type: "SETUP", id: seed.setupId });
     expect(larsView.thread.contextType).toBe("GLOBAL");
     expect(larsView.context.label).toBe("Allgemein");
@@ -50,7 +50,7 @@ describe("Etappe 8: Assistent (Dialog mit Vorschlagskarten)", () => {
     expect(petraView.thread.id).not.toBe(setupView.thread.id);
   });
 
-  it("Neuer Kunde im allgemeinen Kontext: Karte KUNDE übernehmen legt Kunde+Setup an und bindet das Gespräch um; danach Personen und Bedarfe", async () => {
+  it("Neuer Kunde im allgemeinen Kontext: Karte KUNDE übernehmen legt Kunde+Projekt an und bindet das Gespräch um; danach Personen und Bedarfe", async () => {
     process.env.AI_PROVIDER = "test";
     resetConfigCacheForTests();
     await ensureSeed();
@@ -95,11 +95,11 @@ describe("Etappe 8: Assistent (Dialog mit Vorschlagskarten)", () => {
       const v = await decideCard(david, { threadId: view.thread.id, messageId: r1.message.id, cardId: rest.id, decision: "VERWERFEN" });
       expect(v.card.status).toBe("VERWORFEN");
     }
-    // Quelle „Assistent-Dialog“ hängt am Setup
+    // Quelle „Assistent-Dialog“ hängt am Projekt
     const sources = await db.query.sources.findMany({ where: eq(schema.sources.setupId, setupId) });
     expect(sources.some((s) => s.type === "INTERVIEW" && /Assistent/.test(s.title))).toBe(true);
 
-    // Im Setup-Kontext: Aktion und Kontaktaufnahme landen als Vorschläge in „Meine Arbeit“
+    // Im Projekt-Kontext: Aktion und Kontaktaufnahme landen als Vorschläge in „Meine Arbeit“
     const r2 = await sendMessage(david, { threadId: view.thread.id, text: "Herr Berger schickt bis 30.09. das Grobkonzept. Zu Herrn Dr. Kaya, CIO, besteht noch kein Kontakt; Herr Berger könnte den Kontakt herstellen." });
     const aktion = r2.cards.find((c) => c.item.type === "AKTION");
     const kontakt = r2.cards.find((c) => c.item.type === "KONTAKT");
@@ -157,7 +157,7 @@ describe("Etappe 8: Assistent (Dialog mit Vorschlagskarten)", () => {
     // Fremder Nutzer kann im Gespräch weder schreiben noch entscheiden
     const lars = await actorFor("lars");
     await expect(sendMessage(lars, { threadId: view.thread.id, text: "Hallo" })).rejects.toBeInstanceOf(NotFoundError);
-    // Nur-Leser (CEO) im fremden Setup: kein Bearbeitungsrecht
+    // Nur-Leser (CEO) im fremden Projekt: kein Bearbeitungsrecht
     const clemens = await actorFor("clemens");
     const cv = await getThreadView(clemens, { type: "SETUP", id: seed.setupId });
     expect(cv.context.canWrite).toBe(false);
@@ -273,7 +273,7 @@ describe("Etappe 14: Einsortierung eingefügter E-Mail-Texte einem bekannten Kun
     } as unknown as AIProvider;
   }
 
-  it("bindet das (allgemeine) Gespräch an den erkannten Kunden – ohne erkennbares Setup an den Kunden, sonst direkt an das Setup", async () => {
+  it("bindet das (allgemeine) Gespräch an den erkannten Kunden – ohne erkennbares Projekt an den Kunden, sonst direkt an das Projekt", async () => {
     process.env.AI_PROVIDER = "test";
     resetConfigCacheForTests();
     const seed = await ensureSeed();
@@ -281,7 +281,7 @@ describe("Etappe 14: Einsortierung eingefügter E-Mail-Texte einem bekannten Kun
     const account = await db.query.accounts.findFirst({ where: eq(schema.accounts.id, seed.accountId) });
     const text = `Kopie einer E-Mail von ${account!.name}: Wir würden uns über ein Update freuen.`;
 
-    // Ohne erkennbares Setup: Zuordnung landet auf Kundenebene
+    // Ohne erkennbares Projekt: Zuordnung landet auf Kundenebene
     const view = await getThreadView(petra, { type: "GLOBAL", id: "" });
     const r = await sendMessage(petra, { threadId: view.thread.id, text }, { provider: einsortierungProvider(account!.name, "", text) });
     const card = r.cards.find((c) => c.item.type === "EINSORTIERUNG");
@@ -292,7 +292,7 @@ describe("Etappe 14: Einsortierung eingefügter E-Mail-Texte einem bekannten Kun
     expect(applied.thread.contextType).toBe("ACCOUNT");
     expect(applied.thread.contextId).toBe(seed.accountId);
 
-    // Mit erkennbarem, bestehendem Setup: Zuordnung landet direkt auf dem Setup
+    // Mit erkennbarem, bestehendem Projekt: Zuordnung landet direkt auf dem Projekt
     const view2 = await getThreadView(petra, { type: "GLOBAL", id: "" });
     const r2 = await sendMessage(petra, { threadId: view2.thread.id, text }, { provider: einsortierungProvider(account!.name, "Plattformteam", text) });
     const card2 = r2.cards.find((c) => c.item.type === "EINSORTIERUNG");

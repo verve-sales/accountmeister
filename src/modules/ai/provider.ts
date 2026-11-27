@@ -32,7 +32,7 @@ export type IntakeInput = {
   /** z. B. „E-Mail vom 20.10.2026 von Sabine Saß“ */
   sourceLabel: string;
   today: string;
-  /** Lagebild als Text: Kunde, Setups, Chancen (C1…), Einsätze (E1…), offene Aktionen (A1…), offene Fragen (Q1…), Personen (P1…), Verve-Personen, bekannte Kunden */
+  /** Lagebild als Text: Kunde, Projekte, Chancen (C1…), Einsätze (E1…), offene Aktionen (A1…), offene Fragen (Q1…), Personen (P1…), Verve-Personen, bekannte Kunden */
   contextText: string;
   /** Zuletzt abgelehnte Vorschläge mit Grund – ähnliche nicht erneut vorschlagen */
   lessons: string[];
@@ -47,7 +47,7 @@ export type AnalyzeDocumentInput = {
 /** Kontext für die nächste Interviewfrage: bekannter Stand als Text, bisheriger Verlauf, Grenzen. */
 export type InterviewNextInput = {
   kind: "KUNDE_NEU" | "SETUP_ERGAENZUNG";
-  /** Kurzer, berechtigter Kontext (Namen, Setup, bekannte Personen, offene Bedarfe) als Text */
+  /** Kurzer, berechtigter Kontext (Namen, Projekt, bekannte Personen, offene Bedarfe) als Text */
   knownContext: string;
   transcript: { role: "KI" | "NUTZER"; text: string }[];
   questionCount: number;
@@ -73,8 +73,8 @@ export type StrategyInput = {
 };
 
 /**
- * Chancen-Berater (Etappe 15): identische Form wie der Strategiefaden, aber je Bedarf statt je Setup – die
- * Lageanalyse bezieht sich auf genau eine Chance (Status, Buyingcenter, Angebot/Auftrag), nicht auf das ganze Setup.
+ * Chancen-Berater (Etappe 15): identische Form wie der Strategiefaden, aber je Bedarf statt je Projekt – die
+ * Lageanalyse bezieht sich auf genau eine Chance (Status, Buyingcenter, Angebot/Auftrag), nicht auf das ganze Projekt.
  */
 export type OpportunityAdviceInput = StrategyInput;
 

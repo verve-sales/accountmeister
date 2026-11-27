@@ -17,7 +17,7 @@ export default async function ArtefakteKatalogPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Artefaktkatalog</h1>
       <p className="muted text-sm">
-        Alle {templates.length} Arbeitsergebnisse (Setup, Weekly-Protokoll, Zielvereinbarung und weitere) sind registriert <TechRef>{`Briefing A1–A16 · Registerversion ${TEMPLATE_REGISTRY_VERSION}`}</TechRef>. Artefakte entstehen im jeweiligen Kontext (Setup, Kunde, Weekly), nicht über diese Liste. Kein Vorgang muss alle Artefakte anlegen.
+        Alle {templates.length} Arbeitsergebnisse (Projekt, Weekly-Protokoll, Zielvereinbarung und weitere) sind registriert <TechRef>{`Briefing A1–A16 · Registerversion ${TEMPLATE_REGISTRY_VERSION}`}</TechRef>. Artefakte entstehen im jeweiligen Kontext (Projekt, Kunde, Weekly), nicht über diese Liste. Kein Vorgang muss alle Artefakte anlegen.
       </p>
       <section className="card">
         <table className="list">
@@ -38,7 +38,7 @@ export default async function ArtefakteKatalogPage() {
       {setups.length > 0 && (
         <section className="card">
           <h2 className="font-semibold mb-1">Textentwürfe anlegen</h2>
-          <p className="text-sm">In einem Setup: {setups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/artefakte`}>{s.name}</Link></span>)}</p>
+          <p className="text-sm">In einem Projekt: {setups.map((s, i) => <span key={s.id}>{i > 0 && ", "}<Link href={`/setups/${s.id}/artefakte`}>{s.name}</Link></span>)}</p>
         </section>
       )}
     </div>

@@ -31,7 +31,7 @@ async function makeCoach(accountId?: string): Promise<Actor> {
 }
 
 describe("Etappe 33: Rolle Coach (nur lesen)", () => {
-  it("C01: kundenbezogener Coach sieht Kunde, Setups, Einsätze und Meine BDs – ändert nichts", async () => {
+  it("C01: kundenbezogener Coach sieht Kunde, Projekte, Einsätze und Meine BDs – ändert nichts", async () => {
     process.env.AI_PROVIDER = "test";
     process.env.FEATURE_BESETZUNG = "true";
     resetConfigCacheForTests();
@@ -54,7 +54,7 @@ describe("Etappe 33: Rolle Coach (nur lesen)", () => {
     expect(det.access).toMatchObject({ readOnly: true, manage: false, care: false, commercial: false });
     expect((await listEngagements(coach)).items.some((x) => x.id === r.engagement.id)).toBe(true);
     await expect(startRenewal(coach, r.engagement.id, { newEnd: plusDaysIso(todayIso(), 200) })).rejects.toBeInstanceOf(ForbiddenError);
-    // Keine Eingaben in Setups
+    // Keine Eingaben in Projekte
     await expect(smartDump(coach, { setupId: s.setupId, text: "Neue Information vom Kunden, bitte aufnehmen." })).rejects.toBeInstanceOf(ForbiddenError);
     await expect(createOpportunity(coach, { setupId: s.setupId, title: "Darf nicht", needDescription: "Coach legt nichts an.", kind: "VERVE_EXPERTE" })).rejects.toThrow();
   });
@@ -135,7 +135,7 @@ describe("Etappe 33: Rolle Coach (nur lesen)", () => {
     expect(res.opportunity.title).toBe("Performance-Tester Lasttest-Offensive");
     const sig = await db.query.signals.findFirst({ where: eq(schema.signals.id, res.acceptedObjectId) });
     expect(sig?.opportunityId).toBe(res.opportunity.id);
-    // Schnellbesetzung ohne Auftrag, Einsatz aktiv → Setup-Stufe „gestartet“
+    // Schnellbesetzung ohne Auftrag, Einsatz aktiv → Projekt-Stufe „gestartet“
     const setupName = `Stufe ${Date.now()}`;
     const st = await createSetup(david, { accountId: s.accountId, name: setupName, bdUserId: david.userId, creatorContribution: "BD_ZUSTAENDIG" });
     const opp = await createOpportunity(david, { setupId: st.id, title: "Einsatz ohne Auftrag", needDescription: "Läuft bereits beim Kunden.", kind: "FREELANCER_EXPERTE" });

@@ -12,7 +12,7 @@ import { deputyOf, ensureDefaultTeams, isTeamLead, isTeamMember, teamMemberIds, 
 
 /**
  * Vorgänge (Etappe 27, Kollaborationskern). Eine eigene Aufgabe, eine Anfrage an eine Person oder ein Team, eine
- * Prüfung oder eine Erinnerung – an einem Kunden, Setup, einer Chance, einem SOS oder ohne Bezug.
+ * Prüfung oder eine Erinnerung – an einem Kunden, Projekt, einer Chance, einem SOS oder ohne Bezug.
  *
  * Grundregeln:
  * - Auftraggeber:in (requester) und Bearbeiter:in (assignee) sind getrennt. Eine Anfrage wartet als „angefragt“,
@@ -106,7 +106,7 @@ export async function createWorkItem(actor: Actor, raw: unknown, tx0?: Tx) {
     parent && (i.subjectType === "OHNE" || !i.subjectId)
       ? await resolveSubject(actor, parent.subjectType, parent.subjectId)
       : await resolveSubject(actor, i.subjectType, i.subjectId || null);
-  if (subject.accountId && isReadOnlyFor(actor, subject.accountId)) throw new ForbiddenError("Der Coach-Zugang ist nur lesend – Vorgänge legen BD, Anker oder Sales Operations an.");
+  if (subject.accountId && isReadOnlyFor(actor, subject.accountId)) throw new ForbiddenError("Der Coach-Zugang ist nur lesend – Vorgänge legen BD, Kontaktpate oder Sales Operations an.");
 
   // Ziel bestimmen
   let assigneeUserId: string | null = null;

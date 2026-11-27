@@ -14,10 +14,10 @@ import { roleFamilyLabel } from "@/modules/roles/catalog";
 /**
  * Führungsebenen (Briefing 3, 10.2, 11.2–11.4, 4.3):
  *  - Unterstützungsaufträge: begrenzt, konkret; Fallverantwortung bleibt beim BD (F13).
- *  - Principal-/BD-Weekly und CEO-/Principal-Zielgespräch: Reviews ohne Setup-Bezug, Zugriff über Teilnehmerkreis.
+ *  - Principal-/BD-Weekly und CEO-/Principal-Zielgespräch: Reviews ohne Projekt-Bezug, Zugriff über Teilnehmerkreis.
  *  - Portfolio: dieselbe Datenbasis wie der operative Fall (Accountpläne), keine Doppelpflege, keine Rohquellen.
  *  - Ziele: versioniert; keine erfundenen Zielwerte, keine automatischen Quoten (F12).
- *  - Vertrauliche Notizen: expliziter Empfängerkreis, nie in Setup-, Accountplan- oder KI-Zusammenfassungen (S04).
+ *  - Vertrauliche Notizen: expliziter Empfängerkreis, nie in Projekt-, Accountplan- oder KI-Zusammenfassungen (S04).
  */
 
 // ---------------------------------------------------------------------------
@@ -46,8 +46,8 @@ export async function createSupportRequest(actor: Actor, raw: unknown) {
   let ctx: SetupContext | null = null;
   if (input.setupId) {
     ctx = await loadSetupContext(actor, input.setupId);
-    if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-    if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Nur Bearbeitende des Setups fragen Unterstützung an.");
+    if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+    if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Nur Bearbeitende des Projekts fragen Unterstützung an.");
   }
   return db.transaction(async (tx) => {
     const [r] = await tx
@@ -119,7 +119,7 @@ export async function listMySupportRequests(actor: Actor) {
 
 export async function listSupportRequestsForSetup(actor: Actor, setupId: string) {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
   const rows = await db.query.supportRequests.findMany({ where: eq(schema.supportRequests.setupId, setupId), orderBy: desc(schema.supportRequests.createdAt) });
   return decorate(actor, rows);
 }
@@ -194,7 +194,7 @@ export async function buildPortfolio(actor: Actor): Promise<{ entries: Portfolio
 }
 
 // ---------------------------------------------------------------------------
-// Führungs-Reviews (Principal/BD-Weekly, CEO/Principal-Zielgespräch) – ohne Setup, Zugriff über Teilnehmerkreis
+// Führungs-Reviews (Principal/BD-Weekly, CEO/Principal-Zielgespräch) – ohne Projekt, Zugriff über Teilnehmerkreis
 // ---------------------------------------------------------------------------
 
 export const createLeadershipReviewInput = z.object({
@@ -282,7 +282,7 @@ export async function prepareLeadershipReview(actor: Actor, reviewId: string) {
   };
 }
 
-/** Notiz-Entwurf, Entscheidung, Bestätigung, Korrektur: gleiche Semantik wie beim BD-/Anker-Weekly, Zugriff über Teilnehmer. */
+/** Notiz-Entwurf, Entscheidung, Bestätigung, Korrektur: gleiche Semantik wie beim BD-/Kontaktpaten-Weekly, Zugriff über Teilnehmer. */
 export async function saveLeadershipDraft(actor: Actor, reviewId: string, raw: { version: number; noteDraft: string }) {
   const { review } = await requireLeadershipReview(actor, reviewId);
   if (review.status === "BESTAETIGT") throw new TransitionError("Ein bestätigtes Review wird über eine Korrekturversion geändert.");
@@ -331,7 +331,7 @@ export async function confirmLeadershipReview(actor: Actor, reviewId: string, ra
   });
 }
 
-/** Vertrauliche Notiz (11.4): nur für den expliziten Empfängerkreis; nie in Setup/Accountplan/KI-Kontext. */
+/** Vertrauliche Notiz (11.4): nur für den expliziten Empfängerkreis; nie in Projekt/Accountplan/KI-Kontext. */
 export const addConfidentialNoteInput = z.object({
   reviewId: z.string().min(1),
   body: z.string().trim().min(3).max(8000),
@@ -557,7 +557,7 @@ export async function addGoalContribution(actor: Actor, raw: unknown) {
   if (!g) throw new NotFoundError("Ziel");
   const isLeader = hasRole(actor, "PRINCIPAL") || hasRole(actor, "CEO");
   if (!isLeader) {
-    // BD darf Beiträge für eigene Setups melden
+    // BD darf Beiträge für eigene Projekte melden
     if (!input.setupId) throw new ForbiddenError();
     const ctx = await loadSetupContext(actor, input.setupId);
     if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError();
@@ -572,7 +572,7 @@ export async function addGoalContribution(actor: Actor, raw: unknown) {
   return c;
 }
 
-/** Ziele sichtbar für CEO/Principal (alle) und für BD/Anker nur, wenn sie über Beiträge/Kunden beteiligt sind. */
+/** Ziele sichtbar für CEO/Principal (alle) und für BD/Kontaktpate nur, wenn sie über Beiträge/Kunden beteiligt sind. */
 export async function listGoals(actor: Actor) {
   const all = await db.query.goals.findMany({ where: eq(schema.goals.workspaceId, actor.workspaceId), orderBy: desc(schema.goals.updatedAt) });
   const isLeader = hasRole(actor, "PRINCIPAL") || hasRole(actor, "CEO");

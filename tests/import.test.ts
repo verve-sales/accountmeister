@@ -132,10 +132,10 @@ describe("Etappe 3 Teil B: Protokollimport und Outlook-Adapter (Briefing 13, S10
     await expect(importMailboxItem(david, { kind: "MAIL", externalId: "AAMkFIXTURE-0001", setupId: s.setupId })).rejects.toBeInstanceOf(ValidationError);
   });
 
-  it("Zugriff: fremder BD kann nicht in fremdes Setup importieren; nur eigene Importe sichtbar", async () => {
+  it("Zugriff: fremder BD kann nicht in fremdes Projekt importieren; nur eigene Importe sichtbar", async () => {
     const s = await ensureSeed();
     const lars = await actorFor("lars");
-    await expect(importProtocol(lars, { title: "Fremd", text: "Lars versucht in ein fremdes Setup zu importieren.", setupId: s.setupId })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(importProtocol(lars, { title: "Fremd", text: "Lars versucht in ein fremdes Projekt zu importieren.", setupId: s.setupId })).rejects.toBeInstanceOf(NotFoundError);
     const david = await actorFor("david");
     const mine = await listMyImports(david);
     const theirs = await listMyImports(lars);

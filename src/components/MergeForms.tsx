@@ -23,7 +23,7 @@ export function EngagementMergeForm({ g, back, showAccount = true }: { g: Engage
   );
 }
 
-/** Doppelte bzw. Platzhalter-Setups zusammenführen. */
+/** Doppelte bzw. Platzhalter-Projekte zusammenführen. */
 export function SetupMergeForm({ g, back, showAccount = true }: { g: SetupDuplicate; back?: string; showAccount?: boolean }) {
   return (
     <form action={cleanupMergeSetupsAction} className="space-y-1" style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
@@ -41,18 +41,18 @@ export function SetupMergeForm({ g, back, showAccount = true }: { g: SetupDuplic
   );
 }
 
-/** Setup-Seite: dieses Setup in einem anderen Setup desselben Kunden aufgehen lassen. */
+/** Projekt-Seite: dieses Projekt in einem anderen Projekt desselben Kunden aufgehen lassen. */
 export function SetupMergeInto({ setupId, setupName, others, back }: { setupId: string; setupName: string; others: { id: string; name: string }[]; back: string }) {
   if (!others.length) return null;
   return (
     <section className="card">
       <details>
-        <summary className="text-sm muted">In ein anderes Setup dieses Kunden überführen …</summary>
+        <summary className="text-sm muted">In ein anderes Projekt dieses Kunden überführen …</summary>
         <form action={cleanupMergeSetupsAction} className="mt-2 flex flex-wrap gap-2 items-end text-sm">
           <input type="hidden" name="back" value={back} />
           <input type="hidden" name="ids" value={setupId} />
-          <p className="w-full">Alles aus „{setupName}“ – Chancen, Positionen, Einsätze, Beobachtungen, Aktionen, Quellen, Beteiligte – zieht in das gewählte Setup; „{setupName}“ verschwindet danach. Nichts geht verloren.</p>
-          <div><label className="label" htmlFor={`mi-${setupId}`}>Ziel-Setup</label><select id={`mi-${setupId}`} name="keep" className="select" required defaultValue="">
+          <p className="w-full">Alles aus „{setupName}“ – Chancen, Positionen, Einsätze, Beobachtungen, Aktionen, Quellen, Beteiligte – zieht in das gewählte Projekt; „{setupName}“ verschwindet danach. Nichts geht verloren.</p>
+          <div><label className="label" htmlFor={`mi-${setupId}`}>Ziel-Projekt</label><select id={`mi-${setupId}`} name="keep" className="select" required defaultValue="">
             <option value="" disabled>Bitte wählen …</option>
             {others.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select></div>

@@ -90,7 +90,7 @@ describe("Etappe 17: Buying-Center-Berater und MEDDPICC-Vorbefüllung", () => {
     expect(after.versions).toHaveLength(2);
     expect(after.latest?.versionNo).toBe(2);
 
-    // Nina sieht dieses frische Setup gar nicht – weder lesend noch schreibend
+    // Nina sieht dieses frische Projekt gar nicht – weder lesend noch schreibend
     await expect(proposeBuyingCenterAdvice(nina, opp.id)).rejects.toBeInstanceOf(NotFoundError);
     await expect(saveBuyingCenterAdvice(nina, { opportunityId: opp.id, summary: "Unbefugter Versuch einer Fassung.", roles: [], openQuestions: [] })).rejects.toBeInstanceOf(NotFoundError);
   });

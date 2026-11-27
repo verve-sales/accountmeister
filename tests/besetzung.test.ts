@@ -58,7 +58,7 @@ describe("Etappe 28 (E1): Position – Zustände und Rechte", () => {
     await expect(updatePosition(david, open.id, { version: 1, title: "X-Rolle neu", ...base })).rejects.toBeInstanceOf(ConflictError);
   });
 
-  it("A01/A04: Anker, fremder BD und Sales Ops ohne Auftrag sehen die Position nicht; Sales Ops kann sie nicht anlegen", async () => {
+  it("A01/A04: Kontaktpate, fremder BD und Sales Ops ohne Auftrag sehen die Position nicht; Sales Ops kann sie nicht anlegen", async () => {
     const david = await actorFor("david");
     const nina = await actorFor("nina");
     const lars = await actorFor("lars");
@@ -202,10 +202,10 @@ describe("Etappe 28 (E1): Suchauftrag → Teamvorschau → Annahme → Kandidatu
     const oppAfter = await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, opp.id) });
     expect(oppAfter?.status).toBe(opp.status);
 
-    // A16: BD sieht Freelancer-Stammdaten, aber keine fremde Kandidaturhistorie; Anker gar nichts
+    // A16: BD sieht Freelancer-Stammdaten, aber keine fremde Kandidaturhistorie; Kontaktpate gar nichts
     const lars = await actorFor("lars");
     const { createSetup } = await import("@/modules/setups/service");
-    const setupL = (await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.accountId, s.otherAccountId) })) ?? (await createSetup(lars, { accountId: s.otherAccountId, name: "Lagerlogistik (fiktiv)", contextNote: "Setup beim anderen Kunden.", bdUserId: lars.userId, creatorContribution: "BD_ZUSTAENDIG" }));
+    const setupL = (await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.accountId, s.otherAccountId) })) ?? (await createSetup(lars, { accountId: s.otherAccountId, name: "Lagerlogistik (fiktiv)", contextNote: "Projekt beim anderen Kunden.", bdUserId: lars.userId, creatorContribution: "BD_ZUSTAENDIG" }));
     const oppL = await createOpportunity(lars, { setupId: setupL.id, title: "Anderer Kunde", needDescription: "Bedarf beim anderen Kunden, fiktiv.", kind: "FREELANCER_EXPERTE", ownerUserId: lars.userId });
     const pL = await createPosition(lars, oppL.id, { title: "Data Engineer", ...base });
     await changePositionStatus(lars, pL.id, { version: pL.version, status: "OFFEN" });
@@ -354,7 +354,7 @@ describe("Etappe 30: Schnellbesetzung, interne Besetzung, Suchauftrag selbst erl
     const pd = await getPositionDetail(david, r.position.id);
     expect(pd.candidacies[0]?.personName).toMatch(/Nina Demo/);
     expect(pd.candidacies[0]?.freelancer).toBeNull();
-    // Anker darf nicht
+    // Kontaktpate darf nicht
     await expect(quickFill(nina, opp.id, { title: "Noch eine", resourceKind: "INTERN", internalUserId: nina.userId })).rejects.toBeInstanceOf(ForbiddenError);
   });
 

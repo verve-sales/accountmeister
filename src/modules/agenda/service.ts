@@ -35,7 +35,7 @@ export function canMaintainAgenda(actor: Actor, account: typeof schema.accounts.
 
 async function requireAgendaAccount(actor: Actor, accountId: string) {
   const account = await getAccount(actor, accountId);
-  if (!canMaintainAgenda(actor, account)) throw new ForbiddenError("Die Kundenagenda pflegen BD, Anker, Principal oder Sales Operations des Kunden.");
+  if (!canMaintainAgenda(actor, account)) throw new ForbiddenError("Die Kundenagenda pflegen BD, Kontaktpate, Principal oder Sales Operations des Kunden.");
   return account;
 }
 

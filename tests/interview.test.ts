@@ -126,7 +126,7 @@ describe("Etappe 7A: Interview mit Rückfragen und Folgeaktivitäten", () => {
     expect(bc.gaps.some((g) => g.includes("Hypothesen"))).toBe(true);
   });
 
-  it("Setup-Ergänzung: bekannter Kontext wird nicht erneut gefragt; Vorschlag ergänzt das bestehende Setup ohne neuen Kunden; ohne KI feste Fragenfolge", async () => {
+  it("Projekt-Ergänzung: bekannter Kontext wird nicht erneut gefragt; Vorschlag ergänzt das bestehende Projekt ohne neuen Kunden; ohne KI feste Fragenfolge", async () => {
     process.env.AI_PROVIDER = "disabled";
     resetConfigCacheForTests();
     const s = await ensureSeed();
@@ -183,7 +183,7 @@ describe("Etappe 7B: Personenbewertung und Buyingcenter", () => {
     const lars = await actorFor("lars");
     const setup = await createSetup(david, { accountId: s.accountId, name: `Bewertungstest ${Date.now().toString(36)}`, contextNote: "Kontext", bdUserId: david.userId });
     const person = await createPerson(david, { accountId: s.accountId, displayName: "Frau Test-Budget", functionTitle: "CFO", setupId: setup.id });
-    // Anker Nina ist Mitglied (lesend) und hält die Beziehung zu einer zweiten Person
+    // Kontaktpate Nina ist Mitglied (lesend) und hält die Beziehung zu einer zweiten Person
     await addMember(david, setup.id, { userId: nina.userId, contribution: "ANKER_EINFUEHRUNG" });
     const person2 = await createPerson(david, { accountId: s.accountId, displayName: "Herr Test-Fach", functionTitle: "Architekt", setupId: setup.id });
     await db.insert(schema.relationships).values({ personId: person2.id, holderUserId: nina.userId, setupId: setup.id, state: "IM_AUSTAUSCH", createdBy: nina.userId });
@@ -198,7 +198,7 @@ describe("Etappe 7B: Personenbewertung und Buyingcenter", () => {
     expect(confirmed.epistemicStatus).toBe("SACHVERHALT_BESTAETIGT");
     expect(confirmed.version).toBe(hyp.version + 1);
 
-    // Anker Nina (Mitglied) bewertet „ihre“ Person; CEO ohne Mitgliedschaft und Beziehung darf nicht bewerten
+    // Kontaktpate Nina (Mitglied) bewertet „ihre“ Person; CEO ohne Mitgliedschaft und Beziehung darf nicht bewerten
     await upsertAssessment(nina, { personId: person2.id, setupId: setup.id, decisionRole: "FACHLICHE_BEWERTUNG", stance: "POSITIV", influence: "MITTEL" });
     await expect(upsertAssessment(clemens, { personId: person.id, setupId: setup.id, stance: "POSITIV" })).rejects.toBeInstanceOf(ForbiddenError);
 

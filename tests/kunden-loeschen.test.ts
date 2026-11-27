@@ -15,7 +15,7 @@ import { actorFor, ensureSeed } from "./helpers";
 process.env.UPLOAD_DIR = mkdtempSync(path.join(tmpdir(), "verve-uploads-"));
 
 describe("Kunden löschen (zwei Schritte)", () => {
-  it("Archivieren → Wiederherstellen → Archivieren → endgültig löschen entfernt Setups, Personen, Quellen samt Datei, Gespräche; Fremde und Nicht-Berechtigte werden abgewiesen", async () => {
+  it("Archivieren → Wiederherstellen → Archivieren → endgültig löschen entfernt Projekte, Personen, Quellen samt Datei, Gespräche; Fremde und Nicht-Berechtigte werden abgewiesen", async () => {
     process.env.AI_PROVIDER = "test";
     resetConfigCacheForTests();
     await ensureSeed();
@@ -45,7 +45,7 @@ describe("Kunden löschen (zwei Schritte)", () => {
     expect(preview.sources).toBeGreaterThanOrEqual(2); // Assistent-Dialog + Dokument
     expect(preview.canDelete).toBe(false);
 
-    // Ohne Archivierung kein Löschen; Fremder BD und Anker dürfen gar nicht
+    // Ohne Archivierung kein Löschen; Fremder BD und Kontaktpate dürfen gar nicht
     await expect(deleteAccountPermanently(david, { accountId: account.id, confirmName: account.name, reason: "Testkunde, versehentlich angelegt." })).rejects.toBeInstanceOf(TransitionError);
     const lars = await actorFor("lars");
     await expect(archiveAccount(lars, account.id)).rejects.toBeInstanceOf(NotFoundError);
@@ -88,7 +88,7 @@ describe("Kunden löschen (zwei Schritte)", () => {
     const audit = await db.query.auditEvents.findFirst({ where: eq(schema.auditEvents.action, "account.deleted"), orderBy: (a, { desc }) => desc(a.at) });
     expect((audit?.changes as { name: string; begruendung: string }).name).toBe("Löschwerk GmbH");
     expect((audit?.changes as { begruendung: string }).begruendung).toMatch(/versehentlich/);
-    // KI-Protokoll bleibt erhalten (nur vom Setup gelöst)
+    // KI-Protokoll bleibt erhalten (nur vom Projekt gelöst)
     const jobs = await db.query.aiJobs.findMany({ where: eq(schema.aiJobs.actorUserId, david.userId) });
     expect(jobs.length).toBeGreaterThan(0);
 

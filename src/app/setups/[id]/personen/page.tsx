@@ -83,7 +83,7 @@ export default async function PersonenPage({ params, searchParams }: { params: P
         )}
         {people.length === 0 ? <p className="empty">Noch keine Personen erfasst.</p> : (
           <table className="list">
-            <thead><tr><th>Person</th><th>Funktion / Bereich</th><th>Bekannte Zuständigkeit</th><th>Beziehungen in diesem Setup</th><th>Zugriff</th>{canEdit && <th></th>}</tr></thead>
+            <thead><tr><th>Person</th><th>Funktion / Bereich</th><th>Bekannte Zuständigkeit</th><th>Beziehungen in diesem Projekt</th><th>Zugriff</th>{canEdit && <th></th>}</tr></thead>
             <tbody>
               {people.map(({ person, currentFunction, relationships }) => (
                 <tr key={person.id}>

@@ -35,10 +35,10 @@ export function ProvisionCalculator({ isPrincipal, config }: { isPrincipal: bool
           {isPrincipal ? (
             <>
               <label className="text-sm flex items-center gap-1"><input type="radio" name="rcp" checked={recipient === "PRINCIPAL"} onChange={() => setRecipient("PRINCIPAL")} /> Principal (alle Stufen)</label>
-              <label className="text-sm flex items-center gap-1"><input type="radio" name="rcp" checked={recipient !== "PRINCIPAL"} onChange={() => setRecipient("BD")} /> BD / Anker (höchstens 20 %)</label>
+              <label className="text-sm flex items-center gap-1"><input type="radio" name="rcp" checked={recipient !== "PRINCIPAL"} onChange={() => setRecipient("BD")} /> BD / Kontaktpate (höchstens 20 %)</label>
             </>
           ) : (
-            <strong className="text-sm">BD / Anker</strong>
+            <strong className="text-sm">BD / Kontaktpate</strong>
           )}
           <span className="muted text-xs ml-auto">Kostenpauschale {PROVISION_CONFIG.costTiers[0]!.perDay} €/Tag · Finding Fee {eur(PROVISION_CONFIG.findingFee)} · Signing Fee {eur(PROVISION_CONFIG.signingFee)} je Deal</span>
         </div>

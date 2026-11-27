@@ -4,7 +4,7 @@ import { seed } from "./seed";
 
 seed(db)
   .then((r) => {
-    console.log("Seed angewendet (fiktive Demo-Daten). Setup:", r.setupId);
+    console.log("Seed angewendet (fiktive Demo-Daten). Projekt:", r.setupId);
     process.exit(0);
   })
   .catch((e) => {

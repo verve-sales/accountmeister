@@ -61,7 +61,7 @@ export function PositionForm({ opportunityId, back, users, defaultBdId, roles }:
       <div>
         <label className="label" htmlFor="pf-bd">Verantwortlicher BD</label>
         <select id="pf-bd" name="bdUserId" className="input" defaultValue={defaultBdId ?? ""}>
-          <option value="">(Chance/Setup-BD)</option>
+          <option value="">(Chance/Projekt-BD)</option>
           {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
       </div>
@@ -140,7 +140,7 @@ export async function StaffingBlock({ actor, opportunityId, back, users, default
             <form action={createStaffingIntakeAction} className="mt-2 space-y-2">
               <input type="hidden" name="opportunityId" value={opportunityId} />
               <input type="hidden" name="back" value={back} />
-              <textarea name="text" className="input" rows={6} required minLength={20} maxLength={40000} placeholder="Text einfügen – es entstehen Vorschläge mit Belegstellen, die du vor der Übernahme prüfst. Der Text bleibt als Quelle am Setup." />
+              <textarea name="text" className="input" rows={6} required minLength={20} maxLength={40000} placeholder="Text einfügen – es entstehen Vorschläge mit Belegstellen, die du vor der Übernahme prüfst. Der Text bleibt als Quelle am Projekt." />
               <button className="btn btn-secondary btn-small" type="submit">Vorschläge erzeugen</button>
             </form>
           </details>

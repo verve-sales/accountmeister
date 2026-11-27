@@ -20,7 +20,7 @@ describe("Zugriff (Briefing 16.2, S01/S02/S09)", () => {
     expect(visible.map((a) => a.id)).toContain(s.otherAccountId);
   });
 
-  it("S02: CEO sieht Setup-Zusammenfassung, aber keine Rohquellen durch den Führungstitel", async () => {
+  it("S02: CEO sieht Projekt-Zusammenfassung, aber keine Rohquellen durch den Führungstitel", async () => {
     const s = await ensureSeed();
     const ceo = await actorFor("clemens");
     const detail = await getSetupDetail(ceo, s.setupId);
@@ -31,14 +31,14 @@ describe("Zugriff (Briefing 16.2, S01/S02/S09)", () => {
     expect(detail.canEdit).toBe(false);
   });
 
-  it("Persönliche Quelle: nur der Quelleninhaber, nicht die Setup-Kollegin", async () => {
+  it("Persönliche Quelle: nur der Quelleninhaber, nicht die Projekt-Kollegin", async () => {
     const s = await ensureSeed();
     const david = await actorFor("david");
     const nina = await actorFor("nina");
     const own = await getSource(david, s.privateSourceId);
     expect(own.source.accessClass).toBe("PERSOENLICH");
     await expect(getSource(nina, s.privateSourceId)).rejects.toBeInstanceOf(NotFoundError);
-    // Ninas Setup-Sicht enthält die persönliche Quelle Davids nicht, wohl aber die Setup-Notiz
+    // Ninas Projekt-Sicht enthält die persönliche Quelle Davids nicht, wohl aber die Projekt-Notiz
     const detail = await getSetupDetail(nina, s.setupId);
     expect(detail.sources.some((x) => x.id === s.privateSourceId)).toBe(false);
     expect(detail.sources.some((x) => x.accessClass === "SETUP")).toBe(true);
@@ -49,16 +49,16 @@ describe("Zugriff (Briefing 16.2, S01/S02/S09)", () => {
     const admin = await actorFor("admin");
     await expect(getSetupDetail(admin, s.setupId)).rejects.toBeInstanceOf(NotFoundError);
     expect(await listVisibleAccounts(admin)).toHaveLength(0);
-    await expect(createSetup(admin, { accountId: s.accountId, name: "Admin-Setup", bdUserId: "" })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(createSetup(admin, { accountId: s.accountId, name: "Admin-Projekt", bdUserId: "" })).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it("Anker ohne Account-Bezug kann für fremde Kunden kein Setup anlegen", async () => {
+  it("Kontaktpate ohne Account-Bezug kann für fremde Kunden kein Projekt anlegen", async () => {
     const s = await ensureSeed();
     const nina = await actorFor("nina");
     await expect(createSetup(nina, { accountId: s.otherAccountId, name: "Fremdkunde", bdUserId: "" })).rejects.toBeInstanceOf(NotFoundError);
   });
 
-  it("Etappe 24: Principal (arbeitsraumweit) darf Setups sehen und bearbeiten – ein fremder BD weiterhin nicht", async () => {
+  it("Etappe 24: Principal (arbeitsraumweit) darf Projekte sehen und bearbeiten – ein fremder BD weiterhin nicht", async () => {
     const s = await ensureSeed();
     const petra = await actorFor("petra");
     const lars = await actorFor("lars");

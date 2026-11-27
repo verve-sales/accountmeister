@@ -30,7 +30,7 @@ export default async function QuellePage({ params, searchParams }: { params: Pro
   const fmtSize = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
   return (
     <div className="space-y-6 max-w-3xl">
-      <p className="text-sm">{q.setup ? <Link href={`/setups/${q.setup.id}`}>← Zurück zum Setup „{q.setup.name}“</Link> : <Link href="/meine-arbeit">← Meine Arbeit</Link>}</p>
+      <p className="text-sm">{q.setup ? <Link href={`/setups/${q.setup.id}`}>← Zurück zum Projekt „{q.setup.name}“</Link> : <Link href="/meine-arbeit">← Meine Arbeit</Link>}</p>
       <div className="flex flex-wrap items-baseline gap-3"><h1 className="text-2xl font-semibold">{q.source.title}</h1>{q.source.isLocked && <Status label="Gesperrt" />}</div>
       <Feedback params={sp} />
       <section className="card">

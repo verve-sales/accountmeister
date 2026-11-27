@@ -4,7 +4,7 @@ import { ProvisionCalculator } from "@/components/ProvisionCalculator";
 import { provisionAccess } from "@/modules/provision/access";
 import { configFor } from "@/modules/provision/model";
 
-/** Provisionsrechner für Anker, BDs und Principals (zum freien Ausfüllen, ohne Speicherung). */
+/** Provisionsrechner für Kontaktpate, BDs und Principals (zum freien Ausfüllen, ohne Speicherung). */
 export default async function Page() {
   const actor = await getCurrentActor();
   if (!actor) redirect("/anmelden");
@@ -13,7 +13,7 @@ export default async function Page() {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-semibold">Provisionsrechner</h1>
-        <p className="muted">Der Provisionsrechner steht Ankern, BDs und Principals zur Verfügung.</p>
+        <p className="muted">Der Provisionsrechner steht Kontaktpaten, BDs und Principals zur Verfügung.</p>
       </div>
     );
   }

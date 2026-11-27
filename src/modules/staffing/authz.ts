@@ -14,8 +14,8 @@ import { isResponsibleBd, type AccountRow } from "@/modules/identity/authz";
  *  - Kandidaturen: wie interne Konditionen
  *  - Freelancer-Stammdaten: über eine sichtbare Kandidatur oder als Mitglied Sales Operations / Principal / CEO (Pool)
  *
- * Bewusst NICHT abgeleitet: canEditSetup (dort darf Sales Operations arbeitsraumweit), Setup-Mitgliedschaft von Ankern,
- * die Dashboard-Sicht. Anker sehen keine Positionen und keine Kandidaturen.
+ * Bewusst NICHT abgeleitet: canEditSetup (dort darf Sales Operations arbeitsraumweit), Projekt-Mitgliedschaft von Kontaktpaten,
+ * die Dashboard-Sicht. Kontaktpate sehen keine Positionen und keine Kandidaturen.
  */
 
 export type PositionRow = typeof schema.staffingPositions.$inferSelect;
@@ -36,7 +36,7 @@ export type PositionAccess = {
   preview: boolean;
 };
 
-/** BD-Kontext an einem Kunden/Setup: Positions-BD, zuständiger BD, Setup-BD, kundenbezogener oder arbeitsraumweiter Principal, CEO. */
+/** BD-Kontext an einem Kunden/Projekt: Positions-BD, zuständiger BD, Projekt-BD, kundenbezogener oder arbeitsraumweiter Principal, CEO. */
 export function isStaffingManager(actor: Actor, account: AccountRow, setupBdUserId: string | null, positionBdUserId?: string | null): boolean {
   if (account.workspaceId !== actor.workspaceId) return false;
   if (positionBdUserId && positionBdUserId === actor.userId && (hasRole(actor, "BD", account.id) || hasRole(actor, "PRINCIPAL", account.id))) return true;

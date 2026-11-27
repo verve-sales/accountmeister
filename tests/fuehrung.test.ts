@@ -20,7 +20,7 @@ describe("Etappe 4: Führungsebenen (Briefing 10.2, 11.2–11.4, F12, F13, S04)"
     const david = await actorFor("david");
     const petra = await actorFor("petra");
     const nina = await actorFor("nina");
-    await expect(createSupportRequest(david, { addresseeUserId: nina.userId, setupId: s.setupId, task: "Sparring zur Gesprächsfrage" })).rejects.toBeInstanceOf(ValidationError); // Anker ist kein Adressat
+    await expect(createSupportRequest(david, { addresseeUserId: nina.userId, setupId: s.setupId, task: "Sparring zur Gesprächsfrage" })).rejects.toBeInstanceOf(ValidationError); // Kontaktpate ist kein Adressat
     await expect(createSupportRequest(david, { addresseeUserId: petra.userId, setupId: s.setupId, task: "Hilfe" })).rejects.toBeInstanceOf(ValidationError); // zu unkonkret
     const r = await createSupportRequest(david, { addresseeUserId: petra.userId, setupId: s.setupId, task: "Prüfen, ob ein bestehender Sponsor eine Einführung bei Frau Brandt ermöglichen kann.", dueDate: "2026-10-01" });
     expect(r.status).toBe("ANGEFRAGT");
@@ -28,7 +28,7 @@ describe("Etappe 4: Führungsebenen (Briefing 10.2, 11.2–11.4, F12, F13, S04)"
     await expect(respondToSupportRequest(david, r.id, { version: r.version, decision: "ANNEHMEN" })).rejects.toBeInstanceOf(ForbiddenError);
     const acc = await respondToSupportRequest(petra, r.id, { version: r.version, decision: "ANNEHMEN" });
     expect(acc.status).toBe("ANGENOMMEN");
-    // Setup: BD bleibt zuständig, Setup-Zuordnung unverändert
+    // Projekt: BD bleibt zuständig, Projekt-Zuordnung unverändert
     const setup = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, s.setupId) });
     expect(setup?.bdUserId).toBe(david.userId);
     const inSetup = await listSupportRequestsForSetup(david, s.setupId);
@@ -74,7 +74,7 @@ describe("Etappe 4: Führungsebenen (Briefing 10.2, 11.2–11.4, F12, F13, S04)"
     expect(c.version.confirmedBy).toBe(petra.userId);
   });
 
-  it("S04 / 11.4: vertrauliche Coaching-Notiz nur für Empfängerkreis; nicht im Setup, Accountplan oder KI-Kontext", async () => {
+  it("S04 / 11.4: vertrauliche Coaching-Notiz nur für Empfängerkreis; nicht im Projekt, Accountplan oder KI-Kontext", async () => {
     process.env.AI_PROVIDER = "test";
     resetConfigCacheForTests();
     const s = await ensureSeed();
@@ -92,7 +92,7 @@ describe("Etappe 4: Führungsebenen (Briefing 10.2, 11.2–11.4, F12, F13, S04)"
     expect(davidView.confidential).toHaveLength(0);
     const petraView = await prepareLeadershipReview(petra, r.id);
     expect(petraView.confidential.some((n) => n.body === secret)).toBe(true);
-    // Nicht im Setup, nicht im Accountplan, nicht im KI-Kontext
+    // Nicht im Projekt, nicht im Accountplan, nicht im KI-Kontext
     const detail = await getSetupDetail(nina, s.setupId);
     expect(JSON.stringify(detail)).not.toContain("VERTRAULICH-");
     const plan = await buildAccountPlan(david, s.accountId);
@@ -113,7 +113,7 @@ describe("Etappe 4: Führungsebenen (Briefing 10.2, 11.2–11.4, F12, F13, S04)"
     const david = await actorFor("david");
     const nina = await actorFor("nina");
     await expect(createGoal(david, { title: "BD-Ziel", ownerUserId: david.userId, desiredOutcome: "x".repeat(10) })).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(createGoal(petra, { title: "Mit Zahl ohne Basis", ownerUserId: petra.userId, desiredOutcome: "Zwei neue Setups beim Beispielkonzern", targetValue: "2" })).rejects.toBeInstanceOf(ValidationError);
+    await expect(createGoal(petra, { title: "Mit Zahl ohne Basis", ownerUserId: petra.userId, desiredOutcome: "Zwei neue Projekte beim Beispielkonzern", targetValue: "2" })).rejects.toBeInstanceOf(ValidationError);
     const g = await createGoal(petra, { title: "Zugang im Migrationsteam aufbauen", ownerUserId: petra.userId, accountId: s.accountId, desiredOutcome: "Belegter Kontakt zur Kapazitätsplanung des Migrationsteams.", successCriterion: "Beziehungsstand ‚Im Austausch‘ mit Beleg", baseline: "unbekannt – bisher nur Name/Funktion bekannt", periodTo: "2026-12-31" });
     expect(g.status).toBe("ENTWURF");
     const got = await getGoal(petra, g.id);
@@ -133,12 +133,12 @@ describe("Etappe 4: Führungsebenen (Briefing 10.2, 11.2–11.4, F12, F13, S04)"
     expect(u.status).toBe("GEAENDERT");
     expect(u.agreedByUserIds).toEqual([]);
     expect((await getGoal(petra, g.id)).versions).toHaveLength(2);
-    // Beiträge: belegt nur mit Quelle; BD darf für eigenes Setup melden
+    // Beiträge: belegt nur mit Quelle; BD darf für eigenes Projekt melden
     await expect(addGoalContribution(david, { goalId: g.id, setupId: s.setupId, evidencedContribution: "Frau Brandt vorgestellt" })).rejects.toBeInstanceOf(ValidationError);
     const src = await db.query.sources.findFirst({ where: eq(schema.sources.setupId, s.setupId) });
     const c = await addGoalContribution(david, { goalId: g.id, setupId: s.setupId, expectedContribution: "Kontaktweg über Frau Keller", evidencedContribution: "Vorstellung angefragt", evidenceSourceId: src!.id });
     expect(c?.evidenceSourceId).toBe(src!.id);
-    // Sichtbarkeit: Nina (Anker mit Setup-Mitgliedschaft am Kunden) sieht das Ziel wegen Kundenbezug; Lars nicht
+    // Sichtbarkeit: Nina (Kontaktpate mit Projekt-Mitgliedschaft am Kunden) sieht das Ziel wegen Kundenbezug; Lars nicht
     expect((await listGoals(nina)).some((x) => x.id === g.id)).toBe(true);
     const lars = await actorFor("lars");
     expect((await listGoals(lars)).some((x) => x.id === g.id)).toBe(false);

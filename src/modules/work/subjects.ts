@@ -7,12 +7,12 @@ import { getAccount } from "@/modules/accounts/service";
 
 /**
  * Bezugsobjekte von Vorgängen und Kommentaren (Etappe 27). Die Sichtbarkeit leitet sich immer vom Bezugsobjekt ab –
- * wer den Kunden/das Setup/die Chance nicht sehen darf, sieht auch Kommentare und Vorgänge daran nicht (Ausnahme:
+ * wer den Kunden/das Projekt/die Chance nicht sehen darf, sieht auch Kommentare und Vorgänge daran nicht (Ausnahme:
  * direkt Beteiligte eines Vorgangs, siehe work/service).
  */
 export const subjectTypeValues = ["KUNDE", "SETUP", "CHANCE", "SOS", "POSITION", "EINSATZ", "INITIATIVE", "OHNE"] as const;
 export type SubjectType = (typeof subjectTypeValues)[number];
-export const subjectTypeLabel: Record<string, string> = { KUNDE: "Kunde", SETUP: "Setup", CHANCE: "Chance", SOS: "SOS", POSITION: "Position", EINSATZ: "Einsatz", INITIATIVE: "Initiative", OHNE: "ohne Bezug", VORGANG: "Vorgang" };
+export const subjectTypeLabel: Record<string, string> = { KUNDE: "Kunde", SETUP: "Projekt", CHANCE: "Chance", SOS: "SOS", POSITION: "Position", EINSATZ: "Einsatz", INITIATIVE: "Initiative", OHNE: "ohne Bezug", VORGANG: "Vorgang" };
 
 export type ResolvedSubject = { type: SubjectType; id: string | null; accountId: string | null; label: string; link: string | null };
 
@@ -25,7 +25,7 @@ export async function resolveSubject(actor: Actor, type: string, id: string | nu
     }
     case "SETUP": {
       const ctx = await loadSetupContext(actor, id);
-      if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+      if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
       return { type, id, accountId: ctx.account.id, label: `${ctx.account.name} · ${ctx.setup.name}`, link: `/setups/${id}` };
     }
     case "CHANCE": {

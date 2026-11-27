@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { moveOpportunityProjectAction } from "../../actions";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db/client";
 import { canManageStaffingAt, freelancerOptions, topCandidatesForOpportunities } from "@/modules/staffing/service";
@@ -134,7 +135,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   const isSideBranch = opp.status === "ZURUECKGESTELLT" || opp.status === "BEENDET";
   const mayReassign = canReassignResponsibility(actor, ctx.account);
   const [runs, oppScoped, setupScoped, salesOps] = await Promise.all([listRuns(actor, { opportunityId: id }), listPlaybooks(actor, { scope: "OPPORTUNITY", activeOnly: true }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true }), listSalesOpsUsers(actor.workspaceId)]);
-  // Auf der Chance auch Setup-Muster anbieten (z. B. Verlängerung) – sie hängen dann an dieser Chance.
+  // Auf der Chance auch Projekt-Muster anbieten (z. B. Verlängerung) – sie hängen dann an dieser Chance.
   const oppPlaybooks = [...oppScoped, ...setupScoped];
   const oppText = `${opp.title} ${opp.needDescription} ${opp.trigger ?? ""}`;
   const recommended =
@@ -149,6 +150,8 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
   const staffedBy = (await topCandidatesForOpportunities([opp.id]).catch(() => new Map<string, { name: string; status: string }>())).get(opp.id);
   const staffedByText = staffedBy ? (staffedBy.status === "BESETZT" ? staffedBy.name : null) : null;
   const staffingOn = getConfig().FEATURE_BESETZUNG === "true";
+  // e69: Projekt als Gruppierung – Auswahl der Projekte desselben Kunden
+  const projectsOfAccount = (await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, opp.accountId), columns: { id: true, name: true, status: true } })).filter((x) => x.status !== "ARCHIVIERT" || x.id === opp.setupId).sort((a, b) => a.name.localeCompare(b.name, "de"));
   const oppEngagements = staffingOn ? await db.query.engagements.findMany({ where: eq(schema.engagements.opportunityId, opp.id), columns: { id: true, status: true, title: true, plannedEnd: true } }) : [];
   // e65: laufende Einsätze dieser Chance – für den Hinweis „Stufe nachziehen“ und den Abschnitt Auftrag und Einsatz
   const runningEngs = oppEngagements.filter((x) => ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET"].includes(x.status));
@@ -276,7 +279,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
                         <input name={`moves.${k}.title`} className="input sm:col-span-5" placeholder={`Zug ${k + 1}`} defaultValue={m.title} maxLength={200} />
                         <input name={`moves.${k}.why`} className="input sm:col-span-4" placeholder="Warum jetzt" defaultValue={m.why} maxLength={600} />
                         <select name={`moves.${k}.ownerRole`} className="select sm:col-span-2" defaultValue={m.ownerRole}>
-                          <option value="BD">BD</option><option value="ANKER">Anker</option><option value="PRINCIPAL">Principal</option>
+                          <option value="BD">BD</option><option value="ANKER">Kontaktpate</option><option value="PRINCIPAL">Principal</option>
                         </select>
                         <input type="hidden" name={`moves.${k}.evidenceQuote`} value={m.evidenceQuote} />
                         {m.evidenceQuote && <div className="muted text-xs sm:col-span-12">Textstelle: „{m.evidenceQuote.slice(0, 140)}“</div>}
@@ -327,6 +330,23 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       <section className="card" id="chance">
         <h2 className="font-semibold mb-2">Chance</h2>
         <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+          <div className="sm:col-span-2">
+            <dt className="muted">Projekt</dt>
+            <dd>
+              <Link href={`/setups/${opp.setupId}`}>{projectsOfAccount.find((x) => x.id === opp.setupId)?.name ?? "Projekt"}</Link>
+              {canEdit && (
+                <details className="inline-details text-sm">
+                  <summary className="muted"> ändern</summary>
+                  <form action={moveOpportunityProjectAction} className="flex flex-wrap gap-2 items-end mt-1">
+                    <input type="hidden" name="opportunityId" value={opp.id} />
+                    <select name="setupId" className="input" defaultValue="" aria-label="Anderes Projekt"><option value="">– neues Projekt –</option>{projectsOfAccount.filter((x) => x.id !== opp.setupId).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+                    <input name="newName" className="input" placeholder="Name des neuen Projekts" aria-label="Name des neuen Projekts" />
+                    <button className="btn btn-small" type="submit">Zuordnen</button>
+                  </form>
+                </details>
+              )}
+            </dd>
+          </div>
           <div className="sm:col-span-2"><dt className="muted">Wofür</dt><dd><strong>{chanceKindLabel[opp.kind]}</strong>{opp.roleId ? ` · ${d.roles.find((r) => r.id === opp.roleId)?.name ?? "Rolle"}` : " · Standardrolle noch offen"}{opp.headcount ? ` · ${opp.headcount}×` : ""}{opp.horizon ? ` · ${opp.horizon}` : ""}{opp.status === "ANTIZIPIERT" && <span className="muted"> · antizipiert – vom Kunden noch nicht ausgesprochen</span>}</dd></div>
           {(opp.status === "BEAUFTRAGT" || staffedByText) && (
             <div className="sm:col-span-2" id="besetzt-mit">
@@ -471,7 +491,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
       {getConfig().FEATURE_ARTEFAKTE === "true" && (
       <section className="card">
         <h2 className="font-semibold mb-2">Passende Artefakte</h2>
-        <p className="text-sm">Klärung der Chance, Profilvorstellung und Auftrags-/Startunterlagen entstehen als Textentwürfe im Setup: <Link href={`/setups/${ctx.setup.id}/artefakte`}>Artefakte des Setups →</Link> (A7 Bedarfsbriefing, A8 Risiko-/Qualifizierungsnotiz, A9 Profilangebot, A10 Auswahl-/Entscheidungsstand, A11 Auftrags-/Startübergabe, A12 Verlängerung/Entwicklung). Kundentexte enthalten keine internen Einordnungen.</p>
+        <p className="text-sm">Klärung der Chance, Profilvorstellung und Auftrags-/Startunterlagen entstehen als Textentwürfe im Projekt: <Link href={`/setups/${ctx.setup.id}/artefakte`}>Artefakte des Projekts →</Link> (A7 Bedarfsbriefing, A8 Risiko-/Qualifizierungsnotiz, A9 Profilangebot, A10 Auswahl-/Entscheidungsstand, A11 Auftrags-/Startübergabe, A12 Verlängerung/Entwicklung). Kundentexte enthalten keine internen Einordnungen.</p>
       </section>
       )}
 
@@ -769,7 +789,7 @@ export default async function BedarfPage({ params, searchParams }: { params: Pro
         )}
       </section>
 
-      {/* Buying-Center-Berater (Etappe 17, Anker-/BD-Wunsch: Rollen durchgehen, beraten, Hinweise zum Lückenfüllen) */}
+      {/* Buying-Center-Berater (Etappe 17, Kontaktpaten-/BD-Wunsch: Rollen durchgehen, beraten, Hinweise zum Lückenfüllen) */}
       <section className="card">
         <h2 className="font-semibold mb-2">Buying-Center-Berater</h2>
         {bcProposalError && <p className="error text-sm" role="alert">{bcProposalError}</p>}

@@ -46,7 +46,7 @@ describe("Pilot-Feedback: Fahrplan Verlängerung, Vertrag am Einsatz, Belege opt
     expect(ms.find((m) => m.key === "WIRKUNG")!.state).toBe("SPAETER");
   });
 
-  it("Vertrag am Einsatz: Verweis speichern; der zuständige BD sieht Setup-Quellen (Verträge) seines Kunden", async () => {
+  it("Vertrag am Einsatz: Verweis speichern; der zuständige BD sieht Projekt-Quellen (Verträge) seines Kunden", async () => {
     const s = await ensureSeed();
     const david = await actorFor("david");
     const order = await recordExistingEngagement(david, s.accountId, { setupId: s.setupId, title: `Vertragseinsatz ${Date.now().toString(36)}`, plannedEnd: iso(200), evidenceText: "Rahmenvertrag 2026, Abruf 7" });

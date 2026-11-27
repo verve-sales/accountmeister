@@ -41,7 +41,7 @@ describe("Etappe 10: Chance als Zentrum (E-045)", () => {
     resetConfigCacheForTests();
     const seed = await ensureSeed();
     const david = await actorFor("david");
-    const s = await createSetup(david, { accountId: seed.accountId, name: "Chancen-Setup", contextNote: "Migration des Lagersystems.", visibility: "MITGLIEDER", creatorContribution: "BD_ZUSTAENDIG" });
+    const s = await createSetup(david, { accountId: seed.accountId, name: "Chancen-Projekt", contextNote: "Migration des Lagersystems.", visibility: "MITGLIEDER", creatorContribution: "BD_ZUSTAENDIG" });
     const c = await createOpportunity(david, { setupId: s.id, title: "Testkoordination Migration", needDescription: "Der Kunde braucht jemanden, der die Tests koordiniert.", kind: "VERVE_EXPERTE", roleName: "Test Management", headcount: "2", horizon: "Q1 2027", anticipated: "on" });
     expect(c.status).toBe("ANTIZIPIERT");
     expect(c.kind).toBe("VERVE_EXPERTE");

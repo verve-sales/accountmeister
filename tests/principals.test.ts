@@ -64,7 +64,7 @@ describe("Etappe 38 (Use Case 7): Meine Principals – Ziele je Quartal und Gesp
     await placeHead(david, s.setupId, "Kopf");
     // Neukunde: erster Einsatz beginnt heute
     const acc = await createAccount(david, { name: `Neukunde ${Date.now().toString(36)} (fiktiv)`, responsibleBdUserId: david.userId });
-    const setup = await createSetup(david, { accountId: acc.id, name: "Neukunden-Setup", contextNote: "Kontext", bdUserId: david.userId });
+    const setup = await createSetup(david, { accountId: acc.id, name: "Neukunden-Projekt", contextNote: "Kontext", bdUserId: david.userId });
     const newEng = await placeHead(david, setup.id, "Erstkopf");
     await assignRole(admin, { userId: petra.userId, role: "PRINCIPAL", accountId: acc.id, level: "PRINCIPAL" });
     // Verlängerungen: eine bestätigt, eine abgelehnt – heute entschieden

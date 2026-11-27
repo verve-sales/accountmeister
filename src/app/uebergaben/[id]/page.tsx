@@ -46,7 +46,7 @@ export default async function UebergabePage({ params, searchParams }: { params: 
       <Feedback params={sp} />
       <section className="card">
         <dl className="text-sm grid gap-x-6 gap-y-1" style={{ gridTemplateColumns: "max-content 1fr" }}>
-          <Row k="Kunde · Setup">{p.kunde} · {p.setup}</Row>
+          <Row k="Kunde · Projekt">{p.kunde} · {p.setup}</Row>
           <Row k="Person">{p.person} <span className="muted">({p.personArt === "FREELANCER" ? "Freelancer" : "intern"})</span> · <Link href={`/einsaetze/${h.engagementId}`}>Einsatz</Link></Row>
           <Row k="Rolle">{p.rolle}</Row>
           <Row k="Laufzeit">{p.beginn ? fmtDate(p.beginn) : "offen"} – {p.ende ? fmtDate(p.ende) : "offen"}</Row>

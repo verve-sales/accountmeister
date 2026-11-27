@@ -120,12 +120,12 @@ export async function requireSignal(actor: Actor, signalId: string) {
 }
 
 /**
- * Prüfung übernehmen: Der Akteur wird Owner des Hinweises. Zulässig für Bearbeitende des Setups.
+ * Prüfung übernehmen: Der Akteur wird Owner des Hinweises. Zulässig für Bearbeitende des Projekts.
  * Die Übernahme durch eine andere Person läuft über eine angenommene Übergabe (handovers/service.ts).
  */
 export async function takeOverSignal(actor: Actor, signalId: string, expectedVersion: number) {
   const { signal, ctx } = await requireSignal(actor, signalId);
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du bist an diesem Projekt nicht bearbeitend beteiligt.");
   assertSignalTransition(signal.status, "PRUEFUNG_UEBERNOMMEN");
   return db.transaction(async (tx) => {
     const [updated] = await tx

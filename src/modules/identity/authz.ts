@@ -20,7 +20,7 @@ export type SetupContext = {
   setup: SetupRow;
   account: AccountRow;
   membership: MembershipRow | null; // Mitgliedschaft des Akteurs
-  /** Akteur ist für mindestens eine nicht beendete Chance dieses Setups verantwortlich (Etappe 21b) */
+  /** Akteur ist für mindestens eine nicht beendete Chance dieses Projekts verantwortlich (Etappe 21b) */
   ownsOpportunity: boolean;
 };
 
@@ -35,7 +35,7 @@ export async function loadSetupContext(actor: Actor, setupId: string, tx: Tx | D
     (await tx.query.setupMemberships.findFirst({
       where: and(eq(schema.setupMemberships.setupId, setupId), eq(schema.setupMemberships.userId, actor.userId)),
     })) ?? null;
-  // Wer für eine Chance verantwortlich ist, arbeitet am Setup mit – auch ohne ausdrückliche Beteiligung.
+  // Wer für eine Chance verantwortlich ist, arbeitet am Projekt mit – auch ohne ausdrückliche Beteiligung.
   const owned = await tx.query.opportunities.findFirst({
     where: and(eq(schema.opportunities.setupId, setupId), eq(schema.opportunities.ownerUserId, actor.userId), ne(schema.opportunities.status, "BEENDET")),
     columns: { id: true },
@@ -51,7 +51,7 @@ export function isResponsibleBd(actor: Actor, account: AccountRow): boolean {
   return account.responsibleBdUserId === actor.userId && hasRole(actor, "BD", account.id);
 }
 
-/** Zusammenfassende Kundensicht (Überblick, Setup-Liste) */
+/** Zusammenfassende Kundensicht (Überblick, Projekt-Liste) */
 export function canViewAccount(actor: Actor, account: AccountRow): boolean {
   if (account.workspaceId !== actor.workspaceId) return false;
   if (isResponsibleBd(actor, account)) return true;
@@ -69,7 +69,7 @@ export function canCreateAccount(actor: Actor): boolean {
 }
 
 /**
- * Delegation (Briefing-Nachtrag, Etappe 19): wer darf die operative Zuständigkeit (BD, Anker, Verantwortlich
+ * Delegation (Briefing-Nachtrag, Etappe 19): wer darf die operative Zuständigkeit (BD, Kontaktpate, Verantwortlich
  * je Chance) für einen Kunden jederzeit umstellen? Bewusst schmaler als canEditSetup – Principal/CEO erhalten
  * dadurch nur das Recht, Zuständigkeiten neu zuzuweisen, keine pauschalen Bearbeitungsrechte auf Inhalte.
  */
@@ -82,7 +82,7 @@ export function canReassignResponsibility(actor: Actor, account: AccountRow): bo
 }
 
 // ---------------------------------------------------------------------------
-// Setup
+// Projekt
 // ---------------------------------------------------------------------------
 
 export function canViewSetup(actor: Actor, ctx: SetupContext): boolean {
@@ -114,7 +114,7 @@ export function canEditSetup(actor: Actor, ctx: SetupContext): boolean {
   return false;
 }
 
-/** Wer darf ein Setup für einen Kunden anlegen? Anker (Kontext) und BD; Principal ebenfalls. */
+/** Wer darf ein Projekt für einen Kunden anlegen? Kontaktpate (Kontext) und BD; Principal ebenfalls. */
 export function canCreateSetup(actor: Actor, account: AccountRow): boolean {
   if (!canViewAccount(actor, account) && !hasRole(actor, "BD") && !hasRole(actor, "ANKER")) return false;
   return hasRole(actor, "ANKER", account.id) || hasRole(actor, "BD", account.id) || hasRole(actor, "PRINCIPAL", account.id) || hasRole(actor, "CEO") || isSalesOps(actor);
@@ -160,7 +160,7 @@ export function isParty(actor: Actor, h: typeof schema.handovers.$inferSelect): 
   return h.senderUserId === actor.userId || h.receiverUserId === actor.userId;
 }
 
-/** Schreibrecht auf Kundenebene (Personen anlegen/pflegen): zuständiger BD, Principal, account-bezogene BD/Anker-Rollen. */
+/** Schreibrecht auf Kundenebene (Personen anlegen/pflegen): zuständiger BD, Principal, account-bezogene BD/Kontaktpaten-Rollen. */
 export function hasRoleForAccountWrite(actor: Actor, account: AccountRow): boolean {
   if (account.workspaceId !== actor.workspaceId) return false;
   if (isResponsibleBd(actor, account)) return true;
@@ -172,7 +172,7 @@ export function hasRoleForAccountWrite(actor: Actor, account: AccountRow): boole
 
 /**
  * Entscheidungsrecht (Etappe 22): Kritische Übergänge – Chance bestätigen/Status setzen, Angebot als vorgestellt
- * oder akzeptiert markieren, Auftrag/Start bestätigen, Verantwortung übernehmen – bleiben bei BD, Anker, Principal
+ * oder akzeptiert markieren, Auftrag/Start bestätigen, Verantwortung übernehmen – bleiben bei BD, Kontaktpate, Principal
  * oder CEO. Wer nur Sales Operations ist, bereitet vor, entscheidet aber nicht.
  */
 export function assertDecisionRight(actor: Actor, what: string): void {
@@ -186,5 +186,5 @@ export async function isSalesOpsOnlyUser(userId: string, tx: Tx | Db = db): Prom
 }
 
 export async function assertCanCarryResponsibility(userId: string, tx: Tx | Db = db): Promise<void> {
-  if (await isSalesOpsOnlyUser(userId, tx)) throw new ValidationError("Sales Operations bereitet vor, übernimmt aber keine Verantwortung für Kunden, Setups oder Chancen – bitte BD oder Principal wählen.");
+  if (await isSalesOpsOnlyUser(userId, tx)) throw new ValidationError("Sales Operations bereitet vor, übernimmt aber keine Verantwortung für Kunden, Projekte oder Chancen – bitte BD oder Principal wählen.");
 }

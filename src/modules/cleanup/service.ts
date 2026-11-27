@@ -17,7 +17,7 @@ import { freelancerKey } from "@/modules/staffing/dedupe";
  *  - Einsätze mit überschrittenem Ende → abschließen
  *  - doppelte Einsätze (gleiche Person beim gleichen Kunden, überlappende Laufzeit) → zusammenführen
  *  - Einsätze interner Moco-Projekte (Kunde „Verve Consulting“) → entfernen, Kunde archivieren
- *  - doppelte Setups und Personen je Kunde → zusammenführen
+ *  - doppelte Projekte und Personen je Kunde → zusammenführen
  */
 
 export function canClean(actor: Actor): boolean {
@@ -192,16 +192,16 @@ async function setupScores(ids: string[]) {
   return new Map(r.rows.map((x) => [x.id, Number(x.score)]));
 }
 
-/** Setups eines Kunden mit gleichem Namen (ohne Zusätze in Klammern, Groß-/Kleinschreibung, Satzzeichen). */
-/** Platzhalter-Setups aus Import oder Schnellerfassung („Ohne Bereich“, „Allgemein“ …) */
+/** Projekte eines Kunden mit gleichem Namen (ohne Zusätze in Klammern, Groß-/Kleinschreibung, Satzzeichen). */
+/** Platzhalter-Projekte aus Import oder Schnellerfassung („Ohne Bereich“, „Allgemein“ …) */
 export function isPlaceholderSetup(name: string) {
   const n = normSetupName(name);
   return ["ohnebereich", "allgemein", "neuessetup", "setup", "entwurf", "sonstiges", "unbekannt"].includes(n) || n.startsWith("erstkontakt");
 }
 
 /**
- * Doppelte Setups je Kunde: gleicher Name, oder (e59) ein Platzhalter-Setup neben einem echten Setup – das
- * Platzhalter-Setup geht dann im echten auf.
+ * Doppelte Projekte je Kunde: gleicher Name, oder (e59) ein Platzhalter-Projekt neben einem echten Projekt – das
+ * Platzhalter-Projekt geht dann im echten auf.
  */
 export async function findSetupDuplicates(actor: Actor, accountId?: string): Promise<SetupDuplicate[]> {
   const setups = await db.query.projectSetups.findMany({ where: accountId ? and(eq(schema.projectSetups.workspaceId, actor.workspaceId), eq(schema.projectSetups.accountId, accountId)) : eq(schema.projectSetups.workspaceId, actor.workspaceId), columns: { id: true, name: true, accountId: true, status: true } });
@@ -307,7 +307,7 @@ export async function findPlausibility(actor: Actor): Promise<PlausibilityFindin
   const key = (n: string) => n.toLowerCase().replace(/\(.*?\)/g, "").replace(/\b(gmbh|ag|se|kg|co|mbh|eg|e\.?v)\b\.?/g, "").replace(/[^a-z0-9äöüß]+/g, "");
   const groups = new Map<string, typeof accounts>();
   for (const a of accounts.filter((x) => x.status !== "ARCHIVED")) groups.set(key(a.name), [...(groups.get(key(a.name)) ?? []), a]);
-  for (const g of groups.values()) if (g.length > 1) for (const a of g) out.push({ kind: "KUNDE_DOPPELT", title: a.name, detail: `${g.length}× angelegt – zusammenlegen: Setups über „In ein anderes Setup überführen“, danach den leeren Kunden archivieren`, href: `/kunden/${a.id}` });
+  for (const g of groups.values()) if (g.length > 1) for (const a of g) out.push({ kind: "KUNDE_DOPPELT", title: a.name, detail: `${g.length}× angelegt – zusammenlegen: Projekte über „In ein anderes Projekt überführen“, danach den leeren Kunden archivieren`, href: `/kunden/${a.id}` });
   return out;
 }
 
@@ -460,8 +460,8 @@ export async function mergeEngagements(actor: Actor, keepId: string, dropIds: st
   return { kept: keepId, removed: drops.length, moved };
 }
 
-/** Setups eines Kunden zusammenführen: alles, was am entfernten Setup hängt, zieht ins behaltene. */
-/** e59: Setups eines Kunden zusammenführen dürfen Bereinigung (GF, Sales Ops, Administration) und wer die Verantwortung am Kunden umstellen darf. */
+/** Projekte eines Kunden zusammenführen: alles, was am entfernten Projekt hängt, zieht ins behaltene. */
+/** e59: Projekte eines Kunden zusammenführen dürfen Bereinigung (GF, Sales Ops, Administration) und wer die Verantwortung am Kunden umstellen darf. */
 export async function canMergeSetupsAt(actor: Actor, accountId: string): Promise<boolean> {
   if (canClean(actor)) return true;
   const acc = await db.query.accounts.findFirst({ where: and(eq(schema.accounts.id, accountId), eq(schema.accounts.workspaceId, actor.workspaceId)) });
@@ -471,11 +471,11 @@ export async function canMergeSetupsAt(actor: Actor, accountId: string): Promise
 
 export async function mergeSetups(actor: Actor, keepId: string, dropIds: string[]) {
   const keep = await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.id, keepId), eq(schema.projectSetups.workspaceId, actor.workspaceId)) });
-  if (!keep) throw new NotFoundError("Setup");
-  if (!(await canMergeSetupsAt(actor, keep.accountId))) throw new ForbiddenError("Setups zusammenführen dürfen Geschäftsführung, Sales Operations, Administration, Principal und der zuständige BD.");
+  if (!keep) throw new NotFoundError("Projekt");
+  if (!(await canMergeSetupsAt(actor, keep.accountId))) throw new ForbiddenError("Projekte zusammenführen dürfen Geschäftsführung, Sales Operations, Administration, Principal und der zuständige BD.");
   const drops = await db.query.projectSetups.findMany({ where: and(inArray(schema.projectSetups.id, dropIds.filter((d) => d !== keepId).concat("-")), eq(schema.projectSetups.workspaceId, actor.workspaceId)) });
-  if (!drops.length) throw new ValidationError("Bitte mindestens ein weiteres Setup wählen.");
-  if (drops.some((d) => d.accountId !== keep.accountId)) throw new ValidationError("Nur Setups desselben Kunden lassen sich zusammenführen.");
+  if (!drops.length) throw new ValidationError("Bitte mindestens ein weiteres Projekt wählen.");
+  if (drops.some((d) => d.accountId !== keep.accountId)) throw new ValidationError("Nur Projekte desselben Kunden lassen sich zusammenführen.");
   const { Cascade, loadForeignKeys } = await import("@/modules/accounts/deletion");
   let dropped = 0;
   await db.transaction(async (tx) => {

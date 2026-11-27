@@ -8,7 +8,7 @@ import type { Actor } from "@/modules/identity/actor";
 import { canEditSetup, canViewSetup, loadSetupContext, type SetupContext } from "@/modules/identity/authz";
 
 /**
- * BD-/Anker-Weekly (Briefing 11.1): Vorbereitung aus dem letzten bestätigten Stand, gemeinsame Notiz
+ * BD-/Kontaktpaten-Weekly (Briefing 11.1): Vorbereitung aus dem letzten bestätigten Stand, gemeinsame Notiz
  * (automatisch nur als Entwurf), Ergebnisvorschau, Bestätigung durch eine verantwortliche Person mit
  * sichtbarem Bestätiger, versionierter Stand; spätere Änderungen erzeugen eine Korrekturversion (11.4).
  *
@@ -40,9 +40,9 @@ export async function createReview(actor: Actor, raw: unknown) {
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const ctx = await loadSetupContext(actor, input.setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst für dieses Setup kein Weekly anlegen.");
-  // Teilnehmer: Angabe oder alle bearbeitenden Setup-Beteiligten
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst für dieses Projekt kein Weekly anlegen.");
+  // Teilnehmer: Angabe oder alle bearbeitenden Projekt-Beteiligten
   let participants = input.participantIds?.filter(Boolean) ?? [];
   if (participants.length === 0) {
     const members = await db.query.setupMemberships.findMany({ where: eq(schema.setupMemberships.setupId, ctx.setup.id) });
@@ -79,7 +79,7 @@ export async function requireReview(actor: Actor, reviewId: string) {
   return { review, ctx, participants, isParticipant, canWork: isParticipant || canEditSetup(actor, ctx) };
 }
 
-/** Letzter bestätigter Stand eines Setups – Basis für „Was hat sich geändert?“ und die Vorbereitung. */
+/** Letzter bestätigter Stand eines Projekts – Basis für „Was hat sich geändert?“ und die Vorbereitung. */
 export async function getLastConfirmedVersion(setupId: string, beforeReviewId?: string) {
   const confirmed = await db.query.reviews.findMany({
     where: and(eq(schema.reviews.setupId, setupId), eq(schema.reviews.status, "BESTAETIGT"), beforeReviewId ? ne(schema.reviews.id, beforeReviewId) : undefined),
@@ -328,7 +328,7 @@ export async function listReviewsForSetup(setupId: string) {
   return db.query.reviews.findMany({ where: eq(schema.reviews.setupId, setupId), orderBy: desc(schema.reviews.scheduledFor) });
 }
 
-// Für Setup-Abschnitt 2: Zeitpunkt des letzten bestätigten Stands
+// Für Projekt-Abschnitt 2: Zeitpunkt des letzten bestätigten Stands
 export async function getSinceForSetup(setupId: string): Promise<{ since: Date | null; label: string }> {
   const last = await getLastConfirmedVersion(setupId);
   if (!last) return { since: null, label: "Noch kein bestätigtes Weekly – es werden alle Einträge gezeigt." };

@@ -97,7 +97,7 @@ describe("e48: GF-Start, leisere KI, Dokumentenfluss", () => {
     expect(only[0]!.resolved.count).toBe(3);
   });
 
-  it("K02: Kunde erkannt, Setup nicht eindeutig → kein geratenes Setup; eine Rückfrage ordnet alle Karten der Mail zu; Chance-Karte legt je Platz eine Position an", async () => {
+  it("K02: Kunde erkannt, Projekt nicht eindeutig → kein geratenes Projekt; eine Rückfrage ordnet alle Karten der Mail zu; Chance-Karte legt je Platz eine Position an", async () => {
     env();
     await ensureSeed();
     const david = await actorFor("david");
@@ -130,7 +130,7 @@ describe("e48: GF-Start, leisere KI, Dokumentenfluss", () => {
     }
   });
 
-  it("K03: Was ein Anker einspielt, geht an den BD des Setups – mit Benachrichtigung", async () => {
+  it("K03: Was ein Kontaktpate einspielt, geht an den BD des Projekts – mit Benachrichtigung", async () => {
     env();
     const s = await ensureSeed();
     const nina = await actorFor("nina");

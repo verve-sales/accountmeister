@@ -13,7 +13,7 @@ import { getAccount } from "./service";
  * Kunden löschen – zwei Schritte (E-042):
  *  1. Archivieren: Kunde verschwindet aus den Arbeitslisten, alles bleibt erhalten und ist rückholbar.
  *  2. Endgültig löschen: nur für archivierte Kunden, mit Begründung und Namensbestätigung. Entfernt den Kunden
- *     mit allen Setups, Ansprechpartnern, Beziehungen, Einschätzungen, Quellen (samt Dokumentdateien), Signalen,
+ *     mit allen Projekten, Ansprechpartnern, Beziehungen, Einschätzungen, Quellen (samt Dokumentdateien), Signalen,
  *     Bedarfen, Aktionen, Vorschlägen, Reviews, Interviews und Assistentengesprächen.
  *
  * Die Kaskade wird zur Laufzeit aus den Fremdschlüsseln der Datenbank abgeleitet – so kann keine Tabelle vergessen
@@ -239,7 +239,7 @@ export async function deleteAccountPermanently(actor: Actor, raw: unknown): Prom
   return db.transaction(async (tx) => {
     const fks = await loadForeignKeys(tx);
     const cascade = new Cascade(tx, fks);
-    // Assistentengespräche hängen ohne Fremdschlüssel am Kontext (Kunde/Setup) – von Hand mitnehmen.
+    // Assistentengespräche hängen ohne Fremdschlüssel am Kontext (Kunde/Projekt) – von Hand mitnehmen.
     const setups = await tx.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, account.id), columns: { id: true } });
     const contextIds = [account.id, ...setups.map((s) => s.id)];
     const threads = await tx.query.assistantThreads.findMany({ where: and(eq(schema.assistantThreads.workspaceId, actor.workspaceId), inArray(schema.assistantThreads.contextId, contextIds)), columns: { id: true } });

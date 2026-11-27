@@ -14,7 +14,7 @@ async function freshAccount(name: string) {
   const david = await actorFor("david");
   const nina = await actorFor("nina");
   const account = await createAccount(david, { name: `${name} ${Date.now().toString(36)} (fiktiv)`, responsibleBdUserId: david.userId });
-  const setup = await createSetup(david, { accountId: account.id, name: `${name}-Setup`, contextNote: "Kontext", bdUserId: david.userId });
+  const setup = await createSetup(david, { accountId: account.id, name: `${name}-Projekt`, contextNote: "Kontext", bdUserId: david.userId });
   await db.insert(schema.setupMemberships).values({ setupId: setup.id, userId: nina.userId, contribution: "ANKER_KONTEXT", canEdit: true });
   return { david, nina, account, setup };
 }
@@ -39,7 +39,7 @@ describe("Etappe 13: CEO-Dashboard", () => {
     // Accountziel: 3 Positionen in Solution-Architektur
     const goal = await createAccountGoal(petra, { accountId: account.id, title: "CEO-Test: Ausbau Solution-Architektur", desiredOutcome: "Kapazität in der Zielarchitektur ausbauen.", roleFamily: "SOLUTION_ARCHITEKTUR", targetHeadcount: 3 });
 
-    // Zusammenarbeit: Anker erfasst eine Beobachtung, BD erledigt eine Aktion
+    // Zusammenarbeit: Kontaktpate erfasst eine Beobachtung, BD erledigt eine Aktion
     await captureObservation(nina, { setupId: setup.id, observation: "CEO-Test: Beobachtung für die Zusammenarbeit." });
     const action = await createAction(david, { setupId: setup.id, title: "CEO-Test: Aktion", ownerUserId: david.userId, agreedInConversation: "true" });
     await changeActionStatus(david, action.id, { version: action.version, status: "ERLEDIGT", result: "Erledigt." });

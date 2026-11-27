@@ -55,7 +55,7 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
         {p.openQuestions.length > 0 && (
           <div className="mt-2"><span className="muted">Vor der Bestätigung klären: </span><ul className="list-disc ml-5">{p.openQuestions.map((q, i) => <li key={i}>{q}</li>)}</ul></div>
         )}
-        {done && d.proposal.resultSetupId && <p className="mt-2">Übernommen: <Link href={`/setups/${d.proposal.resultSetupId}`}>zum Setup</Link>{d.proposal.resultAccountId ? <> · <Link href={`/kunden/${d.proposal.resultAccountId}`}>zum Kunden</Link></> : null}</p>}
+        {done && d.proposal.resultSetupId && <p className="mt-2">Übernommen: <Link href={`/setups/${d.proposal.resultSetupId}`}>zum Projekt</Link>{d.proposal.resultAccountId ? <> · <Link href={`/kunden/${d.proposal.resultAccountId}`}>zum Kunden</Link></> : null}</p>}
       </section>
 
       {!done && (
@@ -65,9 +65,9 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
 
             {d.targetCtx && (
               <section className="card text-sm">
-                <h2 className="font-semibold mb-1">Ziel: bestehendes Setup</h2>
-                <p>Kunde <strong>{d.targetCtx.account.name}</strong>, Setup <strong>{d.targetCtx.setup.name}</strong>. Es wird kein neuer Kunde angelegt; die ausgewählten Elemente ergänzen dieses Setup.</p>
-                <div className="mt-2"><label className="label" htmlFor="documentAccessClass">Wer darf die Quelle (Transkript/Dokument) im Setup sehen?</label>
+                <h2 className="font-semibold mb-1">Ziel: bestehendes Projekt</h2>
+                <p>Kunde <strong>{d.targetCtx.account.name}</strong>, Projekt <strong>{d.targetCtx.setup.name}</strong>. Es wird kein neuer Kunde angelegt; die ausgewählten Elemente ergänzen dieses Projekt.</p>
+                <div className="mt-2"><label className="label" htmlFor="documentAccessClass">Wer darf die Quelle (Transkript/Dokument) im Projekt sehen?</label>
                   <select id="documentAccessClass" name="documentAccessClass" className="select" defaultValue="SETUP">{schema.accessClassEnum.enumValues.map((v) => <option key={v} value={v}>{accessClassLabel[v]}</option>)}</select></div>
               </section>
             )}
@@ -102,11 +102,11 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
             </section>
 
             <section className="card">
-              <h2 className="font-semibold mb-2">2. Setup (Arbeitszusammenhang)</h2>
+              <h2 className="font-semibold mb-2">2. Projekt (Arbeitszusammenhang)</h2>
               <div className="grid sm:grid-cols-2 gap-3">
-                <div><label className="label" htmlFor="setupName">Name des Setups</label><input id="setupName" name="setupName" className="input" required minLength={3} maxLength={200} defaultValue={p.setup?.name ?? (p.organization ? `Erstkontakt ${p.organization.name}` : "")} /></div>
+                <div><label className="label" htmlFor="setupName">Name des Projekts</label><input id="setupName" name="setupName" className="input" required minLength={3} maxLength={200} defaultValue={p.setup?.name ?? (p.organization ? `Erstkontakt ${p.organization.name}` : "")} /></div>
                 <div>
-                  <label className="label" htmlFor="documentAccessClass">Wer darf das Dokument im Setup sehen?</label>
+                  <label className="label" htmlFor="documentAccessClass">Wer darf das Dokument im Projekt sehen?</label>
                   <select id="documentAccessClass" name="documentAccessClass" className="select" defaultValue="SETUP">
                     {schema.accessClassEnum.enumValues.map((v) => <option key={v} value={v}>{accessClassLabel[v]}</option>)}
                   </select>
@@ -186,7 +186,7 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
                     <label className="flex items-center gap-2 text-sm pt-2"><input type="checkbox" name={`actions.${i}.include`} defaultChecked /> übernehmen</label>
                     <div className="grid sm:grid-cols-[1fr_auto_auto] gap-2">
                       <input name={`actions.${i}.title`} className="input" defaultValue={x.title} aria-label="Aktion" maxLength={300} />
-                      <select name={`actions.${i}.ownerRole`} className="select" defaultValue={x.ownerRole} aria-label="Rolle"><option value="BD">BD</option><option value="ANKER">Anker</option><option value="PRINCIPAL">Principal</option></select>
+                      <select name={`actions.${i}.ownerRole`} className="select" defaultValue={x.ownerRole} aria-label="Rolle"><option value="BD">BD</option><option value="ANKER">Kontaktpate</option><option value="PRINCIPAL">Principal</option></select>
                       <input name={`actions.${i}.dueHint`} className="input" defaultValue={x.dueHint} placeholder="Frist" aria-label="Frist" maxLength={100} style={{ width: "10rem" }} />
                       <input name={`actions.${i}.description`} className="input sm:col-span-3" defaultValue={x.description} placeholder="Beschreibung (optional)" aria-label="Beschreibung" maxLength={2000} />
                       <div className="sm:col-span-3">{quote(x.evidenceQuote)}</div>
@@ -198,7 +198,7 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
 
             <section className="card">
               <h2 className="font-semibold mb-2">7. Kontaktaufnahmen ({p.contacts.length} vorgeschlagen)</h2>
-              <p className="muted text-sm mb-2">Vorschlag für den Anker: Anlass, möglicher Weg, Entwurf zum Bearbeiten. Es wird nichts versendet.</p>
+              <p className="muted text-sm mb-2">Vorschlag für den Kontaktpaten: Anlass, möglicher Weg, Entwurf zum Bearbeiten. Es wird nichts versendet.</p>
               <div className="space-y-3">
                 {p.contacts.map((x, i) => (
                   <div key={i} className="grid sm:grid-cols-[auto_1fr] gap-2 items-start border-t pt-2">
@@ -236,13 +236,13 @@ export default async function AnlagevorschlagPage({ params, searchParams }: { pa
                 <ul className="list-disc ml-5">
                   {p.artifacts.map((a, i) => <li key={i}><strong>{a.code} {getTemplate(a.code)?.name ?? ""}</strong> – {a.why}</li>)}
                 </ul>
-                <p className="muted mt-2">Artefakte legst du nach der Übernahme im Setup unter „Artefakte“ an; sie greifen dann auf die hier übernommenen Quellen und Objekte zu.</p>
+                <p className="muted mt-2">Artefakte legst du nach der Übernahme im Projekt unter „Artefakte“ an; sie greifen dann auf die hier übernommenen Quellen und Objekte zu.</p>
               </section>
             )}
 
             <div className="flex flex-wrap gap-3 items-center">
-              <button className="btn" type="submit">{d.targetCtx ? "Ausgewählte Elemente ins Setup übernehmen" : "Kunde, Setup und ausgewählte Elemente anlegen"}</button>
-              <span className="muted text-sm">Alles entsteht im ungeprüften Zustand und kann danach im Setup bearbeitet werden.</span>
+              <button className="btn" type="submit">{d.targetCtx ? "Ausgewählte Elemente ins Projekt übernehmen" : "Kunde, Projekt und ausgewählte Elemente anlegen"}</button>
+              <span className="muted text-sm">Alles entsteht im ungeprüften Zustand und kann danach im Projekt bearbeitet werden.</span>
             </div>
           </form>
 

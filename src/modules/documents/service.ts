@@ -20,7 +20,7 @@ import { deleteStoredFile, readStoredFile, relativePathFor, storeFile } from "./
 const sha = (b: Buffer | string) => createHash("sha256").update(b).digest("hex");
 
 export const uploadDocumentInput = z.object({
-  /** Setup, dem das Dokument zugeordnet wird; leer = persönliches Dokument ohne Setup (z. B. Kundenanlage aus Dokument) */
+  /** Projekt, dem das Dokument zugeordnet wird; leer = persönliches Dokument ohne Projekt (z. B. Kundenanlage aus Dokument) */
   setupId: z.string().optional().or(z.literal("")),
   title: z.string().trim().max(200).optional().or(z.literal("")),
   accessClass: z.enum(schema.accessClassEnum.enumValues).default("SETUP"),
@@ -46,9 +46,9 @@ export async function uploadDocument(actor: Actor, raw: unknown, file: UploadedF
     await requireEditableSetup(actor, input.setupId);
     setupId = input.setupId;
   } else if (!canCreateAccount(actor)) {
-    throw new ForbiddenError("Dokumente ohne Setup-Bezug können nur BD oder Principal hochladen (Kundenanlage).");
+    throw new ForbiddenError("Dokumente ohne Projekt-Bezug können nur BD oder Principal hochladen (Kundenanlage).");
   }
-  // Ohne Setup gibt es keinen Berechtigungskontext – deshalb immer persönlich, bis das Dokument einem Setup zugeordnet wird.
+  // Ohne Projekt gibt es keinen Berechtigungskontext – deshalb immer persönlich, bis das Dokument einem Projekt zugeordnet wird.
   const accessClass = setupId ? input.accessClass : "PERSOENLICH";
 
   const buf = Buffer.from(await file.arrayBuffer());
@@ -137,7 +137,7 @@ export async function eraseDocumentFile(tx: Tx | Db, sourceId: string): Promise<
   return true;
 }
 
-/** Persönliche Dokumente ohne Setup des Akteurs (Kundenanlage aus Dokument), neueste zuerst. */
+/** Persönliche Dokumente ohne Projekt des Akteurs (Kundenanlage aus Dokument), neueste zuerst. */
 export async function listMyUnassignedDocuments(actor: Actor) {
   const rows = await db
     .select({ source: schema.sources, doc: schema.documents })
@@ -149,12 +149,12 @@ export async function listMyUnassignedDocuments(actor: Actor) {
   return rows;
 }
 
-/** Ein setup-loses Dokument dem (neu angelegten) Setup zuordnen. */
+/** Ein setup-loses Dokument dem (neu angelegten) Projekt zuordnen. */
 export async function attachSourceToSetup(tx: Tx | Db, actor: Actor, sourceId: string, setupId: string, accessClass: (typeof schema.accessClassEnum.enumValues)[number]) {
   const source = await tx.query.sources.findFirst({ where: and(eq(schema.sources.id, sourceId), eq(schema.sources.workspaceId, actor.workspaceId)) });
   if (!source) throw new NotFoundError("Quelle");
   if (source.ownerUserId !== actor.userId) throw new ForbiddenError("Nur der Quelleninhaber ordnet die Quelle zu.");
-  if (source.setupId) throw new ValidationError("Die Quelle ist bereits einem Setup zugeordnet.");
+  if (source.setupId) throw new ValidationError("Die Quelle ist bereits einem Projekt zugeordnet.");
   await tx.update(schema.sources).set({ setupId, accessClass }).where(eq(schema.sources.id, sourceId));
   await recordAudit(tx, actor, "source.attached_to_setup", "SOURCE", sourceId, { setupId, accessClass });
 }

@@ -25,7 +25,7 @@ export async function syncArtifactTemplates(db: Db): Promise<void> {
 export const DEMO_WORKSPACE_NAME = "Verve (Pilot, fiktive Daten)";
 
 export const DEMO_USERS = {
-  nina: { email: "nina.demo@verve.example", displayName: "Nina Demo (Anker)" },
+  nina: { email: "nina.demo@verve.example", displayName: "Nina Demo (Kontaktpate)" },
   david: { email: "david.demo@verve.example", displayName: "David Demo (BD)" },
   petra: { email: "petra.demo@verve.example", displayName: "Petra Demo (Principal)" },
   clemens: { email: "clemens.demo@verve.example", displayName: "Clemens Demo (CEO)" },
@@ -91,7 +91,7 @@ export async function seed(db: Db): Promise<SeedResult> {
     const [plattform] = await tx.insert(schema.orgUnits).values({ accountId: account.id, name: "Plattformteam" }).returning();
     const [migration] = await tx.insert(schema.orgUnits).values({ accountId: account.id, name: "Migrationsteam" }).returning();
 
-    // Setup „Plattformteam“: Nina trägt Kontext bei (keine Ansprache), David ist BD
+    // Projekt „Plattformteam“: Nina trägt Kontext bei (keine Ansprache), David ist BD
     const [setup] = await tx
       .insert(schema.projectSetups)
       .values({
@@ -105,7 +105,7 @@ export async function seed(db: Db): Promise<SeedResult> {
         createdBy: users.nina,
       })
       .returning();
-    if (!setup) throw new Error("Setup");
+    if (!setup) throw new Error("Projekt");
     await tx.insert(schema.setupMemberships).values([
       { setupId: setup.id, userId: users.nina, contribution: "ANKER_KONTEXT", contributionNote: "Bringt Projektkontext ein und beantwortet fachliche Rückfragen. Keine Ansprache neuer Personen vereinbart.", canEdit: true },
       { setupId: setup.id, userId: users.david, contribution: "BD_ZUSTAENDIG", contributionNote: "Operativ zuständiger BD.", canEdit: true },
@@ -148,7 +148,7 @@ export async function seed(db: Db): Promise<SeedResult> {
       { personId: brandt.id, holderUserId: users.david, setupId: setup.id, state: "NAME_FUNKTION_BEKANNT", contextNote: "Name aus Weekly-Notiz; kein persönlicher Kontakt.", createdBy: users.david },
     ]);
 
-    // Ninas Beobachtung aus dem Weekly → Hinweis (NEU), Quelle mit Setup-Zugriff
+    // Ninas Beobachtung aus dem Weekly → Hinweis (NEU), Quelle mit Projekt-Zugriff
     const [obsSource] = await tx
       .insert(schema.sources)
       .values({
@@ -157,7 +157,7 @@ export async function seed(db: Db): Promise<SeedResult> {
         type: "NOTIZ",
         title: "Weekly-Notiz Nina (Demo)",
         body: "Im Migrationsteam wird über zusätzlichen Testkoordinationsaufwand in der nächsten Phase gesprochen. Unklar, ob externe Unterstützung vorgesehen ist.",
-        origin: "Weekly Anker/BD",
+        origin: "Weekly Kontaktpate/BD",
         sourceTime: new Date("2026-09-14T10:00:00Z"),
         ownerUserId: users.nina,
         accessClass: "SETUP",

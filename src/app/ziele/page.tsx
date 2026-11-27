@@ -41,7 +41,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
       <section className="card">
         <h2 className="font-semibold mb-1">Wohin läuft es – Chancen im Portfolio</h2>
         <p className="muted text-sm mb-3">{chancen.byKind.map((k) => `${k.label}: ${pl(k.positions, "Position", "Positionen")} in ${pl(k.chances, "Chance", "Chancen")}`).join(" · ")}</p>
-        {chancen.matrix.length === 0 ? (<p className="empty">Noch keine aktiven Chancen. Chancen entstehen im Setup („Chance erfassen“) oder über den Assistenten – jede mit Art (Verve-Experte, Freelancer-Experte, Ausschreibung) und Standardrolle.</p>
+        {chancen.matrix.length === 0 ? (<p className="empty">Noch keine aktiven Chancen. Chancen entstehen im Projekt („Chance erfassen“) oder über den Assistenten – jede mit Art (Verve-Experte, Freelancer-Experte, Ausschreibung) und Standardrolle.</p>
         ) : (
           <div className="table-wrap"><table className="list text-sm">
             <thead><tr><th>Rollenfamilie</th>{MATURITY.map((m) => <th key={m}>{maturityLabel[m]}</th>)}<th>Summe</th></tr></thead>
@@ -79,7 +79,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
           <h2 className="font-semibold mb-2">Portfolio ({portfolio.entries.length} Kunden)</h2>
           <p className="muted text-sm mb-2">{portfolio.note}</p>
           <div className="table-wrap"><table className="list">
-            <thead><tr><th>Kunde</th><th>BD</th><th>Setups</th><th>Offene Beobachtungen</th><th>Offene Fragen</th><th>Zugangslücken</th><th>Prioritäten (vereinbart / vorgeschlagen)</th><th>Aktionen (offen / blockiert)</th><th>Unterstützung offen</th><th>Letztes bestätigtes Weekly</th></tr></thead>
+            <thead><tr><th>Kunde</th><th>BD</th><th>Projekte</th><th>Offene Beobachtungen</th><th>Offene Fragen</th><th>Zugangslücken</th><th>Prioritäten (vereinbart / vorgeschlagen)</th><th>Aktionen (offen / blockiert)</th><th>Unterstützung offen</th><th>Letztes bestätigtes Weekly</th></tr></thead>
             <tbody>
               {portfolio.entries.map((e) => (
                 <tr key={e.accountId}>
@@ -122,7 +122,7 @@ export default async function ZielePage({ searchParams }: { searchParams: Search
             ))}
           </ul>
         )}
-        <p className="muted text-sm mt-2">Ein Unterstützungsauftrag ist begrenzt und konkret; die operative Fallverantwortung bleibt beim BD. Anfragen erfolgen aus dem Setup.</p>
+        <p className="muted text-sm mt-2">Ein Unterstützungsauftrag ist begrenzt und konkret; die operative Fallverantwortung bleibt beim BD. Anfragen erfolgen aus dem Projekt.</p>
       </section>
 
       <section className="card">

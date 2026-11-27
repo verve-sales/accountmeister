@@ -112,15 +112,15 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
   const setupCtx = await loadSetupContext(actor, id);
   const analysis = setupCtx ? await analyzeSetup(actor, setupCtx) : null;
   const mayReassign = canReassignResponsibility(actor, d.account);
-  // e59: dieses Setup in ein anderes desselben Kunden überführen
+  // e59: dieses Projekt in ein anderes desselben Kunden überführen
   const mergeTargets = (await canMergeSetupsAt(actor, d.account.id)) ? (await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, d.account.id), columns: { id: true, name: true, status: true } })).filter((x) => x.id !== d.setup.id && x.status !== "ARCHIVIERT").map((x) => ({ id: x.id, name: x.name })) : [];
   const [runs, setupScoped, accountScoped, salesOps] = await Promise.all([listRuns(actor, { setupId: id }), listPlaybooks(actor, { scope: "SETUP", activeOnly: true }), listPlaybooks(actor, { scope: "ACCOUNT", activeOnly: true }), listSalesOpsUsers(actor.workspaceId)]);
-  // Kunden-Muster (z. B. Altkunden-Reaktivierung) lassen sich auch direkt auf ein bestehendes Setup anwenden.
+  // Kunden-Muster (z. B. Altkunden-Reaktivierung) lassen sich auch direkt auf ein bestehendes Projekt anwenden.
   const setupPlaybooks = [...accountScoped, ...setupScoped];
   const looksLikeReactivation = /reaktiv|re-?entry|wiedereinstieg|altkunde|bestandskunde|historisch/i.test(`${d.setup.name} ${d.setup.contextNote ?? ""}`);
   const reactivation = accountScoped.find((p) => p.code === ALTKUNDEN_CODE);
-  // Kunden-Vorgehen dieses Setups werden hier ebenfalls gezeigt; Chancen-Vorgehen auf der jeweiligen Chance.
-  // Alle Vorgehen dieses Setups – auch die an einer Chance hängenden (die Karte nennt dann die Chance).
+  // Kunden-Vorgehen dieses Projekts werden hier ebenfalls gezeigt; Chancen-Vorgehen auf der jeweiligen Chance.
+  // Alle Vorgehen dieses Projekts – auch die an einer Chance hängenden (die Karte nennt dann die Chance).
   const setupRuns = runs;
   // Verlängerungs-Vorgabe (e37): nur zeigen, wenn es Einsätze gibt oder gepflegt werden darf
   const setupEngs = await db.query.engagements.findMany({ where: eq(schema.engagements.setupId, id), columns: { id: true, status: true } });
@@ -150,8 +150,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       {analysis && (
         <section className="card">
           <h2 className="font-semibold mb-2">Wo stehen wir? – je Chance</h2>
-          <ChancenUebersicht chances={opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: name(o.ownerUserId), version: d.canEdit ? o.version : undefined, candidate: topCandidates.get(o.id) ?? null }))} emptyText="Noch keine Chance in diesem Setup – worauf läuft es hinaus?" back={`/setups/${id}`} />
-          <p className="text-sm mt-3"><span className="muted">Nächster großer Schritt im Setup: </span>{analysis.nextStep}</p>
+          <ChancenUebersicht chances={opportunities.map((o) => ({ id: o.id, title: o.title, status: o.status, kind: o.kind, ownerName: name(o.ownerUserId), version: d.canEdit ? o.version : undefined, candidate: topCandidates.get(o.id) ?? null }))} emptyText="Noch keine Chance in diesem Projekt – worauf läuft es hinaus?" back={`/setups/${id}`} />
+          <p className="text-sm mt-3"><span className="muted">Nächster großer Schritt im Projekt: </span>{analysis.nextStep}</p>
           {setupRuns.filter((r) => r.status === "AKTIV").map((r) => {
             const cur = r.steps.find((x) => x.status === "OFFEN");
             return cur ? <p key={r.id} className="text-sm mt-2">Laufendes Vorgehen <a href="#vorgehen">{r.playbookName}</a>: Schritt {cur.position}/{r.steps.length} – {cur.title}</p> : null;
@@ -161,10 +161,10 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       <Feedback params={sp} />
 
       {/* 3. Was haben wir vereinbart? */}
-      {/* Chancen (Etappe 5): je Setup mehrere, unabhängige Zustände (F02); direkt erfassbar (F08) */}
+      {/* Chancen (Etappe 5): je Projekt mehrere, unabhängige Zustände (F02); direkt erfassbar (F08) */}
       <section className="card">
         <h2 className="font-semibold mb-2">Chancen ({openOpportunities.length} offen)</h2>
-        {opportunities.length === 0 ? <p className="empty">Noch keine Chance. Eine Chance kann direkt erfasst werden – ohne vollständiges Setup oder Qualifizierung (Fast-Track).</p> : (
+        {opportunities.length === 0 ? <p className="empty">Noch keine Chance. Eine Chance kann direkt erfasst werden – ohne vollständiges Projekt oder Qualifizierung (Fast-Track).</p> : (
           <table className="list">
             <thead><tr><th>Chance</th><th>Wofür</th><th>Status</th><th>Verantwortlich</th><th>Bestätigt</th><th>Geändert</th></tr></thead>
             <tbody>
@@ -247,7 +247,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
         </div>
         {mayReassign && (
           <details className="mt-3" id="zustaendigkeit" open={!d.canEdit}>
-            <summary className="text-sm">{d.setup.bdUserId ? "Zuständigkeit umstellen (BD, Anker)" : "Zuständigen BD zuordnen (und Anker umstellen)"}</summary>
+            <summary className="text-sm">{d.setup.bdUserId ? "Zuständigkeit umstellen (BD, Kontaktpate)" : "Zuständigen BD zuordnen (und Kontaktpate umstellen)"}</summary>
             <form action={reassignSetupBdAction} className="mt-2 flex flex-wrap items-end gap-2">
               <input type="hidden" name="setupId" value={d.setup.id} />
               <input type="hidden" name="version" value={d.setup.version} />
@@ -263,7 +263,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
             <form action={addMemberAction} className="mt-3 grid sm:grid-cols-3 gap-3">
               <input type="hidden" name="setupId" value={d.setup.id} />
               <div>
-                <label className="label" htmlFor="reassignAnkerUser">Anker (oder andere Beteiligung) umstellen</label>
+                <label className="label" htmlFor="reassignAnkerUser">Kontaktpate (oder andere Beteiligung) umstellen</label>
                 <select id="reassignAnkerUser" name="userId" className="select" required defaultValue="">
                   <option value="" disabled>Bitte wählen …</option>
                   {allUsers.map((u) => <option key={u.id} value={u.id}>{u.displayName}</option>)}
@@ -277,7 +277,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
               </div>
               <div className="flex items-end"><button className="btn btn-secondary" type="submit">Übernehmen</button></div>
             </form>
-            <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD kannst du BD-Zuordnung und Beteiligungen (z. B. Anker) jederzeit umstellen – unabhängig davon, wer sie ursprünglich zugewiesen hat.</p>
+            <p className="muted text-xs mt-2">Als Principal, CEO oder aktuell zuständiger BD kannst du BD-Zuordnung und Beteiligungen (z. B. Kontaktpate) jederzeit umstellen – unabhängig davon, wer sie ursprünglich zugewiesen hat.</p>
           </details>
         )}
         {d.canEdit && (
@@ -286,7 +286,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
             <form action={updateSetupAction} className="mt-2 grid sm:grid-cols-3 gap-3">
               <input type="hidden" name="setupId" value={d.setup.id} />
               <input type="hidden" name="version" value={d.setup.version} />
-              <div className="sm:col-span-3"><label className="label" htmlFor="setupName">Name des Setups (Team, Bereich oder Vorhaben beim Kunden)</label><input id="setupName" name="name" className="input" required minLength={3} maxLength={200} defaultValue={d.setup.name} /></div>
+              <div className="sm:col-span-3"><label className="label" htmlFor="setupName">Name des Projekts (Team, Bereich oder Vorhaben beim Kunden)</label><input id="setupName" name="name" className="input" required minLength={3} maxLength={200} defaultValue={d.setup.name} /></div>
               <div className="sm:col-span-3"><label className="label" htmlFor="contextNote">Kontextsatz</label><textarea id="contextNote" name="contextNote" className="textarea" defaultValue={d.setup.contextNote ?? ""} /></div>
               <div>
                 <label className="label" htmlFor="status">Status</label>
@@ -495,7 +495,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
             defaultOwnerId: d.setup.bdUserId,
             salesOps,
             recommendedId: looksLikeReactivation && reactivation ? reactivation.id : null,
-            recommendation: looksLikeReactivation && reactivation && !setupRuns.some((r) => r.status === "AKTIV") ? "Dieses Setup sieht nach einer Reaktivierung aus – „Altkunden-Reaktivierung“ führt Schritt für Schritt durch und erstellt je Schritt Entwürfe (Mail, Metriken, Pitch)." : null,
+            recommendation: looksLikeReactivation && reactivation && !setupRuns.some((r) => r.status === "AKTIV") ? "Dieses Projekt sieht nach einer Reaktivierung aus – „Altkunden-Reaktivierung“ führt Schritt für Schritt durch und erstellt je Schritt Entwürfe (Mail, Metriken, Pitch)." : null,
           } : null}
         />
       )}
@@ -573,7 +573,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
                               </select>
                             </div>
                             <div><label className="label" htmlFor={`due-${s.id}`}>Termin (optional)</label><input id={`due-${s.id}`} name="dueDate" type="date" className="input" /></div>
-                            <div className="sm:col-span-2"><label className="label" htmlFor={`ctx-${s.id}`}>Kontext</label><input id={`ctx-${s.id}`} name="context" className="input" required defaultValue={`Beobachtung aus dem Setup „${d.setup.name}“.`} /></div>
+                            <div className="sm:col-span-2"><label className="label" htmlFor={`ctx-${s.id}`}>Kontext</label><input id={`ctx-${s.id}`} name="context" className="input" required defaultValue={`Beobachtung aus dem Projekt „${d.setup.name}“.`} /></div>
                             <div><label className="label" htmlFor={`prov-${s.id}`}>Was ist belegt?</label><input id={`prov-${s.id}`} name="proven" className="input" defaultValue={s.observation} /></div>
                             <div><label className="label" htmlFor={`open-${s.id}`}>Was bleibt offen?</label><input id={`open-${s.id}`} name="open" className="input" defaultValue={s.relevanceHypothesis ?? ""} /></div>
                             <div><label className="label" htmlFor={`use-${s.id}`}>Was darf verwendet werden?</label><input id={`use-${s.id}`} name="allowedUse" className="input" defaultValue={s.usageLimit ?? ""} /></div>
@@ -650,7 +650,7 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       <section className="card">
         <h2 className="font-semibold mb-2">Unterstützung durch Principal, CEO oder Sales Operations ({openSupport.length} offen)</h2>
         <p className="muted text-sm mb-2">Ein Unterstützungsauftrag ist begrenzt und konkret – an Principal/CEO z. B. „Kontakt zu Frau X herstellen“, an Sales Operations z. B. „Einseiter zum früheren Projekt bis Freitag vorbereiten“ oder „Registrierung im Lieferantenportal anstoßen“. Die operative Fallverantwortung bleibt beim BD.</p>
-        {support.length === 0 ? <p className="empty">Keine Unterstützungsaufträge zu diesem Setup.</p> : (
+        {support.length === 0 ? <p className="empty">Keine Unterstützungsaufträge zu diesem Projekt.</p> : (
           <ul className="space-y-2">
             {support.map((s) => (
               <li key={s.id} className="border rounded-md p-3 text-sm" style={{ borderColor: "var(--border)" }}>
@@ -717,8 +717,8 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
             <input type="hidden" name="kind" value="SETUP_ERGAENZUNG" />
             <input type="hidden" name="setupId" value={d.setup.id} />
             <Link href={`/setups/${d.setup.id}?assistent=interview`} className="btn">Mit dem Assistenten ergänzen (Dialog)</Link>
-            <button className="btn btn-secondary" type="submit">Interview zu diesem Setup führen</button>
-            <span className="muted text-sm">Der Assistent fragt, was noch fehlt (Personen, Entscheidungsweg, Chance, nächste Schritte) und legt Vorschlagskarten für dieses Setup vor – übernommen wird nur, was Sie anklicken.</span>
+            <button className="btn btn-secondary" type="submit">Interview zu diesem Projekt führen</button>
+            <span className="muted text-sm">Der Assistent fragt, was noch fehlt (Personen, Entscheidungsweg, Chance, nächste Schritte) und legt Vorschlagskarten für dieses Projekt vor – übernommen wird nur, was Sie anklicken.</span>
           </form>
         )}
         {d.canEdit && (
@@ -744,19 +744,19 @@ export default async function SetupPage({ params, searchParams }: { params: Prom
       <Comments actor={actor} subjectType="SETUP" subjectId={d.setup.id} back={back} />
       {canClean(actor) && siblings.length > 0 && (
         <details className="card text-sm" id="zusammenlegen">
-          <summary className="font-semibold" style={{ cursor: "pointer" }}>Mit anderem Setup zusammenlegen</summary>
+          <summary className="font-semibold" style={{ cursor: "pointer" }}>Mit anderem Projekt zusammenlegen</summary>
           <form action={mergeIntoSetupAction} className="flex flex-wrap gap-2 items-end mt-2">
             <input type="hidden" name="fromSetupId" value={d.setup.id} />
             <div>
               <label className="label" htmlFor="mergeTarget">„{d.setup.name}“ aufgehen lassen in</label>
               <select id="mergeTarget" name="intoSetupId" className="select" required defaultValue="" style={{ width: "22rem" }}>
-                <option value="" disabled>Setup desselben Kunden …</option>
+                <option value="" disabled>Projekt desselben Kunden …</option>
                 {siblings.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
               </select>
             </div>
             <PendingButton className="btn btn-secondary" busy="Lege zusammen …">Zusammenlegen</PendingButton>
           </form>
-          <p className="muted text-xs mt-1">Chancen, Einsätze, Beobachtungen, Aufgaben, Personen und Quellen wandern mit; dieses Setup verschwindet danach.</p>
+          <p className="muted text-xs mt-1">Chancen, Einsätze, Beobachtungen, Aufgaben, Personen und Quellen wandern mit; dieses Projekt verschwindet danach.</p>
         </details>
       )}
       {mergeTargets.length > 0 && <SetupMergeInto setupId={d.setup.id} setupName={d.setup.name} others={mergeTargets} back={`/kunden/${d.account.id}`} />}

@@ -11,7 +11,7 @@ function env() {
 }
 
 describe("e53: Assistent erledigt Aufträge direkt", () => {
-  it("A01: GF legt im allgemeinen Kontext einen Kunden an – ohne Klick, Gespräch hängt danach am Setup", async () => {
+  it("A01: GF legt im allgemeinen Kontext einen Kunden an – ohne Klick, Gespräch hängt danach am Projekt", async () => {
     env();
     const ceo = await actorFor("clemens");
     const view = await getThreadView(ceo, { type: "GLOBAL", id: "" });
@@ -49,8 +49,8 @@ describe("e53: Assistent erledigt Aufträge direkt", () => {
   });
 });
 
-describe("e56: Verlängerung am bestehenden Einsatz, Setup ohne Rückfrage", () => {
-  it("A03: Im Kundenkontext wird die Verlängerung am Einsatz angestoßen und eine Chance im vorhandenen Setup angelegt", async () => {
+describe("e56: Verlängerung am bestehenden Einsatz, Projekt ohne Rückfrage", () => {
+  it("A03: Im Kundenkontext wird die Verlängerung am Einsatz angestoßen und eine Chance im vorhandenen Projekt angelegt", async () => {
     process.env.FEATURE_BESETZUNG = "true";
     resetConfigCacheForTests();
     const { ASSISTANT_CARDS_MARKER } = await import("@/modules/ai/schemas");
@@ -76,7 +76,7 @@ describe("e56: Verlängerung am bestehenden Einsatz, Setup ohne Rückfrage", () 
     const r = await sendMessage(david, { threadId: view.thread.id, text }, { provider });
     expect(r.cards.every((c) => c.status === "UEBERNOMMEN")).toBe(true);
     expect(r.message.text).toMatch(/Verlängerung für .* angestoßen – Wunschende 30\.04\.2027/);
-    expect(r.message.text).toMatch(/Setup/);
+    expect(r.message.text).toMatch(/Projekt/);
     const ren = await db.query.renewalDecisions.findFirst({ where: eq(schema.renewalDecisions.engagementId, q.engagement.id) });
     expect(ren?.status).toBe("IN_ABSTIMMUNG");
     expect(ren?.proposedTo).toBe("2027-04-30");
@@ -86,8 +86,8 @@ describe("e56: Verlängerung am bestehenden Einsatz, Setup ohne Rückfrage", () 
   });
 });
 
-describe("e58: mögliche Verlängerung als Chance im Setup des Einsatzes", () => {
-  it("A04: im allgemeinen Kontext entsteht die Chance im Setup des laufenden Einsatzes, plus Aufgabe zur Frist", async () => {
+describe("e58: mögliche Verlängerung als Chance im Projekt des Einsatzes", () => {
+  it("A04: im allgemeinen Kontext entsteht die Chance im Projekt des laufenden Einsatzes, plus Aufgabe zur Frist", async () => {
     process.env.FEATURE_BESETZUNG = "true";
     resetConfigCacheForTests();
     const { ASSISTANT_CARDS_MARKER } = await import("@/modules/ai/schemas");
@@ -115,7 +115,7 @@ describe("e58: mögliche Verlängerung als Chance im Setup des Einsatzes", () =>
     const chance = await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, r.cards[0]!.resultId!) });
     expect(chance?.setupId).toBe(q.engagement.setupId);
     expect(chance?.kind).toBe("FREELANCER_EXPERTE");
-    expect(r.message.text).toMatch(/im Setup/);
+    expect(r.message.text).toMatch(/im Projekt/);
     // keine Verlängerungsentscheidung angelegt
     expect(await db.query.renewalDecisions.findFirst({ where: eq(schema.renewalDecisions.engagementId, q.engagement.id) })).toBeUndefined();
   });

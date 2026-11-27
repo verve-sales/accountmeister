@@ -23,7 +23,7 @@ async function makeSalesOps(): Promise<Actor> {
 }
 
 describe("Etappe 22: Sales Operations – vorbereiten, pflegen, nachhalten; entscheiden bleibt beim BD", () => {
-  it("nur arbeitsraumweit vergebbar; sieht und bearbeitet Setups, pflegt Personen, eigene Startsicht", async () => {
+  it("nur arbeitsraumweit vergebbar; sieht und bearbeitet Projekte, pflegt Personen, eigene Startsicht", async () => {
     const s = await ensureSeed();
     const admin = await actorFor("admin");
     const ops = await makeSalesOps();

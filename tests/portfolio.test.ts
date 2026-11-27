@@ -9,7 +9,7 @@ import { viewAccountCounts } from "@/modules/dashboard/service";
 import { actorFor, ensureSeed } from "./helpers";
 
 describe("Etappe 33 (Use Case 5): Meine BDs – durch Kunden gehen, Entscheidung hinterlassen", () => {
-  it("P01: Principal sieht Kunden je BD mit Team, Einsätzen, Chancen, Ampel; Kurzfassung mit Blättern; Hinweis wird Vorgang beim BD; Anker/BD ohne Zugriff", async () => {
+  it("P01: Principal sieht Kunden je BD mit Team, Einsätzen, Chancen, Ampel; Kurzfassung mit Blättern; Hinweis wird Vorgang beim BD; Kontaktpate/BD ohne Zugriff", async () => {
     process.env.AI_PROVIDER = "test";
     resetConfigCacheForTests();
     const s = await ensureSeed();

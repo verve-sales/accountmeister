@@ -73,7 +73,7 @@ export async function captureChoices(actor: Actor) {
 const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).or(z.literal("")).optional().default("");
 const money = z.string().trim().regex(/^(\d+([.,]\d{1,2})?)?$/, "Betrag bitte als Zahl").optional().default("");
 export const captureInput = z.object({
-  setupId: z.string().min(1, "Bitte Kunde/Setup wählen."),
+  setupId: z.string().min(1, "Bitte Kunde/Projekt wählen."),
   title: z.string().trim().min(3, "Rolle/Titel fehlt.").max(200),
   person: z.enum(["FREELANCER", "INTERN"]).default("FREELANCER"),
   freelancerId: z.string().optional().default(""),
@@ -96,7 +96,7 @@ export const captureInput = z.object({
 
 /**
  * Neues Assignment erfassen: Chance „beauftragt“ + Auftrag/Bestellung (bestätigt) + besetzte Position + Einsatzakte.
- * Startet der Einsatz heute oder früher, steht er direkt auf aktiv. BD ist der Setup-BD (sonst der zuständige BD).
+ * Startet der Einsatz heute oder früher, steht er direkt auf aktiv. BD ist der Projekt-BD (sonst der zuständige BD).
  */
 export async function captureAssignment(actor: Actor, raw: unknown) {
   if (!canUseSalesOps(actor)) throw new ForbiddenError("Assignments erfassen hier Sales Operations und Geschäftsführung.");
@@ -104,10 +104,10 @@ export async function captureAssignment(actor: Actor, raw: unknown) {
   if (!p.success) throw new ValidationError(p.error.issues.map((i) => i.message).join("; "));
   const i = p.data;
   const setup = await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.id, i.setupId), eq(schema.projectSetups.workspaceId, actor.workspaceId)) });
-  if (!setup) throw new ValidationError("Setup nicht gefunden.");
+  if (!setup) throw new ValidationError("Projekt nicht gefunden.");
   const account = (await db.query.accounts.findFirst({ where: eq(schema.accounts.id, setup.accountId) }))!;
   const owner = setup.bdUserId ?? account.responsibleBdUserId;
-  if (!owner) throw new ValidationError("Für diesen Kunden ist kein BD hinterlegt – bitte zuerst am Setup oder Kunden den BD eintragen.");
+  if (!owner) throw new ValidationError("Für diesen Kunden ist kein BD hinterlegt – bitte zuerst am Projekt oder Kunden den BD eintragen.");
   if (i.person === "FREELANCER" && !i.freelancerId && i.newName.length < 2) throw new ValidationError("Bitte Freelancer wählen oder Namen eintragen.");
   if (i.person === "INTERN" && !i.internalUserId) throw new ValidationError("Bitte die interne Person wählen.");
   if (i.person === "FREELANCER" && !i.ekRate) throw new ValidationError("Für einen Freelancer bitte den Einkaufssatz (EK) angeben.");

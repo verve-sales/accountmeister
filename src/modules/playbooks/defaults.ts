@@ -110,13 +110,13 @@ export const DEFAULT_PLAYBOOKS: DefaultPlaybook[] = [
   },
   {
     code: "ERSTGESPRAECH",
-    name: "Neues Setup: Erstgespräch",
+    name: "Neues Projekt: Erstgespräch",
     description: "Für ein neues Team oder Vorhaben beim Kunden: Anlass klären, Buyingcenter kartieren, nächsten Termin sichern.",
     scope: "SETUP",
     steps: [
-      { title: "Anlass und Ziel klären", goal: "Verstehen, was das Team erreichen will.", meddpicc: "Identify Pain, Metrics", suggestedAction: "Im Gespräch Ziele, Zeitrahmen und aktuelle Hindernisse erfragen.", doneCriterion: "Anlass und Ziel sind im Setup dokumentiert.", dueInDays: 7 },
+      { title: "Anlass und Ziel klären", goal: "Verstehen, was das Team erreichen will.", meddpicc: "Identify Pain, Metrics", suggestedAction: "Im Gespräch Ziele, Zeitrahmen und aktuelle Hindernisse erfragen.", doneCriterion: "Anlass und Ziel sind im Projekt dokumentiert.", dueInDays: 7 },
       { title: "Buyingcenter kartieren", goal: "Wissen, wer entscheidet, wer beeinflusst und wer nutzt.", meddpicc: "Economic Buyer, Champion", suggestedAction: "Beteiligte Personen und ihre Rollen im Buyingcenter der Chance erfassen.", doneCriterion: "Mindestens Entscheider und Fürsprecher sind benannt (oder als offen markiert).", dueInDays: 14 },
-      { title: "Nächsten Termin sichern", goal: "Aus dem Erstgespräch einen verbindlichen nächsten Schritt machen.", meddpicc: "Decision Process", suggestedAction: "Folgetermin oder konkrete Zusage vereinbaren.", doneCriterion: "Folgetermin steht oder Setup ist bewusst ruhend gestellt.", dueInDays: 21 },
+      { title: "Nächsten Termin sichern", goal: "Aus dem Erstgespräch einen verbindlichen nächsten Schritt machen.", meddpicc: "Decision Process", suggestedAction: "Folgetermin oder konkrete Zusage vereinbaren.", doneCriterion: "Folgetermin steht oder Projekt ist bewusst ruhend gestellt.", dueInDays: 21 },
     ],
   },
 ];

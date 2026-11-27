@@ -14,7 +14,7 @@ import { actorFor, ensureSeed } from "./helpers";
 const NOTE_INPUT = { setupName: "S", participantNames: ["David"], knownPersonNames: [], confirmedAssertions: [] };
 
 describe("Etappe 21: Strategischer Fokus „Wachstum über Freelancer“", () => {
-  it("Fokus: Standard ist „Freelancer-Hebel aktiv“; pflegen nur Principal/CEO/Verwaltung; Versionsschutz", async () => {
+  it("Fokus: Standard ist „Ausbaupotenzial aktiv“; pflegen nur Principal/CEO/Verwaltung; Versionsschutz", async () => {
     const s = await ensureSeed();
     const david = await actorFor("david");
     const petra = await actorFor("petra");
@@ -49,7 +49,7 @@ describe("Etappe 21: Strategischer Fokus „Wachstum über Freelancer“", () =>
     // Ohne Fokus kein zusätzlicher Hinweis
     await p.structureNote({ noteText: "Notiz", ...NOTE_INPUT }, {});
     expect(bodies[1]!.messages.filter((m) => m.role === "system")).toHaveLength(1);
-    expect(focusSystemText({ text: "", freelancerLever: false })).not.toMatch(/Freelancer-Hebel/);
+    expect(focusSystemText({ text: "", freelancerLever: false })).not.toMatch(/Ausbaupotenzial/);
   });
 
   it("Testanbieter erkennt mit aktivem Fokus Freelancer-Potenzial in Notizen – ohne Fokus nicht", async () => {
@@ -99,12 +99,12 @@ describe("Etappe 21: Strategischer Fokus „Wachstum über Freelancer“", () =>
     expect(st.accountsWithoutFreelancerChance).toBe(0);
     expect(st.openChecks).toBeGreaterThanOrEqual(3);
 
-    // Lageanalyse der Chance nennt den Freelancer-Hebel
+    // Lageanalyse der Chance nennt das Ausbaupotenzial
     const { analysis } = await analyzeOpportunity(david, opp.id);
-    expect(analysis.moves.some((m) => m.startsWith("Freelancer-Hebel"))).toBe(true);
+    expect(analysis.moves.some((m) => m.startsWith("Ausbaupotenzial"))).toBe(true);
   });
 
-  it("Freelancer-Hebel aus → keine neuen Standardaufgaben", async () => {
+  it("Ausbaupotenzial aus → keine neuen Standardaufgaben", async () => {
     const s = await ensureSeed();
     const petra = await actorFor("petra");
     const lars = await actorFor("lars");

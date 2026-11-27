@@ -12,7 +12,7 @@ import { fmtDate } from "@/lib/labels";
 import { saveStrategyAction } from "../../../actions";
 
 /**
- * Strategiefaden je Setup (E-044): Lage (regelbasiert), letzte Fassung, neue Fassung erfassen – wahlweise mit
+ * Strategiefaden je Projekt (E-044): Lage (regelbasiert), letzte Fassung, neue Fassung erfassen – wahlweise mit
  * KI-Vorschlag (?vorschlag=1), der hier nur vorbelegt und erst durch Speichern zur Fassung wird.
  */
 export default async function StrategiePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ fehler?: string; ok?: string; vorschlag?: string }> }) {
@@ -122,7 +122,7 @@ export default async function StrategiePage({ params, searchParams }: { params: 
                     <input name={`moves.${k}.title`} className="input sm:col-span-5" placeholder={`Zug ${k + 1}`} defaultValue={m.title} maxLength={200} />
                     <input name={`moves.${k}.why`} className="input sm:col-span-4" placeholder="Warum jetzt" defaultValue={m.why} maxLength={600} />
                     <select name={`moves.${k}.ownerRole`} className="select sm:col-span-2" defaultValue={m.ownerRole}>
-                      <option value="BD">BD</option><option value="ANKER">Anker</option><option value="PRINCIPAL">Principal</option>
+                      <option value="BD">BD</option><option value="ANKER">Kontaktpate</option><option value="PRINCIPAL">Principal</option>
                     </select>
                     <input type="hidden" name={`moves.${k}.evidenceQuote`} value={m.evidenceQuote} />
                     {m.evidenceQuote && <div className="muted text-xs sm:col-span-12">Textstelle: „{m.evidenceQuote.slice(0, 140)}“</div>}

@@ -174,7 +174,7 @@ describe("e67 Auftragseingang: Ablauf", () => {
     expect(await db.query.orderCases.findFirst({ where: eq(schema.orderCases.id, draft.id) })).toBeUndefined();
   });
 
-  it("Rechte: Anker darf nicht hochladen; BD sieht nur Vorgänge seiner Kunden; Plausibilität greift", async () => {
+  it("Rechte: Kontaktpate darf nicht hochladen; BD sieht nur Vorgänge seiner Kunden; Plausibilität greift", async () => {
     const s = await ensureSeed();
     const nina = await actorFor("nina");
     await expect(uploadForCase(nina, file("a.txt", "Angebot"))).rejects.toBeInstanceOf(ForbiddenError);

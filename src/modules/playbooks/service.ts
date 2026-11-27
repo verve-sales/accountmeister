@@ -12,7 +12,7 @@ import { ALTKUNDEN_CODE, DEFAULT_PLAYBOOKS } from "./defaults";
 /**
  * Vorgehensmuster (Etappe 20): ein Standard-Vorgehen als Gerüst.
  *  - Muster pflegen: Principal, CEO oder Betriebsverwaltung. Lesen: alle mit fachlicher Rolle (dient auch der Einarbeitung).
- *  - Anwenden: auf einen Kunden (über ein bestehendes oder neues Setup), ein Setup oder eine Chance.
+ *  - Anwenden: auf einen Kunden (über ein bestehendes oder neues Projekt), ein Projekt oder eine Chance.
  *  - Immer genau ein Schritt ist aktiv und als normale Aktion angelegt (Meine Arbeit, Weekly). Wird die Aktion
  *    erledigt oder verworfen – egal wo –, rückt das Vorgehen zum nächsten Schritt vor.
  *  - Keine Pflichtschleuse: Schritte dürfen begründet übersprungen, Vorgehen begründet zurückgestellt werden.
@@ -191,7 +191,7 @@ export const startRunInput = z.object({
   accountId: optText(100),
   setupId: optText(100),
   opportunityId: optText(100),
-  /** Nur bei Kunden-Mustern: neues Setup für das Vorgehen anlegen (Name), statt ein bestehendes zu nutzen */
+  /** Nur bei Kunden-Mustern: neues Projekt für das Vorgehen anlegen (Name), statt ein bestehendes zu nutzen */
   newSetupName: optText(200),
   ownerUserId: optText(100),
   /** Sales Operations für die Vorbereitungsschritte (Etappe 22); leer = automatisch, falls eindeutig */
@@ -230,7 +230,7 @@ export async function startPlaybookRun(actor: Actor, raw: unknown, opts: { propo
   const steps = await db.query.playbookSteps.findMany({ where: eq(schema.playbookSteps.playbookId, playbook.id), orderBy: [asc(schema.playbookSteps.position)] });
   if (steps.length === 0) throw new ValidationError("Das Vorgehensmuster hat noch keine Schritte.");
 
-  // Ziel auflösen: Kunde (+ Setup bestehend/neu), Setup oder Chance
+  // Ziel auflösen: Kunde (+ Projekt bestehend/neu), Projekt oder Chance
   let account: typeof schema.accounts.$inferSelect | undefined;
   let setupId: string | null = null;
   let opportunityId: string | null = null;
@@ -242,29 +242,29 @@ export async function startPlaybookRun(actor: Actor, raw: unknown, opts: { propo
     opportunityId = opp.id;
     setupId = opp.setupId;
   } else if (playbook.scope === "SETUP" && !input.setupId && input.accountId) {
-    // Vom Kunden aus gestartet: Setup-Muster laufen in einem bestehenden oder neu angelegten Setup
-    if (!input.newSetupName) throw new ValidationError("Bitte ein bestehendes Setup wählen oder einen Namen für ein neues Setup angeben.");
+    // Vom Kunden aus gestartet: Projekt-Muster laufen in einem bestehenden oder neu angelegten Projekt
+    if (!input.newSetupName) throw new ValidationError("Bitte ein bestehendes Projekt wählen oder einen Namen für ein neues Projekt angeben.");
   } else if (playbook.scope === "SETUP") {
-    if (!input.setupId) throw new ValidationError("Dieses Muster wird auf ein Setup angewendet.");
+    if (!input.setupId) throw new ValidationError("Dieses Muster wird auf ein Projekt angewendet.");
     setupId = input.setupId;
     // Von einer Chance aus gestartet (z. B. Verlängerung): Vorgehen und Aktionen hängen an dieser Chance
     if (input.opportunityId) {
       const opp = await db.query.opportunities.findFirst({ where: and(eq(schema.opportunities.id, input.opportunityId), eq(schema.opportunities.workspaceId, actor.workspaceId)) });
-      if (!opp || opp.setupId !== setupId) throw new ValidationError("Die Chance gehört nicht zu diesem Setup.");
+      if (!opp || opp.setupId !== setupId) throw new ValidationError("Die Chance gehört nicht zu diesem Projekt.");
       if (opp.status === "BEENDET") throw new TransitionError("Auf eine beendete Chance wird kein Vorgehen mehr angewendet.");
       opportunityId = opp.id;
     }
   } else {
     if (!input.accountId) throw new ValidationError("Dieses Muster wird auf einen Kunden angewendet.");
     if (input.setupId) setupId = input.setupId;
-    else if (!input.newSetupName) throw new ValidationError("Bitte ein bestehendes Setup wählen oder einen Namen für ein neues Setup angeben.");
+    else if (!input.newSetupName) throw new ValidationError("Bitte ein bestehendes Projekt wählen oder einen Namen für ein neues Projekt angeben.");
   }
 
   if (setupId) {
     const ctx = await loadSetupContext(actor, setupId);
-    if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-    if (input.accountId && ctx.account.id !== input.accountId) throw new ValidationError("Setup gehört nicht zu diesem Kunden.");
-    if (ctx.setup.status === "ARCHIVIERT") throw new TransitionError("Auf ein archiviertes Setup wird kein Vorgehen angewendet.");
+    if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+    if (input.accountId && ctx.account.id !== input.accountId) throw new ValidationError("Projekt gehört nicht zu diesem Kunden.");
+    if (ctx.setup.status === "ARCHIVIERT") throw new TransitionError("Auf ein archiviertes Projekt wird kein Vorgehen angewendet.");
     if (!canEditSetup(actor, ctx) && !canReassignResponsibility(actor, ctx.account)) throw new ForbiddenError("Du darfst hier kein Vorgehen starten.");
     account = ctx.account;
   } else {
@@ -306,7 +306,7 @@ export async function startPlaybookRun(actor: Actor, raw: unknown, opts: { propo
         .insert(schema.projectSetups)
         .values({ workspaceId: actor.workspaceId, accountId: acc.id, name: input.newSetupName!, contextNote: `Vorgehen „${playbook.name}“`, status: "AKTIV", visibility: "ACCOUNT_TEAM", bdUserId: ownerUserId, createdBy: actor.userId })
         .returning();
-      if (!s) throw new Error("Setup konnte nicht angelegt werden");
+      if (!s) throw new Error("Projekt konnte nicht angelegt werden");
       targetSetupId = s.id;
       await tx.insert(schema.setupMemberships).values({ setupId: s.id, userId: ownerUserId, contribution: "BD_ZUSTAENDIG", canEdit: true });
       if (ownerUserId !== actor.userId) await tx.insert(schema.setupMemberships).values({ setupId: s.id, userId: actor.userId, contribution: "BEOBACHTER", canEdit: true });
@@ -445,7 +445,7 @@ async function closeStepAction(tx: Tx, step: RunStepRow, status: "ERLEDIGT" | "V
 }
 
 /**
- * Wird aus changeActionStatus aufgerufen: eine Schritt-Aktion wurde anderswo (Setup-Seite, Meine Arbeit, Weekly)
+ * Wird aus changeActionStatus aufgerufen: eine Schritt-Aktion wurde anderswo (Projekt-Seite, Meine Arbeit, Weekly)
  * erledigt oder verworfen → Schritt übernehmen und zum nächsten vorrücken.
  */
 export async function syncRunStepFromAction(tx: Tx, actor: Actor, action: typeof schema.actions.$inferSelect) {
@@ -532,14 +532,14 @@ export async function reassignRunOwner(actor: Actor, runId: string, raw: unknown
       if (!a || a.status === "ERLEDIGT" || a.status === "VERWORFEN") continue;
       await tx.update(schema.actions).set({ ownerUserId: parsed.data.ownerUserId, status: parsed.data.ownerUserId === actor.userId ? "ANGENOMMEN" : "VORGESCHLAGEN", version: a.version + 1, updatedAt: new Date() }).where(eq(schema.actions.id, a.id));
     }
-    // Neue verantwortliche Person wird Setup-Mitglied (bearbeitend), damit sie am Vorgehen arbeiten kann.
+    // Neue verantwortliche Person wird Projekt-Mitglied (bearbeitend), damit sie am Vorgehen arbeiten kann.
     await tx.insert(schema.setupMemberships).values({ setupId: run.setupId, userId: parsed.data.ownerUserId, contribution: "BD_ZUSTAENDIG", canEdit: true }).onConflictDoNothing();
     await recordAudit(tx, actor, "playbook.run_reassigned", "PLAYBOOK_RUN", runId, { von: run.ownerUserId, nach: parsed.data.ownerUserId });
     return u;
   });
 }
 
-/** Läufe für einen Kunden, ein Setup oder eine Chance – nur die für den Akteur sichtbaren. */
+/** Läufe für einen Kunden, ein Projekt oder eine Chance – nur die für den Akteur sichtbaren. */
 export async function listRuns(actor: Actor, where: { accountId?: string; setupId?: string; opportunityId?: string }) {
   const rows = await db.query.playbookRuns.findMany({
     where: and(
@@ -645,7 +645,7 @@ export const DORMANT_AFTER_DAYS = 180;
 
 /**
  * Kunden, die als „ruhend“ markiert sind oder seit DORMANT_AFTER_DAYS Tagen keine Aktivität mehr hatten
- * (Setups, Aktionen, Beobachtungen, Chancen). Sortiert nach längster Inaktivität.
+ * (Projekte, Aktionen, Beobachtungen, Chancen). Sortiert nach längster Inaktivität.
  */
 export async function listDormantAccounts(actor: Actor, days = DORMANT_AFTER_DAYS) {
   const accounts = (await listVisibleAccounts(actor)).filter((a) => a.status !== "ARCHIVED");

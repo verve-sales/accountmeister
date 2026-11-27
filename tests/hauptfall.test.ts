@@ -8,11 +8,11 @@ import { createHandover, respondToHandover } from "@/modules/handovers/service";
 import { changeActionStatus, createAction, listMyOpenActions } from "@/modules/actions/service";
 import { actorFor, ensureSeed } from "./helpers";
 
-describe("Hauptfall Etappe 1: Setup → Beobachtung → Hinweis → Übergabe → Aktion", () => {
-  it("F01: lückenhaftes Setup speichern ist möglich; BD-Zuordnung bleibt offen und erscheint im Eingang", async () => {
+describe("Hauptfall Etappe 1: Projekt → Beobachtung → Hinweis → Übergabe → Aktion", () => {
+  it("F01: lückenhaftes Projekt speichern ist möglich; BD-Zuordnung bleibt offen und erscheint im Eingang", async () => {
     const s = await ensureSeed();
     const nina = await actorFor("nina");
-    // Nina ist Anker mit Arbeitsraum-Rolle; für den Kunden angelegt über Account-Sicht durch Mitgliedschaft
+    // Nina ist Kontaktpate mit Arbeitsraum-Rolle; für den Kunden angelegt über Account-Sicht durch Mitgliedschaft
     const setup = await createSetup(nina, { accountId: s.accountId, name: "Datenplattform (Entwurf)", contextNote: "", visibility: "MITGLIEDER", bdUserId: "" });
     expect(setup.status).toBe("ENTWURF");
     expect(setup.bdUserId).toBeNull();

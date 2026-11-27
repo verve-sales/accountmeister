@@ -174,7 +174,7 @@ describe("Etappe 27: Kommentare und Erwähnungen", () => {
   it("findet @Name mit und ohne Klammerzusatz", () => {
     const users = [
       { id: "1", displayName: "David Demo (BD)" },
-      { id: "2", displayName: "Nina Demo (Anker)" },
+      { id: "2", displayName: "Nina Demo (Kontaktpate)" },
       { id: "3", displayName: "Nina Demoski" },
     ];
     expect(findMentions("Hallo @Nina Demo, kannst du?", users)).toEqual(["2"]);
@@ -198,7 +198,7 @@ describe("Etappe 27: Kommentare und Erwähnungen", () => {
     await addComment(nina, { subjectType: "KUNDE", subjectId: s.accountId, body: "Mache ich bis Freitag." });
     expect((await listNotifications(david)).some((n) => n.kind === "KOMMENTAR" && n.title.includes("Mache ich"))).toBe(true);
     const list = await listComments(david, "KUNDE", s.accountId);
-    expect(list.at(-1)!.authorName).toBe("Nina Demo (Anker)");
+    expect(list.at(-1)!.authorName).toBe("Nina Demo (Kontaktpate)");
     await markRead(david);
     expect(await unreadCount(david)).toBe(0);
   });

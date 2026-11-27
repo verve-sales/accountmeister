@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getConfig } from "@/lib/config";
 
-/** Reiter eines Setups (Etappe 9): ein Ort für Überblick, Strategiefaden, Personen & Zugang, Artefakte, Weeklys. */
+/** Reiter eines Projekts (Etappe 9): ein Ort für Überblick, Strategiefaden, Personen & Zugang, Artefakte, Weeklys. */
 export function SetupTabs({ setupId, active }: { setupId: string; active: "ueberblick" | "strategie" | "personen" | "artefakte" }) {
   const tabs = [
     { key: "ueberblick", href: `/setups/${setupId}`, label: "Überblick" },
@@ -11,7 +11,7 @@ export function SetupTabs({ setupId, active }: { setupId: string; active: "ueber
     ...(getConfig().FEATURE_ARTEFAKTE === "true" || active === "artefakte" ? [{ key: "artefakte", href: `/setups/${setupId}/artefakte`, label: "Artefakte" }] : []),
   ];
   return (
-    <nav aria-label="Setup-Bereiche" className="tabs">
+    <nav aria-label="Projekt-Bereiche" className="tabs">
       {tabs.map((t) => {
         const isActive = t.key === active;
         return (

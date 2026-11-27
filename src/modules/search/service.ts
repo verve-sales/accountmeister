@@ -49,8 +49,8 @@ export async function searchAll(actor: Actor, q: string, limit = 8): Promise<{ q
     ]);
     const ch = opps.filter((o) => has(o.title)).slice(0, limit).map<SearchHit>((o) => ({ kind: "CHANCE", id: o.id, title: o.title, subtitle: `Chance · ${an.get(o.accountId) ?? ""} · ${opportunityStatusLabel[o.status] ?? o.status}`, href: `/bedarfe/${o.id}` }));
     if (ch.length) groups.push({ kind: "CHANCE", label: "Chancen", hits: ch });
-    const st = setups.filter((s) => has(s.name)).slice(0, limit).map<SearchHit>((s) => ({ kind: "SETUP", id: s.id, title: s.name, subtitle: `Setup · ${an.get(s.accountId) ?? ""}`, href: `/setups/${s.id}` }));
-    if (st.length) groups.push({ kind: "SETUP", label: "Setups", hits: st });
+    const st = setups.filter((s) => has(s.name)).slice(0, limit).map<SearchHit>((s) => ({ kind: "SETUP", id: s.id, title: s.name, subtitle: `Projekt · ${an.get(s.accountId) ?? ""}`, href: `/setups/${s.id}` }));
+    if (st.length) groups.push({ kind: "SETUP", label: "Projekte", hits: st });
   }
 
   const users = await db.query.users.findMany({ where: and(eq(schema.users.workspaceId, actor.workspaceId), eq(schema.users.status, "ACTIVE")), columns: { id: true, displayName: true, email: true } });

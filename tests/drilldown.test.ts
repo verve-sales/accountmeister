@@ -17,7 +17,7 @@ describe("Etappe 46: Kennzahlen führen auf die Chancen und Kunden dahinter", ()
     const withFl = await createAccount(d0, { name: `Drill mit ${tag} (fiktiv)`, orgType: "KONZERN", responsibleBdUserId: d0.userId });
     const without = await createAccount(d0, { name: `Drill ohne ${tag} (fiktiv)`, orgType: "KONZERN", responsibleBdUserId: d0.userId });
     const david = (await loadActor(d0.userId))!;
-    const st = await createSetup(david, { accountId: withFl.id, name: "Drill-Setup", bdUserId: david.userId, creatorContribution: "BD_ZUSTAENDIG" });
+    const st = await createSetup(david, { accountId: withFl.id, name: "Drill-Projekt", bdUserId: david.userId, creatorContribution: "BD_ZUSTAENDIG" });
     const opp = await createOpportunity(david, { setupId: st.id, title: `Freelancer Drill ${tag}`, needDescription: "Ein Spezialist für Lasttests.", kind: "FREELANCER_EXPERTE", ownerUserId: david.userId });
     const ceo = await actorFor("clemens");
     const open = await drilldown(ceo, { bd: david.userId, art: "FREELANCER_EXPERTE", stufe: "offen" });

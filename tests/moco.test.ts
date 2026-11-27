@@ -58,7 +58,7 @@ describe("Etappe 31: Moco-Anbindung", () => {
     expect(nameSimilarity("Nordlicht Versicherung AG", "Südwind Bank")).toBe(0);
   });
 
-  it("M01: Vorschau – Kunde/Setup/Nutzer per E-Mail und Name verknüpft, Rest neu; nur CEO/Principal", async () => {
+  it("M01: Vorschau – Kunde/Projekt/Nutzer per E-Mail und Name verknüpft, Rest neu; nur CEO/Principal", async () => {
     setMocoEnv();
     const s = await ensureSeed();
     const petra = await actorFor("petra");
@@ -93,7 +93,7 @@ describe("Etappe 31: Moco-Anbindung", () => {
     expect((items.find((i) => i.type === "TEAM") as Extract<ImportItem, { type: "TEAM" }>).memberMocoIds).not.toContain(999);
   });
 
-  it("M02: Übernahme – Zugänge als Anker, Teamleitung, Freelancer-Pool, Setups mit BD, Einsätze aktiv mit Check-ins nur für Freelancer; idempotent", async () => {
+  it("M02: Übernahme – Zugänge als Kontaktpate, Teamleitung, Freelancer-Pool, Projekte mit BD, Einsätze aktiv mit Check-ins nur für Freelancer; idempotent", async () => {
     setMocoEnv();
     const s = await ensureSeed();
     const petra = await actorFor("petra");
@@ -110,7 +110,7 @@ describe("Etappe 31: Moco-Anbindung", () => {
     expect(res.created.setups).toBe(2); // Gruppe 12 + „Ohne Bereich“ bei Nordlicht
     expect(res.created.freelancer).toBe(2);
     expect(res.created.nutzer).toBe(2); // Anna, Ben
-    // Anna: Zugang, Rolle Anker, Leitung Team Nord; David verknüpft, nicht dupliziert
+    // Anna: Zugang, Rolle Kontaktpate, Leitung Team Nord; David verknüpft, nicht dupliziert
     const anna = await db.query.users.findFirst({ where: eq(schema.users.mocoUserId, 502) });
     expect(anna).toBeTruthy();
     const annaRoles = await db.query.roleAssignments.findMany({ where: eq(schema.roleAssignments.userId, anna!.id) });
@@ -120,7 +120,7 @@ describe("Etappe 31: Moco-Anbindung", () => {
     expect(lead?.role).toBe("LEITUNG");
     expect((await db.query.users.findMany({ where: eq(schema.users.email, "david.demo@verve.example") })).length).toBe(1);
     expect((await db.query.users.findFirst({ where: eq(schema.users.id, s.users.david) }))?.mocoUserId).toBe(501);
-    // Kunde verknüpft, Setup verknüpft und mit Gruppen-ID, neues Setup mit Principal-Zuständigkeit
+    // Kunde verknüpft, Projekt verknüpft und mit Gruppen-ID, neues Projekt mit Principal-Zuständigkeit
     expect((await db.query.accounts.findFirst({ where: eq(schema.accounts.id, s.accountId) }))?.mocoCompanyId).toBe(101);
     expect((await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, s.setupId) }))?.mocoProjectGroupId).toBe(11);
     const setup12 = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.mocoProjectGroupId, 12) });
@@ -192,7 +192,7 @@ describe("Etappe 31: Moco-Anbindung", () => {
     const inaktiv = hints.find((h) => h.kind === "CONTRACT_INAKTIV")!;
     expect(hints.some((h) => h.kind === "NEUES_PROJEKT" && /Neues Vorhaben/.test(h.title))).toBe(true);
     expect(hints.some((h) => h.kind === "NUTZER_INAKTIV")).toBe(false); // Olaf war nie im AM
-    // Übernehmen: Ende nachgezogen; Einsatz beendet mit abgesagten Check-ins; Anker darf nicht
+    // Übernehmen: Ende nachgezogen; Einsatz beendet mit abgesagten Check-ins; Kontaktpate darf nicht
     await expect(resolveHint(await actorFor("nina"), ende.id, "UEBERNEHMEN")).rejects.toThrow();
     await resolveHint(petra, ende.id, "UEBERNEHMEN");
     expect((await db.query.engagements.findFirst({ where: eq(schema.engagements.id, ende.subjectId!) }))?.plannedEnd).toBe("2026-11-30");

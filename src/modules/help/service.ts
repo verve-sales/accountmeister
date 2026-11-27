@@ -16,12 +16,12 @@ export async function describeMySettings(actor: Actor): Promise<string> {
   if (canManagePlaybooks(actor)) may.push("Vorgehensmuster pflegen");
   if (actor.roles.has("ADMIN")) may.push("Zugänge, Rollen und KI-Konfiguration verwalten (Verwaltung)");
   if (actor.roles.has("CEO")) may.push("das CEO-Dashboard sehen");
-  if (actor.roles.has("PRINCIPAL")) may.push("bei deinen Kunden Setups und Chancen pflegen sowie BD, Anker und Verantwortliche umstellen");
+  if (actor.roles.has("PRINCIPAL")) may.push("bei deinen Kunden Projekte und Chancen pflegen sowie BD, Kontaktpate und Verantwortliche umstellen");
   if (isSalesOps(actor)) may.push("für alle BDs vorbereiten und pflegen (Entscheidungen bleiben beim BD)");
   if (may.length) lines.push(`Du darfst u. a.: ${may.join("; ")}.`);
   try {
     const focus = await getFocus(actor.workspaceId);
-    lines.push(`Strategischer Fokus: ${focus.focusText ? `„${focus.focusText.slice(0, 200)}${focus.focusText.length > 200 ? "…" : ""}“` : "kein Text gesetzt"}; Freelancer-Hebel ${focus.freelancerLever ? "an" : "aus"}.`);
+    lines.push(`Strategischer Fokus: ${focus.focusText ? `„${focus.focusText.slice(0, 200)}${focus.focusText.length > 200 ? "…" : ""}“` : "kein Text gesetzt"}; Ausbaupotenzial ${focus.freelancerLever ? "an" : "aus"}.`);
   } catch {
     /* Fokus nicht lesbar – weglassen */
   }

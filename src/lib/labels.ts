@@ -25,16 +25,16 @@ export const handoverStatusLabel: Record<string, string> = {
 export const setupStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", AKTIV: "Aktiv", RUHEND: "Ruhend", ARCHIVIERT: "Archiviert" };
 export const visibilityLabel: Record<string, string> = { MITGLIEDER: "Nur Beteiligte", ACCOUNT_TEAM: "Kundenteam", WORKSPACE: "Gesamter Arbeitsraum" };
 export const contributionLabel: Record<string, string> = {
-  ANKER_KONTEXT: "Anker – Kontextbeitrag",
-  ANKER_RUECKFRAGEN: "Anker – fachliche Rückfragen",
-  ANKER_EINFUEHRUNG: "Anker – Einführung möglich",
+  ANKER_KONTEXT: "Kontaktpate – Kontextbeitrag",
+  ANKER_RUECKFRAGEN: "Kontaktpate – fachliche Rückfragen",
+  ANKER_EINFUEHRUNG: "Kontaktpate – Einführung möglich",
   BD_ZUSTAENDIG: "BD – zuständig",
   BEOBACHTER: "Beobachter",
   PRINCIPAL_ZUSTAENDIG: "Principal – zuständig",
 };
 export const accessClassLabel: Record<string, string> = {
   PERSOENLICH: "Persönlich (nur Quelleninhaber)",
-  SETUP: "Setup-Beteiligte",
+  SETUP: "Projekt-Beteiligte",
   ACCOUNT_TEAM: "Kundenteam",
   WORKSPACE: "Arbeitsraum",
 };
@@ -54,7 +54,7 @@ export const influenceLabel: Record<string, string> = { UNBEKANNT: "unbekannt", 
 export const interviewStatusLabel: Record<string, string> = { LAUFEND: "Läuft", ABGESCHLOSSEN: "Abgeschlossen", VERWORFEN: "Verworfen" };
 export const extractStatusLabel: Record<string, string> = { OK: "Vollständig", TEILWEISE: "Teilweise", LEER: "Kein Text", FEHLER: "Fehler" };
 export const intakeStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", UEBERNOMMEN: "Übernommen", VERWORFEN: "Verworfen" };
-export const roleLabel: Record<string, string> = { ANKER: "Anker", BD: "BD", PRINCIPAL: "Principal", CEO: "Geschäftsführung", ADMIN: "Administration", SALES_OPS: "Sales Operations", COACH: "Coach (nur lesen)" };
+export const roleLabel: Record<string, string> = { ANKER: "Kontaktpate", BD: "BD", PRINCIPAL: "Principal", CEO: "Geschäftsführung", ADMIN: "Administration", SALES_OPS: "Sales Operations", COACH: "Coach (nur lesen)" };
 
 export function fmtDate(d: string | Date | null | undefined, tz = "Europe/Berlin"): string {
   if (!d) return "–";
@@ -113,7 +113,7 @@ export const importKindLabel: Record<string, string> = { PROTOKOLL_TEXT: "Protok
 export const integrationStatusLabel: Record<string, string> = { VERBUNDEN_FIXTURE: "Verbunden (Fixture-Modus)", VERBUNDEN: "Verbunden", ABGELAUFEN: "Abgelaufen – erneut anmelden", WIDERRUFEN: "Widerrufen", FEHLER: "Fehler" };
 export const supportStatusLabel: Record<string, string> = { ANGEFRAGT: "Angefragt", ANGENOMMEN: "Angenommen", ZURUECKGEGEBEN: "Zurückgegeben", ERLEDIGT: "Erledigt", ZURUECKGEZOGEN: "Zurückgezogen" };
 export const goalStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", ZUR_ABSTIMMUNG: "Zur Abstimmung", VEREINBART: "Vereinbart", GEAENDERT: "Geändert – erneute Abstimmung", BEENDET: "Beendet" };
-export const reviewTypeLabel: Record<string, string> = { BD_ANKER_WEEKLY: "BD-/Anker-Weekly", PRINCIPAL_BD_WEEKLY: "Principal-/BD-Weekly", CEO_PRINCIPAL_ZIELGESPRAECH: "CEO-/Principal-Zielgespräch" };
+export const reviewTypeLabel: Record<string, string> = { BD_ANKER_WEEKLY: "BD-/Kontaktpaten-Weekly", PRINCIPAL_BD_WEEKLY: "Principal-/BD-Weekly", CEO_PRINCIPAL_ZIELGESPRAECH: "CEO-/Principal-Zielgespräch" };
 export const opportunityStatusLabel: Record<string, string> = { ANTIZIPIERT: "Antizipiert", IN_KLAERUNG: "In Klärung", BESTAETIGT: "Bestätigt", PROFIL_ANGEBOT_VORGESTELLT: "Profil/Angebot vorgestellt", AUSWAHL_BESTELLUNG: "Auswahl/Bestellung", BEAUFTRAGT: "Konvertiert", ZURUECKGESTELLT: "Zurückgestellt", BEENDET: "Beendet" };
 export const decisionRoleLabel: Record<string, string> = { BEDARFSTRAEGER: "Bedarfsträger", FACHLICHE_BEWERTUNG: "Fachliche Bewertung / Profilauswahl", BUDGETVERANTWORTUNG: "Budgetverantwortung", EINKAUF_VERTRAGSWEG: "Einkauf und Vertragsweg", ZUSAETZLICHE_FREIGABE: "Zusätzliche Freigabe", UNTERSTUETZER_SPONSOR: "Belegter Unterstützer / Sponsor" };
 export const offerStatusLabel: Record<string, string> = { ENTWURF: "Entwurf", GEPRUEFT: "Geprüft", VORGESTELLT: "Tatsächlich vorgestellt", RUECKMELDUNG_OFFEN: "Rückmeldung offen", AKZEPTIERT: "Akzeptiert", ABGELEHNT: "Abgelehnt", ZURUECKGEZOGEN: "Zurückgezogen" };
@@ -122,7 +122,7 @@ export const engagementStatusLabel: Record<string, string> = { GEPLANT: "Einsatz
 export const requirementStatusLabel: Record<string, string> = { OFFEN: "Offen", NACHWEIS_VORGELEGT: "Nachweis vorgelegt", BESTAETIGT: "Bestätigt", NICHT_ANWENDBAR: "Nicht anwendbar (begründet)" };
 
 // Vorgehensmuster (Etappe 20)
-export const playbookScopeLabel: Record<string, string> = { ACCOUNT: "Kunde", SETUP: "Setup", OPPORTUNITY: "Chance" };
+export const playbookScopeLabel: Record<string, string> = { ACCOUNT: "Kunde", SETUP: "Projekt", OPPORTUNITY: "Chance" };
 export const playbookRunStatusLabel: Record<string, string> = { AKTIV: "läuft", ABGESCHLOSSEN: "abgeschlossen", ZURUECKGESTELLT: "zurückgestellt" };
 export const playbookStepStatusLabel: Record<string, string> = { WARTET: "wartet", OFFEN: "aktuell", ERLEDIGT: "erledigt", UEBERSPRUNGEN: "übersprungen" };
 

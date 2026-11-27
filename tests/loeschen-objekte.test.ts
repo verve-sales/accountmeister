@@ -10,7 +10,7 @@ import { changeEngagementStatus } from "@/modules/engagements/service";
 import { deleteEngagementPermanently, deleteOpportunityPermanently, deleteSetupPermanently, previewOpportunityDeletion, previewSetupDeletion } from "@/modules/deletion/objects";
 import { actorFor, ensureSeed } from "./helpers";
 
-describe("Endgültiges Löschen: Einsatz, Chance, Setup (rekursiv)", () => {
+describe("Endgültiges Löschen: Einsatz, Chance, Projekt (rekursiv)", () => {
   it("Einsatz löschen nimmt Kandidatur/Position/Auftrag mit; Chance bleibt; Statuswechsel führt den Auftrag mit", async () => {
     process.env.FEATURE_BESETZUNG = "true";
     resetConfigCacheForTests();
@@ -48,11 +48,11 @@ describe("Endgültiges Löschen: Einsatz, Chance, Setup (rekursiv)", () => {
     expect(await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, opp.id) })).toBeTruthy();
   });
 
-  it("Chance löschen nimmt Position/Einsatz mit, löst Beobachtungen; Setup löschen rekursiv", async () => {
+  it("Chance löschen nimmt Position/Einsatz mit, löst Beobachtungen; Projekt löschen rekursiv", async () => {
     const s = await ensureSeed();
     const david = await actorFor("david");
     const petra = await actorFor("petra");
-    const setup = await createSetup(david, { accountId: s.accountId, name: "Löschfall Setup", bdUserId: david.userId });
+    const setup = await createSetup(david, { accountId: s.accountId, name: "Löschfall Projekt", bdUserId: david.userId });
     const opp = await createOpportunity(david, { setupId: setup.id, title: "Löschfall Chance", needDescription: "Bedarf für den Löschfall Chance.", kind: "FREELANCER_EXPERTE", ownerUserId: david.userId });
     const r = await quickFill(david, opp.id, { title: "Löschfall", resourceKind: "FREELANCER", newName: "Lösch Freelancer (fiktiv)", ekRate: "700", desiredStart: "2026-09-01", endOpen: "on" });
     const [sig] = await db.insert(schema.signals).values({ workspaceId: s.workspaceId, setupId: setup.id, observation: "Beobachtung zur Chance, soll überleben.", opportunityId: opp.id, createdBy: david.userId }).returning();
@@ -65,14 +65,14 @@ describe("Endgültiges Löschen: Einsatz, Chance, Setup (rekursiv)", () => {
     const sigAfter = await db.query.signals.findFirst({ where: eq(schema.signals.id, sig!.id) });
     expect(sigAfter).toBeTruthy();
     expect(sigAfter?.opportunityId).toBeNull();
-    // Setup rekursiv
+    // Projekt rekursiv
     const opp2 = await createOpportunity(david, { setupId: setup.id, title: "Löschfall Chance 2", needDescription: "Noch ein Bedarf für den Löschfall.", kind: "VERVE_EXPERTE", ownerUserId: david.userId });
     await quickFill(david, opp2.id, { title: "Löschfall 2", resourceKind: "INTERN", internalUserId: s.users.nina, desiredStart: "2026-09-01", endOpen: "on" });
     const spv = await previewSetupDeletion(petra, setup.id);
     expect(spv.opportunities).toBe(1);
     expect(spv.engagements).toBe(1);
     expect(spv.signals).toBe(1);
-    const srep = await deleteSetupPermanently(petra, setup.id, { reason: "Testfall Löschen Setup rekursiv", confirm: "on" });
+    const srep = await deleteSetupPermanently(petra, setup.id, { reason: "Testfall Löschen Projekt rekursiv", confirm: "on" });
     expect(srep.deleted.project_setups).toBe(1);
     expect(srep.deleted.engagements).toBe(1);
     expect(await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, setup.id) })).toBeUndefined();

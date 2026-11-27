@@ -21,7 +21,7 @@ export function listTemplates(): ArtifactTemplate[] {
   return ARTIFACT_TEMPLATES;
 }
 
-/** Vorlagen, für die im Setup-Kontext ein Textentwurf angelegt werden kann (Datenbezug Setup oder noch nicht modelliert). */
+/** Vorlagen, für die im Projekt-Kontext ein Textentwurf angelegt werden kann (Datenbezug Projekt oder noch nicht modelliert). */
 export function templatesForSetupDrafts(): ArtifactTemplate[] {
   return ARTIFACT_TEMPLATES.filter((t) => t.sections.length > 0 && (t.scopeType === "SETUP" || t.implementation === "FOLGT" || t.code === "A5"));
 }
@@ -46,10 +46,10 @@ export async function createDraft(actor: Actor, raw: unknown) {
   if (!template || template.sections.length === 0) throw new ValidationError("Für diese Vorlage gibt es keinen Textentwurf; sie ist als Ansicht umgesetzt.");
   if (input.variant === "EXTERN" && !template.externalVariantAllowed) throw new ValidationError("Diese Vorlage sieht keine Kundentext-Variante vor.");
   const ctx = await loadSetupContext(actor, input.setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst in diesem Setup keine Artefakte entwerfen.");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst in diesem Projekt keine Artefakte entwerfen.");
   if (template.code === "A14" && input.audience !== "PERSOENLICH" && input.audience !== "ACCOUNT_TEAM") {
-    throw new ValidationError("Coaching-/Eskalationsnotizen haben einen gesonderten Empfängerkreis (persönlich oder Kundenteam), nie Setup-weit oder Arbeitsraum-weit.");
+    throw new ValidationError("Coaching-/Eskalationsnotizen haben einen gesonderten Empfängerkreis (persönlich oder Kundenteam), nie Projekt-weit oder Arbeitsraum-weit.");
   }
 
   const { content, sourceIds } = await prefill(actor, ctx, template, input.variant);
@@ -243,10 +243,10 @@ export async function changeArtifactStatus(actor: Actor, raw: unknown) {
   });
 }
 
-/** Artefakte eines Setups: je Kette die neueste Version, gefiltert nach Empfängerkreis. */
+/** Artefakte eines Projekts: je Kette die neueste Version, gefiltert nach Empfängerkreis. */
 export async function listArtifactsForSetup(actor: Actor, setupId: string) {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
   const rows = await db.query.artifactVersions.findMany({ where: eq(schema.artifactVersions.setupId, setupId), orderBy: desc(schema.artifactVersions.versionNo) });
   const latest = new Map<string, (typeof rows)[number]>();
   for (const r of rows) if (!latest.has(r.artifactKey)) latest.set(r.artifactKey, r);

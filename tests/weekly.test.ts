@@ -8,12 +8,12 @@ import { createAction } from "@/modules/actions/service";
 import { createSetup, getSetupDetail } from "@/modules/setups/service";
 import { actorFor, ensureSeed } from "./helpers";
 
-describe("Etappe 2: BD-/Anker-Weekly (Briefing 11.1, F07, F11)", () => {
+describe("Etappe 2: BD-/Kontaktpaten-Weekly (Briefing 11.1, F07, F11)", () => {
   it("Zwei aufeinanderfolgende Weeklys bauen nachvollziehbar aufeinander auf", async () => {
     const s = await ensureSeed();
     const nina = await actorFor("nina");
     const david = await actorFor("david");
-    // Eigenes Setup, damit der Test unabhängig vom Seed-Setup bleibt
+    // Eigenes Projekt, damit der Test unabhängig vom Seed-Projekt bleibt
     const setup = await createSetup(david, { accountId: s.accountId, name: "Weekly-Testsetup", contextNote: "Kontext für Weekly-Test", bdUserId: david.userId });
     await db.insert(schema.setupMemberships).values({ setupId: setup.id, userId: nina.userId, contribution: "ANKER_KONTEXT", canEdit: true });
 
@@ -62,7 +62,7 @@ describe("Etappe 2: BD-/Anker-Weekly (Briefing 11.1, F07, F11)", () => {
     // Doppelte Bestätigung / veraltete Version → Konflikt oder Übergangsfehler
     await expect(confirmReview(david, w1.id, { version: draft.version })).rejects.toBeInstanceOf(TransitionError);
 
-    // Setup-Abschnitt 2 bezieht sich jetzt auf den bestätigten Stand
+    // Projekt-Abschnitt 2 bezieht sich jetzt auf den bestätigten Stand
     const detail = await getSetupDetail(david, setup.id);
     expect(detail.recentSince.getTime()).toBe(confirmed.version.confirmedAt.getTime());
     expect(detail.recentLabel).toContain("Weekly");

@@ -21,9 +21,9 @@ import { upsertAssessment } from "@/modules/people/assessments";
 import { insertSuggestionCard } from "@/modules/assistant/suggestions";
 
 /**
- * Anlagevorschlag (Etappe 6B/7A): aus einem Dokument oder einem Interview schlägt die KI Organisation, Setup, Personen
+ * Anlagevorschlag (Etappe 6B/7A): aus einem Dokument oder einem Interview schlägt die KI Organisation, Projekt, Personen
  * (mit Einschätzung), Signale, Bedarfe, Folgeaktivitäten, Kontaktaufnahmen und Artefakte vor → der BD prüft, ändert,
- * streicht und übernimmt – in einen neuen Kunden oder ein bestehendes Setup. Ohne KI funktioniert der Weg genauso, nur
+ * streicht und übernimmt – in einen neuen Kunden oder ein bestehendes Projekt. Ohne KI funktioniert der Weg genauso, nur
  * ohne Vorbefüllung. Es entsteht nichts ohne Bestätigung; alles Erzeugte startet in ungeprüften Zuständen.
  */
 
@@ -46,7 +46,7 @@ export async function startIntake(actor: Actor, raw: unknown, file: UploadedFile
 
 /**
  * Aus einer Quelle (Dokument oder Interviewtranskript) einen Anlagevorschlag erzeugen. Bei targetSetupId wird kein
- * neuer Kunde vorgeschlagen, sondern das Setup ergänzt.
+ * neuer Kunde vorgeschlagen, sondern das Projekt ergänzt.
  */
 export async function createProposalFromSource(
   actor: Actor,
@@ -257,20 +257,20 @@ export async function applyIntake(actor: Actor, proposalId: string, raw: unknown
   let accountId: string;
   let setupId: string;
   if (targetCtx) {
-    // Ergänzung eines bestehenden Setups: kein neuer Kunde, kein neues Setup
+    // Ergänzung eines bestehenden Projekte: kein neuer Kunde, kein neues Projekt
     accountId = targetCtx.account.id;
     setupId = targetCtx.setup.id;
     if (!source.setupId) await db.transaction(async (tx) => attachSourceToSetup(tx, actor, source.id, setupId, input.documentAccessClass));
   } else {
     if (!input.existingAccountId && (input.orgName ?? "").length < 2) throw new ValidationError("Bitte einen Kundennamen eingeben oder einen bestehenden Kunden wählen.");
-    if ((input.setupName ?? "").length < 3) throw new ValidationError("Setup-Name ist zu kurz.");
+    if ((input.setupName ?? "").length < 3) throw new ValidationError("Projekt-Name ist zu kurz.");
     if (!input.existingAccountId && !input.orgType) throw new ValidationError("Bitte den Organisationstyp des neuen Kunden wählen (Pflichtfeld).");
-    // 1) Kunde (neu oder bestehend) und Setup – über die geprüften Services, damit alle Rechte- und Rollenregeln gelten
+    // 1) Kunde (neu oder bestehend) und Projekt – über die geprüften Services, damit alle Rechte- und Rollenregeln gelten
     const bd = input.responsibleBdUserId || actor.userId;
     accountId = input.existingAccountId || (await createAccount(actor, { name: input.orgName, orgType: input.orgType || "SONSTIGE", responsibleBdUserId: bd })).id;
     const setup = await createSetup(actor, { accountId, name: input.setupName, contextNote: input.contextNote || `Angelegt aus ${originLabel}.`, bdUserId: bd, creatorContribution: "ANKER_KONTEXT" });
     setupId = setup.id;
-    // 2) Quelle dem Setup zuordnen
+    // 2) Quelle dem Projekt zuordnen
     await db.transaction(async (tx) => attachSourceToSetup(tx, actor, source.id, setupId, input.documentAccessClass));
   }
 

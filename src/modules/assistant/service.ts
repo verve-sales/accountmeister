@@ -36,9 +36,9 @@ import { ensureDefaultTeams } from "@/modules/work/teams";
 import { parseRelativeDue, plusDaysIso, todayIso } from "@/modules/work/calendar";
 
 /**
- * Assistent (Etappe 8, E-041): ein Dialog je Nutzer und Kontext (allgemein, Kunde, Setup). Der Assistent antwortet
+ * Assistent (Etappe 8, E-041): ein Dialog je Nutzer und Kontext (allgemein, Kunde, Projekt). Der Assistent antwortet
  * in Prosa, legt Vorschlagskarten daneben (Personen, Signale, Chancen, Aktionen, Kontaktaufnahmen, Fragen, Kunde,
- * Setup) und benennt, was ihm für weitere Vorschläge fehlt. Er sieht nur, was die Person sieht; er schreibt nichts
+ * Projekt) und benennt, was ihm für weitere Vorschläge fehlt. Er sieht nur, was die Person sieht; er schreibt nichts
  * ohne Klick; jede Karte braucht eine Textstelle aus dem Dialog oder dem Kontext. Der Dialog wird bei der ersten
  * Übernahme zur Quelle (Typ INTERVIEW) und bleibt als Beleg erhalten.
  */
@@ -77,7 +77,7 @@ export async function getOrCreateThread(actor: Actor, ref: AssistantContextRef) 
     orderBy: desc(schema.assistantThreads.createdAt),
   });
   if (existing) return existing;
-  const title = ref.type === "GLOBAL" ? "Assistent" : ref.type === "ACCOUNT" ? "Assistent · Kunde" : "Assistent · Setup";
+  const title = ref.type === "GLOBAL" ? "Assistent" : ref.type === "ACCOUNT" ? "Assistent · Kunde" : "Assistent · Projekt";
   const [t] = await db.insert(schema.assistantThreads).values({ workspaceId: actor.workspaceId, userId: actor.userId, contextType: ref.type, contextId: ref.id, title }).returning();
   if (!t) throw new Error("Gesprächsfaden");
   return t;
@@ -111,7 +111,7 @@ export async function computeOpenPoints(actor: Actor, res: Resolved): Promise<Op
   }
   const setupName = new Map<string, string>();
   if (setupIds.length) for (const s of await db.query.projectSetups.findMany({ where: inArray(schema.projectSetups.id, setupIds) })) setupName.set(s.id, s.name);
-  const tag = (sid: string | null) => (res.ref.type === "SETUP" || !sid ? "" : ` (${setupName.get(sid) ?? "Setup"})`);
+  const tag = (sid: string | null) => (res.ref.type === "SETUP" || !sid ? "" : ` (${setupName.get(sid) ?? "Projekt"})`);
 
   if (setupIds.length) {
     // Adressierte / offene Vorschläge
@@ -119,7 +119,7 @@ export async function computeOpenPoints(actor: Actor, res: Resolved): Promise<Op
     const mine = sugg.filter((s) => s.proposedOwnerUserId === actor.userId);
     for (const s of mine.slice(0, 3)) points.push({ kind: "VORSCHLAG", text: `An dich adressierter Vorschlag: ${s.title}${tag(s.setupId)}`, href: `/setups/${s.setupId}` });
     const others = sugg.length - mine.length;
-    if (others > 0) points.push({ kind: "VORSCHLAG", text: `${others} offene Vorschläge warten auf Entscheidung${setupIds.length === 1 ? "" : " in deinen Setups"}.`, href: res.ref.type === "SETUP" ? `/setups/${setupIds[0]}` : "/meine-arbeit" });
+    if (others > 0) points.push({ kind: "VORSCHLAG", text: `${others} offene Vorschläge warten auf Entscheidung${setupIds.length === 1 ? "" : " in deinen Projekten"}.`, href: res.ref.type === "SETUP" ? `/setups/${setupIds[0]}` : "/meine-arbeit" });
     // Überfällige Aktionen des Akteurs
     const today = new Date().toISOString().slice(0, 10);
     const overdue = await db.query.actions.findMany({ where: and(inArray(schema.actions.setupId, setupIds), eq(schema.actions.ownerUserId, actor.userId), lt(schema.actions.dueDate, today), inArray(schema.actions.status, ["VORGESCHLAGEN", "ANGENOMMEN", "IN_ARBEIT"])), limit: 5 });
@@ -132,7 +132,7 @@ export async function computeOpenPoints(actor: Actor, res: Resolved): Promise<Op
     const staleSetups = await db.query.projectSetups.findMany({ where: and(inArray(schema.projectSetups.id, setupIds), lt(schema.projectSetups.updatedAt, stale), inArray(schema.projectSetups.status, ["ENTWURF", "AKTIV"])), limit: 5 });
     for (const s of staleSetups) points.push({ kind: "STILLSTAND", text: `„${s.name}“ hat seit über zwei Wochen keine Änderung.`, href: `/setups/${s.id}` });
   }
-  // Buyingcenter-Lücken nur im Setup-Kontext (bewertungsberechtigt)
+  // Buyingcenter-Lücken nur im Projekt-Kontext (bewertungsberechtigt)
   if (res.ref.type === "SETUP" && res.ctx) {
     try {
       const bc = await getBuyingCenter(actor, res.ctx.setup.id);
@@ -151,18 +151,18 @@ export async function computeOpenPoints(actor: Actor, res: Resolved): Promise<Op
 export async function computeMissing(actor: Actor, res: Resolved): Promise<string[]> {
   const m: string[] = [];
   if (res.ref.type === "GLOBAL") {
-    m.push("Um welchen Kunden oder welches Vorhaben geht es? Nenn mir Organisation (mit Rechtsform) und Anlass – dann schlage ich Kunde und Setup vor.");
+    m.push("Um welchen Kunden oder welches Vorhaben geht es? Nenn mir Organisation (mit Rechtsform) und Anlass – dann schlage ich Kunde und Projekt vor.");
     return m;
   }
   if (res.ref.type === "ACCOUNT" && res.account) {
     const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, res.account.id) });
-    if (setups.length === 0) m.push(`Für ${res.account.name} gibt es noch kein Setup. Woran arbeitet der Kunde gerade, und warum seid ihr im Gespräch? Daraus mache ich einen Setup-Vorschlag.`);
+    if (setups.length === 0) m.push(`Für ${res.account.name} gibt es noch kein Projekt. Woran arbeitet der Kunde gerade, und warum seid ihr im Gespräch? Daraus mache ich einen Projekt-Vorschlag.`);
     const persons = await db.query.persons.findMany({ where: eq(schema.persons.accountId, res.account.id) });
     if (persons.length === 0) m.push("Es sind noch keine Ansprechpartner erfasst. Mit wem hast du gesprochen – Name, Funktion, Zuständigkeit?");
     return m;
   }
   if (res.ctx) {
-    if (!res.ctx.setup.contextNote) m.push("Dem Setup fehlt die Kontextnotiz: Was läuft hier, in ein bis zwei Sätzen?");
+    if (!res.ctx.setup.contextNote) m.push("Dem Projekt fehlt die Kontextnotiz: Was läuft hier, in ein bis zwei Sätzen?");
     const persons = await db.query.persons.findMany({ where: eq(schema.persons.accountId, res.ctx.account.id) });
     if (persons.length === 0) m.push("Noch keine Ansprechpartner: Mit wem hast du gesprochen – Name, Funktion, Zuständigkeit?");
     const [opps] = await db.select({ n: count() }).from(schema.opportunities).where(eq(schema.opportunities.setupId, res.ctx.setup.id));
@@ -184,8 +184,8 @@ const nameKey = (n: string) => n.toLowerCase().replace(/\(.*?\)/g, " ").replace(
 export type RunningEngagementRef = { id: string; person: string; accountId: string; accountName: string; setupId: string; setupName: string; end: string | null; contact: string | null; orderContact: string | null; approach: string | null; canEdit: boolean };
 
 /**
- * Laufende Einsätze, die der Akteur sieht – im Kunden-/Setup-Kontext alle des Kunden, sonst die der im Text genannten
- * Personen (Nachname genügt). Damit kennt der Assistent Kunde und Setup eines Einsatzes, ohne danach zu fragen.
+ * Laufende Einsätze, die der Akteur sieht – im Kunden-/Projekt-Kontext alle des Kunden, sonst die der im Text genannten
+ * Personen (Nachname genügt). Damit kennt der Assistent Kunde und Projekt eines Einsatzes, ohne danach zu fragen.
  */
 export async function findRunningEngagements(actor: Actor, opts: { accountId?: string | null; mention?: string; personName?: string }): Promise<RunningEngagementRef[]> {
   const rows = await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, actor.workspaceId), inArray(schema.engagements.status, RUNNING), opts.accountId ? eq(schema.engagements.accountId, opts.accountId) : undefined) });
@@ -256,7 +256,7 @@ export async function buildContextText(actor: Actor, res: Resolved, mention?: st
   else lines.push(`Meine offenen Aufgaben: keine (heute ${today}).`);
   if (res.account) lines.push(`Kunde: ${res.account.name} (${res.account.orgType})`);
   if (res.ctx) {
-    lines.push(`Setup: ${res.ctx.setup.name} [${res.ctx.setup.status}]${res.ctx.setup.contextNote ? ` – ${res.ctx.setup.contextNote}` : ""}`);
+    lines.push(`Projekt: ${res.ctx.setup.name} [${res.ctx.setup.status}]${res.ctx.setup.contextNote ? ` – ${res.ctx.setup.contextNote}` : ""}`);
     const [persons, fns, opps, signals, actions, oq] = await Promise.all([
       db.query.persons.findMany({ where: eq(schema.persons.accountId, res.ctx.account.id) }),
       db.query.personFunctions.findMany({}),
@@ -278,14 +278,14 @@ export async function buildContextText(actor: Actor, res: Resolved, mention?: st
       const c = await loadSetupContext(actor, s.id);
       if (c && canViewSetup(actor, c)) visible.push(s.name);
     }
-    if (visible.length) lines.push(`Setups: ${visible.join("; ")}`);
+    if (visible.length) lines.push(`Projekte: ${visible.join("; ")}`);
     if (persons.length) lines.push(`Bekannte Personen: ${persons.map((p) => p.displayName).join("; ")}`);
   }
   if (mention !== undefined) {
     const engs = await findRunningEngagements(actor, res.account ? { accountId: res.account.id } : { mention }).catch(() => []);
     if (engs.length) {
-      lines.push("Laufende Einsätze (Kunde und Setup sind damit bekannt – nicht danach fragen):");
-      for (const e of engs) lines.push(`- ${e.person} – Kunde ${e.accountName}, Setup „${e.setupName}“, Ende ${e.end ?? "offen"}; Verlängerung fachlich über: ${e.contact ?? "offen"}; Bestellung/Vertrag über: ${e.orderContact ?? "offen"}; spricht an: ${e.approach ?? "offen"}`);
+      lines.push("Laufende Einsätze (Kunde und Projekt sind damit bekannt – nicht danach fragen):");
+      for (const e of engs) lines.push(`- ${e.person} – Kunde ${e.accountName}, Projekt „${e.setupName}“, Ende ${e.end ?? "offen"}; Verlängerung fachlich über: ${e.contact ?? "offen"}; Bestellung/Vertrag über: ${e.orderContact ?? "offen"}; spricht an: ${e.approach ?? "offen"}`);
     }
   }
   return lines.join("\n");
@@ -595,7 +595,7 @@ export async function decideCard(actor: Actor, raw: unknown) {
   return { card, thread: await requireThread(actor, threadId) };
 }
 
-/** Chance eines Setups nach Titel finden (unscharf) – für das Wofür der Karten. */
+/** Chance eines Projekts nach Titel finden (unscharf) – für das Wofür der Karten. */
 async function matchOpportunity(setupId: string, purpose: string) {
   const opps = await db.query.opportunities.findMany({ where: eq(schema.opportunities.setupId, setupId) });
   const q = purpose.trim().toLowerCase();
@@ -635,7 +635,7 @@ async function matchColleague(workspaceId: string, name: string) {
 }
 
 /**
- * e57: Vermittler-Anfrage (Hays, Gulp …). Der Vermittler ist der Kunde (Kundenart VERMITTLER, Setup „Anfragen“);
+ * e57: Vermittler-Anfrage (Hays, Gulp …). Der Vermittler ist der Kunde (Kundenart VERMITTLER, Projekt „Anfragen“);
  * je vorgeschlagener Person entsteht eine eigene Chance mit Position und Kandidatur – das ist später je ein Lead in
  * Moco (übertragen erst ab „Profil/Angebot verschickt“). Ohne Personen entsteht eine Chance mit offener Position.
  */
@@ -650,7 +650,7 @@ async function applyIntermediaryRequest(actor: Actor, res: Resolved, item: Extra
     account = await createAccount(actor, { name: item.intermediaryName, orgType: "SONSTIGE", responsibleBdUserId: isSalesOpsOnly(actor) ? null : actor.userId });
   }
   if (account.accountKind !== "VERMITTLER") await db.update(schema.accounts).set({ accountKind: "VERMITTLER", updatedAt: new Date() }).where(eq(schema.accounts.id, account.id));
-  // 2) Setup „Anfragen“
+  // 2) Projekt „Anfragen“
   const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, account.id) });
   let setupRow = setups.find((x) => x.status !== "ARCHIVIERT" && x.name.toLowerCase() === "anfragen") ?? null;
   if (!setupRow) {
@@ -659,7 +659,7 @@ async function applyIntermediaryRequest(actor: Actor, res: Resolved, item: Extra
     setupRow = await createSetup(actor, { accountId: account.id, name: "Anfragen", contextNote: `Anfragen von ${account.name} (Vermittler) – je vorgeschlagener Person eine Chance.`, bdUserId: bd, creatorContribution: "ANKER_KONTEXT" });
   }
   const ctx = await loadSetupContext(actor, setupRow.id);
-  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError(`Das Setup „Anfragen“ bei ${account.name} darfst du nicht bearbeiten.`);
+  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError(`Das Projekt „Anfragen“ bei ${account.name} darfst du nicht bearbeiten.`);
   await env.sourceFor(ctx.setup.id).catch(() => null);
   const notes: string[] = [];
   // 3) Ansprechpartner beim Vermittler
@@ -709,11 +709,11 @@ async function applyIntermediaryRequest(actor: Actor, res: Resolved, item: Extra
     notes.push(`Rückmeldung bis ${due.split("-").reverse().join(".")} als Aufgabe.`);
   }
   const head = created.length ? `${created.length === 1 ? "Eine Chance" : `${created.length} Chancen`} bei ${account.name} (Vermittler) angelegt: ${created.join("; ")}.` : `Chance „${item.title}“ bei ${account.name} (Vermittler) mit offener Position angelegt.`;
-  return { type: "OPPORTUNITY", id: firstOpp!, note: [head, ...notes].join(" "), rebind: { type: "SETUP", id: ctx.setup.id, title: "Assistent · Setup" } };
+  return { type: "OPPORTUNITY", id: firstOpp!, note: [head, ...notes].join(" "), rebind: { type: "SETUP", id: ctx.setup.id, title: "Assistent · Projekt" } };
 }
 
 /**
- * e56: Karten, die ein Setup brauchen, im Kundenkontext ohne Rückfrage zuordnen – das zuletzt bearbeitete Setup, das
+ * e56: Karten, die ein Projekt brauchen, im Kundenkontext ohne Rückfrage zuordnen – das zuletzt bearbeitete Projekt, das
  * die Person bearbeiten darf, sonst ein neues „Allgemein“.
  */
 async function ensureSetupContext(actor: Actor, res0: Resolved, origin: string): Promise<{ res: Resolved; note: string }> {
@@ -735,7 +735,7 @@ async function ensureSetupContext(actor: Actor, res0: Resolved, origin: string):
     }
     if (chosen) {
       res = { ...res, ctx: chosen };
-      autoSetupNote = ` (Setup „${chosen.setup.name}“)`;
+      autoSetupNote = ` (Projekt „${chosen.setup.name}“)`;
     }
   }
   return { res, note: autoSetupNote };
@@ -745,26 +745,26 @@ const NEEDS_SETUP = new Set(["SIGNAL", "BESETZUNG", "CHANCE", "AKTION", "KONTAKT
 
 /** Eine Karte übernehmen (Assistent und Eingangs-Auswertung teilen sich diese Logik). */
 export async function applyCard(actor: Actor, res0: Resolved, item: AssistantItem, env: CardEnv): Promise<ApplyResult> {
-  // e58: Chance zu einem laufenden Einsatz (mögliche Verlängerung) – immer im Setup dieses Einsatzes
+  // e58: Chance zu einem laufenden Einsatz (mögliche Verlängerung) – immer im Projekt dieses Einsatzes
   if (item.type === "CHANCE" && item.engagementPerson.trim()) {
     const found = await findRunningEngagements(actor, { accountId: res0.account?.id ?? null, personName: item.engagementPerson });
     const pool = found.length ? found : await findRunningEngagements(actor, { personName: item.engagementPerson });
     if (new Set(pool.map((f) => f.accountId)).size === 1) {
       const f = [...pool].sort((x, y) => (y.end ?? "").localeCompare(x.end ?? ""))[0]!;
       const ctx = await loadSetupContext(actor, f.setupId);
-      if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError(`Im Setup „${f.setupName}“ bei ${f.accountName} darfst du keine Chancen anlegen – bitte den zuständigen BD.`);
+      if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError(`Im Projekt „${f.setupName}“ bei ${f.accountName} darfst du keine Chancen anlegen – bitte den zuständigen BD.`);
       const e = await db.query.engagements.findFirst({ where: eq(schema.engagements.id, f.id), columns: { freelancerId: true } });
       const chance = { ...item, kind: e?.freelancerId ? ("FREELANCER_EXPERTE" as const) : ("VERVE_EXPERTE" as const), headcount: 1, positions: [] };
       const r = await applyCardInner(actor, { ref: { type: "SETUP", id: ctx.setup.id }, ctx, account: ctx.account, canWrite: true }, chance, env);
-      return { ...r, note: `Chance „${item.title}“ für ${f.person} bei ${f.accountName} im Setup „${f.setupName}“ angelegt${f.end ? ` (Einsatz läuft bis ${f.end.split("-").reverse().join(".")})` : ""}. /bedarfe/${r.id}`, rebind: { type: "SETUP", id: ctx.setup.id, title: "Assistent · Setup" } };
+      return { ...r, note: `Chance „${item.title}“ für ${f.person} bei ${f.accountName} im Projekt „${f.setupName}“ angelegt${f.end ? ` (Einsatz läuft bis ${f.end.split("-").reverse().join(".")})` : ""}. /bedarfe/${r.id}`, rebind: { type: "SETUP", id: ctx.setup.id, title: "Assistent · Projekt" } };
     }
   }
   if (!res0.ctx && res0.account && NEEDS_SETUP.has(item.type)) {
     const { res, note } = await ensureSetupContext(actor, res0, env.origin);
     const r = await applyCardInner(actor, res, item, env);
     const withNote = note && r.note ? { ...r, note: r.note.replace(/^([^.]*)\./, `$1${note}.`) } : r;
-    // Gespräch hängt danach am Setup – Folgekarten brauchen dann nichts mehr aufzulösen
-    return res.ctx && !withNote.rebind ? { ...withNote, rebind: { type: "SETUP", id: res.ctx.setup.id, title: "Assistent · Setup" } } : withNote;
+    // Gespräch hängt danach am Projekt – Folgekarten brauchen dann nichts mehr aufzulösen
+    return res.ctx && !withNote.rebind ? { ...withNote, rebind: { type: "SETUP", id: res.ctx.setup.id, title: "Assistent · Projekt" } } : withNote;
   }
   return applyCardInner(actor, res0, item, env);
 }
@@ -780,17 +780,17 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     if (existing) {
       const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, existing.id) });
       const same = setups.find((x) => x.name.toLowerCase() === item.setupName.toLowerCase()) ?? (setups.length === 1 ? setups[0] : undefined);
-      if (same) return { type: "SETUP", id: same.id, note: `Kunde „${existing.name}“ gibt es schon – das Gespräch gehört jetzt zu „${existing.name} · ${same.name}“.`, rebind: { type: "SETUP", id: same.id, title: "Assistent · Setup" } };
+      if (same) return { type: "SETUP", id: same.id, note: `Kunde „${existing.name}“ gibt es schon – das Gespräch gehört jetzt zu „${existing.name} · ${same.name}“.`, rebind: { type: "SETUP", id: same.id, title: "Assistent · Projekt" } };
     }
     const setup = await createSetup(actor, { accountId: account.id, name: item.setupName, contextNote: item.contextNote || `Angelegt aus ${origin}.`, bdUserId: hasRole(actor, "BD") ? actor.userId : null, creatorContribution: "ANKER_KONTEXT" });
     await env.sourceFor(setup.id);
-    return { type: "SETUP", id: setup.id, note: existing ? `Kunde „${account.name}“ gibt es schon; Setup „${setup.name}“ dort angelegt.` : `Kunde „${account.name}“ mit Setup „${setup.name}“ angelegt.`, rebind: { type: "SETUP", id: setup.id, title: "Assistent · Setup" } };
+    return { type: "SETUP", id: setup.id, note: existing ? `Kunde „${account.name}“ gibt es schon; Projekt „${setup.name}“ dort angelegt.` : `Kunde „${account.name}“ mit Projekt „${setup.name}“ angelegt.`, rebind: { type: "SETUP", id: setup.id, title: "Assistent · Projekt" } };
   }
   if (item.type === "SETUP") {
-    if (!res.account) throw new ValidationError("Für ein Setup fehlt der Kunde – sag mir zuerst, um welche Organisation es geht.");
+    if (!res.account) throw new ValidationError("Für ein Projekt fehlt der Kunde – sag mir zuerst, um welche Organisation es geht.");
     const setup = await createSetup(actor, { accountId: res.account.id, name: item.name, contextNote: item.contextNote || `Angelegt aus ${origin}.`, bdUserId: hasRole(actor, "BD") ? actor.userId : null, creatorContribution: "ANKER_KONTEXT" });
     await env.sourceFor(setup.id);
-    return { type: "SETUP", id: setup.id, note: `Setup „${setup.name}“ angelegt; das Gespräch gehört jetzt zu diesem Setup.`, rebind: { type: "SETUP", id: setup.id, title: "Assistent · Setup" } };
+    return { type: "SETUP", id: setup.id, note: `Projekt „${setup.name}“ angelegt; das Gespräch gehört jetzt zu diesem Projekt.`, rebind: { type: "SETUP", id: setup.id, title: "Assistent · Projekt" } };
   }
   if (item.type === "PERSON") {
     if (!res.account) throw new ValidationError("Für eine Person fehlt der Kunde – lege zuerst den Kunden an (Karte „Kunde“).");
@@ -832,7 +832,7 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     }
     await env.sourceFor(editable[0]!.setupId).catch(() => null);
     const f = editable[0]!;
-    return { type: "ENGAGEMENT", id: f.id, note: `${item.contactName} ${created ? `bei ${f.accountName} neu angelegt und ` : ""}als Ansprechpartner (${item.role === "FACHLICH" ? "fachlich" : "Bestellung/Vertrag"}) für die Verlängerung von ${f.person} eingetragen – ${f.accountName}, Setup „${f.setupName}“${item.approach ? `; spricht an: ${approachLabel[item.approach]}` : ""}${editable.length > 1 ? ` (${editable.length} Einsätze)` : ""}. /einsaetze/${f.id}#ansprechpartner` };
+    return { type: "ENGAGEMENT", id: f.id, note: `${item.contactName} ${created ? `bei ${f.accountName} neu angelegt und ` : ""}als Ansprechpartner (${item.role === "FACHLICH" ? "fachlich" : "Bestellung/Vertrag"}) für die Verlängerung von ${f.person} eingetragen – ${f.accountName}, Projekt „${f.setupName}“${item.approach ? `; spricht an: ${approachLabel[item.approach]}` : ""}${editable.length > 1 ? ` (${editable.length} Einsätze)` : ""}. /einsaetze/${f.id}#ansprechpartner` };
   }
   if (item.type === "VERMITTLER_ANFRAGE") return applyIntermediaryRequest(actor, res, item, env);
   // e56: Verlängerung eines laufenden Einsatzes – Signal am Einsatz (Sales Ops und Backoffice setzen um), keine Chance
@@ -848,7 +848,7 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     await signalRenewal(actor, f.id, { signal: item.signal, wishEnd, note: item.note, followUp });
     const de = (d: string) => d.split("-").reverse().join(".");
     if (item.signal === "MOEGLICH") return { type: "ENGAGEMENT", id: f.id, note: `Am Einsatz von ${f.person} bei ${f.accountName} vermerkt: Verlängerung möglich${wishEnd ? ` bis ${de(wishEnd)}` : ""}, noch kein Angebot${followUp ? ` – Wiedervorlage ${de(followUp)}` : ""}. Steht in der Zeitleiste; Sales Operations wird erst mit „Jetzt umsetzen“ aktiv. /einsaetze/${f.id}` };
-    return { type: "ENGAGEMENT", id: f.id, note: item.signal === "ENDET" ? `Am Einsatz von ${f.person} bei ${f.accountName} vermerkt: endet${f.end ? ` zum ${de(f.end)}` : ""}. Sales Operations und Backoffice sind informiert. /einsaetze/${f.id}` : `Verlängerung für ${f.person} bei ${f.accountName} (Setup „${f.setupName}“) angestoßen${wishEnd ? ` – Wunschende ${de(wishEnd)}` : ""}. Sales Operations und Backoffice setzen um. /einsaetze/${f.id}` };
+    return { type: "ENGAGEMENT", id: f.id, note: item.signal === "ENDET" ? `Am Einsatz von ${f.person} bei ${f.accountName} vermerkt: endet${f.end ? ` zum ${de(f.end)}` : ""}. Sales Operations und Backoffice sind informiert. /einsaetze/${f.id}` : `Verlängerung für ${f.person} bei ${f.accountName} (Projekt „${f.setupName}“) angestoßen${wishEnd ? ` – Wunschende ${de(wishEnd)}` : ""}. Sales Operations und Backoffice setzen um. /einsaetze/${f.id}` };
   }
   if (item.type === "EINSORTIERUNG") {
     const accounts = await listVisibleAccounts(actor);
@@ -861,12 +861,12 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     }
     if (matchedSetup) {
       const ctx = await loadSetupContext(actor, matchedSetup.id);
-      if (!ctx || !canViewSetup(actor, ctx)) throw new ForbiddenError("Dieses Setup ist für dich nicht sichtbar.");
-      return { type: "SETUP", id: matchedSetup.id, note: `Zuordnung übernommen – das Gespräch bezieht sich jetzt auf „${account.name} · ${matchedSetup.name}“.`, rebind: { type: "SETUP", id: matchedSetup.id, title: "Assistent · Setup" } };
+      if (!ctx || !canViewSetup(actor, ctx)) throw new ForbiddenError("Dieses Projekt ist für dich nicht sichtbar.");
+      return { type: "SETUP", id: matchedSetup.id, note: `Zuordnung übernommen – das Gespräch bezieht sich jetzt auf „${account.name} · ${matchedSetup.name}“.`, rebind: { type: "SETUP", id: matchedSetup.id, title: "Assistent · Projekt" } };
     }
-    return { type: "ACCOUNT", id: account.id, note: `Zuordnung übernommen – das Gespräch bezieht sich jetzt auf „${account.name}“. Als Nächstes kannst du z. B. ein Setup vorschlagen lassen.`, rebind: { type: "ACCOUNT", id: account.id, title: "Assistent · Kunde" } };
+    return { type: "ACCOUNT", id: account.id, note: `Zuordnung übernommen – das Gespräch bezieht sich jetzt auf „${account.name}“. Als Nächstes kannst du z. B. ein Projekt vorschlagen lassen.`, rebind: { type: "ACCOUNT", id: account.id, title: "Assistent · Kunde" } };
   }
-  // Etappe 27: Vorgang – an Kunde/Setup/Chance des Gesprächs, an mich, eine Person oder Sales Operations
+  // Etappe 27: Vorgang – an Kunde/Projekt/Chance des Gesprächs, an mich, eine Person oder Sales Operations
   if (item.type === "VORGANG") {
     // e53: im allgemeinen Kontext den genannten Kunden zuordnen (nur exakte, sichtbare Treffer)
     const named = !res.account && item.accountName ? (await listVisibleAccounts(actor)).find((a) => a.name.toLowerCase() === item.accountName.trim().toLowerCase()) : undefined;
@@ -942,11 +942,11 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     }
     for (const name of item.ankerNames) {
       const u = await matchUserByName(actor.workspaceId, name);
-      if (!u) notes.push(`Anker „${name}“ nicht eindeutig gefunden.`);
-      else if (!res.ctx) notes.push(`Anker ${u.displayName}: bitte im Setup als Beteiligung eintragen.`);
+      if (!u) notes.push(`Kontaktpate „${name}“ nicht eindeutig gefunden.`);
+      else if (!res.ctx) notes.push(`Kontaktpate ${u.displayName}: bitte im Projekt als Beteiligung eintragen.`);
       else {
-        await addMember(actor, res.ctx.setup.id, { userId: u.id, contribution: "ANKER_KONTEXT", contributionNote: "Aus dem Assistenten übernommen (Account-Anker)." });
-        notes.push(`${u.displayName} als Anker im Setup „${res.ctx.setup.name}“ eingetragen.`);
+        await addMember(actor, res.ctx.setup.id, { userId: u.id, contribution: "ANKER_KONTEXT", contributionNote: "Aus dem Assistenten übernommen (Account-Kontaktpate)." });
+        notes.push(`${u.displayName} als Kontaktpate im Projekt „${res.ctx.setup.name}“ eingetragen.`);
       }
     }
     if (item.principalName) notes.push(`Principal „${item.principalName}“: Die kundenbezogene Principal-Rolle vergibt die Betriebsverwaltung (Verwaltung → Rolle zuweisen).`);
@@ -954,16 +954,16 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
     return { type: "ACCOUNT", id: account.id, note: notes.join(" ") || "Nichts zuzuordnen." };
   }
   if (item.type === "EINSATZ") {
-    if (!res.account || !res.ctx) throw new ValidationError("Für einen laufenden Einsatz braucht es Kunde und Setup – übernimm zuerst die Karte „Kunde“.");
+    if (!res.account || !res.ctx) throw new ValidationError("Für einen laufenden Einsatz braucht es Kunde und Projekt – übernimm zuerst die Karte „Kunde“.");
     const plannedEnd = /^\d{4}-\d{2}-\d{2}$/.test(item.plannedEnd) ? item.plannedEnd : parseDueHint(item.endHint || item.plannedEnd) ?? "";
     const order = await recordExistingEngagement(actor, res.account.id, { setupId: res.ctx.setup.id, title: item.title, kind: item.kind, plannedEnd, evidenceText: `Aus dem Assistenten übernommen: „${item.evidenceQuote.slice(0, 400)}“`, consultantName: item.consultantName });
     return { type: "ORDER", id: order.id, note: `Laufender Einsatz nachgetragen${plannedEnd ? ` (Ende ${isoDe(plannedEnd)} – die Verlängerungsregel greift rechtzeitig)` : " – Einsatzende bitte im Health-Check ergänzen"}.` };
   }
-  if (!res.ctx) throw new ValidationError(res.account ? `Bei ${res.account.name} gibt es kein Setup, das du bearbeiten darfst – bitte den zuständigen BD fragen.` : "Dafür fehlt der Kunde – sag mir, um welchen Kunden es geht.");
-  if (!canEditSetup(actor, res.ctx)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");
+  if (!res.ctx) throw new ValidationError(res.account ? `Bei ${res.account.name} gibt es kein Projekt, das du bearbeiten darfst – bitte den zuständigen BD fragen.` : "Dafür fehlt der Kunde – sag mir, um welchen Kunden es geht.");
+  if (!canEditSetup(actor, res.ctx)) throw new ForbiddenError("Du bist an diesem Projekt nicht bearbeitend beteiligt.");
   const setupId = res.ctx.setup.id;
   const sourceId = await env.sourceFor(setupId);
-  // Wofür (E-045): purpose gegen bestehende Chancen des Setups auflösen (Titel, unscharf)
+  // Wofür (E-045): purpose gegen bestehende Chancen des Projekts auflösen (Titel, unscharf)
   const purpose = "purpose" in item ? item.purpose : "";
   const linkedOpp = purpose ? await matchOpportunity(setupId, purpose) : null;
   const purposeNote = linkedOpp ? ` Wofür: „${linkedOpp.title}“.` : purpose ? ` Wofür (noch ohne Chance): ${purpose}.` : "";
@@ -1042,7 +1042,7 @@ async function applyCardInner(actor: Actor, res: Resolved, item: AssistantItem, 
   }
   if (item.type === "KONTAKT") {
     const id = await db.transaction(async (tx) => insertSuggestionCard(tx, actor, setupId, sourceId, origin, { type: "KONTAKTAUFNAHME", title: `Kontaktaufnahme ${item.personName}`.slice(0, 200), targetRole: "ANKER", observation: item.occasion, evidenceQuote: item.evidenceQuote, hypothesis: item.viaVerveName ? `Möglicher Weg: über ${item.viaVerveName}` : "", nextStep: item.draftMessage, mentionedPersonName: item.personName, uncertainty: "Entwurf zum Bearbeiten – wird nie automatisch versendet.", priority: "ZUGANGSLUECKE", opportunityId: linkedOpp?.id ?? null, purpose }));
-    return { type: "SUGGESTION", id, note: `Als Kontaktaufnahme-Vorschlag für den Anker abgelegt.${purposeNote}` };
+    return { type: "SUGGESTION", id, note: `Als Kontaktaufnahme-Vorschlag für den Kontaktpaten abgelegt.${purposeNote}` };
   }
   if (item.type === "FRAGE") {
     const id = await db.transaction(async (tx) => insertSuggestionCard(tx, actor, setupId, sourceId, origin, { type: "OFFENE_FRAGE", title: item.question.slice(0, 200), targetRole: "BD", observation: item.question, evidenceQuote: item.evidenceQuote, proposedQuestion: item.question, uncertainty: "Vor der Bestätigung zu klären.", priority: "NEUE_INFORMATION", opportunityId: linkedOpp?.id ?? null, purpose }));

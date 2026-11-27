@@ -46,7 +46,7 @@ export default async function WeeklysPage({ searchParams }: { searchParams: Prom
           <summary>Weekly anlegen</summary>
           <form action={createReviewAction} className="mt-3 grid sm:grid-cols-2 gap-3">
             <div>
-              <label className="label" htmlFor="setupId">Setup</label>
+              <label className="label" htmlFor="setupId">Projekt</label>
               <select id="setupId" name="setupId" className="select" required defaultValue={preselected}>
                 <option value="" disabled>Bitte wählen …</option>
                 {mySetups.map((s) => <option key={s.id} value={s.id}>{s.accountName} – {s.name}</option>)}
@@ -55,7 +55,7 @@ export default async function WeeklysPage({ searchParams }: { searchParams: Prom
             <div><label className="label" htmlFor="scheduledFor">Termin</label><input id="scheduledFor" name="scheduledFor" type="date" className="input" required defaultValue={nextMonday} /></div>
             <div className="sm:col-span-2"><label className="label" htmlFor="title">Titel (optional)</label><input id="title" name="title" className="input" placeholder="z. B. Weekly Plattformteam KW 40" /></div>
             <fieldset className="sm:col-span-2">
-              <legend className="label">Teilnehmende (leer = alle Setup-Beteiligten)</legend>
+              <legend className="label">Teilnehmende (leer = alle Projekt-Beteiligten)</legend>
               <div className="flex flex-wrap gap-3 text-sm">
                 {users.map((u) => (
                   <label key={u.id} className="flex items-center gap-1"><input type="checkbox" name="participantIds" value={u.id} /> {u.displayName}</label>
@@ -76,7 +76,7 @@ type ReviewRow = Awaited<ReturnType<typeof listReviews>>["upcoming"][number];
 function ReviewTable({ rows }: { rows: ReviewRow[] }) {
   return (
     <table className="list">
-      <thead><tr><th>Weekly</th><th>Setup</th><th>Kunde</th><th>Termin</th><th>Status</th></tr></thead>
+      <thead><tr><th>Weekly</th><th>Projekt</th><th>Kunde</th><th>Termin</th><th>Status</th></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.id}>

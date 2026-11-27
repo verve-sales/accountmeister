@@ -12,10 +12,10 @@ import { getMocoClient, isFreelancerMocoUser, isIgnoredMocoUser, isInternalMocoC
 /**
  * Moco-Startimport mit Prüfliste (Etappe 31).
  *
- * Grundsatz: Moco führt Stammdaten (Kunde, Projektgruppe = Setup, Projekt, Contract, Personen/Teams); der
+ * Grundsatz: Moco führt Stammdaten (Kunde, Projektgruppe = Projekt, Projekt, Contract, Personen/Teams); der
  * Accountmeister führt Vertrieb, Besetzung und Betreuung. Der Import erzeugt nichts stillschweigend – jede Zeile
  * trägt einen Vorschlag (verknüpfen / neu / überspringen), den die prüfende Person bestätigt oder ändert.
- * Sales-Rollen (BD, Principal) kommen nie aus Moco; sie werden je Setup in der Prüfliste gesetzt.
+ * Sales-Rollen (BD, Principal) kommen nie aus Moco; sie werden je Projekt in der Prüfliste gesetzt.
  */
 
 export type ImportAction = "LINK" | "NEW" | "SKIP";
@@ -140,7 +140,7 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
       const byMail = !byId && u.email ? users.find((x) => x.email.toLowerCase() === u.email) : null;
       const byName = !byId && !byMail ? best(users, (x) => nameSimilarity(x.displayName, name), 0.8) : null;
       const hit = byId ?? byMail ?? byName?.item ?? null;
-      const note = byId ? "bereits verknüpft" : hit ? (byMail ? "Treffer über E-Mail" : "Namenstreffer – bitte prüfen") : u.email ? "neuer Zugang (Rolle Anker)" : "ohne E-Mail – kein Zugang möglich";
+      const note = byId ? "bereits verknüpft" : hit ? (byMail ? "Treffer über E-Mail" : "Namenstreffer – bitte prüfen") : u.email ? "neuer Zugang (Rolle Kontaktpate)" : "ohne E-Mail – kein Zugang möglich";
       items.push({ key: `person:${u.id}`, type: "PERSON", mocoId: u.id, name, email: u.email, personKind: kind, teamlead: isTeamlead(u), unit: u.unit?.name ?? null, proposal: hit ? "LINK" : u.email ? "NEW" : "SKIP", targetId: hit?.id ?? null, targetLabel: hit?.displayName ?? null, candidates: users.map((x) => ({ id: x.id, label: x.displayName })), note });
     }
   }
@@ -170,7 +170,7 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
     items.push({ key: `kunde:${c.id}`, type: "KUNDE", mocoId: c.id, name: c.name, proposal: hit ? "LINK" : "NEW", targetId: hit?.id ?? null, targetLabel: hit?.name ?? null, candidates: accounts.map((a) => ({ id: a.id, label: a.name })), note: byId ? "bereits verknüpft" : hit ? `Namensähnlichkeit ${Math.round((byName?.score ?? 0) * 100)} % – Name wird aus Moco übernommen` : "neuer Kunde" });
   }
 
-  // Setups: je Projektgruppe eines Kunden; Projekte ohne Gruppe → „Ohne Bereich“ je Kunde
+  // Projekte: je Projektgruppe eines Kunden; Projekte ohne Gruppe → „Ohne Bereich“ je Kunde
   const setupKeyOf = (p: MocoProject) => (p.project_group ? `setup:${p.project_group.id}` : `setup:none:${p.customer!.id}`);
   const groupsNeeded = new Map<string, { group: MocoProjectGroup | null; companyId: number; name: string }>();
   for (const p of activeProjects) {
@@ -179,7 +179,7 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
     const g = p.project_group ? (mGroups.find((x) => x.id === p.project_group!.id) ?? { id: p.project_group.id, name: p.project_group.name, company: p.customer, user: null }) : null;
     groupsNeeded.set(k, { group: g, companyId: p.customer!.id, name: g ? g.name : "Ohne Bereich" });
   }
-  // Heuristik „Person steht schon im Setup“: Engagements je Setup mit Personen
+  // Heuristik „Person steht schon im Projekt“: Engagements je Projekt mit Personen
   const engPersons = new Map<string, Set<string>>(); // setupId → person keys (user:<id> | fl:<id>)
   for (const e of engagements) {
     const set = engPersons.get(e.setupId) ?? new Set<string>();
@@ -205,7 +205,7 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
         hit = byName.item;
         note = `Namensähnlichkeit ${Math.round(byName.score * 100)} %`;
       } else {
-        // Personen-Heuristik: ein Setup, in dem eine Person aus diesen Projekten schon im Einsatz ist
+        // Personen-Heuristik: ein Projekt, in dem eine Person aus diesen Projekten schon im Einsatz ist
         const personsHere = new Set(activeProjects.filter((p) => setupKeyOf(p) === key).flatMap((p) => p.contracts.filter((c) => c.active).map((c) => personTarget(c.user_id))).filter((x): x is string => !!x));
         const cand = inAccount.find((s) => [...(engPersons.get(s.id) ?? [])].some((pk) => personsHere.has(pk)));
         if (cand) {
@@ -213,11 +213,11 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
           note = "Vorschlag: hier läuft bereits ein Einsatz derselben Person";
         } else if (inAccount.length === 1 && !g.group) {
           hit = inAccount[0]!;
-          note = "einziges Setup des Kunden";
+          note = "einziges Projekt des Kunden";
         }
       }
     }
-    if (!hit && !note) note = accountId ? "neues Setup im Kunden" : "neues Setup (Kunde wird mit angelegt)";
+    if (!hit && !note) note = accountId ? "neues Projekt im Kunden" : "neues Projekt (Kunde wird mit angelegt)";
     items.push({ key, type: "SETUP", mocoId: g.group?.id ?? null, companyMocoId: g.companyId, name: g.name, principalMocoId: g.group?.user?.id ?? null, proposal: hit ? "LINK" : "NEW", targetId: hit?.id ?? null, targetLabel: hit?.name ?? null, candidates: inAccount.map((s) => ({ id: s.id, label: s.name })), note });
   }
 
@@ -267,7 +267,7 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
       it.proposal = "SKIP";
     }
   }
-  // Setups ohne Projektgruppe haben keine Moco-ID: per Name verknüpft und ohne neuen Einsatz gilt das als unverändert
+  // Projekte ohne Projektgruppe haben keine Moco-ID: per Name verknüpft und ohne neuen Einsatz gilt das als unverändert
   const neededSetups = new Set(flagged.filter((x) => x.type === "EINSATZ" && !x.unchanged && !x.ignored).map((x) => (x as Extract<ImportItem, { type: "EINSATZ" }>).setupKey));
   for (const it of flagged) if (it.type === "SETUP" && !it.unchanged && !it.ignored && it.proposal === "LINK" && it.mocoId === null && !neededSetups.has(it.key)) it.unchanged = true;
   // Personen nur zeigen, wenn sie neu sind oder an einem neuen Einsatz hängen
@@ -277,7 +277,7 @@ export async function buildImportPreview(actor: Actor, client: MocoClient = getM
   const counts = { personen: items.filter((i) => i.type === "PERSON").length, teams: items.filter((i) => i.type === "TEAM").length, kunden: items.filter((i) => i.type === "KUNDE").length, setups: items.filter((i) => i.type === "SETUP").length, einsaetze: items.filter((i) => i.type === "EINSATZ").length };
   const [row] = await db
     .insert(schema.mocoImports)
-    .values({ workspaceId: ws, items, createdBy: actor.userId, summary: changed.length ? `Abgleich ${todayIso()}: ${changed.length} Änderung(en) – ${changed.filter((x) => x.type === "EINSATZ").length} Einsätze, ${changed.filter((x) => x.type === "SETUP").length} Setups, ${changed.filter((x) => x.type === "KUNDE").length} Kunden, ${changed.filter((x) => x.type === "PERSON").length} Personen; unverändert ${flagged.filter((x) => x.unchanged).length} (Quelle: ${client.kind})` : `Abgleich ${todayIso()}: keine Änderungen seit dem letzten Import (Quelle: ${client.kind})` })
+    .values({ workspaceId: ws, items, createdBy: actor.userId, summary: changed.length ? `Abgleich ${todayIso()}: ${changed.length} Änderung(en) – ${changed.filter((x) => x.type === "EINSATZ").length} Einsätze, ${changed.filter((x) => x.type === "SETUP").length} Projekte, ${changed.filter((x) => x.type === "KUNDE").length} Kunden, ${changed.filter((x) => x.type === "PERSON").length} Personen; unverändert ${flagged.filter((x) => x.unchanged).length} (Quelle: ${client.kind})` : `Abgleich ${todayIso()}: keine Änderungen seit dem letzten Import (Quelle: ${client.kind})` })
     .returning();
   await recordAudit(db, actor, "moco.preview", "MOCO_IMPORT", row!.id, counts);
   return row!;
@@ -390,7 +390,7 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
           res.created.verknuepft++;
         }
         await db.update(schema.users).set({ mocoUserId: it.mocoId, updatedAt: new Date() }).where(eq(schema.users.id, uid));
-        // Rolle Anker, wenn noch keine fachliche Rolle vorhanden
+        // Rolle Kontaktpate, wenn noch keine fachliche Rolle vorhanden
         const roles = await db.query.roleAssignments.findMany({ where: and(eq(schema.roleAssignments.userId, uid), isNull(schema.roleAssignments.validTo)) });
         if (!roles.some((r) => ["ANKER", "BD", "PRINCIPAL", "CEO", "SALES_OPS"].includes(r.role))) {
           await db.insert(schema.roleAssignments).values({ workspaceId: ws, userId: uid, role: "ANKER", scope: "WORKSPACE" });
@@ -460,7 +460,7 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
     }
   }
 
-  // 4) Setups
+  // 4) Projekte
   for (const it of items.filter((x): x is Extract<ImportItem, { type: "SETUP" }> => x.type === "SETUP")) {
     const action = actionOf(it);
     try {
@@ -487,7 +487,7 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
         await recordAudit(db, actor, "setup.created", "SETUP", sid, { name: it.name, quelle: "Moco" });
       } else {
         const s = await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, sid) });
-        if (!s) throw new NotFoundError("Setup");
+        if (!s) throw new NotFoundError("Projekt");
         await db.update(schema.projectSetups).set({ mocoProjectGroupId: it.mocoId, name: it.mocoId ? it.name : s.name, bdUserId: bdUserId ?? s.bdUserId, updatedAt: new Date() }).where(eq(schema.projectSetups.id, sid));
         if (it.mocoId && s.name !== it.name) await recordAudit(db, actor, "setup.renamed", "SETUP", sid, { von: s.name, nach: it.name, quelle: "Moco" });
         res.created.verknuepft++;
@@ -531,7 +531,7 @@ export async function applyImport(actor: Actor, id: string, decisionsOverride?: 
         res.created.verknuepft++;
       } else {
         const setupId = setupByKey.get(it.setupKey);
-        if (!setupId) throw new ValidationError("Setup wurde nicht übernommen");
+        if (!setupId) throw new ValidationError("Projekt wurde nicht übernommen");
         const setup = (await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, setupId) }))!;
         const account = (await db.query.accounts.findFirst({ where: eq(schema.accounts.id, setup.accountId) }))!;
         const owner = setup.bdUserId ?? account.responsibleBdUserId ?? actor.userId;
@@ -753,7 +753,7 @@ function ignoreLabel(x: ImportItem): string {
   if (x.type === "PERSON") return `Person: ${x.name}`;
   if (x.type === "TEAM") return `Team: ${x.name}`;
   if (x.type === "KUNDE") return `Kunde: ${x.name}`;
-  return `Setup: ${x.name}`;
+  return `Projekt: ${x.name}`;
 }
 
 export async function listMocoIgnores(actor: Actor) {

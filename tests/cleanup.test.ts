@@ -91,7 +91,7 @@ describe("e37: Bereinigung und Verlängerungs-Ansprechpartner", () => {
     expect((await cleanupReport(ceo)).internal.some((x) => x.accountId === acc!.id)).toBe(false);
   });
 
-  it("C04: Doppelte Setups eines Kunden werden zusammengeführt – Chancen und Einsätze ziehen um", async () => {
+  it("C04: Doppelte Projekte eines Kunden werden zusammengeführt – Chancen und Einsätze ziehen um", async () => {
     env();
     const s = await ensureSeed();
     const ceo = await actorFor("clemens");
@@ -108,7 +108,7 @@ describe("e37: Bereinigung und Verlängerungs-Ansprechpartner", () => {
     expect((await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, e.opportunityId) }))?.setupId).toBe(s1.id);
   });
 
-  it("C05: Ansprechpartner – Vorgabe am Setup, Abweichung am Einsatz, Zusammenführen von Personen hängt um", async () => {
+  it("C05: Ansprechpartner – Vorgabe am Projekt, Abweichung am Einsatz, Zusammenführen von Personen hängt um", async () => {
     env();
     const s = await ensureSeed();
     const david = await actorFor("david");
@@ -153,7 +153,7 @@ describe("e37: Bereinigung und Verlängerungs-Ansprechpartner", () => {
     await db.delete(schema.roleAssignments).where(eq(schema.roleAssignments.userId, s.users.nina));
     await db.insert(schema.roleAssignments).values({ workspaceId: s.workspaceId, userId: s.users.nina, role: "ANKER" });
   });
-  it("C07: Assistent kennt den laufenden Einsatz – fragt nicht nach Kunde/Setup, CEO übernimmt die Karte im allgemeinen Kontext, Ansprechpartner wird angelegt", async () => {
+  it("C07: Assistent kennt den laufenden Einsatz – fragt nicht nach Kunde/Projekt, CEO übernimmt die Karte im allgemeinen Kontext, Ansprechpartner wird angelegt", async () => {
     env();
     process.env.AI_PROVIDER = "test";
     resetConfigCacheForTests();
@@ -175,7 +175,7 @@ describe("e37: Bereinigung und Verlängerungs-Ansprechpartner", () => {
     const p = (await db.query.persons.findFirst({ where: eq(schema.persons.id, after.renewalContactPersonId!) }))!;
     expect(p.displayName).toBe("Fabian Langbeispiel");
     expect(p.accountId).toBe(s.accountId);
-    // Anker ohne Bezug zum Einsatz sieht ihn nicht – keine Karte, keine Preisgabe
+    // Kontaktpate ohne Bezug zum Einsatz sieht ihn nicht – keine Karte, keine Preisgabe
     const lars = await actorFor("lars");
     const lv = await getThreadView(lars, { type: "GLOBAL" });
     const lr = await sendMessage(lars, { threadId: lv.thread.id, text: "die fachliche verlängerung von martina kraussbeispiel läuft über einen neuen Ansprechpartner: Fabian Langbeispiel" });

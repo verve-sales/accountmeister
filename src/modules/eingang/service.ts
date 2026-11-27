@@ -22,7 +22,7 @@ import { parseDueHint } from "@/modules/agenda/service";
 /**
  * Eingangs-Auswertung (Etappe 36) – der „Gamechanger“: Mail, Notiz oder Protokoll rein, Karten raus.
  *
- *   Text → Kunde/Setup erkennen (Absender, Adressen, Namen, Einsätze) → Lagebild mit Kürzeln (Chancen C1…,
+ *   Text → Kunde/Projekt erkennen (Absender, Adressen, Namen, Einsätze) → Lagebild mit Kürzeln (Chancen C1…,
  *   Einsätze E1…, offene Aktionen A1…, offene Fragen Q1…, Personen P1…) → KI-Karten → Beleg- und Kürzelprüfung
  *   → Vorschläge (Typ KARTE) → ein Klick je Karte.
  *
@@ -38,7 +38,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}$/;
 export type Participant = { name: string; email?: string };
 
 // ---------------------------------------------------------------------------
-// 1) Kunde und Setup erkennen
+// 1) Kunde und Projekt erkennen
 // ---------------------------------------------------------------------------
 
 export type Route = {
@@ -50,19 +50,19 @@ export type Route = {
   byKey?: boolean;
   /** fremde, als Kennung taugliche Mail-Domänen im Eingang (zum Lernen bei Neu-/Umzuordnung) */
   domains?: string[];
-  /** Kunde erkannt, Setup aber nicht eindeutig (e48): dann kein geratenes Setup, sondern eine Rückfrage */
+  /** Kunde erkannt, Projekt aber nicht eindeutig (e48): dann kein geratenes Projekt, sondern eine Rückfrage */
   setupUnsure?: boolean;
 };
 
 /** Allgemeine Wörter, die in Kundennamen vorkommen, aber nichts über den Kunden sagen (z. B. „Agent Platforms“). */
 const GENERIC_NAME_WORDS = new Set(["gmbh", "gruppe", "group", "holding", "versicherung", "versicherungen", "bank", "fiktiv", "financial", "services", "service", "solutions", "consulting", "digital", "platform", "platforms", "plattform", "agent", "agents", "systems", "system", "software", "technology", "technologies", "partner", "partners", "international", "deutschland", "germany", "europe", "data", "cloud", "global", "management", "kreditbank", "leasing", "insurance"]);
 
-/** Kunde/Setup aus Absender, E-Mail-Domänen, Kunden-, Personen- und Einsatznamen im Text erkennen – nur sichtbare Kunden. */
+/** Kunde/Projekt aus Absender, E-Mail-Domänen, Kunden-, Personen- und Einsatznamen im Text erkennen – nur sichtbare Kunden. */
 export async function routeText(actor: Actor, text: string, participants: Participant[] = [], hintSetupId?: string): Promise<Route> {
   if (hintSetupId) {
     const ctx = await loadSetupContext(actor, hintSetupId);
-    if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-    return { ctx, account: ctx.account, reason: "gewähltes Setup", confident: true };
+    if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+    return { ctx, account: ctx.account, reason: "gewähltes Projekt", confident: true };
   }
   const accounts = (await listVisibleAccounts(actor)).filter((a) => a.status !== "ARCHIVED");
   if (!accounts.length) return { ctx: null, account: null, reason: "keine sichtbaren Kunden", confident: false };
@@ -134,7 +134,7 @@ export async function routeText(actor: Actor, text: string, participants: Partic
   const account = accounts.find((a) => a.id === bestId)!;
   // Sicher nur mit Adress-/Domänenbezug oder sehr deutlichem Vorsprung; reine Namensähnlichkeit bleibt unsicher
   const confident = best.n >= 5 && best.n >= second * 2 && best.why.some((w) => /Adresse|Domäne|Einsatz/.test(w));
-  // Setup: Einsatz-/Namens-Treffer, sonst einziges bzw. zuletzt aktives bearbeitbares Setup
+  // Projekt: Einsatz-/Namens-Treffer, sonst einziges bzw. zuletzt aktives bearbeitbares Projekt
   const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, account.id), orderBy: desc(schema.projectSetups.updatedAt) });
   const editable: SetupContext[] = [];
   for (const s of setups.filter((x) => x.status !== "ARCHIVIERT")) {
@@ -143,13 +143,13 @@ export async function routeText(actor: Actor, text: string, participants: Partic
   }
   const engHit = engs.find((e) => e.accountId === account.id && (() => { const last = norm(engPerson(e)).split(" ").pop() ?? ""; return last.length >= 4 && flat.includes(` ${last} `); })());
   const byName = editable.find((c) => norm(c.setup.name).length >= 4 && flat.includes(norm(c.setup.name)));
-  // e48: ohne echten Treffer kein geratenes Setup – nur wenn es genau eines gibt
+  // e48: ohne echten Treffer kein geratenes Projekt – nur wenn es genau eines gibt
   const hitCtx = (engHit && editable.find((c) => c.setup.id === engHit.setupId)) || byName || null;
   const ctx = hitCtx ?? (editable.length === 1 ? editable[0]! : null);
   return { ctx, account, reason: best.why.slice(0, 3).join(" · "), confident, domains: keyDomains, setupUnsure: !ctx && editable.length > 1 };
 }
 
-/** Setup für einen über Kennung erkannten Kunden: Einsatz- oder Setupname im Text, sonst das einzige Setup – sonst offen (Rückfrage). */
+/** Projekt für einen über Kennung erkannten Kunden: Einsatz- oder Setupname im Text, sonst das einzige Projekt – sonst offen (Rückfrage). */
 async function pickSetup(actor: Actor, accountId: string, flat: string, engs: (typeof schema.engagements.$inferSelect)[], internalName: (e: typeof schema.engagements.$inferSelect) => string | null): Promise<{ ctx: SetupContext | null; unsure: boolean }> {
   const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, accountId), orderBy: desc(schema.projectSetups.updatedAt) });
   const editable: SetupContext[] = [];
@@ -165,7 +165,7 @@ async function pickSetup(actor: Actor, accountId: string, flat: string, engs: (t
     return last.length >= 4 && flat.includes(` ${last} `);
   });
   const byName = editable.find((c) => norm(c.setup.name).length >= 4 && flat.includes(norm(c.setup.name)));
-  // e48: ohne Einsatz- oder Setupnamen im Text kein „zuletzt geändertes“ Setup mehr – nur wenn es genau eines gibt
+  // e48: ohne Einsatz- oder Setupnamen im Text kein „zuletzt geändertes“ Projekt mehr – nur wenn es genau eines gibt
   const found = (hit && editable.find((c) => c.setup.id === hit.setupId)) || byName || null;
   if (found) return { ctx: found, unsure: false };
   return editable.length === 1 ? { ctx: editable[0]!, unsure: false } : { ctx: null, unsure: editable.length > 1 };
@@ -190,7 +190,7 @@ export async function buildLagebild(actor: Actor, route: Route): Promise<{ text:
   const acc = route.account;
   lines.push(`Kunde: ${acc.name} (${acc.orgType}) – erkannt über: ${route.reason}`);
   const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, acc.id) });
-  lines.push(`Setups: ${setups.map((s) => `${s.name}${route.ctx?.setup.id === s.id ? " (Ziel dieses Eingangs)" : ""}`).join("; ") || "noch keins"}`);
+  lines.push(`Projekte: ${setups.map((s) => `${s.name}${route.ctx?.setup.id === s.id ? " (Ziel dieses Eingangs)" : ""}`).join("; ") || "noch keins"}`);
   const setupIds = setups.map((s) => s.id);
   const [opps, engs, actions, questions, persons] = await Promise.all([
     db.query.opportunities.findMany({ where: eq(schema.opportunities.accountId, acc.id), orderBy: desc(schema.opportunities.updatedAt) }),
@@ -261,7 +261,7 @@ export async function recentLessons(workspaceId: string, accountId: string | nul
 
 export const eingangInput = z.object({
   text: z.string().trim().min(12, "Bitte mehr Text einfügen (mind. 12 Zeichen).").max(60000),
-  /** leer oder „AUTO“ = Kunde/Setup automatisch erkennen */
+  /** leer oder „AUTO“ = Kunde/Projekt automatisch erkennen */
   setupId: z.string().optional().or(z.literal("")),
   title: z.string().trim().max(200).optional().or(z.literal("")),
 });
@@ -274,7 +274,7 @@ export async function eingangFromText(actor: Actor, raw: unknown, deps: { provid
   if (!p.success) throw new ValidationError(p.error.issues.map((i) => i.message).join("; "));
   const hint = p.data.setupId && p.data.setupId !== "AUTO" ? p.data.setupId : undefined;
   const route = await routeText(actor, p.data.text, [], hint);
-  if (route.ctx && !canEditSetup(actor, route.ctx)) throw new ForbiddenError("In dieses Setup darfst du nichts einspielen.");
+  if (route.ctx && !canEditSetup(actor, route.ctx)) throw new ForbiddenError("In dieses Projekt darfst du nichts einspielen.");
   const [src] = await db
     .insert(schema.sources)
     .values({ workspaceId: actor.workspaceId, setupId: route.ctx?.setup.id ?? null, type: "NOTIZ", title: p.data.title || `Eingang ${new Date().toLocaleDateString("de-DE")}`, body: p.data.text, origin: "Was gibt es Neues? (Eingang)", sourceTime: new Date(), ownerUserId: actor.userId, accessClass: route.ctx ? "SETUP" : "PERSOENLICH" })
@@ -388,7 +388,7 @@ async function evaluate(actor: Actor, i: { text: string; sourceId: string; sourc
   // Karte ohne eigenes Initiativen-Kürzel: über die Chance, auf die sie sich bezieht
   const oppIds = valid.map((v) => v.resolved.opportunityId).filter((x): x is string => !!x);
   const oppInitiative = new Map((oppIds.length ? await db.query.opportunities.findMany({ where: inArray(schema.opportunities.id, oppIds), columns: { id: true, initiativeId: true } }) : []).filter((o) => o.initiativeId).map((o) => [o.id, o.initiativeId!] as const));
-  // e48: Was ein Anker einspielt, geht an den BD des Setups – mit Benachrichtigung (bei Unzufriedenheit/SOS als SOS)
+  // e48: Was ein Kontaktpate einspielt, geht an den BD des Projekts – mit Benachrichtigung (bei Unzufriedenheit/SOS als SOS)
   const bdId = i.route.ctx?.setup.bdUserId ?? null;
   const accId0 = i.route.account?.id;
   const fromAnker = !!bdId && bdId !== actor.userId && (actor.roles.has("ANKER") || (!!accId0 && hasRole(actor, "ANKER", accId0))) && !actor.roles.has("CEO") && !actor.roles.has("PRINCIPAL") && !actor.roles.has("BD");
@@ -442,7 +442,7 @@ type Resolved = { opportunityId?: string | null; engagementId?: string | null; a
 
 /** Rangfolge der Karten (e48): was eine Entscheidung oder eine neue Chance auslöst, zuerst. */
 const CARD_RANK = ["VERMITTLER_ANFRAGE", "VERLAENGERUNG", "EINSATZ_VERLAENGERN", "CHANCE_STATUS", "CHANCE", "BESETZUNG", "SOS", "STIMMUNG", "ERLEDIGT", "AKTION", "VORGANG", "FREELANCER", "ANSPRECHPARTNER", "EINSATZ", "FRAGE", "SIGNAL", "KONTAKT", "RISIKO", "INITIATIVE", "HEBEL", "BESCHAFFUNG", "TEAM", "ACCOUNTZIEL"];
-/** Struktur-Karten (Kunde/Setup zuordnen) zählen nicht gegen die Obergrenze */
+/** Struktur-Karten (Kunde/Projekt zuordnen) zählen nicht gegen die Obergrenze */
 const STRUCTURE = new Set(["KUNDE", "EINSORTIERUNG", "SETUP"]);
 /** Nebenkarten fallen weg, sobald die Mail etwas Handfestes enthält */
 const SECONDARY = new Set(["SIGNAL", "FRAGE", "RISIKO", "INITIATIVE", "HEBEL", "KONTAKT", "BESCHAFFUNG", "TEAM", "ACCOUNTZIEL"]);
@@ -565,7 +565,7 @@ function cardKey(item: IntakeItem): unknown {
 }
 
 const typeLabel: Record<string, string> = {
-  KUNDE: "Neuer Kunde", SETUP: "Neues Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Neue Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Aufgabe", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Vorhaben", VORGANG: "Vorgang", BESETZUNG: "Besetzung", TEAM: "Team", EINSORTIERUNG: "Kunde zuordnen", ANSPRECHPARTNER: "Verlängerung läuft über",
+  KUNDE: "Neuer Kunde", SETUP: "Neues Projekt", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Neue Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Aufgabe", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Vorhaben", VORGANG: "Vorgang", BESETZUNG: "Besetzung", TEAM: "Team", EINSORTIERUNG: "Kunde zuordnen", ANSPRECHPARTNER: "Verlängerung läuft über",
   VERMITTLER_ANFRAGE: "Vermittler-Anfrage", EINSATZ_VERLAENGERN: "Verlängerung",
   VERLAENGERUNG: "Verlängerung", CHANCE_STATUS: "Chance: neuer Stand", ERLEDIGT: "Erledigt", STIMMUNG: "Stimmung", FREELANCER: "Freelancer",
 };
@@ -578,7 +578,7 @@ export function describeCard(item: IntakeItem, labels: Map<string, string> = new
   const t = typeLabel[item.type] ?? item.type;
   const L = (ref: string) => labels.get(ref.trim().toUpperCase()) ?? ref;
   switch (item.type) {
-    case "KUNDE": return { title: `${t}: ${item.name}`, detail: `Setup „${item.setupName}“${item.contextNote ? ` – ${item.contextNote}` : ""}`, purpose: "", priority: "NEUE_INFORMATION" };
+    case "KUNDE": return { title: `${t}: ${item.name}`, detail: `Projekt „${item.setupName}“${item.contextNote ? ` – ${item.contextNote}` : ""}`, purpose: "", priority: "NEUE_INFORMATION" };
     case "SETUP": return { title: `${t}: ${item.name}`, detail: item.contextNote, purpose: "", priority: "NEUE_INFORMATION" };
     case "PERSON": return { title: `${t}: ${item.displayName}${item.functionTitle ? ` – ${item.functionTitle}` : ""}`, detail: [item.orgUnitName && `Bereich: ${item.orgUnitName}`, item.email, item.phone, item.decisionRole && `Buyingcenter: ${item.decisionRole}`, item.knownResponsibility].filter(Boolean).join(" · "), purpose: "", priority: "ZUGANGSLUECKE" };
     case "SIGNAL": return { title: `${t}: ${item.observation.slice(0, 120)}`, detail: [item.observation, item.relevanceHypothesis && `Vermutung: ${item.relevanceHypothesis}`].filter(Boolean).join(" · "), purpose: item.purpose, priority: "NEUE_INFORMATION" };
@@ -618,7 +618,7 @@ export const acceptCardInput = z.object({
   contractFollowUp: z.string().trim().max(200).optional().or(z.literal("")),
   /** Organisationstyp beim Anlegen eines neuen Kunden (Pflichtfrage auf der Karte) */
   orgType: z.enum(schema.orgTypeEnum.enumValues).optional().or(z.literal("")),
-  /** Kunde zuordnen, wenn die Karte noch keinem Setup gehört */
+  /** Kunde zuordnen, wenn die Karte noch keinem Projekt gehört */
   setupId: z.string().optional().or(z.literal("")),
 });
 
@@ -635,13 +635,13 @@ export async function acceptIntakeCard(actor: Actor, s: SuggestionRow, ctx0: Set
   const { item, resolved } = payload;
   if (item.type === "KUNDE" && input.orgType) item.orgType = input.orgType;
   let ctx = ctx0;
-  // Karte ohne Setup: gewähltes Setup übernehmen
+  // Karte ohne Projekt: gewähltes Projekt übernehmen
   if (!ctx && input.setupId) {
     const c = await loadSetupContext(actor, input.setupId);
-    if (!c || !canViewSetup(actor, c)) throw new NotFoundError("Setup");
+    if (!c || !canViewSetup(actor, c)) throw new NotFoundError("Projekt");
     ctx = c;
   }
-  if (ctx && !canEditSetup(actor, ctx) && !["VERLAENGERUNG", "STIMMUNG"].includes(item.type)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");
+  if (ctx && !canEditSetup(actor, ctx) && !["VERLAENGERUNG", "STIMMUNG"].includes(item.type)) throw new ForbiddenError("Du bist an diesem Projekt nicht bearbeitend beteiligt.");
   const account = ctx?.account ?? (s.accountId ? await db.query.accounts.findFirst({ where: eq(schema.accounts.id, s.accountId) }) : null) ?? null;
   const sourceId = s.sourceIds[0] ?? null;
   let result: { type: string; id: string; note: string };
@@ -662,7 +662,7 @@ export async function acceptIntakeCard(actor: Actor, s: SuggestionRow, ctx0: Set
       result = await applyFreelancer(actor, resolved.opportunityId ?? null, item);
       break;
     case "PERSON":
-      if (!account) throw new ValidationError("Für die Person fehlt der Kunde – übernimm zuerst „Neuer Kunde“ oder wähle ein Setup.");
+      if (!account) throw new ValidationError("Für die Person fehlt der Kunde – übernimm zuerst „Neuer Kunde“ oder wähle ein Projekt.");
       result = await applyPerson(actor, account.id, ctx, resolved, item, sourceId);
       break;
     default: {
@@ -688,8 +688,8 @@ export async function acceptIntakeCard(actor: Actor, s: SuggestionRow, ctx0: Set
       const extra = item.type === "BESETZUNG" && !item.personName ? Math.min((resolved.count ?? 1) - 1, 19) : 0;
       for (let k = 0; k < extra; k++) await applyCard(actor, res, item as AssistantItem, { origin: s.trigger, intake: true, opportunityId: resolved.opportunityId ?? null, sourceFor: srcFor });
       if (extra > 0) r.note = `${extra + 1} Positionen „${(item as Extract<IntakeItem, { type: "BESETZUNG" }>).title}“ angelegt.`;
-      result = { type: r.type, id: r.id, note: (r.note ?? "Übernommen.").replace(/;\s*das Gespräch gehört jetzt zu diesem Setup\./, ".").replace("das Gespräch bezieht sich jetzt auf", "der Eingang gehört jetzt zu").replace(/ Als Nächstes kannst du z\. B\. ein Setup vorschlagen lassen\./, "") };
-      // Neuer Kunde/Setup oder Zuordnung: die übrigen Karten desselben Eingangs gehören jetzt dorthin
+      result = { type: r.type, id: r.id, note: (r.note ?? "Übernommen.").replace(/;\s*das Gespräch gehört jetzt zu diesem Projekt\./, ".").replace("das Gespräch bezieht sich jetzt auf", "der Eingang gehört jetzt zu").replace(/ Als Nächstes kannst du z\. B\. ein Projekt vorschlagen lassen\./, "") };
+      // Neuer Kunde/Projekt oder Zuordnung: die übrigen Karten desselben Eingangs gehören jetzt dorthin
       if (r.rebind && s.aiJobId) {
         const setupId = r.rebind.type === "SETUP" ? r.rebind.id : null;
         const accId = r.rebind.type === "ACCOUNT" ? r.rebind.id : setupId ? (await db.query.projectSetups.findFirst({ where: eq(schema.projectSetups.id, setupId) }))?.accountId ?? null : null;
@@ -855,7 +855,7 @@ async function applyPerson(actor: Actor, accountId: string, ctx: SetupContext | 
     });
     note = `${hit.displayName.replace(/\(.*?\)/g, "").trim()} ergänzt${item.functionTitle ? `: ${item.functionTitle}` : ""}${item.orgUnitName ? ` (${item.orgUnitName})` : ""}.`;
   }
-  // Buyingcenter-Rolle / Haltung als Hypothese am Setup (ggf. Chance)
+  // Buyingcenter-Rolle / Haltung als Hypothese am Projekt (ggf. Chance)
   if (ctx && (item.decisionRole || item.stance !== "UNBEKANNT" || item.influence !== "UNBEKANNT")) {
     const { upsertAssessment } = await import("@/modules/people/assessments");
     await upsertAssessment(actor, { personId, setupId: ctx.setup.id, decisionRole: item.decisionRole ?? "", stance: item.stance, influence: item.influence, note: item.assessmentNote, sourceId: sourceId ?? "", confirm: false }).catch(() => null);
@@ -878,7 +878,7 @@ export async function listRunningEingang(actor: Actor): Promise<{ running: { id:
 }
 
 /**
- * Falsch zugeordnet? (Etappe 42) – Eingang einem anderen Kunden/Setup zuordnen und mit dessen Lagebild neu auswerten.
+ * Falsch zugeordnet? (Etappe 42) – Eingang einem anderen Kunden/Projekt zuordnen und mit dessen Lagebild neu auswerten.
  * Optional werden die Mail-Domänen des Eingangs zur Kennung des richtigen Kunden (und bei einem anderen Kunden entfernt).
  */
 export async function reassignIntake(actor: Actor, suggestionId: string, setupId: string, opts: { learn?: boolean } = {}, deps: { provider?: AIProvider } = {}) {
@@ -887,7 +887,7 @@ export async function reassignIntake(actor: Actor, suggestionId: string, setupId
   const sourceId = s.sourceIds[0];
   if (!sourceId) throw new ValidationError("Zu dieser Karte gibt es keine Quelle, die neu ausgewertet werden könnte.");
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError("In diesem Setup darfst du nicht arbeiten.");
+  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError("In diesem Projekt darfst du nicht arbeiten.");
   const domains = (s.payload as { route?: { domains?: string[] } } | null)?.route?.domains ?? [];
   const learned: string[] = [];
   if (opts.learn && domains.length) {
@@ -906,7 +906,7 @@ export async function reassignIntake(actor: Actor, suggestionId: string, setupId
   return { ...r, accountName: ctx.account.name, learned };
 }
 
-/** Bearbeitbare Setups für die Auswahl „Anderer Kunde“. */
+/** Bearbeitbare Projekte für die Auswahl „Anderer Kunde“. */
 export async function editableSetupOptions(actor: Actor): Promise<{ id: string; label: string; accountId: string; setupName: string }[]> {
   const accounts = (await listVisibleAccounts(actor)).filter((x) => x.status !== "ARCHIVED");
   if (!accounts.length) return [];
@@ -920,7 +920,7 @@ export async function editableSetupOptions(actor: Actor): Promise<{ id: string; 
   return out.sort((x, y) => x.label.localeCompare(y.label, "de"));
 }
 
-/** Rückfrage „welches Setup?“ beantworten (e48): alle offenen Karten derselben Mail kommen in dieses Setup. */
+/** Rückfrage „welches Projekt?“ beantworten (e48): alle offenen Karten derselben Mail kommen in dieses Projekt. */
 export async function assignIntakeSetup(actor: Actor, suggestionId: string, setupId: string): Promise<{ moved: number; setupName: string }> {
   const s = await db.query.suggestions.findFirst({ where: and(eq(schema.suggestions.id, suggestionId), eq(schema.suggestions.workspaceId, actor.workspaceId)) });
   if (!s) throw new NotFoundError("Karte");
@@ -938,7 +938,7 @@ export async function assignIntakeSetup(actor: Actor, suggestionId: string, setu
 }
 
 /**
- * Eine Karte ohne neue Auswertung einem anderen Setup (ggf. anderen Kunden) zuordnen (e47). Bezüge auf Objekte des
+ * Eine Karte ohne neue Auswertung einem anderen Projekt (ggf. anderen Kunden) zuordnen (e47). Bezüge auf Objekte des
  * alten Kunden (Chance, Einsatz, Aufgabe, Person) fallen weg, wenn der Kunde wechselt.
  */
 export async function moveIntakeCard(actor: Actor, suggestionId: string, setupId: string) {
@@ -946,7 +946,7 @@ export async function moveIntakeCard(actor: Actor, suggestionId: string, setupId
   const { suggestion: s, ctx: from } = await requireSuggestionAny(actor, suggestionId);
   if (from && !canEditSetup(actor, from)) throw new ForbiddenError();
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError("In diesem Setup darfst du nicht arbeiten.");
+  if (!ctx || !canEditSetup(actor, ctx)) throw new ForbiddenError("In diesem Projekt darfst du nicht arbeiten.");
   const p = (s.payload ?? {}) as { resolved?: Record<string, unknown> } & Record<string, unknown>;
   const sameAccount = s.accountId === ctx.account.id;
   const payload = sameAccount ? p : { ...p, resolved: p.resolved?.dueDate ? { dueDate: p.resolved.dueDate } : {} };

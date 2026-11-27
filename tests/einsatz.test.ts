@@ -151,7 +151,7 @@ describe("Etappe 29 (E2): Betreuung, Check-ins, Verlängerung, Sales-Signal", ()
     expect(d.cares.filter((c) => !c.toDate).map((c) => c.userId)).toEqual([ops.userId]);
     expect(d.cares.find((c) => c.userId === david.userId)!.toDate).toBeTruthy();
     // Sales Ops hat keine Account-/Statusrechte
-    // e49: Sales Operations führt die Verlängerung zu Ende; wer den Einsatz nicht sieht (Anker), kann nichts entscheiden
+    // e49: Sales Operations führt die Verlängerung zu Ende; wer den Einsatz nicht sieht (Kontaktpate), kann nichts entscheiden
     await expect(upsertRenewalDecision(await actorFor("nina"), e.id, { status: "ABGELEHNT" })).rejects.toThrow();
     // Vorgang abschließen → Betreuung bleibt
     const done = await actOnWorkItem(ops, w.id, { version: acc.version, action: "ABSCHLIESSEN", result: "Übernommen." });

@@ -8,7 +8,7 @@ import { canReassignResponsibility, loadSetupContext } from "@/modules/identity/
 import { Cascade, loadForeignKeys, rowCount, type DeletionReport } from "@/modules/accounts/deletion";
 
 /**
- * Endgültiges Löschen unterhalb des Kunden (Feedback Oktober 2026): Einsatz, Chance, Setup – jeweils mit allem, was
+ * Endgültiges Löschen unterhalb des Kunden (Feedback Oktober 2026): Einsatz, Chance, Projekt – jeweils mit allem, was
  * daran hängt (Kaskade aus den Fremdschlüsseln, wie beim Kunden). Beobachtungen, die nur auf eine Chance verweisen
  * („Wofür“), werden gelöst statt gelöscht. Pflicht: ausdrückliche Bestätigung und Begründung (bleibt im Protokoll).
  */
@@ -131,14 +131,14 @@ export async function deleteOpportunityPermanently(actor: Actor, opportunityId: 
 }
 
 // ---------------------------------------------------------------------------
-// Setup (rekursiv: Chancen, Positionen, Einsätze, Beobachtungen, Aktionen, Weeklys, Quellen …)
+// Projekt (rekursiv: Chancen, Positionen, Einsätze, Beobachtungen, Aktionen, Weeklys, Quellen …)
 // ---------------------------------------------------------------------------
 
 async function requireSetupDeletable(actor: Actor, setupId: string) {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx) throw new NotFoundError("Setup");
+  if (!ctx) throw new NotFoundError("Projekt");
   const allowed = hasRole(actor, "ADMIN") || canReassignResponsibility(actor, ctx.account) || ctx.setup.bdUserId === actor.userId;
-  if (!allowed) throw new ForbiddenError("Ein Setup löschen dürfen der zuständige BD, Principal, CEO oder die Betriebsverwaltung.");
+  if (!allowed) throw new ForbiddenError("Ein Projekt löschen dürfen der zuständige BD, Principal, CEO oder die Betriebsverwaltung.");
   return ctx;
 }
 

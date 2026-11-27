@@ -4,7 +4,7 @@ import { schema, type Tx } from "@/db/client";
 import type { Actor } from "@/modules/identity/actor";
 import { ANALYZE_DOCUMENT_PROMPT_VERSION } from "@/modules/ai/provider";
 
-/** Vorschlag (Aktion, Kontaktaufnahme, offene Frage) aus einer Übernahme in die Vorschlagsliste des Setups schreiben. */
+/** Vorschlag (Aktion, Kontaktaufnahme, offene Frage) aus einer Übernahme in die Vorschlagsliste des Projekts schreiben. */
 export type SuggestionSeed = {
   type: (typeof schema.suggestionTypeEnum.enumValues)[number];
   title: string;
@@ -52,7 +52,7 @@ export async function insertSuggestionCard(tx: Tx, actor: Actor, setupId: string
       mentionedPersonName: s.mentionedPersonName || null,
       priorityCategory: s.priority,
       dedupeKey,
-      recheckTrigger: "Neue Quelle im Setup",
+      recheckTrigger: "Neue Quelle im Projekt",
       provider: "intake",
       model: "uebernahme",
       promptVersion: ANALYZE_DOCUMENT_PROMPT_VERSION,

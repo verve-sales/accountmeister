@@ -11,7 +11,7 @@ import { plusDaysIso, todayIso } from "@/modules/work/calendar";
 import { actorFor } from "./helpers";
 
 describe("e59: Aufräumen beim Kunden", () => {
-  it("U01: Platzhalter-Setup neben echtem Setup wird erkannt; BD führt zusammen; danach doppelter Einsatz zusammenführbar", async () => {
+  it("U01: Platzhalter-Projekt neben echtem Projekt wird erkannt; BD führt zusammen; danach doppelter Einsatz zusammenführbar", async () => {
     process.env.FEATURE_BESETZUNG = "true";
     resetConfigCacheForTests();
     const david = await actorFor("david");

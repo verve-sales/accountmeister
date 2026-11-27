@@ -29,11 +29,11 @@ export function PlaybookRuns({
   start?: {
     playbooks: PlaybookOption[];
     hidden: Record<string, string>;
-    /** Nur Kunden-Muster: bestehendes Setup wählen oder neues anlegen */
+    /** Nur Kunden-Muster: bestehendes Projekt wählen oder neues anlegen */
     setups?: { id: string; name: string }[];
     defaultNewSetupName?: string;
     defaultOwnerId?: string | null;
-    /** Vorausgewähltes Muster samt kurzer Begründung (z. B. Reaktivierungs-Setup → Altkunden-Reaktivierung) */
+    /** Vorausgewähltes Muster samt kurzer Begründung (z. B. Reaktivierungs-Projekt → Altkunden-Reaktivierung) */
     recommendedId?: string | null;
     recommendation?: string | null;
     /** Personen mit Rolle Sales Operations – übernehmen die Vorbereitungsschritte */
@@ -79,14 +79,14 @@ export function PlaybookRuns({
             {start.setups && (
               <>
                 <div>
-                  <label className="label" htmlFor="pbSetup">In bestehendem Setup</label>
+                  <label className="label" htmlFor="pbSetup">In bestehendem Projekt</label>
                   <select id="pbSetup" name="setupId" className="select" defaultValue="">
-                    <option value="">– neues Setup anlegen –</option>
+                    <option value="">– neues Projekt anlegen –</option>
                     {start.setups.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="label" htmlFor="pbNewSetup">Name des neuen Setups (falls kein bestehendes)</label>
+                  <label className="label" htmlFor="pbNewSetup">Name des neuen Projekte (falls kein bestehendes)</label>
                   <input id="pbNewSetup" name="newSetupName" className="input" defaultValue={start.defaultNewSetupName ?? ""} maxLength={200} />
                 </div>
               </>
@@ -146,7 +146,7 @@ function RunCard({ r, back, users }: { r: RunView; back: string; users: User[] }
       <div className="flex flex-wrap items-baseline gap-2 mb-2">
         <strong>{r.playbookName}{r.persons.length ? ` – ${r.persons.join(", ")}` : ""}</strong>
         <Status label={playbookRunStatusLabel[r.status] ?? r.status} />
-        <span className="muted text-sm">verantwortlich: {r.ownerName}{r.salesOpsName ? ` · Sales Operations: ${r.salesOpsName}` : ""} · Setup: <Link href={`/setups/${r.setupId}`}>{r.setupName}</Link>{r.opportunityId && r.opportunityTitle ? <> · Chance: <Link href={`/bedarfe/${r.opportunityId}`}>{r.opportunityTitle}</Link></> : null} · gestartet {fmtDate(r.createdAt)}</span>
+        <span className="muted text-sm">verantwortlich: {r.ownerName}{r.salesOpsName ? ` · Sales Operations: ${r.salesOpsName}` : ""} · Projekt: <Link href={`/setups/${r.setupId}`}>{r.setupName}</Link>{r.opportunityId && r.opportunityTitle ? <> · Chance: <Link href={`/bedarfe/${r.opportunityId}`}>{r.opportunityTitle}</Link></> : null} · gestartet {fmtDate(r.createdAt)}</span>
       </div>
       <ProcessStepper
         steps={r.steps.map((s) => ({ key: s.id, label: s.title }))}

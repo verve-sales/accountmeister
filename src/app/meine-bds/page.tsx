@@ -32,7 +32,7 @@ export default async function MeineBdsPage({ searchParams }: { searchParams: Sea
               {g.rows.map((r) => (
                 <tr key={r.accountId}>
                   <td><Link href={`/meine-bds/${r.accountId}`}><strong>{r.accountName}</strong></Link><div className="muted text-xs">{r.nextStep}</div></td>
-                  <td className="text-xs">{r.ankerNames.length ? `Anker ${r.ankerNames.join(", ")}` : <span style={{ color: "#b7791f" }}>kein Anker</span>}</td>
+                  <td className="text-xs">{r.ankerNames.length ? `Kontaktpate ${r.ankerNames.join(", ")}` : <span style={{ color: "#b7791f" }}>kein Kontaktpate</span>}</td>
                   <td style={{ fontVariantNumeric: "tabular-nums" }}>{r.runningEngagements}</td>
                   <td className="text-xs" style={{ whiteSpace: "nowrap" }}>{r.nextEnd ? <>{fmtDate(r.nextEnd)}{r.nextEndPerson ? <div className="muted">{r.nextEndPerson}</div> : null}</> : <span className="muted">–</span>}</td>
                   <td className="text-xs">{r.chancesInWork} in Arbeit{r.chancesAnticipated ? <span className="muted"> · {r.chancesAnticipated} antizipiert</span> : null}</td>

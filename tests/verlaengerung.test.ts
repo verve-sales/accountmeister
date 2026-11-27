@@ -72,7 +72,7 @@ describe("Etappe 33 (Use Case 1): Verlängerung als Anstoß und Karte", () => {
     expect((await listRenewalCards(ops)).find((c) => c.engagementId === e.id)?.mode).toBe("ENTSCHEIDEN");
     expect((await listNotifications(david)).some((n) => n.title.startsWith("Verlängerung bestätigen") && n.title.includes(freelancerName))).toBe(true);
 
-    // Anker (nina) sieht den Einsatz gar nicht
+    // Kontaktpate (nina) sieht den Einsatz gar nicht
     await expect(decideRenewal(await actorFor("nina"), e.id, { decision: "BESTAETIGEN" })).rejects.toBeInstanceOf(NotFoundError);
 
     // BD bestätigt mit einem Klick
@@ -136,7 +136,7 @@ describe("Etappe 33 (Use Case 1): Verlängerung als Anstoß und Karte", () => {
     expect(byPerson.groups.find((g) => g.kind === "FREELANCER")?.hits.some((h) => h.title === freelancerName)).toBe(true);
     const byAccount = await searchAll(david, "Beispielkonzern");
     expect(byAccount.groups.find((g) => g.kind === "KUNDE")?.hits.some((h) => h.id === s.accountId)).toBe(true);
-    // Anker nina sieht den Einsatz in der Suche nicht
+    // Kontaktpate nina sieht den Einsatz in der Suche nicht
     const nina = await searchAll(await actorFor("nina"), "Sven Such");
     expect(nina.groups.find((g) => g.kind === "EINSATZ")?.hits.some((h) => h.id === e.id) ?? false).toBe(false);
   });

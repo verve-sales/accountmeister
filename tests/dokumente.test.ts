@@ -34,7 +34,7 @@ Herr Berger sucht Unterstützung bei der Testkoordination für die Migration.
 Das Budget wurde noch nicht freigegeben.`;
 
 describe("Etappe 6A: Dokumente als Quellen", () => {
-  it("Upload im Setup: Text wird extrahiert, Quelle vom Typ DOKUMENT mit Datei; fremder BD sieht nichts; Löschen entfernt Text und Datei", async () => {
+  it("Upload im Projekt: Text wird extrahiert, Quelle vom Typ DOKUMENT mit Datei; fremder BD sieht nichts; Löschen entfernt Text und Datei", async () => {
     process.env.UPLOAD_DIR = uploadDir;
     process.env.AI_PROVIDER = "test";
     resetConfigCacheForTests();
@@ -101,7 +101,7 @@ describe("Etappe 6A: Dokumente als Quellen", () => {
 });
 
 describe("Etappe 6B: Kundenanlage aus Dokument", () => {
-  it("Dokument → Vorschlag (Testanbieter) → Übernahme legt Kunde, Setup, Person, Signal und Bedarf an; Dokument wird dem Setup zugeordnet", async () => {
+  it("Dokument → Vorschlag (Testanbieter) → Übernahme legt Kunde, Projekt, Person, Signal und Bedarf an; Dokument wird dem Projekt zugeordnet", async () => {
     process.env.UPLOAD_DIR = uploadDir;
     process.env.AI_PROVIDER = "test";
     resetConfigCacheForTests();
@@ -200,7 +200,7 @@ describe("Etappe 6B: Kundenanlage aus Dokument", () => {
       async analyzeDocument() {
         return {
           organization: { name: "Erfundene AG", orgType: "KONZERN", possibleExistingAccount: "Beispielkonzern", evidenceQuote: "steht nirgends im Text" },
-          setup: { name: "Setup X" },
+          setup: { name: "Projekt X" },
           persons: [{ displayName: "Herr Berger", functionTitle: "Leiter IT", evidenceQuote: "Herr Berger, Leiter IT" }, { displayName: "Dr. Niemand", evidenceQuote: "nicht vorhanden" }],
           signals: [],
           needs: [],

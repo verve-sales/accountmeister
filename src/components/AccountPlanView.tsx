@@ -13,7 +13,7 @@ export function AccountPlanView({ plan, live, children }: { plan: Plan; live: bo
     <div className="space-y-4">
       <p className="muted text-sm">
         {live ? "Live-Übersicht" : "Gespeicherter Stand"} · erzeugt {fmtDateTime(plan.generatedAt)} · zuständiger BD: {plan.account.responsibleBd ?? "offen"}
-        {plan.dataQuality.setupsWithoutConfirmedWeekly > 0 && ` · ${pl(plan.dataQuality.setupsWithoutConfirmedWeekly, "Setup", "Setups")} ohne bestätigtes Weekly`}
+        {plan.dataQuality.setupsWithoutConfirmedWeekly > 0 && ` · ${pl(plan.dataQuality.setupsWithoutConfirmedWeekly, "Projekt", "Projekte")} ohne bestätigtes Weekly`}
         {plan.dataQuality.hiddenSourcesNote && ` · ${plan.dataQuality.hiddenSourcesNote}`}
       </p>
 
@@ -23,7 +23,7 @@ export function AccountPlanView({ plan, live, children }: { plan: Plan; live: bo
           {plan.engagements.length === 0 ? <p className="empty">Keine bestätigten Einsatzangaben.</p> : (
             <ul className="text-sm list-disc ml-5">{plan.engagements.map((e, i) => <li key={i}>{e.content} <span className="muted">({e.setupName}{e.hasEvidence ? ", belegt" : ", ohne Beleg"})</span></li>)}</ul>
           )}
-          <h4 className="font-medium mt-3 mb-1 text-sm">Setups</h4>
+          <h4 className="font-medium mt-3 mb-1 text-sm">Projekte</h4>
           <ul className="text-sm space-y-1">
             {plan.setups.map((s) => (
               <li key={s.id}>

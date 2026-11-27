@@ -59,7 +59,7 @@ export function AppShell({ sections, brand, topbar, children }: { sections: NavS
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, []);
-  // aktiver Eintrag: längster passender Pfad (Anker und Abfrage ignoriert)
+  // aktiver Eintrag: längster passender Pfad (Kontaktpate und Abfrage ignoriert)
   const all = sections.flatMap((s) => s.items.map((i) => i.href.split(/[?#]/)[0]!));
   const active = all.filter((h) => path === h || (h !== "/" && path.startsWith(`${h}/`))).sort((a, b) => b.length - a.length)[0];
   // Bereich: über die Menüpunkte, sonst über bekannte Pfadanfänge (Detailseiten)

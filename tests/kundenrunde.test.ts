@@ -21,7 +21,7 @@ const u = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 5)
 async function customer(bd: Actor, label: string, opts: { end?: string; status?: string } = {}) {
   const acc = await createAccount(bd, { name: `${label} ${u()} (fiktiv)`, orgType: "KONZERN", responsibleBdUserId: bd.userId });
   const b = (await loadActor(bd.userId))!;
-  const setup = await createSetup(b, { accountId: acc.id, name: `${label}-Setup`, bdUserId: b.userId, creatorContribution: "BD_ZUSTAENDIG" });
+  const setup = await createSetup(b, { accountId: acc.id, name: `${label}-Projekt`, bdUserId: b.userId, creatorContribution: "BD_ZUSTAENDIG" });
   let engagementId: string | null = null;
   if (opts.status) {
     const opp = await createOpportunity(b, { setupId: setup.id, title: `${label} Bedarf ${u()}`, needDescription: "Testautomatisierung im Kernteam.", kind: "FREELANCER_EXPERTE", ownerUserId: b.userId });

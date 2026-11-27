@@ -45,11 +45,11 @@ export async function suggestFormFields(actor: Actor, raw: unknown, deps: { prov
   let analysisText = "";
   let setupId: string | null = null;
   if (req.kind === "MEDDPICC") {
-    // MEDDPICC (Etappe 17, Anker-/BD-Wunsch): Vorbefüllung aus Bedarfsbeschreibung/Anlass dieser Chance und
+    // MEDDPICC (Etappe 17, Kontaktpaten-/BD-Wunsch): Vorbefüllung aus Bedarfsbeschreibung/Anlass dieser Chance und
     // ihrem Buyingcenter-Stand. Wer die Qualifizierungshilfe pflegen darf, darf sich auch vorbelegen lassen.
     if (!req.opportunityId) throw new ValidationError("Für MEDDPICC-Vorschläge braucht es die Chance.");
     const { analysis, ctx, canEdit } = await analyzeOpportunity(actor, req.opportunityId);
-    if (!canEdit) throw new ForbiddenError("Die Qualifizierungshilfe pflegen Beteiligte mit Bearbeitungsrecht am Setup.");
+    if (!canEdit) throw new ForbiddenError("Die Qualifizierungshilfe pflegen Beteiligte mit Bearbeitungsrecht am Projekt.");
     const d = await getOpportunityDetail(actor, req.opportunityId);
     const roleStatus = computeRoleStatus(d.participations);
     setupId = ctx.setup.id;
@@ -57,17 +57,17 @@ export async function suggestFormFields(actor: Actor, raw: unknown, deps: { prov
     contextText = await buildContextText(actor, await resolveContext(actor, { type: "SETUP", id: ctx.setup.id }));
   } else if (req.setupId) {
     const ctx = await loadSetupContext(actor, req.setupId);
-    if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+    if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
     if (req.kind === "CHANCE" && !canEditSetup(actor, ctx)) throw new ForbiddenError("Bedarfe erfassen Beteiligte mit Bearbeitungsrecht.");
     setupId = ctx.setup.id;
     analysisText = analysisToText(await analyzeSetup(actor, ctx));
     contextText = await buildContextText(actor, await resolveContext(actor, { type: "SETUP", id: ctx.setup.id }));
   } else if (req.accountId) {
     const account = await getAccount(actor, req.accountId);
-    if (req.kind === "SETUP" && !canCreateSetup(actor, account)) throw new ForbiddenError("Setups legen Anker, BD oder Principal des Kunden an.");
+    if (req.kind === "SETUP" && !canCreateSetup(actor, account)) throw new ForbiddenError("Projekte legen Kontaktpate, BD oder Principal des Kunden an.");
     if (req.kind === "VORHABEN" && !(await canEditAccountPlan(actor, account.id))) throw new ForbiddenError("Vorhaben schlagen BD und Principal des Kunden vor.");
     contextText = await buildContextText(actor, await resolveContext(actor, { type: "ACCOUNT", id: account.id }));
-    // Lage über die sichtbaren Setups des Kunden (kurz)
+    // Lage über die sichtbaren Projekte des Kunden (kurz)
     const setups = await db.query.projectSetups.findMany({ where: eq(schema.projectSetups.accountId, account.id) });
     const parts: string[] = [];
     for (const s of setups.slice(0, 5)) {
@@ -76,7 +76,7 @@ export async function suggestFormFields(actor: Actor, raw: unknown, deps: { prov
     }
     analysisText = parts.join("\n---\n");
   } else {
-    throw new ValidationError("Für einen Vorschlag braucht es Kunde oder Setup.");
+    throw new ValidationError("Für einen Vorschlag braucht es Kunde oder Projekt.");
   }
 
   const provider = deps.provider ?? getAIProvider();

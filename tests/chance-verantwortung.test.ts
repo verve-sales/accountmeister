@@ -7,11 +7,11 @@ import { listPlaybooks, listRuns, startPlaybookRun } from "@/modules/playbooks/s
 import { actorFor, ensureSeed } from "./helpers";
 
 describe("Etappe 21b: Verantwortlich für eine Chance = bearbeitend beteiligt; passende Vorgehen auf der Chance", () => {
-  it("wer eine Chance übernimmt, darf das Setup sehen und bearbeiten – ohne ausdrückliche Beteiligung", async () => {
+  it("wer eine Chance übernimmt, darf das Projekt sehen und bearbeiten – ohne ausdrückliche Beteiligung", async () => {
     const s = await ensureSeed();
     const david = await actorFor("david");
     const petra = await actorFor("petra");
-    const lars = await actorFor("lars"); // BD eines anderen Kunden, im Setup nicht beteiligt
+    const lars = await actorFor("lars"); // BD eines anderen Kunden, im Projekt nicht beteiligt
     const before = await loadSetupContext(lars, s.setupId);
     expect(before && canViewSetup(lars, before)).toBe(false);
 
@@ -27,7 +27,7 @@ describe("Etappe 21b: Verantwortlich für eine Chance = bearbeitend beteiligt; p
     expect((await getAccount(lars, s.accountId)).id).toBe(s.accountId);
   });
 
-  it("Setup-Muster (Verlängerung) lässt sich von der Chance aus starten und hängt an ihr", async () => {
+  it("Projekt-Muster (Verlängerung) lässt sich von der Chance aus starten und hängt an ihr", async () => {
     const s = await ensureSeed();
     const david = await actorFor("david");
     const opp = await createOpportunity(david, { setupId: s.setupId, title: "Verlängerung Testkoordination", needDescription: "Fortsetzung des laufenden Einsatzes im nächsten Jahr." });

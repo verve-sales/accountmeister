@@ -114,7 +114,7 @@ export const intakeNeedSchema = z.object({
 });
 
 /**
- * Was das Modell aus einem Dokument vorschlagen darf: eine Organisation, ein Setup-Name, Personen mit Funktion,
+ * Was das Modell aus einem Dokument vorschlagen darf: eine Organisation, ein Projekt-Name, Personen mit Funktion,
  * Beobachtungen (Signale) und mögliche Bedarfe – jeweils mit Textstelle. Nichts davon wird ohne Bestätigung angelegt;
  * Bedarfe entstehen als „in Klärung“, Signale als „neu“, Personen mit Beziehung „Name/Funktion bekannt“.
  */
@@ -214,7 +214,7 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
     horizon: z.string().max(60).optional().default(""),
     /** antizipiert = aus Beobachtungen vermutet, noch nicht vom Kunden ausgesprochen */
     anticipated: z.boolean().optional().default(true),
-    /** e58: mögliche Verlängerung eines laufenden Einsatzes – Person wie unter „Laufende Einsätze“; die Chance entsteht im Setup dieses Einsatzes */
+    /** e58: mögliche Verlängerung eines laufenden Einsatzes – Person wie unter „Laufende Einsätze“; die Chance entsteht im Projekt dieses Einsatzes */
     engagementPerson: z.string().max(200).optional().default(""),
     /** e48: zu besetzende Plätze dieser Chance (aus Besetzungs-Karten derselben Mail zusammengeführt) */
     positions: z
@@ -301,7 +301,7 @@ export const assistantItemSchema = z.discriminatedUnion("type", [
     type: z.literal("EINSORTIERUNG"),
     /** Name exakt wie in der Liste der bekannten Kunden – nie erfunden. */
     accountName: z.string().min(1).max(200),
-    /** Name eines bestehenden Setups dieses Kunden, wenn im Text erkennbar – sonst leer. */
+    /** Name eines bestehenden Projekte dieses Kunden, wenn im Text erkennbar – sonst leer. */
     setupName: z.string().max(200).optional().default(""),
     reasoning: z.string().max(300).optional().default(""),
     ...q,

@@ -9,7 +9,7 @@ import { canSeeSubject, resolveSubject } from "@/modules/work/subjects";
 import { canViewWorkItem } from "@/modules/work/service";
 
 /**
- * Kommentare am Objekt (Etappe 27): Vorgang, Kunde, Setup, Chance, SOS. Lesen und schreiben darf, wer das Objekt sieht.
+ * Kommentare am Objekt (Etappe 27): Vorgang, Kunde, Projekt, Chance, SOS. Lesen und schreiben darf, wer das Objekt sieht.
  * @-Erwähnungen („@Vorname Nachname“) benachrichtigen die erwähnte Person – aber nur, wenn sie das Objekt auch sehen
  * darf; sonst wird die Erwähnung nicht gesetzt und die Schreiberin erfährt es.
  */

@@ -72,7 +72,7 @@ describe("Etappe 26: Kundenagenda, Beschaffung, Berater, SOS – und die Account
     const orders = await db.select({ o: schema.orders }).from(schema.orders).innerJoin(schema.opportunities, eq(schema.opportunities.id, schema.orders.opportunityId)).where(eq(schema.opportunities.accountId, account!.id));
     expect(orders).toHaveLength(1);
     expect(orders[0]!.o.plannedEnd).toBe("2026-12-31");
-    expect(orders[0]!.o.consultantName).toBe("Nina Demo (Anker)");
+    expect(orders[0]!.o.consultantName).toBe("Nina Demo (Kontaktpate)");
     const prios = await db.query.accountPriorities.findMany({ where: eq(schema.accountPriorities.accountId, account!.id) });
     expect(prios.map((p) => p.kind)).toContain("AUSWEITEN");
     const h = await getHealth(david, account!.id);
@@ -84,7 +84,7 @@ describe("Etappe 26: Kundenagenda, Beschaffung, Berater, SOS – und die Account
     expect(notes.join("\n")).toMatch(/TEAM: .*bereits zuständiger BD/);
   });
 
-  it("SOS: Anker löst aus, BD sieht es auf der Startseite, Health-Check zieht ab, Lösung ist Pflicht", async () => {
+  it("SOS: Kontaktpate löst aus, BD sieht es auf der Startseite, Health-Check zieht ab, Lösung ist Pflicht", async () => {
     const s = await ensureSeed();
     const nina = await actorFor("nina");
     const david = await actorFor("david");

@@ -39,8 +39,8 @@ function CandidateHint({ c }: { c: ChanceRow }) {
 }
 
 /**
- * „Wo stehen wir?“ auf Setup- und Kundenebene (Etappe 24): eine Zeile je Chance mit eigener Fortschrittsleiste
- * und dem nächsten Schritt als Knopf – statt eines verdichteten Setup-/Kundenstatus.
+ * „Wo stehen wir?“ auf Projekt- und Kundenebene (Etappe 24): eine Zeile je Chance mit eigener Fortschrittsleiste
+ * und dem nächsten Schritt als Knopf – statt eines verdichteten Projekt-/Kundenstatus.
  */
 export function ChancenUebersicht({ chances, emptyText, showSetup = false, back = "" }: { chances: ChanceRow[]; emptyText: string; showSetup?: boolean; back?: string }) {
   const all = chances.filter((c) => c.status !== "BEENDET");

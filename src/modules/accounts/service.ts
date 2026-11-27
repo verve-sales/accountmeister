@@ -52,13 +52,13 @@ export async function listVisibleAccounts(actor: Actor) {
     where: and(eq(schema.accounts.workspaceId, actor.workspaceId)),
     orderBy: (a, { asc }) => [asc(a.name)],
   });
-  // Mitglieder eines Setups sehen dessen Kunden (zusammenfassend)
+  // Mitglieder eines Projekts sehen dessen Kunden (zusammenfassend)
   const memberSetups = await db
     .select({ accountId: schema.projectSetups.accountId })
     .from(schema.setupMemberships)
     .innerJoin(schema.projectSetups, eq(schema.projectSetups.id, schema.setupMemberships.setupId))
     .where(eq(schema.setupMemberships.userId, actor.userId));
-  // Verantwortliche einer Chance sehen den Kunden (zusammenfassend), auch ohne Setup-Beteiligung
+  // Verantwortliche einer Chance sehen den Kunden (zusammenfassend), auch ohne Projekt-Beteiligung
   const ownedOpps = await db.select({ accountId: schema.opportunities.accountId }).from(schema.opportunities).where(and(eq(schema.opportunities.workspaceId, actor.workspaceId), eq(schema.opportunities.ownerUserId, actor.userId)));
   const memberAccountIds = new Set([...memberSetups.map((m) => m.accountId), ...ownedOpps.map((o) => o.accountId)]);
   return all.filter((a) => canViewAccount(actor, a) || memberAccountIds.has(a.id));
@@ -129,7 +129,7 @@ export async function getUsersByIds(userIds: string[]) {
   return db.query.users.findMany({ where: inArray(schema.users.id, userIds) });
 }
 
-/** Organisationstyp nachtragen oder korrigieren (Etappe 41) – BD, Principal, Anker des Kunden, Sales Operations. */
+/** Organisationstyp nachtragen oder korrigieren (Etappe 41) – BD, Principal, Kontaktpate des Kunden, Sales Operations. */
 export async function setAccountOrgType(actor: Actor, accountId: string, orgType: string) {
   const account = await getAccount(actor, accountId);
   const { hasRoleForAccountWrite } = await import("@/modules/identity/authz");

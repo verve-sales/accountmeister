@@ -26,17 +26,17 @@ export default async function VorgehenPage({ searchParams }: { searchParams: Sea
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Vorgehensmuster</h1>
-      <p className="muted text-sm max-w-3xl">Standard-Vorgehen als Gerüst: Jeder Schritt hat ein Ziel, einen MEDDPICC-Bezug, einen Vorschlag und ein Erledigt-Kriterium. Angewendet auf einen Kunden, ein Setup oder eine Chance wird immer der aktuelle Schritt als Aktion angelegt. Orientierung, keine Pflichtschleuse – jeder Schritt darf begründet übersprungen werden.</p>
+      <p className="muted text-sm max-w-3xl">Standard-Vorgehen als Gerüst: Jeder Schritt hat ein Ziel, einen MEDDPICC-Bezug, einen Vorschlag und ein Erledigt-Kriterium. Angewendet auf einen Kunden, ein Projekt oder eine Chance wird immer der aktuelle Schritt als Aktion angelegt. Orientierung, keine Pflichtschleuse – jeder Schritt darf begründet übersprungen werden.</p>
       <Feedback params={sp} />
 
       <section className="card" id="fokus">
         <div className="flex flex-wrap items-baseline gap-3 mb-1">
           <h2 className="font-semibold">Strategischer Fokus</h2>
-          {focus.freelancerLever && <Status label="Freelancer-Hebel aktiv" />}
+          {focus.freelancerLever && <Status label="Ausbaupotenzial aktiv" />}
           {focus.updatedAt && <span className="muted text-xs ml-auto">zuletzt geändert {fmtDate(focus.updatedAt)}</span>}
         </div>
         <p className="text-sm">{focus.focusText || <span className="muted">Kein Fokus gesetzt.</span>}</p>
-        <p className="muted text-xs mt-1">Der Fokus fließt in alle KI-Agenten ein (Notizen und Dokumente auswerten, Assistent, Interview, Strategiefaden, Chancen- und Buying-Center-Berater, Formularvorschläge, Schritt-Assistent) – als Gewichtung, ohne die Regeln zu lockern: nichts wird erfunden, Unbelegtes erscheint als Frage oder Vermutung.{focus.freelancerLever ? " Der Freelancer-Hebel erzeugt außerdem Standardaufgaben (Freelancer-Check je Chance, Ausweitung nach Einsatzstart, Potenzial je Kunde) und die Kachel „Freelancer-Hebel“ auf der Startseite." : ""}</p>
+        <p className="muted text-xs mt-1">Der Fokus fließt in alle KI-Agenten ein (Notizen und Dokumente auswerten, Assistent, Interview, Strategiefaden, Chancen- und Buying-Center-Berater, Formularvorschläge, Schritt-Assistent) – als Gewichtung, ohne die Regeln zu lockern: nichts wird erfunden, Unbelegtes erscheint als Frage oder Vermutung.{focus.freelancerLever ? " Das Ausbaupotenzial erzeugt außerdem Standardaufgaben (Freelancer-Check je Chance, Ausweitung nach Einsatzstart, Potenzial je Kunde) und die Kachel „Ausbaupotenzial“ auf der Startseite." : ""}</p>
         {focus.weeklyQuestion && <p className="text-sm mt-2"><span className="muted">Leitfrage im Weekly: </span>{focus.weeklyQuestion}</p>}
         {mayFocus && (
           <details className="mt-3">
@@ -45,7 +45,7 @@ export default async function VorgehenPage({ searchParams }: { searchParams: Sea
               <input type="hidden" name="version" value={focus.version ?? 0} />
               <div><label className="label" htmlFor="fText">Fokus (für alle KI-Agenten)</label><textarea id="fText" name="focusText" className="textarea" rows={3} maxLength={1500} defaultValue={focus.focusText} /></div>
               <div><label className="label" htmlFor="fQ">Leitfrage im Weekly</label><input id="fQ" name="weeklyQuestion" className="input" maxLength={400} defaultValue={focus.weeklyQuestion} /></div>
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="freelancerLever" value="on" defaultChecked={focus.freelancerLever} /> Freelancer-Hebel aktiv (Standardaufgaben, Hinweise in den Lageanalysen, Kennzahlen)</label>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="freelancerLever" value="on" defaultChecked={focus.freelancerLever} /> Ausbaupotenzial aktiv (Standardaufgaben, Hinweise in den Lageanalysen, Kennzahlen)</label>
               <div><button className="btn" type="submit">Fokus speichern</button></div>
             </form>
           </details>
@@ -54,7 +54,7 @@ export default async function VorgehenPage({ searchParams }: { searchParams: Sea
 
       <section className="card">
         <h2 className="font-semibold mb-2">Reaktivierung prüfen – ruhende Kunden ({dormant.length})</h2>
-        <p className="muted text-sm mb-2">Kunden, die als „ruhend“ markiert sind oder seit mehr als {DORMANT_AFTER_DAYS} Tagen keine Aktivität hatten (Setups, Aktionen, Beobachtungen, Chancen). Längste Inaktivität zuerst.</p>
+        <p className="muted text-sm mb-2">Kunden, die als „ruhend“ markiert sind oder seit mehr als {DORMANT_AFTER_DAYS} Tagen keine Aktivität hatten (Projekte, Aktionen, Beobachtungen, Chancen). Längste Inaktivität zuerst.</p>
         {dormant.length === 0 ? <p className="empty">Keine ruhenden Kunden in deinem Berechtigungsbereich.</p> : (
           <table className="list">
             <thead><tr><th>Kunde</th><th>Status</th><th>Letzte Aktivität</th><th>Vorgehen</th></tr></thead>

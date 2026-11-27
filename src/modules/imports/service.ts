@@ -15,7 +15,7 @@ import type { FetchedSource, SelectableKind } from "@/modules/integrations/adapt
 
 /**
  * Importprozess (Briefing 13.2):
- *  1 berechtigte Quelle wählen · 2 Zielkunde/Setup vorschlagen oder wählen · 3 Umfang und Empfängerkreis anzeigen
+ *  1 berechtigte Quelle wählen · 2 Zielkunde/Projekt vorschlagen oder wählen · 3 Umfang und Empfängerkreis anzeigen
  *  4 Quelle sicher übernehmen · 5 Personen/Aussagen/Hinweise/Aktionen extrahieren (KI-Kette) · 6 Konflikte, unklare
  *  Zuordnungen und sensible Inhalte sichtbar machen · 7 Ergänzungen prüfen/bestätigen (Vorschläge) · 8 protokollieren.
  *
@@ -57,7 +57,7 @@ export async function proposeForText(actor: Actor, text: string, participants: {
   if (/https?:\/\//i.test(text)) warnings.push("Links bleiben als Text stehen und werden nicht abgerufen.");
   if (SENSITIVE.test(text)) warnings.push("Der Text enthält möglicherweise sensible personenbezogene Inhalte. Bitte prüfen, ob der Import zulässig und der Empfängerkreis eng genug ist.");
 
-  // Zielsetup vorschlagen: E-Mail-Adressen/Namen der Beteiligten mit bekannten Personen abgleichen → Kunde → Setups des Akteurs
+  // Zielsetup vorschlagen: E-Mail-Adressen/Namen der Beteiligten mit bekannten Personen abgleichen → Kunde → Projekte des Akteurs
   const mySetups = await listMySetups(actor);
   const clean = sanitizeToText(text);
   const persons = await db.query.persons.findMany({ where: eq(schema.persons.workspaceId, actor.workspaceId) });
@@ -217,8 +217,8 @@ type PersistInput = {
 
 async function requireEditableCtx(actor: Actor, setupId: string): Promise<SetupContext> {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst in dieses Setup nichts importieren.");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du darfst in dieses Projekt nichts importieren.");
   return ctx;
 }
 
@@ -380,7 +380,7 @@ export async function listMyImports(actor: Actor) {
 export const importMailboxSmartInput = z.object({
   kind: z.enum(["MAIL", "TERMIN", "CHAT"]),
   externalId: z.string().min(1),
-  /** „AUTO“ = Kunde/Setup erkennen (auch neuer Kunde) */
+  /** „AUTO“ = Kunde/Projekt erkennen (auch neuer Kunde) */
   setupId: z.string().min(1).default("AUTO"),
   accessClass: z.enum(schema.accessClassEnum.enumValues).default("PERSOENLICH"),
 });
@@ -435,7 +435,7 @@ export async function importMailboxItemSmart(actor: Actor, raw: unknown) {
   const route = await routeText(actor, body, participants, input.setupId === "AUTO" ? undefined : input.setupId);
   let sourceId: string;
   if (route.ctx) {
-    if (!canEditSetup(actor, route.ctx)) throw new ForbiddenError("In dieses Setup darfst du nichts importieren.");
+    if (!canEditSetup(actor, route.ctx)) throw new ForbiddenError("In dieses Projekt darfst du nichts importieren.");
     const proposal = await proposeForText(actor, clean, participants);
     const res = await persistImport(actor, route.ctx, {
       kind: input.kind,
@@ -456,7 +456,7 @@ export async function importMailboxItemSmart(actor: Actor, raw: unknown) {
     });
     sourceId = res.sourceId;
   } else {
-    // Kein bekannter Kunde: Quelle persönlich ablegen; die Karten schlagen Kunde/Setup vor
+    // Kein bekannter Kunde: Quelle persönlich ablegen; die Karten schlagen Kunde/Projekt vor
     sourceId = await db.transaction(async (tx) => {
       const [src] = await tx.insert(schema.sources).values({ workspaceId: actor.workspaceId, setupId: null, type: fetched.kind === "MAIL" ? "EMAIL" : isChat ? "CHAT" : "TERMIN", title: fetched.subject, body, origin: `Microsoft 365 · Import durch ${actor.displayName}`, externalKey, sourceTime: new Date(fetched.at), ownerUserId: actor.userId, accessClass: "PERSOENLICH" }).returning();
       const [job] = await tx.insert(schema.importJobs).values({ workspaceId: actor.workspaceId, actorUserId: actor.userId, kind: input.kind, connectionId: conn.id, externalKey, title: fetched.subject, setupId: null, accountId: null, accessClass: "PERSOENLICH", sourceId: src!.id, status: "UEBERNOMMEN", scopeSummary: "Kunde noch offen", warnings: [] }).returning();

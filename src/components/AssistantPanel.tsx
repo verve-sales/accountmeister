@@ -5,7 +5,7 @@ import { pl } from "@/lib/labels";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 /**
- * Assistent (Etappe 8): Seitenpanel auf jeder Seite. Kontext folgt der Adresse (Setup, Kunde, sonst allgemein).
+ * Assistent (Etappe 8): Seitenpanel auf jeder Seite. Kontext folgt der Adresse (Projekt, Kunde, sonst allgemein).
  * Der Dialog wird gestreamt; Vorschlagskarten werden einzeln übernommen oder verworfen. Alles Fachliche läuft
  * serverseitig über die geprüften Dienste – dieses Bauteil zeigt nur an und ruft auf.
  */
@@ -26,7 +26,7 @@ type View = {
   ai: { enabled: boolean; description: string };
 };
 
-const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Setup", SETUP: "Setup", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung", ANSPRECHPARTNER: "Verlängerung läuft über", EINSATZ_VERLAENGERN: "Verlängerung", VERMITTLER_ANFRAGE: "Vermittler-Anfrage", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Hebel / Vorhaben", TEAM: "Verve-Team", VORGANG: "Vorgang / Anfrage", BESETZUNG: "Besetzung (Position)" };
+const TYPE_LABEL: Record<string, string> = { KUNDE: "Kunde + Projekt", SETUP: "Projekt", PERSON: "Person", SIGNAL: "Beobachtung", CHANCE: "Chance", ACCOUNTZIEL: "Accountziel", AKTION: "Folgeaktivität", KONTAKT: "Kontaktaufnahme", FRAGE: "Offene Frage", EINSORTIERUNG: "Einsortierung", ANSPRECHPARTNER: "Verlängerung läuft über", EINSATZ_VERLAENGERN: "Verlängerung", VERMITTLER_ANFRAGE: "Vermittler-Anfrage", INITIATIVE: "Kundenagenda", BESCHAFFUNG: "Beschaffung", EINSATZ: "Laufender Einsatz", RISIKO: "Risiko", SOS: "SOS", HEBEL: "Hebel / Vorhaben", TEAM: "Verve-Team", VORGANG: "Vorgang / Anfrage", BESETZUNG: "Besetzung (Position)" };
 const INITIATIVE_LABEL: Record<string, string> = { PRIORITAET: "Priorität des Kunden", INITIATIVE: "Schlüssel-Initiative", HERAUSFORDERUNG: "Herausforderung" };
 const LEVER_LABEL: Record<string, string> = { VERLAENGERN: "Verlängern", AUSWEITEN: "Ausweiten", VERTIEFEN: "Vertiefen", UEBERTRAGEN: "Übertragen", REAKTIVIEREN: "Reaktivieren" };
 const RISK_LABEL: Record<string, string> = { UMSTRUKTURIERUNG: "Umstrukturierung", BUDGETKUERZUNG: "Budgetkürzung", WETTBEWERBER: "Wettbewerber aktiv", FUERSPRECHER_WEG: "Fürsprecher geht", INSOURCING: "Insourcing", EINKAUF_VERSCHAERFT: "Einkauf verschärft", NACHBARTEAM: "Nachbarteam stellt sich quer" };
@@ -49,7 +49,7 @@ function cardTitle(item: Item): string {
   const s = (k: string) => String(item[k] ?? "");
   switch (item.type) {
     case "KUNDE":
-      return `${s("name")} → Setup „${s("setupName")}“`;
+      return `${s("name")} → Projekt „${s("setupName")}“`;
     case "SETUP":
       return s("name");
     case "VERMITTLER_ANFRAGE":
@@ -88,7 +88,7 @@ function cardTitle(item: Item): string {
       return `${LEVER_LABEL[s("lever")] ?? s("lever")}: ${s("title")}`;
     case "TEAM": {
       const ank = Array.isArray(item.ankerNames) ? (item.ankerNames as string[]).join(", ") : "";
-      return [s("bdName") && `BD ${s("bdName")}`, ank && `Anker ${ank}`, s("principalName") && `Principal ${s("principalName")}`, s("consultantName") && `Berater ${s("consultantName")}`].filter(Boolean).join(" · ") || "Team";
+      return [s("bdName") && `BD ${s("bdName")}`, ank && `Kontaktpate ${ank}`, s("principalName") && `Principal ${s("principalName")}`, s("consultantName") && `Berater ${s("consultantName")}`].filter(Boolean).join(" · ") || "Team";
     }
     case "VORGANG": {
       const to: Record<string, string> = { ICH: "für mich", SALES_OPS: "an Sales Operations", BD: "an den BD", PRINCIPAL: "an Principal", PERSON: `an ${s("personName") || "Person"}` };
@@ -285,7 +285,7 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
       }
       if (payload.error) throw new Error(payload.error);
       setMessages((m) => m.map((x) => (x.id === tempId ? { id: payload.message?.id ?? tempId, role: "ASSISTENT", text: payload.message?.text ?? prose.trim(), cards: payload.cards ?? [], missing: payload.missing ?? [] } : x)));
-      // e53: Auftrag hat das Gespräch an einen Kunden/ein Setup gebunden (z. B. „lege Kunde X an“)
+      // e53: Auftrag hat das Gespräch an einen Kunden/ein Projekt gebunden (z. B. „lege Kunde X an“)
       if (payload.thread && view) setView({ ...view, thread: { ...view.thread, ...payload.thread } });
       if (payload.cards?.some((c) => c.auto)) router.refresh();
     } catch (e) {
@@ -308,7 +308,7 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
     setMessages((m) => m.map((x) => (x.id === messageId ? { ...x, cards: x.cards.map((c) => (c.id === cardId ? (j.card as Card) : c)) } : x)));
     if (quiet) return { ok: true, thread: j.thread };
     if (j.thread && j.thread.contextType !== view.thread.contextType) {
-      // Gespräch wurde an ein neues Setup gebunden: dorthin wechseln
+      // Gespräch wurde an ein neues Projekt gebunden: dorthin wechseln
       setView({ ...view, thread: { ...view.thread, ...j.thread } });
       if (j.thread.contextType === "SETUP" && j.thread.contextId) router.push(`/setups/${j.thread.contextId}`);
     } else {
@@ -451,7 +451,7 @@ function AssistantPanelInner({ signedIn }: { signedIn: boolean }) {
                             <button type="button" className="btn btn-secondary btn-small" onClick={() => decide(m.id, c.id, "VERWERFEN")}>Verwerfen</button>
                           </div>
                         )}
-                        {c.status === "NEU" && view && !view.context.canWrite && !OWN_RIGHTS.has(c.item.type) && <div className="muted text-xs mt-1">{view.context.label === "Allgemein" ? "Hier fehlt noch der Kunde – übernimm zuerst die Einsortierung oder öffne den Assistenten beim Kunden bzw. im Setup." : "Zum Übernehmen fehlt dir das Bearbeitungsrecht an diesem Kunden bzw. Setup."}</div>}
+                        {c.status === "NEU" && view && !view.context.canWrite && !OWN_RIGHTS.has(c.item.type) && <div className="muted text-xs mt-1">{view.context.label === "Allgemein" ? "Hier fehlt noch der Kunde – übernimm zuerst die Einsortierung oder öffne den Assistenten beim Kunden bzw. im Projekt." : "Zum Übernehmen fehlt dir das Bearbeitungsrecht an diesem Kunden bzw. Projekt."}</div>}
                         {c.status === "NEU" && c.error && <div className="text-xs mt-1" style={{ color: "var(--danger)" }}>Konnte nicht direkt erledigt werden: {c.error}</div>}
                         {c.status !== "NEU" && <div className="text-xs mt-1">{c.status === "UEBERNOMMEN" ? <>{c.auto ? "Erledigt." : "Übernommen."} <NoteText text={c.note ?? ""} />{c.resultType && c.resultId && RESULT_HREF[c.resultType] && !/\/(einsaetze|besetzung|bedarfe|vorgaenge)\//.test(c.note ?? "") ? <> <a href={`${RESULT_HREF[c.resultType]}${c.resultId}`}>öffnen</a></> : null}</> : "Verworfen."}</div>}
                       </li>

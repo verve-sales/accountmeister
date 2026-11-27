@@ -57,7 +57,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
             <h3 className="text-sm font-semibold mb-1">Portfolio – Zählungen aus den Accountplänen</h3>
             {p.portfolio.entries.length === 0 ? <p className="empty">Keine sichtbaren Kunden.</p> : (
               <table className="list text-sm">
-                <thead><tr><th>Kunde</th><th>BD</th><th>Setups</th><th>Änderungen</th><th>Fragen</th><th>Zugangslücken</th><th>Blockiert</th><th>Unterstützung</th><th>Letztes Weekly</th></tr></thead>
+                <thead><tr><th>Kunde</th><th>BD</th><th>Projekte</th><th>Änderungen</th><th>Fragen</th><th>Zugangslücken</th><th>Blockiert</th><th>Unterstützung</th><th>Letztes Weekly</th></tr></thead>
                 <tbody>
                   {p.portfolio.entries.map((e) => (
                     <tr key={e.accountId}>
@@ -170,7 +170,7 @@ export default async function FuehrungsReviewPage({ params, searchParams }: { pa
       {isLeader && (
         <section className="card">
           <h2 className="font-semibold mb-2">Vertrauliche Notizen ({p.confidential.length})</h2>
-          <p className="muted text-sm mb-2">Sichtbar nur für den gewählten Empfängerkreis. Erscheint nie im Setup, im Accountplan oder im KI-Kontext <TechRef>Briefing 11.4</TechRef>.</p>
+          <p className="muted text-sm mb-2">Sichtbar nur für den gewählten Empfängerkreis. Erscheint nie im Projekt, im Accountplan oder im KI-Kontext <TechRef>Briefing 11.4</TechRef>.</p>
           {p.confidential.length === 0 ? <p className="empty">Keine vertraulichen Notizen für dich in diesem Review.</p> : (
             <ul className="text-sm space-y-2">
               {p.confidential.map((n) => (

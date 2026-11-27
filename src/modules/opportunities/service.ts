@@ -12,8 +12,8 @@ import { listRoles, matchRole } from "@/modules/roles/catalog";
 
 /**
  * Chancen, Buyingcenter, Angebote, Aufträge, Startvoraussetzungen (Briefing 8.3, 9.1–9.4, 15.2, Etappe 5).
- *  - Je Setup mehrere Chancen mit unabhängigen Zuständen; kein gemeinsamer Kunden-Pipelinestatus (F02).
- *  - Eine Chance kann direkt erfasst werden – ohne vollständiges Setup oder MEDDPICC (F08, Fast-Track 9.4).
+ *  - Je Projekt mehrere Chancen mit unabhängigen Zuständen; kein gemeinsamer Kunden-Pipelinestatus (F02).
+ *  - Eine Chance kann direkt erfasst werden – ohne vollständiges Projekt oder MEDDPICC (F08, Fast-Track 9.4).
  *  - Kritische Übergänge (9.3) brauchen dokumentierte Ereignisse mit Quelle: bestätigt, vorgestellt (F09),
  *    beauftragt, startbereit, gestartet. Ein Entwurf oder ein erreichtes Datum genügt nie.
  *  - Positive Rückmeldung zu einem Angebot ist kein Auftrag (F10).
@@ -34,7 +34,7 @@ async function requireOpportunity(actor: Actor, id: string) {
 
 async function requireEditableOpportunity(actor: Actor, id: string) {
   const r = await requireOpportunity(actor, id);
-  if (!canEditSetup(actor, r.ctx)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");
+  if (!canEditSetup(actor, r.ctx)) throw new ForbiddenError("Du bist an diesem Projekt nicht bearbeitend beteiligt.");
   return r;
 }
 
@@ -76,7 +76,7 @@ const chanceFields = {
 };
 
 export const createOpportunityInput = z.object({
-  setupId: z.string().min(1, "Setup fehlt"),
+  setupId: z.string().min(1, "Projekt fehlt"),
   title: z.string().trim().min(3, "Titel fehlt").max(200),
   needDescription: z.string().trim().min(10, "Bitte die Chance in Kundensprache beschreiben (mind. 10 Zeichen).").max(4000),
   trigger: z.string().trim().max(2000).optional().or(z.literal("")),
@@ -94,20 +94,20 @@ async function resolveChanceFields(workspaceId: string, i: { kind: "VERVE_EXPERT
   return { kind: i.kind, roleId: role?.id ?? null, roleFamily: family, headcount: i.headcount ?? null, horizon: i.horizon || null };
 }
 
-/** Chance anlegen: minimal (Titel + Beschreibung). Kein vorgeschaltetes MEDDPICC, kein vollständiges Setup nötig (F08). */
+/** Chance anlegen: minimal (Titel + Beschreibung). Kein vorgeschaltetes MEDDPICC, kein vollständiges Projekt nötig (F08). */
 export async function createOpportunity(actor: Actor, raw: unknown) {
   const parsed = createOpportunityInput.safeParse(raw);
   if (!parsed.success) throw new ValidationError(parsed.error.issues.map((i) => i.message).join("; "));
   const input = parsed.data;
   const ctx = await loadSetupContext(actor, input.setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
-  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du bist an diesem Setup nicht bearbeitend beteiligt.");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
+  if (!canEditSetup(actor, ctx)) throw new ForbiddenError("Du bist an diesem Projekt nicht bearbeitend beteiligt.");
   const fastTrack = input.fastTrack === "on" || input.fastTrack === "true" || input.fastTrack === true;
   const anticipated = input.anticipated === "on" || input.anticipated === "true" || input.anticipated === true;
   const chance = await resolveChanceFields(actor.workspaceId, input);
   // Legt Sales Operations eine Chance an (z. B. aus einem Protokoll), übernimmt der zuständige BD die Verantwortung.
   const ownerUserId = isSalesOpsOnly(actor) ? (ctx.setup.bdUserId ?? ctx.account.responsibleBdUserId) : actor.userId;
-  if (!ownerUserId) throw new ValidationError("Für dieses Setup ist kein BD zugeordnet, der die Chance verantworten kann – bitte zuerst einen BD zuordnen.");
+  if (!ownerUserId) throw new ValidationError("Für dieses Projekt ist kein BD zugeordnet, der die Chance verantworten kann – bitte zuerst einen BD zuordnen.");
   return db.transaction(async (tx) => {
     let signal: typeof schema.signals.$inferSelect | null = null;
     if (input.signalId) {
@@ -692,7 +692,7 @@ export async function markStarted(actor: Actor, orderId: string, raw: { version:
 
 export async function listOpportunitiesForSetup(actor: Actor, setupId: string) {
   const ctx = await loadSetupContext(actor, setupId);
-  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Setup");
+  if (!ctx || !canViewSetup(actor, ctx)) throw new NotFoundError("Projekt");
   return db.query.opportunities.findMany({ where: eq(schema.opportunities.setupId, setupId), orderBy: desc(schema.opportunities.updatedAt) });
 }
 
@@ -767,4 +767,31 @@ export async function countChancesByStatus(accountIds: string[]): Promise<Record
   const out: Record<string, number> = {};
   for (const r of rows) out[r.status] = (out[r.status] ?? 0) + 1;
   return out;
+}
+
+/**
+ * e69 (Projekt als Gruppierung): eine Chance einem anderen Projekt desselben Kunden zuordnen – oder einem neuen.
+ * Positionen, Einsätze und die an der Chance hängenden Aktionen ziehen mit; der Kunde bleibt.
+ */
+export async function moveOpportunityToProject(actor: Actor, id: string, raw: { setupId?: string; newName?: string }) {
+  const { opp, ctx } = await requireEditableOpportunity(actor, id);
+  let targetId = (raw.setupId ?? "").trim();
+  const newName = (raw.newName ?? "").trim();
+  if (!targetId && newName.length >= 3) {
+    const { createSetup } = await import("@/modules/setups/service");
+    const s = await createSetup(actor, { accountId: opp.accountId, name: newName, contextNote: `Angelegt beim Zuordnen der Chance „${opp.title}“.`, bdUserId: ctx.setup.bdUserId ?? null });
+    targetId = s.id;
+  }
+  if (!targetId) throw new ValidationError("Bitte ein Projekt wählen oder einen neuen Namen (mindestens 3 Zeichen) eintragen.");
+  if (targetId === opp.setupId) return opp;
+  const target = await db.query.projectSetups.findFirst({ where: and(eq(schema.projectSetups.id, targetId), eq(schema.projectSetups.workspaceId, actor.workspaceId)) });
+  if (!target || target.accountId !== opp.accountId) throw new ValidationError("Das Projekt gehört zu einem anderen Kunden.");
+  return db.transaction(async (tx) => {
+    const [u] = await tx.update(schema.opportunities).set({ setupId: target.id, version: opp.version + 1, updatedAt: new Date() }).where(eq(schema.opportunities.id, id)).returning();
+    await tx.update(schema.staffingPositions).set({ setupId: target.id, updatedAt: new Date() }).where(eq(schema.staffingPositions.opportunityId, id));
+    await tx.update(schema.engagements).set({ setupId: target.id, updatedAt: new Date() }).where(eq(schema.engagements.opportunityId, id));
+    await tx.update(schema.actions).set({ setupId: target.id, updatedAt: new Date() }).where(eq(schema.actions.opportunityId, id));
+    await recordAudit(tx, actor, "opportunity.moved_project", "OPPORTUNITY", id, { von: opp.setupId, nach: target.id });
+    return u!;
+  });
 }

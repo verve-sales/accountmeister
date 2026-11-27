@@ -27,13 +27,13 @@ export type PlaybookStepInput = {
   setupName: string;
   /** Bekannte Personen beim Kunden: „Name (Funktion)“ */
   people: string[];
-  /** Offene Chancen dieses Setups (Titel) */
+  /** Offene Chancen dieses Projekts (Titel) */
   opportunities: string[];
-  /** Beobachtungen/Notizen des Setups (wörtlich) */
+  /** Beobachtungen/Notizen des Projekts (wörtlich) */
   observations: string[];
   /** Ergebnisse der bisherigen Schritte: „Schritt n – Titel: Ergebnis“ */
   previousResults: string[];
-  /** Weiterer Kontext als Text (Quellen-Zusammenfassungen, Setup-Kontext) */
+  /** Weiterer Kontext als Text (Quellen-Zusammenfassungen, Projekt-Kontext) */
   contextText: string;
 };
 
@@ -250,7 +250,7 @@ export function stepInputToText(i: PlaybookStepInput): string {
     i.step.meddpicc && `MEDDPICC: ${i.step.meddpicc}`,
     i.step.suggestedAction && `Vorschlag: ${i.step.suggestedAction}`,
     i.step.doneCriterion && `Erledigt, wenn: ${i.step.doneCriterion}`,
-    `Kunde: ${i.accountName} · Setup: ${i.setupName}`,
+    `Kunde: ${i.accountName} · Projekt: ${i.setupName}`,
     i.people.length ? `Bekannte Personen: ${i.people.join("; ")}` : "Bekannte Personen: keine erfasst",
     i.opportunities.length ? `Chancen: ${i.opportunities.join("; ")}` : "",
     i.observations.length ? `Beobachtungen:\n${i.observations.map((o) => `- ${o}`).join("\n")}` : "",

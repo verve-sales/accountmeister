@@ -8,7 +8,7 @@ import type { Actor } from "@/modules/identity/actor";
 /**
  * Strategischer Fokus (Etappe 21): ein vom Management gesetzter Schwerpunkt, zuerst „Wachstum über Freelancer“.
  *  - Text wird in alle KI-Agenten eingespeist (siehe focusSystemText), ohne deren Regeln zu lockern.
- *  - Der Freelancer-Hebel schaltet Standardaufgaben, Hinweise in den Lageanalysen und die Kennzahlen-Kachel.
+ *  - Das Ausbaupotenzial schaltet Standardaufgaben, Hinweise in den Lageanalysen und die Kennzahlen-Kachel.
  *  - Pflege: Principal (arbeitsraumweit), CEO oder Betriebsverwaltung. Lesen: alle.
  */
 
@@ -76,10 +76,10 @@ export function focusSystemText(f: PromptFocus): string {
   ];
   if (f.freelancerLever) {
     lines.push(
-      "Freelancer-Hebel – achte besonders auf:",
+      "Ausbaupotenzial – achte besonders auf:",
       "- Hinweise auf zusätzliche Rollen, fehlende Kapazität, Engpässe, weitere Profile oder Skill-Pakete, externe Unterstützung, Lieferantenlisten/Vendor-Prozesse.",
       "- Solche Hinweise als Beobachtung „Freelancer-Potenzial“ bzw. als mögliche Chance der Art Freelancer-Experte (FREELANCER_EXPERTE) vorschlagen – als Vermutung, nicht als Tatsache.",
-      "- Wo passend eine Frage vorschlagen wie: „Welche weiteren Rollen fehlen im Team?“ oder einen Zug „Freelancer-Hebel“ (weitere Profile anbieten, Listung klären).",
+      "- Wo passend eine Frage vorschlagen wie: „Welche weiteren Rollen fehlen im Team?“ oder einen Zug „Ausbaupotenzial“ (weitere Profile anbieten, Listung klären).",
     );
   }
   lines.push(

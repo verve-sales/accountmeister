@@ -111,7 +111,7 @@ export default async function InterviewPage({ params, searchParams }: { params: 
             <section className="card text-sm">
               <h2 className="font-semibold mb-1">Bekannter Kontext</h2>
               <p>{d.ctx.account.name} · {d.ctx.setup.name}</p>
-              <p className="muted">Bereits Bekanntes wird nicht erneut gefragt; der Vorschlag ergänzt dieses Setup.</p>
+              <p className="muted">Bereits Bekanntes wird nicht erneut gefragt; der Vorschlag ergänzt dieses Projekt.</p>
             </section>
           )}
         </aside>
