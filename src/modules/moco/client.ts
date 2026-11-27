@@ -118,6 +118,46 @@ export interface MocoClient {
   updateProjectFinishDate(projectId: number, finishDate: string): Promise<MocoProject>;
 }
 
+/**
+ * e70: Schreibzugriffe für den Auftragseingang (Projektanlage aus einer Bestellung). Eigene Schnittstelle, damit alle
+ * übrigen Stellen beim lesenden Client bleiben. Nichts wird gelöscht; jede Methode legt an oder ändert genau ein Objekt.
+ */
+export type MocoContact = { id: number; firstname: string; lastname: string; companyId: number | null; jobPosition: string | null };
+export type MocoProjectCreate = {
+  name: string;
+  currency: string;
+  start_date: string;
+  finish_date: string;
+  fixed_price: boolean;
+  retainer: boolean;
+  leader_id: number;
+  customer_id: number;
+  deal_id?: number;
+  billing_variant?: "project" | "task" | "user";
+  hourly_rate?: number;
+  budget?: number;
+  contact_id?: number;
+  billing_contact_id?: number;
+  info?: string;
+  tags?: string[];
+  custom_properties?: Record<string, string>;
+};
+export interface MocoWriteClient {
+  createCompany(p: { name: string; type: "customer"; currency: string }): Promise<MocoCompany>;
+  contacts(term: string): Promise<MocoContact[]>;
+  createContact(p: { lastname: string; firstname?: string; gender: "F" | "M" | "U"; company_id: number; job_position?: string }): Promise<MocoContact>;
+  updateDeal(id: number, p: Partial<{ name: string; status: MocoDeal["status"]; company_id: number; money: number; deal_category_id: number }>): Promise<MocoDeal>;
+  createProject(p: MocoProjectCreate): Promise<MocoProject>;
+  createProjectTask(projectId: number, p: { name: string; billable: boolean; hourly_rate?: number; budget?: number }): Promise<{ id: number; name: string }>;
+  createProjectContract(projectId: number, p: { user_id: number; billable: boolean; active: boolean; hourly_rate?: number; budget?: number }): Promise<{ id: number }>;
+}
+export type MocoFullClient = MocoClient & MocoWriteClient;
+
+function pickContact(raw: Record<string, unknown>): MocoContact {
+  const c = raw.company && typeof raw.company === "object" ? (raw.company as Record<string, unknown>) : null;
+  return { id: Number(raw.id), firstname: String(raw.firstname ?? ""), lastname: String(raw.lastname ?? ""), companyId: c ? Number(c.id) : null, jobPosition: raw.job_position ? String(raw.job_position) : null };
+}
+
 export class MocoConfigError extends Error {}
 
 /** Whitelist der Nutzerfelder – alles andere (IBAN, Adresse, Geburtstag …) wird verworfen. */
@@ -217,7 +257,7 @@ function pickGroup(raw: Record<string, unknown>): MocoProjectGroup {
 // HTTP-Client (Produktion)
 // ---------------------------------------------------------------------------
 
-export class HttpMocoClient implements MocoClient {
+export class HttpMocoClient implements MocoClient, MocoWriteClient {
   readonly kind = "http" as const;
   constructor(private readonly subdomain: string, private readonly apiKey: string, private readonly fetchImpl: typeof fetch = fetch) {}
 
@@ -299,6 +339,45 @@ export class HttpMocoClient implements MocoClient {
     }
     return pickDeal((await res.json()) as Record<string, unknown>);
   }
+  // e70: Schreibzugriffe des Auftragseingangs
+  private async write(pathname: string, body: unknown, what: string, method: "POST" | "PUT" = "POST"): Promise<Record<string, unknown>> {
+    const res = await this.post(pathname, body, method);
+    if (!res.ok) {
+      let detail = "";
+      try {
+        detail = JSON.stringify(await res.json()).slice(0, 400);
+      } catch {
+        /* keine Details */
+      }
+      const err = new Error(`Moco ${what}: HTTP ${res.status}${detail ? ` – ${detail}` : ""}`) as Error & { status?: number };
+      err.status = res.status;
+      throw err;
+    }
+    return (await res.json()) as Record<string, unknown>;
+  }
+  async createCompany(p: { name: string; type: "customer"; currency: string }) {
+    return pickCompany(await this.write("companies", p, "Firma anlegen"));
+  }
+  async contacts(term: string) {
+    return (await this.getAll("contacts/people", { term })).map(pickContact);
+  }
+  async createContact(p: { lastname: string; firstname?: string; gender: "F" | "M" | "U"; company_id: number; job_position?: string }) {
+    return pickContact(await this.write("contacts/people", p, "Kontakt anlegen"));
+  }
+  async updateDeal(id: number, p: Partial<{ name: string; status: MocoDeal["status"]; company_id: number; money: number; deal_category_id: number }>) {
+    return pickDeal(await this.write(`deals/${id}`, p, "Lead ändern", "PUT"));
+  }
+  async createProject(p: MocoProjectCreate) {
+    return pickProject(await this.write("projects", p, "Projekt anlegen"));
+  }
+  async createProjectTask(projectId: number, p: { name: string; billable: boolean; hourly_rate?: number; budget?: number }) {
+    const r = await this.write(`projects/${projectId}/tasks`, p, "Leistung anlegen");
+    return { id: Number(r.id), name: String(r.name ?? p.name) };
+  }
+  async createProjectContract(projectId: number, p: { user_id: number; billable: boolean; active: boolean; hourly_rate?: number; budget?: number }) {
+    const r = await this.write(`projects/${projectId}/contracts`, p, "Person eintragen");
+    return { id: Number(r.id) };
+  }
   async updateProjectFinishDate(projectId: number, finishDate: string) {
     const res = await this.post(`projects/${projectId}`, { finish_date: finishDate }, "PUT");
     if (!res.ok) {
@@ -318,7 +397,7 @@ export class HttpMocoClient implements MocoClient {
 // Fixture-Client (Tests, Entwicklung ohne Moco-Zugang) – liest JSON-Dateien im Format der Moco-API
 // ---------------------------------------------------------------------------
 
-export class FixtureMocoClient implements MocoClient {
+export class FixtureMocoClient implements MocoClient, MocoWriteClient {
   readonly kind = "fixture" as const;
   constructor(private readonly dir: string) {}
   private async load(name: string): Promise<Record<string, unknown>[]> {
@@ -335,7 +414,7 @@ export class FixtureMocoClient implements MocoClient {
     return opts.includeArchived ? rows : rows.filter((u) => u.active);
   }
   async companies(opts: { type?: "customer" | "supplier" | "organization" } = {}) {
-    const rows = (await this.load("companies")).map(pickCompany);
+    const rows = [...(await this.load("companies")).map(pickCompany), ...FixtureMocoClient.createdCompanies];
     return opts.type ? rows.filter((c) => c.type === opts.type) : rows;
   }
   async projectGroups() {
@@ -360,6 +439,55 @@ export class FixtureMocoClient implements MocoClient {
     if (!p) throw new Error(`Moco projects/${projectId} (Ende setzen): HTTP 404`);
     FixtureMocoClient.finishDates.set(projectId, finishDate);
     return { ...p, finish_date: finishDate };
+  }
+  // e70: Schreibzugriffe im Speicher (Tests, Entwicklung); `written` protokolliert jede Anlage
+  static written: { what: string; payload: unknown }[] = [];
+  private static createdCompanies: MocoCompany[] = [];
+  private static createdContacts: MocoContact[] = [];
+  private static createdProjects: MocoProject[] = [];
+  private static seq = 70000;
+  static resetWrites() {
+    FixtureMocoClient.written = [];
+    FixtureMocoClient.createdCompanies = [];
+    FixtureMocoClient.createdContacts = [];
+    FixtureMocoClient.createdProjects = [];
+  }
+  async createCompany(p: { name: string; type: "customer"; currency: string }) {
+    const c: MocoCompany = { id: ++FixtureMocoClient.seq, type: "customer", name: p.name, identifier: null, active: true };
+    FixtureMocoClient.createdCompanies.push(c);
+    FixtureMocoClient.written.push({ what: "company", payload: p });
+    return c;
+  }
+  async contacts(term: string) {
+    return FixtureMocoClient.createdContacts.filter((c) => `${c.firstname} ${c.lastname}`.toLowerCase().includes(term.toLowerCase()));
+  }
+  async createContact(p: { lastname: string; firstname?: string; gender: "F" | "M" | "U"; company_id: number; job_position?: string }) {
+    const c: MocoContact = { id: ++FixtureMocoClient.seq, firstname: p.firstname ?? "", lastname: p.lastname, companyId: p.company_id, jobPosition: p.job_position ?? null };
+    FixtureMocoClient.createdContacts.push(c);
+    FixtureMocoClient.written.push({ what: "contact", payload: p });
+    return c;
+  }
+  async updateDeal(id: number, p: Partial<{ name: string; status: MocoDeal["status"]; company_id: number; money: number; deal_category_id: number }>) {
+    const d = (await this.deals()).find((x) => x.id === id);
+    if (!d) throw new Error(`Moco Lead ändern: HTTP 404`);
+    if (p.status) d.status = p.status;
+    if (p.name) d.name = p.name;
+    FixtureMocoClient.written.push({ what: "deal.update", payload: { id, ...p } });
+    return d;
+  }
+  async createProject(p: MocoProjectCreate) {
+    const pr: MocoProject = { id: ++FixtureMocoClient.seq, identifier: `P${FixtureMocoClient.seq}`, name: p.name, active: true, billable: true, start_date: p.start_date, finish_date: p.finish_date, hourly_rate: p.hourly_rate ?? null, currency: p.currency, customer: { id: p.customer_id, name: "" }, leader: null, project_group: null, deal: p.deal_id ? { id: p.deal_id, name: "" } : null, tags: p.tags ?? [], contracts: [] };
+    FixtureMocoClient.createdProjects.push(pr);
+    FixtureMocoClient.written.push({ what: "project", payload: p });
+    return pr;
+  }
+  async createProjectTask(projectId: number, p: { name: string; billable: boolean; hourly_rate?: number; budget?: number }) {
+    FixtureMocoClient.written.push({ what: "task", payload: { projectId, ...p } });
+    return { id: ++FixtureMocoClient.seq, name: p.name };
+  }
+  async createProjectContract(projectId: number, p: { user_id: number; billable: boolean; active: boolean; hourly_rate?: number; budget?: number }) {
+    FixtureMocoClient.written.push({ what: "contract", payload: { projectId, ...p } });
+    return { id: ++FixtureMocoClient.seq };
   }
   /** Angelegte Leads bleiben nur im Prozess (Tests, Entwicklung); neue IDs ab 90001. */
   private static createdDeals: MocoDeal[] = [];
@@ -423,7 +551,7 @@ export function mocoEnabled(): boolean {
   return c.MOCO_MODE === "fixture" || (c.MOCO_MODE === "http" && !!c.MOCO_SUBDOMAIN && !!c.MOCO_API_KEY);
 }
 
-export function getMocoClient(): MocoClient {
+export function getMocoClient(): MocoFullClient {
   const c = getConfig();
   if (c.MOCO_MODE === "fixture") return new FixtureMocoClient(c.MOCO_FIXTURE_DIR);
   if (c.MOCO_MODE === "http") {

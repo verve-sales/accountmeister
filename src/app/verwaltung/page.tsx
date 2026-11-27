@@ -13,7 +13,7 @@ import { fmtDateTime, roleLabel } from "@/lib/labels";
 import { getConfig } from "@/lib/config";
 import { SESSION_IDLE_SECONDS, SESSION_MAX_AGE_SECONDS } from "@/modules/identity/session";
 import { LIMITS } from "@/lib/ratelimit";
-import { assignRoleAction, createUserAccessAction, renameUserAction, revokeRoleAction, setUserStatusAction } from "../actions";
+import { mocoProbeRunAction, assignRoleAction, createUserAccessAction, renameUserAction, revokeRoleAction, setUserStatusAction } from "../actions";
 import { RoleAssignFields } from "@/components/RoleAssignFields";
 
 export default async function VerwaltungPage({ searchParams }: { searchParams: SearchParams }) {
@@ -39,6 +39,13 @@ export default async function VerwaltungPage({ searchParams }: { searchParams: S
       <h1 className="text-2xl font-semibold">Verwaltung (Betriebsverwaltung)</h1>
       <p className="muted text-sm">Zugänge und Rollen oben; Hintergrundläufe, Konfiguration, Bestand und Protokoll darunter eingeklappt. Kein Zugriff auf Projekt-Inhalte, Quellen, Notizen oder Vorschläge <TechRef>Briefing 16.2</TechRef>.</p>
       <Feedback params={sp} />
+      {getConfig().MOCO_MODE !== "off" && (
+        <section className="card" id="moco-probelauf">
+          <h2 className="font-semibold mb-1">Moco: Projektanlage aus Bestellungen</h2>
+          <p className="text-sm muted mb-2">Der Probelauf legt in Moco zwei Testfirmen („ZZ Test Accountmeister …“), den Kontakt „Buchhaltung“, einen Lead, ein Projekt mit Bestellnummer und eine Leistung mit Stundensatz an – so, wie es später aus einer Bestellung geschieht. Danach in Moco prüfen und die Testfirmen archivieren. Stand: Schreiben am Vorgang ist {getConfig().MOCO_WRITE === "on" ? "eingeschaltet" : "ausgeschaltet (MOCO_WRITE=on schaltet es ein)"}.</p>
+          <form action={mocoProbeRunAction}><button className="btn btn-secondary" type="submit">Moco-Testprojekt anlegen</button></form>
+        </section>
+      )}
 
       <section className="card text-sm">
         <h2 className="font-semibold mb-1">Einstellungen</h2>

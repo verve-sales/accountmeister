@@ -307,3 +307,55 @@ describe("e68 Auftragseingang: Person zuordnen", () => {
     expect(r.displayName).toBe("Moritz Mustermann");
   });
 });
+
+describe("e70 Auftragseingang: nach Moco schreiben", () => {
+  it("Vermittler-Bestellung: Firma, Kontakt Buchhaltung, Lead gewonnen, Projekt mit Bestellnummer, Leistung mit Tagessatz ÷ 8; wiederholen legt nichts doppelt an", async () => {
+    const { FixtureMocoClient } = await import("@/modules/moco/client");
+    const { writeOrderToMoco } = await import("@/modules/o2o/moco");
+    FixtureMocoClient.resetWrites();
+    const client = new FixtureMocoClient("./tests/fixtures/moco");
+    const input = { broker: true, customerName: `Endkunde ${uniq()} AG (fiktiv)`, brokerName: `Vermittla ${uniq()} AG (fiktiv)`, projectName: "Berater Umfeldanalyse", personName: "Mia Muster", personMocoUserId: null, leaderMocoUserId: 1, startDate: "2027-01-01", endDate: "2027-03-31", dailyRate: 985, days: 60, orderNumber: "60M2099000001", note: "VG-TEST", allowCreateCustomer: false, allowCreateBroker: false };
+    // R3: ohne ausdrückliches „neu anlegen“ entsteht keine Firma – und danach auch sonst nichts
+    const blocked = await writeOrderToMoco(client, input);
+    expect(blocked.done).toBe(false);
+    expect(blocked.steps[0]!.state).toBe("OFFEN");
+    expect(FixtureMocoClient.written.length).toBe(0);
+    const r = await writeOrderToMoco(client, { ...input, allowCreateCustomer: true, allowCreateBroker: true });
+    expect(r.done).toBe(true);
+    const w = (what: string) => FixtureMocoClient.written.filter((x) => x.what === what).map((x) => x.payload as Record<string, unknown>);
+    expect(w("company").length).toBe(2);
+    expect(w("contact")[0]).toMatchObject({ lastname: "Buchhaltung", gender: "U", job_position: "Buchhaltung", company_id: r.ids.brokerCompanyId });
+    const project = w("project")[0]!;
+    expect(project).toMatchObject({ customer_id: r.ids.customerCompanyId, deal_id: r.ids.dealId, billing_contact_id: r.ids.contactId, start_date: "2027-01-01", finish_date: "2027-03-31", billing_variant: "task" });
+    expect((project.custom_properties as Record<string, string>).Bestellnummer).toBe("60M2099000001");
+    expect(w("task")[0]).toMatchObject({ hourly_rate: 123.13, billable: true });
+    expect(r.steps.find((s) => s.key === "person")!.state).toBe("OFFEN");
+    const before = FixtureMocoClient.written.length;
+    const again = await writeOrderToMoco(client, { ...input, personMocoUserId: 2 }, r.ids);
+    expect(FixtureMocoClient.written.slice(before).map((x) => x.what)).toEqual(["deal.update", "contract"]);
+    expect(again.ids.projectId).toBe(r.ids.projectId);
+  });
+
+  it("am Vorgang: nur Berechtigte, nur beauftragt; IDs landen an Kunde, Chance und Einsatz", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const { FixtureMocoClient } = await import("@/modules/moco/client");
+    const { writeCaseToMoco } = await import("@/modules/o2o/moco");
+    FixtureMocoClient.resetWrites();
+    const client = new FixtureMocoClient("./tests/fixtures/moco");
+    await db.update(schema.users).set({ mocoUserId: 4711 }).where(eq(schema.users.id, s.users.david));
+    const offer = await createOfferWithoutDocument(ops, { channel: "DIREKT", partnerAccountId: s.accountId, personNewName: `Nora Neu ${uniq()} (fiktiv)`, role: "Testerin", dailyRate: "800", startDate: "2027-02-01", endDate: "2027-04-30", offerNumber: `M-${uniq()}` });
+    await expect(writeCaseToMoco(ops, offer.id, {}, client)).rejects.toThrow(/sobald die Bestellung bestätigt ist/);
+    const d = await uploadForCase(ops, file(`po-${uniq()}.txt`, `Bestellung ${uniq()}`), { forCaseId: offer.id });
+    const po = `MO-${uniq()}`;
+    const c = await confirmCase(ops, d.id, { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, personNewName: offer.personName!, role: "Testerin", dailyRate: "800", startDate: "2027-02-01", endDate: "2027-04-30", orderNumber: po, matchCaseId: offer.id });
+    await expect(writeCaseToMoco(await actorFor("nina"), c.id, {}, client)).rejects.toBeInstanceOf(ForbiddenError);
+    const r = await writeCaseToMoco(ops, c.id, { allowCreateCustomer: true }, client);
+    expect(r.done).toBe(true);
+    expect((await db.query.engagements.findFirst({ where: eq(schema.engagements.id, c.engagementId!) }))!.mocoProjectId).toBe(r.ids.projectId);
+    expect((await db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, c.opportunityId!) }))!.mocoDealId).toBe(r.ids.dealId);
+    expect((await db.query.accounts.findFirst({ where: eq(schema.accounts.id, s.accountId) }))!.mocoCompanyId).toBeTruthy();
+    const after = await getCase(ops, c.id);
+    expect((after.systems as { moco: { mode: string } }).moco.mode).toBe("GESCHRIEBEN");
+  });
+});

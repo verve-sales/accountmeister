@@ -2474,3 +2474,25 @@ export async function moveOpportunityProjectAction(fd: FormData) {
     await moveOpportunityToProject(actor, id, { setupId: data.setupId, newName: data.newName });
   }, "Projekt geändert.");
 }
+
+// --- e70: Auftragseingang schreibt nach Moco ---------------------------------------------------------------------
+
+export async function writeCaseToMocoAction(fd: FormData) {
+  const id = String(fd.get("caseId") ?? "");
+  return run(`/auftragseingang/${id}#moco`, async (actor) => {
+    const { writeCaseToMoco } = await import("@/modules/o2o/moco");
+    const r = await writeCaseToMoco(actor, id, { allowCreateCustomer: fd.get("createCustomer") === "on", allowCreateBroker: fd.get("createBroker") === "on" });
+    const open = r.steps.filter((s) => s.state !== "ERLEDIGT");
+    if (open.length) throw new ValidationError(`Noch nicht vollständig: ${open.map((s) => `${s.title} – ${s.detail}`).join(" · ")}`);
+  }, "In Moco angelegt.");
+}
+
+export async function mocoProbeRunAction() {
+  return run("/verwaltung#moco-probelauf", async (actor) => {
+    const { mocoProbeRun } = await import("@/modules/o2o/moco");
+    const r = await mocoProbeRun(actor);
+    const text = r.steps.map((s) => `${s.state === "ERLEDIGT" ? "✓" : s.state === "FEHLER" ? "✗" : "○"} ${s.title}: ${s.detail}`).join(" | ");
+    if (!r.done) throw new ValidationError(`Probelauf unvollständig – ${text}`);
+    throw new PendingInfo(`Probelauf erfolgreich – ${text}${r.projectUrl ? ` | Projekt: ${r.projectUrl}` : ""}. Bitte in Moco prüfen und die beiden „ZZ Test“-Firmen danach archivieren.`);
+  }, "");
+}

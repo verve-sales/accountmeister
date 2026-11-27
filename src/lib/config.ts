@@ -68,6 +68,10 @@ const envSchema = z.object({
   MAIL_DIGEST_HOUR: z.coerce.number().int().min(0).max(23).default(7),
   /** Moco-Anbindung (Etappe 31): off (Standard) | http (echte Moco-API) | fixture (Testdaten aus tests/fixtures/moco, nur Entwicklung/Tests) */
   MOCO_MODE: z.enum(["off", "http", "fixture"]).default("off"),
+  /** e70: Auftragseingang schreibt Projekte nach Moco – „off“ (nur Plan, Standard) oder „on“ (Knopf „In Moco anlegen“ am Vorgang) */
+  MOCO_WRITE: z.enum(["off", "on"]).default("off"),
+  /** e70: Lead-Phase für versendete Angebote (Name oder Teil davon, wie in Moco) */
+  MOCO_OFFER_PHASE: z.string().default("90% - Verhandlung"),
   /** Subdomain der Moco-Instanz (https://<subdomain>.mocoapp.com) */
   MOCO_SUBDOMAIN: z.string().min(1).optional(),
   /** API-Key eines technischen Moco-Nutzers mit Leserechten (nie persönlicher Key) */

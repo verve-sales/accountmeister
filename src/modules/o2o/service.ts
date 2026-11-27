@@ -453,7 +453,8 @@ async function refreshSystems(c: CaseRow, sharepoint?: Systems["sharepoint"]): P
   const prev = (c.systems ?? {}) as Partial<Systems>;
   const sp = sharepoint ?? prev.sharepoint ?? { state: "AUS", note: "SharePoint ist nicht eingerichtet.", link: null };
   const systems: Systems = {
-    moco: { mode: "PROBELAUF", steps: plan(f).filter((s) => s.system === "MOCO") },
+    // e70: gemerkte Moco-IDs und Schrittergebnisse bleiben beim Neuberechnen des Plans erhalten
+    moco: { ...((prev.moco ?? {}) as object), mode: ((prev.moco as { mode?: string } | undefined)?.mode ?? "PROBELAUF") as "PROBELAUF", steps: plan(f).filter((s) => s.system === "MOCO") },
     sharepoint: sp.state === "AUS" || sp.state === "FEHLER" ? { ...sp, note: sp.note ?? plan(f).find((s) => s.system === "SHAREPOINT")?.detail ?? null } : sp,
     accountmeister: { state: c.status === "BEAUFTRAGT" ? (c.engagementId ? "ERLEDIGT" : "AUSSTEHEND") : c.opportunityId ? "ERLEDIGT" : "AUSSTEHEND" },
   };

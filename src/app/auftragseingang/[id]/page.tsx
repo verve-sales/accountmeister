@@ -9,7 +9,7 @@ import { canUseOrderIntake, caseChoices, caseStatusLabel, channelLabel, deviatio
 import type { PlanStep } from "@/modules/o2o/plan";
 import { NotFoundError } from "@/lib/errors";
 import { isoDe } from "@/lib/labels";
-import { cancelOrderCaseAction, confirmOrderCaseAction, setEndCustomerAction, uploadOrderCaseAction } from "../../actions";
+import { cancelOrderCaseAction, confirmOrderCaseAction, writeCaseToMocoAction, setEndCustomerAction, uploadOrderCaseAction } from "../../actions";
 import { systemStates } from "../SystemDots";
 
 const Ev = ({ f }: { f: { evidence: string; by?: string } | null | undefined }) => (f ? <span className="field-ev" title={f.evidence}>{f.by === "KI" ? <span className="ev-by">KI</span> : null}„{f.evidence.length > 90 ? `${f.evidence.slice(0, 90)} …` : f.evidence}“</span> : <span className="field-ev field-ev-missing">nicht im Dokument gefunden</span>);
@@ -36,6 +36,10 @@ export default async function CasePage({ params, searchParams }: { params: Promi
     c.opportunityId ? db.query.opportunities.findFirst({ where: eq(schema.opportunities.id, c.opportunityId), columns: { id: true, title: true } }) : null,
     c.engagementId ? db.query.engagements.findFirst({ where: eq(schema.engagements.id, c.engagementId), columns: { id: true, title: true } }) : null,
   ]);
+  const { canWriteMoco, mocoWriteOn } = await import("@/modules/o2o/moco");
+  const mocoOn = mocoWriteOn();
+  const mayWriteMoco = canWriteMoco(actor);
+  const mocoState = (sys as { moco?: { mode?: string; results?: { key: string; title: string; state: string; detail: string }[]; projectUrl?: string | null } }).moco;
   const kind = p?.kind?.value ?? (c.orderNumber ? "BESTELLUNG" : "ANGEBOT");
 
   return (
@@ -221,9 +225,23 @@ export default async function CasePage({ params, searchParams }: { params: Promi
                   <ol className="text-sm mt-2 space-y-1 list-decimal pl-5">
                     {sys.moco.steps.map((s, i) => <li key={i}><strong>{s.title}</strong>{s.state === "WARTET" && <span className="chip" data-tone="warn" style={{ marginLeft: 6 }}>wartet</span>}<div className="muted text-xs">{s.detail}</div></li>)}
                   </ol>
-                  <p className="muted text-xs mt-2">Bis zum Probelauf mit Moco wird nichts geschrieben; das Backoffice legt nach diesem Plan an.</p>
+                  {!mocoOn && <p className="muted text-xs mt-2">Das Schreiben nach Moco ist noch nicht eingeschaltet; das Backoffice legt nach diesem Plan an.</p>}
                 </details>
               ) : null}
+              {mocoState?.results?.length ? (
+                <ol className="text-sm mt-3 space-y-1" id="moco">
+                  {mocoState.results.map((r) => <li key={r.key}><span className="sys-dot" data-tone={r.state === "ERLEDIGT" ? "ok" : r.state === "FEHLER" ? "bad" : "warn"}>{r.state === "ERLEDIGT" ? "✓" : r.state === "FEHLER" ? "!" : "…"}</span> <strong>{r.title}</strong> <span className="muted">– {r.detail}</span></li>)}
+                  {mocoState.projectUrl && <li><a href={mocoState.projectUrl} target="_blank" rel="noreferrer">Projekt in Moco öffnen</a></li>}
+                </ol>
+              ) : null}
+              {mocoOn && mayWriteMoco && c.status === "BEAUFTRAGT" && !c.isRenewal && mocoState?.mode !== "GESCHRIEBEN" && (
+                <form action={writeCaseToMocoAction} className="mt-3 space-y-2">
+                  <input type="hidden" name="caseId" value={c.id} />
+                  <label className="text-sm flex items-center gap-2"><input type="checkbox" name="createCustomer" /> Kunde in Moco neu anlegen, falls es ihn dort nicht gibt</label>
+                  {c.channel === "VERMITTLER" && <label className="text-sm flex items-center gap-2"><input type="checkbox" name="createBroker" /> Vermittler in Moco neu anlegen, falls es ihn dort nicht gibt</label>}
+                  <button className="btn" type="submit">{mocoState?.results?.length ? "Offene Schritte wiederholen" : "In Moco anlegen"}</button>
+                </form>
+              )}
             </section>
           </div>
 
