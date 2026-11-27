@@ -166,6 +166,8 @@ export type Suggestion = {
   fileName: string | null;
   extractStatus: string | null;
   /** wie gelesen wurde: KI (mit Modell) oder Regeln */
+  /** dieselbe Person läuft im selben Zeitraum schon beim Kunden – Rückfrage statt Annahme */
+  parallelNote?: string;
   readMode?: "KI" | "REGELN";
   readNote?: string;
 };
@@ -258,7 +260,12 @@ export async function uploadForCase(actor: Actor, file: UploadedFile, opts: { fo
     const accIds = [partnerAccountId, endCustomer?.id ?? null, base?.endCustomerAccountId ?? null].filter((x): x is string => !!x);
     if (accIds.length) {
       const running = await db.query.engagements.findMany({ where: and(inArray(schema.engagements.accountId, accIds), inArray(schema.engagements.status, ["GEPLANT", "AKTIV", "PAUSIERT", "ENDET"]), fl ? eq(schema.engagements.freelancerId, fl.id) : eq(schema.engagements.internalUserId, us!.id)) });
-      if (running.length === 1 && !sug.matchCaseId) sug.renewalEngagementId = running[0]!.id;
+      // Verlängerung nur vorschlagen, wenn der neue Zeitraum an den laufenden anschließt; überschneidet er sich,
+      // ist es ein weiterer Auftrag derselben Person (z. B. zweites Kontingent) – dann wird nachgefragt statt verlängert
+      const start = parsed.start?.value ?? null;
+      const follows = running.filter((e) => !start || !e.plannedEnd || start > e.plannedEnd);
+      if (running.length === 1 && follows.length === 1 && !sug.matchCaseId) sug.renewalEngagementId = running[0]!.id;
+      else if (running.length) sug.parallelNote = `${parsed.person?.value ?? "Die Person"} hat bei diesem Kunden bereits ${running.length === 1 ? "einen laufenden Einsatz" : `${running.length} laufende Einsätze`} im selben Zeitraum. Standard ist ein weiterer, eigener Einsatz; soll stattdessen ein laufender verlängert werden, unten „Als Verlängerung übernehmen“ wählen.`;
     }
   }
   // Vermittler: als solcher geführt, laut KI ein Vermittler, oder das Dokument nennt einen Endkunden neben dem Vertragspartner

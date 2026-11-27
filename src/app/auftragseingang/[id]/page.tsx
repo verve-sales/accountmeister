@@ -66,10 +66,16 @@ export default async function CasePage({ params, searchParams }: { params: Promi
               <div>Gehört vermutlich zu <Link href={`/auftragseingang/${base.id}`}>{base.number}</Link> ({sug.matchReason}).{dev.length > 0 && <> <strong>Abweichungen zum Angebot:</strong> {dev.join("; ")}.</>}</div>
             </div>
           )}
+          {sug.parallelNote && (
+            <div className="callout mb-3" data-tone="warn" role="note">
+              <Icon name="alert" size={18} />
+              <div>{sug.parallelNote}</div>
+            </div>
+          )}
           {sug.renewalEngagementId && (
             <div className="callout mb-3" role="note">
               <Icon name="refresh" size={18} />
-              <div>Dieselbe Person läuft bereits bei diesem Kunden – „als Verlängerung übernehmen“ ist vorausgewählt.</div>
+              <div>Dieselbe Person läuft bereits bei diesem Kunden und der neue Zeitraum schließt an – „Als Verlängerung übernehmen“ ist vorausgewählt. Ist es ein zusätzlicher Auftrag, dort „neuer Einsatz“ wählen.</div>
             </div>
           )}
           <form action={confirmOrderCaseAction} className="grid sm:grid-cols-3 gap-x-4 gap-y-3">

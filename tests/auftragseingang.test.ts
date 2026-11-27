@@ -407,3 +407,26 @@ describe("e71 Auftragseingang: Excel-Angebotsformular", () => {
     expect(c.partnerAccountId).toBe(s.accountId);
   });
 });
+
+describe("e71 Auftragseingang: mehrere Bestellungen derselben Person", () => {
+  it("zweite Bestellung im selben Zeitraum wird ein eigener Einsatz (mit Rückfrage), keine Verlängerung und keine Dublette", async () => {
+    const s = await ensureSeed();
+    const ops = await makeSalesOps();
+    const name = `Paula Parallel ${uniq().replace(/\d/g, "x")}`;
+    const mk = async (po: string) => {
+      const d = await uploadForCase(ops, file(`po-${po}.txt`, `Bestellung Nr. ${po}\nBeraterin: ${name}\nZeitraum: 01.02.2027 bis 30.06.2027\nTagessatz: 900 €`));
+      return { draft: d, raw: { kind: "BESTELLUNG", channel: "DIREKT", partnerAccountId: s.accountId, personKind: "FREELANCER", ...(d.freelancerId ? { freelancerId: d.freelancerId } : { personNewName: name }), role: "Beraterin", startDate: "2027-02-01", endDate: "2027-06-30", dailyRate: "900", orderNumber: po } };
+    };
+    const a = await mk(`PA-${uniq()}`);
+    const first = await confirmCase(ops, a.draft.id, a.raw);
+    const b = await mk(`PB-${uniq()}`);
+    const sug = b.draft.parsed as { renewalEngagementId: string | null; parallelNote?: string };
+    expect(sug.renewalEngagementId).toBeNull();
+    expect(sug.parallelNote).toContain("bereits einen laufenden Einsatz");
+    const second = await confirmCase(ops, b.draft.id, b.raw);
+    expect(second.engagementId).not.toBe(first.engagementId);
+    const { findEngagementDuplicates } = await import("@/modules/cleanup/service");
+    const dups = await findEngagementDuplicates(await actorFor("clemens"));
+    expect(JSON.stringify(dups)).not.toContain(first.engagementId!);
+  });
+});

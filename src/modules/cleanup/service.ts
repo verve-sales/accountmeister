@@ -124,8 +124,11 @@ export async function findEngagementDuplicates(actor: Actor, rows?: EngagementRo
   const all = rows ?? (await db.query.engagements.findMany({ where: and(eq(schema.engagements.workspaceId, actor.workspaceId), notInArray(schema.engagements.status, CLOSED), accountId ? eq(schema.engagements.accountId, accountId) : undefined) }));
   const open = all.filter((e) => !CLOSED.includes(e.status) && personOf(e));
   const byKey = new Map<string, EngagementRow[]>();
+  // e71: Einsätze aus dem Auftragseingang sind beim Hochladen bestätigt – mehrere Bestellungen derselben Person beim
+  // selben Kunden im selben Zeitraum sind dann gewollt und keine Dublette (eigene Gruppe je Bestellnummer)
+  const caseBacked = new Set((await db.query.orderCases.findMany({ where: eq(schema.orderCases.workspaceId, actor.workspaceId), columns: { engagementId: true } })).map((c) => c.engagementId).filter((x): x is string => !!x));
   for (const e of open) {
-    const k = `${e.accountId}|${personOf(e)}`;
+    const k = `${e.accountId}|${personOf(e)}${caseBacked.has(e.id) ? `|${e.orderReference ?? e.id}` : ""}`;
     byKey.set(k, [...(byKey.get(k) ?? []), e]);
   }
   const candidates = [...byKey.values()].filter((g) => g.length > 1);
