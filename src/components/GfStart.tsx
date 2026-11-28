@@ -21,7 +21,7 @@ function Kpi({ value, label, href, warn, trend }: { value: ReactNode; label: str
 }
 
 /** e75: Veränderung gegenüber dem Vergleichsstand – Pfeil, Differenz, Farbe nach „gut“ oder „schlecht“. */
-function Trend({ now, base, since, goodUp, money }: { now: number | null; base: number | null | undefined; since: string; goodUp: boolean; money?: boolean }) {
+export function Trend({ now, base, since, goodUp, money }: { now: number | null; base: number | null | undefined; since: string; goodUp: boolean; money?: boolean }) {
   if (now == null || base == null) return null;
   const d = now - base;
   const fmt = (n: number) => (money ? eur(Math.abs(n)) : String(Math.abs(n)));
@@ -184,7 +184,7 @@ export function GfTeam({ o }: { o: GfOverview }) {
 }
 
 /** e65: Köpfe im Einsatz – 12 Wochen Verlauf und 12 Wochen Ausblick (aus den geplanten Enden): zeigt die „Klippe“. */
-export function GfHeadsTrend({ o }: { o: GfOverview }) {
+export function GfHeadsTrend({ o, title = "Köpfe im Einsatz – Verlauf und Ausblick" }: { o: Pick<GfOverview, "headsTrend">; title?: string }) {
   const t = o.headsTrend;
   const now = t[12]?.value ?? 0;
   const in12 = t.at(-1)?.value ?? 0;
@@ -193,7 +193,7 @@ export function GfHeadsTrend({ o }: { o: GfOverview }) {
   return (
     <section className="card" id="koepfe">
       <div className="flex flex-wrap items-baseline gap-3">
-        <h2 className="font-semibold">Köpfe im Einsatz – Verlauf und Ausblick</h2>
+        <h2 className="font-semibold">{title}</h2>
         <span className="muted text-sm">vor 12 Wochen {ago12} · heute {now} · in 12 Wochen {in12} ohne Verlängerung{in12 < now ? <span style={{ color: "var(--danger)" }}> ({in12 - now})</span> : null}</span>
         <Link href="/einsaetze?f=enden_8w" className="text-sm ml-auto">auslaufende Einsätze</Link>
       </div>

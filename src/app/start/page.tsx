@@ -13,7 +13,7 @@ import { buildDashboard, loadHat, viewLabel } from "@/modules/dashboard/service"
 import { canBrowsePortfolio } from "@/modules/portfolio/service";
 import { hasAnyContentRole, hasRole, isCoach, isReadOnlyActor, type Actor } from "@/modules/identity/actor";
 import { buildGfOverview } from "@/modules/overview/gf";
-import { GfCustomers, GfExpiring, GfHeadsTrend, GfKpis, GfPipeline, GfTeam } from "@/components/GfStart";
+import { GfCustomers, GfExpiring, GfHeadsTrend, GfKpis, GfPipeline, GfTeam, Trend } from "@/components/GfStart";
 import { canEditSetup, loadSetupContext } from "@/modules/identity/authz";
 import { MATURITY, maturityLabel } from "@/modules/strategy/chancen";
 import { CHANCE_STEPS } from "@/lib/chanceStages";
@@ -252,6 +252,22 @@ export default async function StartPage({ searchParams }: { searchParams: Search
   // e64: dieselbe Zählung wie „Einsätze › enden in 8 Wochen“ (laufende Einsätze, nicht nur bestätigte Aufträge)
   const in56 = new Date(Date.parse(`${today}T00:00:00Z`) + 56 * 86400000).toISOString().slice(0, 10);
   const endingSoon = new Set(healthAll.flatMap((h) => h.engagements.filter((x) => x.plannedEnd && x.plannedEnd >= today && x.plannedEnd <= in56).map((x) => x.engagementId ?? x.orderId))).size;
+  // e79: persönliche Kennzahlen mit Trend und „Köpfe im Einsatz“ auch für BD und Principal (eigene Kunden)
+  const openChances = Object.entries(chanceCounts).filter(([k]) => !["BEAUFTRAGT", "ZURUECKGESTELLT", "BEENDET"].includes(k)).reduce((a, [, b]) => a + b, 0);
+  const overdueMine = timelineTasks.filter((t) => t.due && t.due < today).length;
+  const personal = d.view === "BD" || d.view === "PRINCIPAL" ? await (async () => {
+    const { db: dbt, schema: st } = await import("@/db/client");
+    const { and: andt, inArray: inA, notInArray: notIn } = await import("drizzle-orm");
+    const { recordPersonal, personalBaseline, headsTrendOf } = await import("@/modules/overview/trend");
+    const ids = d.accounts.map((c) => c.accountId);
+    const rows = ids.length ? await dbt.query.engagements.findMany({ where: andt(inA(st.engagements.accountId, ids), notIn(st.engagements.status, ["ABGEBROCHEN", "VORBEREITUNG"])), columns: { id: true, freelancerId: true, internalUserId: true, plannedStart: true, actualStart: true, plannedEnd: true, actualEnd: true } }) : [];
+    const headsTrend = headsTrendOf(rows, today);
+    const now = { kunden: d.accounts.length, chancen: openChances, enden: endingSoon, health: healthGaps.length, ueberfaellig: overdueMine, koepfe: headsTrend[12]?.value ?? 0 };
+    await recordPersonal(actor.workspaceId, today, actor.userId, d.view, now).catch(() => null);
+    const base = await personalBaseline(actor.workspaceId, today, actor.userId, d.view).catch(() => null);
+    return { headsTrend, base, since: base ? base.day.split("-").reverse().slice(0, 2).join(".") + "." : "" };
+  })().catch(() => null) : null;
+  const pt = (key: string, nowVal: number, goodUp: boolean) => (personal?.base ? <Trend now={nowVal} base={personal.base.values[key]} since={personal.since} goodUp={goodUp} /> : null);
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline gap-4">
@@ -261,14 +277,16 @@ export default async function StartPage({ searchParams }: { searchParams: Search
       <SosBanner sos={openSos} />
       {d.view === "SALES_OPS" ? <SalesOpsKpis actor={actor} /> : (
         <KpiRow>
-          <KpiTile value={d.accounts.length} label={d.view === "BD" ? "meine Kunden" : "Kunden im Blick"} href="/kunden" />
-          <KpiTile value={Object.entries(chanceCounts).filter(([k]) => !["BEAUFTRAGT", "ZURUECKGESTELLT", "BEENDET"].includes(k)).reduce((a, [, b]) => a + b, 0)} label="offene Chancen" href="#uebersicht-chancen" />
-          <KpiTile value={endingSoon} label="Einsätze enden in 8 Wochen" href="/einsaetze?f=enden_8w" tone={endingSoon ? "warn" : null} />
-          <KpiTile value={healthGaps.length} label="Kunden mit fehlenden Health-Angaben" href="#uebersicht-health" tone={healthGaps.length ? "warn" : null} />
-          <KpiTile value={timelineTasks.filter((t) => t.due && t.due < today).length} label="überfällige Aufgaben" href="#zeitleiste" tone={timelineTasks.some((t) => t.due && t.due < today) ? "danger" : null} />
+          {personal && <KpiTile value={personal.headsTrend[12]?.value ?? 0} label={<>Köpfe im Einsatz{pt("koepfe", personal.headsTrend[12]?.value ?? 0, true)}</>} href="#koepfe" />}
+          <KpiTile value={d.accounts.length} label={<>{d.view === "BD" ? "meine Kunden" : "Kunden im Blick"}{pt("kunden", d.accounts.length, true)}</>} href="/kunden" />
+          <KpiTile value={openChances} label={<>offene Chancen{pt("chancen", openChances, true)}</>} href="/chancen" />
+          <KpiTile value={endingSoon} label={<>Einsätze enden in 8 Wochen{pt("enden", endingSoon, false)}</>} href="/einsaetze?f=enden_8w" tone={endingSoon ? "warn" : null} />
+          <KpiTile value={healthGaps.length} label={<>Kunden mit fehlenden Health-Angaben{pt("health", healthGaps.length, false)}</>} href="#uebersicht-health" tone={healthGaps.length ? "warn" : null} />
+          <KpiTile value={overdueMine} label={<>überfällige Aufgaben{pt("ueberfaellig", overdueMine, false)}</>} href="#zeitleiste" tone={overdueMine ? "danger" : null} />
         </KpiRow>
       )}
       {timeline}
+      {personal && personal.headsTrend.some((x) => x.value > 0) && <GfHeadsTrend o={personal} title={d.view === "BD" ? "Köpfe im Einsatz bei meinen Kunden – Verlauf und Ausblick" : "Köpfe im Einsatz bei den Kunden meiner BDs – Verlauf und Ausblick"} />}
       {readOnly ? (
         <section className="card text-sm">
           <strong>Coach-Zugang (nur lesen).</strong> Zum Durchgehen: <Link href="/meine-bds">Meine BDs</Link> (Kunden je BD mit Stand) · <Link href="/kunden">Kunden</Link> · <Link href="/einsaetze">Einsätze</Link>. Unten die Übersichten zum Aufklappen. Änderungen sind in diesem Zugang nicht möglich.

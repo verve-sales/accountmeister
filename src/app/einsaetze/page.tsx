@@ -1,7 +1,9 @@
 import { titleWithoutPerson } from "@/lib/labels";
 import Link from "next/link";
 import { EinsatzViews } from "@/components/EinsatzViews";
-import { Pills } from "@/components/ViewSwitch";
+import { Pills, Segmented } from "@/components/ViewSwitch";
+import { AsgTimeline } from "@/components/AsgTimeline";
+import type { AsgEngagement, AsgState } from "@/modules/assignments/service";
 import { pl } from "@/lib/labels";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentActor } from "@/modules/identity/session";
@@ -47,6 +49,14 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
   const dups = await findEngagementDuplicates(actor, items);
   const dupIds = new Set(dups.flatMap((g) => [g.keep.id, ...g.drop.map((d) => d.id)]));
   const cleaner = canClean(actor);
+  // e79: Zeitleiste auch für BD und Principal – dieselben Einsätze wie in der Liste, nur lesend, ohne Konditionen
+  const asTimeline = !asg && (sp as { ansicht?: string }).ansicht === "zeitleiste";
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const tlItems: AsgEngagement[] = asTimeline ? items.map((e) => {
+    const renewing = !!e.renewalStatus && ["IN_ABSTIMMUNG", "ANGEBOTEN", "MOEGLICH"].includes(e.renewalStatus);
+    const state: AsgState = ["ABGESCHLOSSEN", "ABGEBROCHEN"].includes(e.status) ? "BEENDET" : e.status === "GEPLANT" ? "GEPLANT" : e.daysToEnd !== null && e.daysToEnd < 0 ? "UEBERSCHRITTEN" : renewing ? "VERLAENGERUNG" : e.daysToEnd !== null && e.daysToEnd <= 28 ? "DRINGEND" : e.daysToEnd !== null && e.daysToEnd <= 56 ? "ENDET_BALD" : "LAEUFT";
+    return { id: e.id, personId: e.freelancerId ? `fl:${e.freelancerId}` : `u:${e.internalUserId ?? e.id}`, person: e.personName, kind: e.internalUserId ? "INTERN" : "FREELANCER", accountId: e.accountId, accountName: e.accountName, title: e.title, status: e.status, start: e.actualStart ?? e.plannedStart, end: e.plannedEnd, daysToEnd: e.daysToEnd, state, renewalStatus: e.renewalStatus ?? null, renewalTo: e.renewalTo ?? null, offerNumber: null, orderReference: e.orderReference, mocoProjectId: null, ek: null, vk: null, rateUnit: "TAG", scope: null, contract: null, orderDoc: false, bdName: e.bdName, nextCheckin: null, checkinDots: [] };
+  }) : [];
   // e77: betrifft eine Warnung fast alle Zeilen, steht sie einmal über der Tabelle statt orange in jeder Zeile
   const noContact = items.filter((e) => !e.contacts.renewal).length;
   const noContactShare = items.length >= 4 ? noContact / items.length : 0;
@@ -61,6 +71,7 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
         </span>
       </div>
       <EinsatzViews active="liste" asg={!!asg} />
+      {!asg && <Segmented label="Ansicht der Einsätze" items={[{ href: `/einsaetze?f=${filter}${qs}`, label: "Liste", active: !asTimeline }, { href: `/einsaetze?f=${filter}${qs}&ansicht=zeitleiste`, label: "Zeitleiste", active: asTimeline }]} />}
       <Feedback params={sp} />
       {noContactShare >= 0.6 && <p className="text-sm muted">Bei {noContact} von {items.length} Einsätzen ist noch kein Ansprechpartner für die Verlängerung hinterlegt – <Link href="/einsaetze?f=ohne_ansprechpartner">nur diese zeigen</Link>.</p>}
       <form method="get" action="/einsaetze" className="flex flex-wrap gap-2 items-center text-sm">
@@ -77,7 +88,13 @@ export default async function EinsaetzePage({ searchParams }: { searchParams: Pr
           {cleaner ? <Link href="/bereinigung">In der Bereinigung abschließen bzw. zusammenführen →</Link> : <span className="muted">Abschließen und Zusammenführen machen Sales Operations oder Geschäftsführung in der Bereinigung.</span>}
         </p>
       )}
-      <section className="card">
+      {asTimeline && (
+        <section className="card" id="zeitleiste">
+          <h2 className="font-semibold mb-2">Wer ist wo bis wann</h2>
+          <AsgTimeline engagements={tlItems} today={todayStr} />
+        </section>
+      )}
+      <section className="card" hidden={asTimeline}>
         {items.length === 0 ? (<p className="empty">{q ? `Nichts gefunden für „${q}“.` : "Keine Einsätze in diesem Filter. Einsätze entstehen mit der bestätigten Auswahl an einer Position oder aus Moco."}</p>
         ) : (
           <div className="table-wrap"><table className="list text-sm">
